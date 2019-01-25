@@ -1623,6 +1623,7 @@ struct tcp_fastopen_request {
 	struct msghdr			*data;  /* data in MSG_FASTOPEN */
 	size_t				size;
 	int				copied;	/* queued in tcp_connect() */
+	struct ubuf_info		*uarg;
 };
 void tcp_free_fastopen_req(struct tcp_sock *tp);
 void tcp_fastopen_destroy_cipher(struct sock *sk);
