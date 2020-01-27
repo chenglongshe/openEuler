@@ -21,6 +21,7 @@
 #include <linux/phy.h>
 #include <linux/bitops.h>
 #include <linux/uaccess.h>
+#include <linux/vermagic.h>
 #include <linux/vmalloc.h>
 #include <linux/sfp.h>
 #include <linux/slab.h>
@@ -851,6 +852,7 @@ static noinline_for_stack int ethtool_get_drvinfo(struct net_device *dev,
 	const struct ethtool_ops *ops = dev->ethtool_ops;
 
 	memset(&info, 0, sizeof(info));
+	strlcpy(info.version, UTS_RELEASE, sizeof(info.version));
 	info.cmd = ETHTOOL_GDRVINFO;
 	if (ops->get_drvinfo) {
 		ops->get_drvinfo(dev, &info);
