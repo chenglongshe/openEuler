@@ -69,6 +69,7 @@
 #define HNAE3_DEV_SUPPORT_FD_B			0x6
 #define HNAE3_DEV_SUPPORT_GRO_B			0x7
 #define HNAE3_DEV_SUPPORT_VLAN_FLTR_MDF_B	0x8
+#define HNAE3_DEV_SUPPORT_FEC_B			0x9
 
 #define HNAE3_DEV_SUPPORT_ROCE_DCB_BITS (BIT(HNAE3_DEV_SUPPORT_DCB_B) |\
 		BIT(HNAE3_DEV_SUPPORT_ROCE_B))
@@ -91,6 +92,10 @@
 enum HNAE3_PF_CAP_BITS {
 	HNAE3_PF_SUPPORT_VLAN_FLTR_MDF_B = 0,
 };
+
+#define hnae3_dev_fec_supported(hdev) \
+	hnae3_get_bit((hdev)->ae_dev->flag, HNAE3_DEV_SUPPORT_FEC_B)
+
 #define ring_ptr_move_fw(ring, p) \
 	((ring)->p = ((ring)->p + 1) % (ring)->desc_num)
 #define ring_ptr_move_bw(ring, p) \
