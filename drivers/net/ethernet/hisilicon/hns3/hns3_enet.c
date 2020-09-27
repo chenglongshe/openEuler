@@ -622,6 +622,25 @@ void hns3_request_update_promisc_mode(struct hnae3_handle *handle)
 		ops->request_update_promisc_mode(handle);
 }
 
+void hns3_enable_vlan_filter(struct net_device *netdev, bool enable)
+{
+	struct hns3_nic_priv *priv = netdev_priv(netdev);
+	struct hnae3_handle *h = priv->ae_handle;
+	struct hnae3_ae_dev *ae_dev = pci_get_drvdata(h->pdev);
+	bool last_state;
+
+	if (ae_dev->dev_version >= HNAE3_DEVICE_VERSION_V2 &&
+	    h->ae_algo->ops->enable_vlan_filter) {
+		last_state = h->netdev_flags & HNAE3_VLAN_FLTR ? true : false;
+		if (enable != last_state) {
+			netdev_info(netdev,
+				    "%s vlan filter\n",
+				    enable ? "enable" : "disable");
+			h->ae_algo->ops->enable_vlan_filter(h, enable);
+		}
+	}
+}
+
 static int hns3_set_tso(struct sk_buff *skb, u32 *paylen,
 			u16 *mss, u32 *type_cs_vlan_tso, u32 *send_bytes)
 {
@@ -2442,7 +2461,7 @@ static void hns3_set_default_feature(struct net_device *netdev)
 		NETIF_F_GSO_UDP_TUNNEL_CSUM | NETIF_F_SCTP_CRC |
 		NETIF_F_FRAGLIST;
 
-	if (pdev->revision > HNAE3_REVISION_ID_20) {
+	if (ae_dev->dev_version >= HNAE3_DEVICE_VERSION_V2) {
 #ifdef NETIF_F_GRO_HW
 		netdev->features |= NETIF_F_GRO_HW;
 		netdev->hw_features |= NETIF_F_GRO_HW;
@@ -2948,8 +2967,9 @@ static bool hns3_parse_vlan_tag(struct hns3_enet_ring *ring,
 {
 	struct hnae3_handle *handle = ring->tqp->handle;
 	struct pci_dev *pdev = ring->tqp->handle->pdev;
+	struct hnae3_ae_dev *ae_dev = pci_get_drvdata(pdev);
 
-	if (pdev->revision == HNAE3_REVISION_ID_20) {
+	if (unlikely(ae_dev->dev_version < HNAE3_DEVICE_VERSION_V2)) {
 		*vlan_tag = le16_to_cpu(desc->rx.ot_vlan_tag);
 		if (!(*vlan_tag & VLAN_VID_MASK))
 			*vlan_tag = le16_to_cpu(desc->rx.vlan_tag);
