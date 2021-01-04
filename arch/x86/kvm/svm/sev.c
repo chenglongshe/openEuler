@@ -1471,6 +1471,7 @@ static int sev_es_validate_vmgexit(struct vcpu_svm *svm)
 			goto vmgexit_err;
 		break;
 	case SVM_VMGEXIT_NMI_COMPLETE:
+	case SVM_VMGEXIT_AP_HLT_LOOP:
 	case SVM_VMGEXIT_AP_JUMP_TABLE:
 	case SVM_VMGEXIT_UNSUPPORTED_EVENT:
 		break;
@@ -1701,6 +1702,9 @@ int sev_handle_vmgexit(struct vcpu_svm *svm)
 	case SVM_VMGEXIT_NMI_COMPLETE:
 		ret = svm_invoke_exit_handler(svm, SVM_EXIT_IRET);
 		break;
+	case SVM_VMGEXIT_AP_HLT_LOOP:
+		ret = kvm_emulate_ap_reset_hold(&svm->vcpu);
+		break;
 	case SVM_VMGEXIT_AP_JUMP_TABLE: {
 		struct kvm_sev_info *sev = &to_kvm_svm(svm->vcpu.kvm)->sev_info;
 
@@ -1736,4 +1740,22 @@ int sev_handle_vmgexit(struct vcpu_svm *svm)
 	}
 
 	return ret;
+}
+
+void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
+{
+	struct vcpu_svm *svm = to_svm(vcpu);
+
+	/* First SIPI: Use the values as initially set by the VMM */
+	if (!svm->received_first_sipi) {
+		svm->received_first_sipi = true;
+		return;
+	}
+
+	/*
+	 * Subsequent SIPI: Return from an AP Reset Hold VMGEXIT, where
+	 * the guest will set the CS and RIP. Set SW_EXIT_INFO_2 to a
+	 * non-zero value.
+	 */
+	ghcb_set_sw_exit_info_2(svm->ghcb, 1);
 }
