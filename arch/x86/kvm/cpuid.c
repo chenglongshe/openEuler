@@ -223,7 +223,7 @@ static void kvm_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
 	    __cr4_reserved_bits(guest_cpuid_has, vcpu);
 
 	/* Invoke the vendor callback only after the above state is updated. */
-	kvm_x86_ops.vcpu_after_set_cpuid(vcpu);
+	static_call(kvm_x86_vcpu_after_set_cpuid)(vcpu);
 
 	/*
 	 * Except for the MMU, which needs to do its thing any vendor specific
