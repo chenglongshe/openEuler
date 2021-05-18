@@ -29,9 +29,7 @@
 
 /* enable / disable AVIC */
 int avic;
-#ifdef CONFIG_X86_LOCAL_APIC
 module_param(avic, int, S_IRUGO);
-#endif
 
 /* AVIC GATAG is encoded using VM and VCPU IDs */
 #define AVIC_VCPU_ID_BITS		8
