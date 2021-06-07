@@ -1090,15 +1090,12 @@ __sev_send_start_query_session_length(struct kvm *kvm, struct kvm_sev_cmd *argp,
 
 	data->handle = sev->handle;
 	ret = sev_issue_cmd(kvm, SEV_CMD_SEND_START, data, &argp->error);
-	if (ret < 0)
-		goto out;
 
 	params->session_len = data->session_len;
 	if (copy_to_user((void __user *)(uintptr_t)argp->data, params,
 				sizeof(struct kvm_sev_send_start)))
 		ret = -EFAULT;
 
-out:
 	kfree(data);
 	return ret;
 }
@@ -1215,8 +1212,6 @@ __sev_send_update_data_query_lengths(struct kvm *kvm, struct kvm_sev_cmd *argp,
 
 	data->handle = sev->handle;
 	ret = sev_issue_cmd(kvm, SEV_CMD_SEND_UPDATE_DATA, data, &argp->error);
-	if (ret < 0)
-		goto out;
 
 	params->hdr_len = data->hdr_len;
 	params->trans_len = data->trans_len;
@@ -1225,7 +1220,6 @@ __sev_send_update_data_query_lengths(struct kvm *kvm, struct kvm_sev_cmd *argp,
 			 sizeof(struct kvm_sev_send_update_data)))
 		ret = -EFAULT;
 
-out:
 	kfree(data);
 	return ret;
 }
