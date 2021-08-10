@@ -452,12 +452,6 @@ extern struct kvm_x86_nested_ops svm_nested_ops;
 
 /* avic.c */
 
-static inline void avic_update_vapic_bar(struct vcpu_svm *svm, u64 data)
-{
-	svm->vmcb->control.avic_vapic_bar = data & VMCB_AVIC_APIC_BAR_MASK;
-	vmcb_mark_dirty(svm->vmcb, VMCB_AVIC);
-}
-
 static inline bool avic_vcpu_is_running(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
