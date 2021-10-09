@@ -84,7 +84,7 @@ static int handle_no_fpsimd(struct kvm_vcpu *vcpu)
  *
  * WFE[T]: Yield the CPU and come back to this vcpu when the scheduler
  * decides to.
- * WFI: Simply call kvm_vcpu_block(), which will halt execution of
+ * WFI: Simply call kvm_vcpu_halt(), which will halt execution of
  * world-switches and schedule other host processes until there is an
  * incoming IRQ or FIQ to the VM.
  * WFIT: Same as WFI, with a timed wakeup implemented as a background timer
