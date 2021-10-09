@@ -124,9 +124,8 @@ static int kvm_handle_wfx(struct kvm_vcpu *vcpu)
 		vcpu->arch.pvsched.pv_unhalted = false;
 		if (esr & ESR_ELx_WFx_ISS_WFxT)
 			vcpu->arch.flags |= KVM_ARM64_WFIT;
-		kvm_vcpu_block(vcpu);
+		kvm_vcpu_wfi(vcpu);
 		vcpu->arch.flags &= ~KVM_ARM64_WFIT;
-		kvm_clear_request(KVM_REQ_UNHALT, vcpu);
 	}
 
 out:
