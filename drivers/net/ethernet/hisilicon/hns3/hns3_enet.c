@@ -1356,7 +1356,7 @@ static int hns3_set_tso(struct sk_buff *skb, u32 *paylen_fdop_ol4cs,
 	/* Software should clear the IPv4's checksum field when tso is
 	 * needed.
 	 */
-	if (l3.v4->version == 4)
+	if (l3.v4->version == IP_VERSION_IPV4)
 		l3.v4->check = 0;
 
 	/* tunnel packet */
@@ -1371,7 +1371,7 @@ static int hns3_set_tso(struct sk_buff *skb, u32 *paylen_fdop_ol4cs,
 		/* Software should clear the IPv4's checksum field when
 		 * tso is needed.
 		 */
-		if (l3.v4->version == 4)
+		if (l3.v4->version == IP_VERSION_IPV4)
 			l3.v4->check = 0;
 	}
 
@@ -1446,13 +1446,13 @@ static int hns3_get_l4_protocol(struct sk_buff *skb, u8 *ol4_proto,
 	l3.hdr = skb_inner_network_header(skb);
 	l4_hdr = skb_inner_transport_header(skb);
 
-	if (l3.v6->version == 6) {
+	if (l3.v6->version == IP_VERSION_IPV6) {
 		exthdr = l3.hdr + sizeof(*l3.v6);
 		l4_proto_tmp = l3.v6->nexthdr;
 		if (l4_hdr != exthdr)
 			ipv6_skip_exthdr(skb, exthdr - skb->data,
 					 &l4_proto_tmp, &frag_off);
-	} else if (l3.v4->version == 4) {
+	} else if (l3.v4->version == IP_VERSION_IPV4) {
 		l4_proto_tmp = l3.v4->protocol;
 	}
 
@@ -1540,7 +1540,7 @@ static void hns3_set_outer_l2l3l4(struct sk_buff *skb, u8 ol4_proto,
 static void hns3_set_l3_type(struct sk_buff *skb, union l3_hdr_info l3,
 			     u32 *type_cs_vlan_tso)
 {
-	if (l3.v4->version == 4) {
+	if (l3.v4->version == IP_VERSION_IPV4) {
 		hns3_set_field(*type_cs_vlan_tso, HNS3_TXD_L3T_S,
 			       HNS3_L3T_IPV4);
 
@@ -1549,7 +1549,7 @@ static void hns3_set_l3_type(struct sk_buff *skb, union l3_hdr_info l3,
 		 */
 		if (skb_is_gso(skb))
 			hns3_set_field(*type_cs_vlan_tso, HNS3_TXD_L3CS_B, 1);
-	} else if (l3.v6->version == 6) {
+	} else if (l3.v6->version == IP_VERSION_IPV6) {
 		hns3_set_field(*type_cs_vlan_tso, HNS3_TXD_L3T_S,
 			       HNS3_L3T_IPV6);
 	}
