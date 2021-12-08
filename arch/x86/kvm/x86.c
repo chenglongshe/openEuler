@@ -9437,7 +9437,6 @@ void __kvm_request_apicv_update(struct kvm *kvm, bool activate,
 		kvm->arch.apicv_inhibit_reasons = new;
 	}
 }
-EXPORT_SYMBOL_GPL(__kvm_request_apicv_update);
 
 void kvm_request_apicv_update(struct kvm *kvm, bool activate,
 			      enum kvm_apicv_inhibit reason)
