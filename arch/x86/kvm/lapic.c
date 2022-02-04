@@ -2182,9 +2182,6 @@ void kvm_apic_write_nodecode(struct kvm_vcpu *vcpu, u32 offset)
 	struct kvm_lapic *apic = vcpu->arch.apic;
 	u64 val = 0;
 
-	/* hw has done the conditional check and inst decode */
-	offset &= 0xff0;
-
 	/* exception dealing with 64bit data on vICR in x2apic mode */
 	if ((offset == APIC_ICR) && apic_x2apic_mode(apic)) {
 		val = kvm_lapic_get_reg64(apic, offset);
