@@ -29,6 +29,8 @@ static const u32 host_save_user_msrs[] = {
 	MSR_IA32_SYSENTER_CS, MSR_IA32_SYSENTER_ESP, MSR_IA32_SYSENTER_EIP,
 	MSR_TSC_AUX,
 };
+#include "kvm_cache_regs.h"
+
 
 #define NR_HOST_SAVE_USER_MSRS ARRAY_SIZE(host_save_user_msrs)
 
