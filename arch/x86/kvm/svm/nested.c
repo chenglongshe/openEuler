@@ -473,12 +473,6 @@ static void nested_prepare_vmcb_control(struct vcpu_svm *svm)
 	 * exit_int_info, exit_int_info_err, next_rip, insn_len, insn_bytes.
 	 */
 
-	/*
-	 * Also covers avic_vapic_bar, avic_backing_page, avic_logical_id,
-	 * avic_physical_id.
-	 */
-	WARN_ON(kvm_apicv_activated(svm->vcpu.kvm));
-
 	/* Copied from vmcb01.  msrpm_base can be overwritten later.  */
 	svm->vmcb->control.nested_ctl = svm->vmcb01.ptr->control.nested_ctl;
 	svm->vmcb->control.iopm_base_pa = svm->vmcb01.ptr->control.iopm_base_pa;
@@ -546,6 +540,9 @@ int enter_svm_guest_mode(struct vcpu_svm *svm, u64 vmcb12_gpa,
 		svm->vcpu.arch.mmu->inject_page_fault = svm_inject_page_fault_nested;
 
 	svm_set_gif(svm, true);
+
+	if (kvm_vcpu_apicv_active(&svm->vcpu))
+		kvm_make_request(KVM_REQ_APICV_UPDATE, &svm->vcpu);
 
 	return 0;
 }
@@ -784,6 +781,13 @@ int nested_svm_vmexit(struct vcpu_svm *svm)
 	svm->vcpu.arch.nmi_injected = false;
 	kvm_clear_exception_queue(&svm->vcpu);
 	kvm_clear_interrupt_queue(&svm->vcpu);
+
+	/*
+	 * Un-inhibit the AVIC right away, so that other vCPUs can start
+	 * to benefit from it right away.
+	 */
+	if (kvm_apicv_activated(svm->vcpu.kvm))
+		kvm_vcpu_update_apicv(&svm->vcpu);
 
 	return 0;
 }
