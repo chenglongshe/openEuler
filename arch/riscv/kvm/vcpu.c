@@ -871,13 +871,13 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 	/* Mark this VCPU ran at least once */
 	vcpu->arch.ran_atleast_once = true;
 
-	vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
+	kvm_vcpu_srcu_read_lock(vcpu);
 
 	/* Process MMIO value returned from user-space */
 	if (run->exit_reason == KVM_EXIT_MMIO) {
 		ret = kvm_riscv_vcpu_mmio_return(vcpu, vcpu->run);
 		if (ret) {
-			srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
+			kvm_vcpu_srcu_read_unlock(vcpu);
 			return ret;
 		}
 	}
@@ -886,13 +886,13 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 	if (run->exit_reason == KVM_EXIT_RISCV_SBI) {
 		ret = kvm_riscv_vcpu_sbi_return(vcpu, vcpu->run);
 		if (ret) {
-			srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
+			kvm_vcpu_srcu_read_unlock(vcpu);
 			return ret;
 		}
 	}
 
 	if (run->immediate_exit) {
-		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
+		kvm_vcpu_srcu_read_unlock(vcpu);
 		return -EINTR;
 	}
 
@@ -931,7 +931,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 		 */
 		vcpu->mode = IN_GUEST_MODE;
 
-		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
+		kvm_vcpu_srcu_read_unlock(vcpu);
 		smp_mb__after_srcu_read_unlock();
 
 		/*
@@ -949,7 +949,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 			vcpu->mode = OUTSIDE_GUEST_MODE;
 			local_irq_enable();
 			preempt_enable();
-			vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
+			kvm_vcpu_srcu_read_lock(vcpu);
 			continue;
 		}
 
@@ -997,7 +997,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 
 		preempt_enable();
 
-		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
+		kvm_vcpu_srcu_read_lock(vcpu);
 
 		ret = kvm_riscv_vcpu_exit(vcpu, run, &trap);
 	}
@@ -1006,7 +1006,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 
 	vcpu_put(vcpu);
 
-	srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
+	kvm_vcpu_srcu_read_unlock(vcpu);
 
 	return ret;
 }

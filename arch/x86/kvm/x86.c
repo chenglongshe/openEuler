@@ -5239,9 +5239,9 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
 		if (copy_from_user(&events, argp, sizeof(struct kvm_vcpu_events)))
 			break;
 
-		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
+		kvm_vcpu_srcu_read_lock(vcpu);
 		r = kvm_vcpu_ioctl_x86_set_vcpu_events(vcpu, &events);
-		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
+		kvm_vcpu_srcu_read_unlock(vcpu);
 		break;
 	}
 	case KVM_GET_DEBUGREGS: {
@@ -9720,7 +9720,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	/* Store vcpu->apicv_active before vcpu->mode.  */
 	smp_store_release(&vcpu->mode, IN_GUEST_MODE);
 
-	srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
+	kvm_vcpu_srcu_read_unlock(vcpu);
 
 	/*
 	 * 1) We should set ->mode before checking ->requests.  Please see
@@ -9748,7 +9748,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		smp_wmb();
 		local_irq_enable();
 		preempt_enable();
-		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
+		kvm_vcpu_srcu_read_lock(vcpu);
 		r = 1;
 		goto cancel_injection;
 	}
@@ -9878,7 +9878,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	local_irq_enable();
 	preempt_enable();
 
-	vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
+	kvm_vcpu_srcu_read_lock(vcpu);
 
 	/*
 	 * Profile KVM exit RIPs:
@@ -9912,16 +9912,16 @@ out:
 }
 
 /* Called within kvm->srcu read side.  */
-static inline int vcpu_block(struct kvm *kvm, struct kvm_vcpu *vcpu)
+static inline int vcpu_block(struct kvm_vcpu *vcpu)
 {
 	if (!kvm_arch_vcpu_runnable(vcpu) &&
 	    (!kvm_x86_ops.pre_block || static_call(kvm_x86_pre_block)(vcpu) == 0)) {
-		srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+		kvm_vcpu_srcu_read_unlock(vcpu);
 		if (vcpu->arch.mp_state == KVM_MP_STATE_HALTED)
 			kvm_vcpu_halt(vcpu);
 		else
 			kvm_vcpu_block(vcpu);
-		vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
+		kvm_vcpu_srcu_read_lock(vcpu);
 
 		if (kvm_x86_ops.post_block)
 			static_call(kvm_x86_post_block)(vcpu);
@@ -9962,7 +9962,6 @@ static inline bool kvm_vcpu_running(struct kvm_vcpu *vcpu)
 static int vcpu_run(struct kvm_vcpu *vcpu)
 {
 	int r;
-	struct kvm *kvm = vcpu->kvm;
 
 	vcpu->arch.l1tf_flush_l1d = true;
 
@@ -9977,7 +9976,7 @@ static int vcpu_run(struct kvm_vcpu *vcpu)
 		if (kvm_vcpu_running(vcpu)) {
 			r = vcpu_enter_guest(vcpu);
 		} else {
-			r = vcpu_block(kvm, vcpu);
+			r = vcpu_block(vcpu);
 		}
 
 		if (r <= 0)
@@ -9996,9 +9995,9 @@ static int vcpu_run(struct kvm_vcpu *vcpu)
 		}
 
 		if (__xfer_to_guest_mode_work_pending()) {
-			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+			kvm_vcpu_srcu_read_unlock(vcpu);
 			r = xfer_to_guest_mode_handle_work(vcpu);
-			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
+			kvm_vcpu_srcu_read_lock(vcpu);
 			if (r)
 				return r;
 		}
@@ -10104,7 +10103,6 @@ static void kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 {
 	struct kvm_run *kvm_run = vcpu->run;
-	struct kvm *kvm = vcpu->kvm;
 	int r;
 
 	vcpu_load(vcpu);
@@ -10112,16 +10110,16 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 	kvm_run->flags = 0;
 	kvm_load_guest_fpu(vcpu);
 
-	vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
+	kvm_vcpu_srcu_read_lock(vcpu);
 	if (unlikely(vcpu->arch.mp_state == KVM_MP_STATE_UNINITIALIZED)) {
 		if (kvm_run->immediate_exit) {
 			r = -EINTR;
 			goto out;
 		}
 
-		srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+		kvm_vcpu_srcu_read_unlock(vcpu);
 		kvm_vcpu_block(vcpu);
-		vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
+		kvm_vcpu_srcu_read_lock(vcpu);
 
 		kvm_apic_accept_events(vcpu);
 		kvm_clear_request(KVM_REQ_UNHALT, vcpu);
@@ -10172,7 +10170,7 @@ out:
 	if (kvm_run->kvm_valid_regs)
 		store_regs(vcpu);
 	post_kvm_run_save(vcpu);
-	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+	kvm_vcpu_srcu_read_unlock(vcpu);
 
 	kvm_sigset_deactivate(vcpu);
 	vcpu_put(vcpu);
