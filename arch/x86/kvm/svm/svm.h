@@ -197,6 +197,8 @@ struct vcpu_svm {
 	u64 ghcb_sa_len;
 	bool ghcb_sa_sync;
 	bool ghcb_sa_free;
+
+	bool x2avic_msrs_intercepted;
 };
 
 struct svm_cpu_data {
