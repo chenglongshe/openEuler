@@ -677,4 +677,6 @@ DECLARE_PER_CPU(struct per_cpu_nodestat, boot_nodestats);
 int numa_migrate_prep(struct page *page, struct vm_area_struct *vma,
 		      unsigned long addr, int page_nid, int *flags);
 
+extern bool mirrored_kernelcore;
+
 #endif	/* __MM_INTERNAL_H */
