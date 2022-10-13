@@ -148,7 +148,7 @@ static inline u32 gic_read_rpr(void)
 
 extern struct static_key_false supports_pseudo_nmis;
 
-static inline bool gic_supports_nmi(void)
+static inline bool gic_supports_pseudo_nmis(void)
 {
        return IS_ENABLED(CONFIG_ARM64_PSEUDO_NMI) &&
               static_branch_likely(&supports_pseudo_nmis);
@@ -191,7 +191,7 @@ static inline void gic_arch_disable_irqs(void)
 
 static inline void gic_arch_restore_irqs(unsigned long flags)
 {
-	if (gic_supports_nmi() && !(flags & GIC_PRIO_PSR_I_SET))
+	if (gic_supports_pseudo_nmis() && !(flags & GIC_PRIO_PSR_I_SET))
 		gic_arch_enable_irqs();
 }
 #endif /* __ASSEMBLY__ */

@@ -235,7 +235,7 @@ static inline void gicr_write_vpendbaser(u64 val, void __iomem *addr)
 
 #define gicr_read_vpendbaser(c)		__gic_readq_nonatomic(c)
 
-static inline bool gic_supports_nmi(void)
+static inline bool gic_supports_pseudo_nmis(void)
 {
        return false;
 }
