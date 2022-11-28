@@ -98,6 +98,7 @@ xfs_fs_map_blocks(
 	int			nimaps = 1;
 	uint			lock_flags;
 	int			error = 0;
+	u64			seq;
 
 	if (XFS_FORCED_SHUTDOWN(mp))
 		return -EIO;
@@ -149,6 +150,7 @@ xfs_fs_map_blocks(
 	lock_flags = xfs_ilock_data_map_shared(ip);
 	error = xfs_bmapi_read(ip, offset_fsb, end_fsb - offset_fsb,
 				&imap, &nimaps, bmapi_flags);
+	seq = xfs_iomap_inode_sequence(ip, 0);
 	xfs_iunlock(ip, lock_flags);
 
 	if (error)
@@ -166,7 +168,7 @@ xfs_fs_map_blocks(
 			 */
 			xfs_ilock(ip, XFS_ILOCK_SHARED);
 			error = xfs_iomap_write_direct(ip, offset, length,
-						       &imap, nimaps);
+						       &imap, nimaps, &seq);
 			if (error)
 				goto out_unlock;
 
@@ -185,7 +187,7 @@ xfs_fs_map_blocks(
 	}
 	xfs_iunlock(ip, XFS_IOLOCK_EXCL);
 
-	xfs_bmbt_to_iomap(ip, iomap, &imap);
+	xfs_bmbt_to_iomap(ip, iomap, &imap, seq);
 	*device_generation = mp->m_generation;
 	return error;
 out_unlock:
