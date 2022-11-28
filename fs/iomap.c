@@ -745,6 +745,28 @@ iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, unsigned flags,
 	if (!page)
 		return -ENOMEM;
 
+	/*
+	 * Now we have a locked folio, before we do anything with it we need to
+	 * check that the iomap we have cached is not stale. The inode extent
+	 * mapping can change due to concurrent IO in flight (e.g.
+	 * IOMAP_UNWRITTEN state can change and memory reclaim could have
+	 * reclaimed a previously partially written page at this index after IO
+	 * completion before this write reaches this file offset) and hence we
+	 * could do the wrong thing here (zero a page range incorrectly or fail
+	 * to zero) and corrupt data.
+	 */
+	if (iomap->iomap_valid) {
+		bool iomap_valid = iomap->iomap_valid(inode, iomap);
+		if (!iomap_valid) {
+			iomap->flags |= IOMAP_F_STALE;
+			status = 0;
+			unlock_page(page);
+			put_page(page);
+			page = NULL;
+			goto out;
+		}
+	}
+
 	if (iomap->type == IOMAP_INLINE)
 		iomap_read_inline_data(inode, page, iomap);
 	else if (iomap->flags & IOMAP_F_BUFFER_HEAD)
@@ -759,6 +781,7 @@ iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, unsigned flags,
 		iomap_write_failed(inode, pos, len);
 	}
 
+out:
 	*pagep = page;
 	return status;
 }
@@ -895,6 +918,8 @@ again:
 				iomap);
 		if (unlikely(status))
 			break;
+		if (iomap->flags & IOMAP_F_STALE)
+			break;
 
 		if (mapping_writably_mapped(inode->i_mapping))
 			flush_dcache_page(page);
@@ -995,6 +1020,8 @@ iomap_dirty_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 		put_page(rpage);
 		if (unlikely(status))
 			return status;
+		if (iomap->flags & IOMAP_F_STALE)
+			break;
 
 		WARN_ON_ONCE(!PageUptodate(page));
 
@@ -1045,6 +1072,8 @@ static int iomap_zero(struct inode *inode, loff_t pos, unsigned offset,
 	status = iomap_write_begin(inode, pos, bytes, AOP_FLAG_NOFS, &page,
 				   iomap);
 	if (status)
+		return status;
+	if (iomap->flags & IOMAP_F_STALE)
 		return status;
 
 	zero_user(page, offset, bytes);
