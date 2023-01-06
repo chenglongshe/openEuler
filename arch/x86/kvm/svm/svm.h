@@ -468,6 +468,21 @@ void svm_switch_vmcb(struct vcpu_svm *svm, struct kvm_vmcb_info *target_vmcb);
 extern struct kvm_x86_nested_ops svm_nested_ops;
 
 /* avic.c */
+#define AVIC_REQUIRED_APICV_INHIBITS			\
+(							\
+	BIT(APICV_INHIBIT_REASON_DISABLE) |		\
+	BIT(APICV_INHIBIT_REASON_ABSENT) |		\
+	BIT(APICV_INHIBIT_REASON_HYPERV) |		\
+	BIT(APICV_INHIBIT_REASON_NESTED) |		\
+	BIT(APICV_INHIBIT_REASON_IRQWIN) |		\
+	BIT(APICV_INHIBIT_REASON_PIT_REINJ) |		\
+	BIT(APICV_INHIBIT_REASON_BLOCKIRQ) |		\
+	BIT(APICV_INHIBIT_REASON_SEV)      |		\
+	BIT(APICV_INHIBIT_REASON_PHYSICAL_ID_ALIASED) |	\
+	BIT(APICV_INHIBIT_REASON_APIC_ID_MODIFIED) |	\
+	BIT(APICV_INHIBIT_REASON_APIC_BASE_MODIFIED) |	\
+	BIT(APICV_INHIBIT_REASON_LOGICAL_ID_ALIASED)	\
+)
 
 #define AVIC_LOGICAL_ID_ENTRY_GUEST_PHYSICAL_ID_MASK	(0xFF)
 #define AVIC_LOGICAL_ID_ENTRY_VALID_BIT			31
@@ -493,7 +508,6 @@ void avic_vcpu_put(struct kvm_vcpu *vcpu);
 void avic_apicv_post_state_restore(struct kvm_vcpu *vcpu);
 void avic_refresh_apicv_exec_ctrl(struct kvm_vcpu *vcpu);
 void avic_load_eoi_exitmap(struct kvm_vcpu *vcpu, u64 *eoi_exit_bitmap);
-bool avic_check_apicv_inhibit_reasons(enum kvm_apicv_inhibit reason);
 void avic_hwapic_irr_update(struct kvm_vcpu *vcpu, int max_irr);
 void avic_hwapic_isr_update(struct kvm_vcpu *vcpu, int max_isr);
 bool avic_dy_apicv_has_pending_interrupt(struct kvm_vcpu *vcpu);
