@@ -8,16 +8,7 @@
 # Copyright (C) 2003,2004 Greg Kroah-Hartman <greg@kroah.com>
 #
 OUTPUT=./
-ifeq ("$(origin O)", "command line")
-	OUTPUT := $(O)/
-endif
-
-ifneq ($(OUTPUT),)
-# check that the output directory actually exists
-OUTDIR := $(shell cd $(OUTPUT) && pwd)
-$(if $(OUTDIR),, $(error output directory "$(OUTPUT)" does not exist))
-endif
-
+include ../../scripts/Makefile.include
 
 # --- CONFIGURATION BEGIN ---
 
@@ -86,12 +77,8 @@ INSTALL_SCRIPT = ${INSTALL} -m 644
 # to something more interesting, like "arm-linux-".  If you want
 # to compile vs uClibc, that can be done here as well.
 CROSS = #/usr/i386-linux-uclibc/usr/bin/i386-uclibc-
-CC = $(CROSS)gcc
-LD = $(CROSS)gcc
-AR = $(CROSS)ar
-STRIP = $(CROSS)strip
+CROSS_COMPILE ?= $(CROSS)
 RANLIB = $(CROSS)ranlib
-HOSTCC = gcc
 MKDIR = mkdir
 
 # 64bit library detection
