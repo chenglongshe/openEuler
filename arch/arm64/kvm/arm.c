@@ -395,6 +395,9 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 		r = static_key_enabled(&virtcca_cvm_is_available);
 		break;
 #endif
+	case KVM_CAP_ARM_SUPPORTED_REG_MASK_RANGES:
+		r = BIT(0);
+		break;
 	default:
 		r = 0;
 	}
@@ -1836,6 +1839,7 @@ int kvm_arch_vm_ioctl(struct file *filp, unsigned int ioctl, unsigned long arg)
 
 		return kvm_vm_set_attr(kvm, &attr);
 	}
+<<<<<<< HEAD
 #ifdef CONFIG_VIRT_PLAT_DEV
 	case KVM_CREATE_SHADOW_DEV: {
 		struct kvm_master_dev_info *mdi;
@@ -1866,6 +1870,15 @@ int kvm_arch_vm_ioctl(struct file *filp, unsigned int ioctl, unsigned long arg)
 		return 0;
 	}
 #endif
+=======
+	case KVM_ARM_GET_REG_WRITABLE_MASKS: {
+		struct reg_mask_range range;
+
+		if (copy_from_user(&range, argp, sizeof(range)))
+			return -EFAULT;
+		return kvm_vm_ioctl_get_reg_writable_masks(kvm, &range);
+	}
+>>>>>>> 3f9cd0ca8484 (KVM: arm64: Allow userspace to get the writable masks for feature ID registers)
 	default:
 		return -EINVAL;
 	}
