@@ -15,6 +15,7 @@
 #include <linux/percpu.h>
 #include <linux/spinlock.h>
 #include <asm/hwcap.h>
+#include <asm/cpufeature.h>
 #include <asm/kvm_aia_imsic.h>
 
 struct aia_hgei_control {
