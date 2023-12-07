@@ -128,7 +128,7 @@ ssize_t phyt_ps2364_pciepmu_event_sysfs_show(struct device *dev,
 	return sprintf(page, "config=0x%lx\n", (unsigned long)eattr->var);
 }
 
-ssize_t cpumask_show(struct device *dev,
+static ssize_t cpumask_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct phyt_ps2364_pciepmu *pcie_pmu = to_phyt_ps2364_pciepmu(dev_get_drvdata(dev));
