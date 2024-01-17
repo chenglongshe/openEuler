@@ -97,6 +97,10 @@ static unsigned int normalized_sysctl_sched_wakeup_granularity	= 1000000UL;
 
 const_debug unsigned int sysctl_sched_migration_cost	= 500000UL;
 
+#ifdef CONFIG_BPF_SCHED
+DEFINE_PER_CPU(cpumask_var_t, select_idle_mask);
+#endif
+
 int sched_thermal_decay_shift;
 static int __init setup_sched_thermal_decay_shift(char *str)
 {
@@ -8472,6 +8476,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 	if (sched_feat(SOFT_DOMAIN))
 		new_cpu = prev_cpu = wake_soft_domain(p, prev_cpu, &cpu, sd_flag);
 #endif
+
 #ifdef CONFIG_BPF_SCHED
 	if (bpf_sched_enabled()) {
 		ctx.task = p;
