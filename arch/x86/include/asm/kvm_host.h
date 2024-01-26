@@ -1779,6 +1779,7 @@ struct kvm_x86_ops {
 	int (*vm_attestation)(struct kvm *kvm, unsigned long gpa, unsigned long len);
 	int (*control_pre_system_reset)(struct kvm *kvm);
 	int (*control_post_system_reset)(struct kvm *kvm);
+	void *(*alloc_apic_backing_page)(struct kvm_vcpu *vcpu);
 };
 
 struct kvm_x86_nested_ops {
