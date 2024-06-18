@@ -123,6 +123,9 @@ struct sched_ext_entity {
 	struct list_head	runnable_node;	/* rq->scx.runnable_list */
 	unsigned long		runnable_at;
 
+#ifdef CONFIG_SCHED_CORE
+	u64			core_sched_at;	/* see scx_prio_less() */
+#endif
 	u64			ddsp_dsq_id;
 	u64			ddsp_enq_flags;
 	/* BPF scheduler modifiable fields */
@@ -442,6 +445,24 @@ struct sched_ext_ops {
 	 * scheduler can implement the request, return %true; otherwise, %false.
 	 */
 	bool (*yield)(struct task_struct *from, struct task_struct *to);
+
+	/**
+	 * core_sched_before - Task ordering for core-sched
+	 * @a: task A
+	 * @b: task B
+	 *
+	 * Used by core-sched to determine the ordering between two tasks. See
+	 * Documentation/admin-guide/hw-vuln/core-scheduling.rst for details on
+	 * core-sched.
+	 *
+	 * Both @a and @b are runnable and may or may not currently be queued on
+	 * the BPF scheduler. Should return %true if @a should run before @b.
+	 * %false if there's no required ordering or @b should run before @a.
+	 *
+	 * If not specified, the default is ordering them according to when they
+	 * became runnable.
+	 */
+	bool (*core_sched_before)(struct task_struct *a, struct task_struct *b);
 
 	/**
 	 * set_weight - Set task weight
