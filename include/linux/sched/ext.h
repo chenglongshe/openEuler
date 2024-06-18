@@ -194,6 +194,20 @@ struct scx_exit_info {
 
 	/* informational message */
 	char			*msg;
+
+	/* debug dump */
+	char			*dump;
+};
+
+/*
+ * Informational context provided to dump operations.
+ */
+struct scx_dump_ctx {
+	enum scx_exit_kind	kind;
+	s64			exit_code;
+	const char		*reason;
+	u64			at_ns;
+	u64			at_jiffies;
 };
 
 /**
@@ -387,6 +401,36 @@ struct sched_ext_ops {
 	 */
 	void (*disable)(struct task_struct *p);
 
+	/**
+	 * dump - Dump BPF scheduler state on error
+	 * @ctx: debug dump context
+	 *
+	 * Use scx_bpf_dump() to generate BPF scheduler specific debug dump.
+	 */
+	void (*dump)(struct scx_dump_ctx *ctx);
+
+	/**
+	 * dump_cpu - Dump BPF scheduler state for a CPU on error
+	 * @ctx: debug dump context
+	 * @cpu: CPU to generate debug dump for
+	 * @idle: @cpu is currently idle without any runnable tasks
+	 *
+	 * Use scx_bpf_dump() to generate BPF scheduler specific debug dump for
+	 * @cpu. If @idle is %true and this operation doesn't produce any
+	 * output, @cpu is skipped for dump.
+	 */
+	void (*dump_cpu)(struct scx_dump_ctx *ctx, s32 cpu, bool idle);
+
+	/**
+	 * dump_task - Dump BPF scheduler state for a runnable task on error
+	 * @ctx: debug dump context
+	 * @p: runnable task to generate debug dump for
+	 *
+	 * Use scx_bpf_dump() to generate BPF scheduler specific debug dump for
+	 * @p.
+	 */
+	void (*dump_task)(struct scx_dump_ctx *ctx, struct task_struct *p);
+
 	/*
 	 * All online ops must come before ops.init().
 	 */
@@ -420,6 +464,12 @@ struct sched_ext_ops {
 	 * Defaults to the maximum allowed timeout value of 30 seconds.
 	 */
 	u32 timeout_ms;
+
+	/**
+	 * exit_dump_len - scx_exit_info.dump buffer length. If 0, the default
+	 * value of 32768 is used.
+	 */
+	u32 exit_dump_len;
 
 	/**
 	 * name - BPF scheduler's name
