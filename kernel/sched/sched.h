@@ -3766,4 +3766,6 @@ extern void check_class_changing(struct rq *rq, struct task_struct *p, const str
 bool bpf_sched_is_cpu_allowed(struct task_struct *p, int cpu);
 #endif
 
+#include "ext.h"
+
 #endif /* _KERNEL_SCHED_SCHED_H */
