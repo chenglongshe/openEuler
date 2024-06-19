@@ -2115,9 +2115,15 @@ static __always_inline void exc_machine_check_kernel(struct pt_regs *regs)
 
 static __always_inline void exc_machine_check_user(struct pt_regs *regs)
 {
+	irqentry_state_t irq_state;
+
 	irqentry_enter_from_user_mode(regs);
 
+	irq_state = irqentry_nmi_enter(regs);
+
 	do_machine_check(regs);
+
+	irqentry_nmi_exit(regs, irq_state);
 
 	irqentry_exit_to_user_mode(regs);
 }
