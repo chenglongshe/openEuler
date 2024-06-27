@@ -31,7 +31,7 @@ static int mpi3mr_bsg_pel_abort(struct mpi3mr_ioc *mrioc)
 		dprint_bsg_err(mrioc, "%s: reset in progress\n", __func__);
 		return -1;
 	}
-	if (mrioc->stop_bsgs) {
+	if (mrioc->stop_bsgs || mrioc->block_on_pci_err) {
 		dprint_bsg_err(mrioc, "%s: bsgs are blocked\n", __func__);
 		return -1;
 	}
@@ -423,6 +423,9 @@ static long mpi3mr_bsg_adp_reset(struct mpi3mr_ioc *mrioc,
 		    __func__);
 		goto out;
 	}
+
+	if (mrioc->unrecoverable || mrioc->block_on_pci_err)
+		return -EINVAL;
 
 	sg_copy_to_buffer(job->request_payload.sg_list,
 			  job->request_payload.sg_cnt,
@@ -1200,7 +1203,7 @@ static long mpi3mr_bsg_process_mpt_cmds(struct bsg_job *job, unsigned int *reply
 		mutex_unlock(&mrioc->bsg_cmds.mutex);
 		goto out;
 	}
-	if (mrioc->stop_bsgs) {
+	if (mrioc->stop_bsgs || mrioc->block_on_pci_err) {
 		dprint_bsg_err(mrioc, "%s: bsgs are blocked\n", __func__);
 		rval = -EAGAIN;
 		mutex_unlock(&mrioc->bsg_cmds.mutex);
@@ -1719,7 +1722,8 @@ adp_state_show(struct device *dev, struct device_attribute *attr,
 	ioc_state = mpi3mr_get_iocstate(mrioc);
 	if (ioc_state == MRIOC_STATE_UNRECOVERABLE)
 		adp_state = MPI3MR_BSG_ADPSTATE_UNRECOVERABLE;
-	else if ((mrioc->reset_in_progress) || (mrioc->stop_bsgs))
+	else if (mrioc->reset_in_progress || mrioc->stop_bsgs ||
+		 mrioc->block_on_pci_err)
 		adp_state = MPI3MR_BSG_ADPSTATE_IN_RESET;
 	else if (ioc_state == MRIOC_STATE_FAULT)
 		adp_state = MPI3MR_BSG_ADPSTATE_FAULT;
