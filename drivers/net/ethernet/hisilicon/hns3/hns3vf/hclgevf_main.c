@@ -11,12 +11,17 @@
 #include "hnae3.h"
 #include "hclgevf_devlink.h"
 #include "hclge_comm_rss.h"
+#if IS_ENABLED(CONFIG_UB_UDMA_HNS3)
 #include "hclgevf_udma.h"
+#endif
+#ifdef CONFIG_HNS3_UBL
 #include "hclge_comm_unic_addr.h"
 #include "hclgevf_unic_ip.h"
 #include "hclgevf_unic_guid.h"
 #include "hclgevf_unic_addr.h"
+#endif
 #include "hclgevf_trace.h"
+#include "hclgevf_dcb.h"
 
 #define HCLGEVF_NAME	"hclgevf"
 
@@ -191,10 +196,13 @@ static int hclgevf_get_basic_info(struct hclgevf_dev *hdev)
 	basic_info = (struct hclge_basic_info *)resp_msg;
 
 	hdev->hw_tc_map = basic_info->hw_tc_map;
+	hdev->nic.kinfo.tc_info.max_tc = basic_info->tc_max;
 	hdev->mbx_api_version = le16_to_cpu(basic_info->mbx_api_version);
 	caps = le32_to_cpu(basic_info->pf_caps);
 	if (test_bit(HNAE3_PF_SUPPORT_VLAN_FLTR_MDF_B, &caps))
 		set_bit(HNAE3_DEV_SUPPORT_VLAN_FLTR_MDF_B, ae_dev->caps);
+	if (!test_bit(HNAE3_PF_SUPPORT_VF_MULTI_TCS_B, &caps))
+		clear_bit(HNAE3_DEV_SUPPORT_VF_MULTI_TCS_B, ae_dev->caps);
 
 	return 0;
 }
@@ -387,12 +395,12 @@ static int hclgevf_knic_setup(struct hclgevf_dev *hdev)
 	new_tqps = kinfo->rss_size * num_tc;
 	kinfo->num_tqps = min(new_tqps, hdev->num_tqps);
 
-	kinfo->tqp = devm_kcalloc(&hdev->pdev->dev, kinfo->num_tqps,
+	kinfo->tqp = devm_kcalloc(&hdev->pdev->dev, hdev->num_tqps,
 				  sizeof(struct hnae3_queue *), GFP_KERNEL);
 	if (!kinfo->tqp)
 		return -ENOMEM;
 
-	for (i = 0; i < kinfo->num_tqps; i++) {
+	for (i = 0; i < hdev->num_tqps; i++) {
 		hdev->htqp[i].q.handle = &hdev->nic;
 		hdev->htqp[i].q.tqp_index = i;
 		kinfo->tqp[i] = &hdev->htqp[i].q;
@@ -1421,8 +1429,10 @@ static int hclgevf_reset_tqp(struct hnae3_handle *handle)
 
 	ret = hclgevf_send_mbx_msg(hdev, &send_msg, true, &return_status,
 				   sizeof(return_status));
-	if (ret || return_status == HCLGEVF_RESET_ALL_QUEUE_DONE)
+	if (ret)
 		return ret;
+	if (return_status == HCLGEVF_RESET_ALL_QUEUE_DONE)
+		goto map_tc;
 
 	for (i = 1; i < handle->kinfo.num_tqps; i++) {
 		hclgevf_build_send_msg(&send_msg, HCLGE_MBX_QUEUE_RESET, 0);
@@ -1431,8 +1441,14 @@ static int hclgevf_reset_tqp(struct hnae3_handle *handle)
 		if (ret)
 			return ret;
 	}
+map_tc:
+	/* restore the tc map for tx ring */
+	ret = hclgevf_tx_ring_tc_config(hdev);
+	if (ret)
+		dev_err(&hdev->pdev->dev, "failed to set tqp tc, ret = %d\n",
+			ret);
 
-	return 0;
+	return ret;
 }
 
 static int hclgevf_set_mtu(struct hnae3_handle *handle, int new_mtu)
@@ -1448,8 +1464,8 @@ static int hclgevf_set_mtu(struct hnae3_handle *handle, int new_mtu)
 	return hclgevf_send_mbx_msg(hdev, &send_msg, true, NULL, 0);
 }
 
-static int hclgevf_notify_client(struct hclgevf_dev *hdev,
-				 enum hnae3_reset_notify_type type)
+int hclgevf_notify_client(struct hclgevf_dev *hdev,
+			  enum hnae3_reset_notify_type type)
 {
 	struct hnae3_client *client = hdev->nic_client;
 	struct hnae3_handle *handle = &hdev->nic;
@@ -1488,6 +1504,17 @@ static int hclgevf_notify_roce_client(struct hclgevf_dev *hdev,
 		dev_err(&hdev->pdev->dev, "notify roce client failed %d(%d)",
 			type, ret);
 	return ret;
+}
+
+static void hclgevf_set_reset_pending(struct hclgevf_dev *hdev,
+				      enum hnae3_reset_type reset_type)
+{
+	/* When an incorrect reset type is executed, the get_reset_level
+	 * function generates the HNAE3_NONE_RESET flag. As a result, this
+	 * type do not need to pending.
+	 */
+	if (reset_type != HNAE3_NONE_RESET)
+		set_bit(reset_type, &hdev->reset_pending);
 }
 
 static int hclgevf_reset_wait(struct hclgevf_dev *hdev)
@@ -1639,7 +1666,7 @@ static void hclgevf_reset_err_handle(struct hclgevf_dev *hdev)
 		hdev->rst_stats.rst_fail_cnt);
 
 	if (hdev->rst_stats.rst_fail_cnt < HCLGEVF_RESET_MAX_FAIL_CNT)
-		set_bit(hdev->reset_type, &hdev->reset_pending);
+		hclgevf_set_reset_pending(hdev, hdev->reset_type);
 
 	if (hclgevf_is_reset_pending(hdev)) {
 		set_bit(HCLGEVF_RESET_PENDING, &hdev->reset_state);
@@ -1785,6 +1812,8 @@ static enum hnae3_reset_type hclgevf_get_reset_level(unsigned long *addr)
 		clear_bit(HNAE3_FLR_RESET, addr);
 	}
 
+	clear_bit(HNAE3_NONE_RESET, addr);
+
 	return rst_level;
 }
 
@@ -1794,13 +1823,14 @@ static void hclgevf_reset_event(struct pci_dev *pdev,
 	struct hnae3_ae_dev *ae_dev = pci_get_drvdata(pdev);
 	struct hclgevf_dev *hdev = ae_dev->priv;
 
-	dev_info(&hdev->pdev->dev, "received reset request from VF enet\n");
-
 	if (hdev->default_reset_request)
 		hdev->reset_level =
 			hclgevf_get_reset_level(&hdev->default_reset_request);
 	else
 		hdev->reset_level = HNAE3_VF_FUNC_RESET;
+
+	dev_info(&hdev->pdev->dev, "received reset request from VF enet, reset level is %d\n",
+		 hdev->reset_level);
 
 	/* reset of this VF requested */
 	set_bit(HCLGEVF_RESET_REQUESTED, &hdev->reset_state);
@@ -1812,8 +1842,20 @@ static void hclgevf_reset_event(struct pci_dev *pdev,
 static void hclgevf_set_def_reset_request(struct hnae3_ae_dev *ae_dev,
 					  enum hnae3_reset_type rst_type)
 {
+#define HCLGEVF_SUPPORT_RESET_TYPE \
+	(BIT(HNAE3_VF_RESET) | BIT(HNAE3_VF_FUNC_RESET) | \
+	BIT(HNAE3_VF_PF_FUNC_RESET) | BIT(HNAE3_VF_FULL_RESET) | \
+	BIT(HNAE3_FLR_RESET) | BIT(HNAE3_VF_EXP_RESET))
+
 	struct hclgevf_dev *hdev = ae_dev->priv;
 
+	if (!(BIT(rst_type) & HCLGEVF_SUPPORT_RESET_TYPE)) {
+		/* To prevent reset triggered by hclge_reset_event */
+		set_bit(HNAE3_NONE_RESET, &hdev->default_reset_request);
+		dev_info(&hdev->pdev->dev, "unsupported reset type %d\n",
+			 rst_type);
+		return;
+	}
 	set_bit(rst_type, &hdev->default_reset_request);
 }
 
@@ -1970,14 +2012,14 @@ static void hclgevf_reset_service_task(struct hclgevf_dev *hdev)
 		 */
 		if (hdev->reset_attempts > HCLGEVF_MAX_RESET_ATTEMPTS_CNT) {
 			/* prepare for full reset of stack + pcie interface */
-			set_bit(HNAE3_VF_FULL_RESET, &hdev->reset_pending);
+			hclgevf_set_reset_pending(hdev, HNAE3_VF_FULL_RESET);
 
 			/* "defer" schedule the reset task again */
 			set_bit(HCLGEVF_RESET_PENDING, &hdev->reset_state);
 		} else {
 			hdev->reset_attempts++;
 
-			set_bit(hdev->reset_level, &hdev->reset_pending);
+			hclgevf_set_reset_pending(hdev, hdev->reset_level);
 			set_bit(HCLGEVF_RESET_PENDING, &hdev->reset_state);
 		}
 		hclgevf_reset_task_schedule(hdev);
@@ -2109,7 +2151,7 @@ static enum hclgevf_evt_cause hclgevf_check_evt_cause(struct hclgevf_dev *hdev,
 		rst_ing_reg = hclgevf_read_dev(&hdev->hw, HCLGEVF_RST_ING);
 		dev_info(&hdev->pdev->dev,
 			 "receive reset interrupt 0x%x!\n", rst_ing_reg);
-		set_bit(HNAE3_VF_RESET, &hdev->reset_pending);
+		hclgevf_set_reset_pending(hdev, HNAE3_VF_RESET);
 		set_bit(HCLGEVF_RESET_PENDING, &hdev->reset_state);
 		set_bit(HCLGE_COMM_STATE_CMD_DISABLE, &hdev->hw.hw.comm_state);
 		*clearval = ~(1U << HCLGEVF_VECTOR0_RST_INT_B);
@@ -2197,6 +2239,8 @@ static int hclgevf_configure(struct hclgevf_dev *hdev)
 	if (ret)
 		return ret;
 
+	hclgevf_dcb_init(hdev);
+
 	/* get current port based vlan state from PF */
 	ret = hclgevf_get_port_base_vlan_filter_state(hdev);
 	if (ret)
@@ -2212,7 +2256,11 @@ static int hclgevf_configure(struct hclgevf_dev *hdev)
 	if (ret)
 		return ret;
 
-	return hclgevf_get_pf_media_type(hdev);
+	ret = hclgevf_get_pf_media_type(hdev);
+	if (ret)
+		return ret;
+
+	return hclgevf_get_dscp_to_pri_map(hdev);
 }
 
 static int hclgevf_alloc_hdev(struct hnae3_ae_dev *ae_dev)
@@ -2278,12 +2326,21 @@ static int hclgevf_config_gro(struct hclgevf_dev *hdev)
 	return ret;
 }
 
+int hclgevf_init_rss_tc_mode(struct hclgevf_dev *hdev, u16 rss_size)
+{
+	u16 tc_offset[HNAE3_MAX_TC] = {0};
+	u16 tc_valid[HNAE3_MAX_TC] = {0};
+	u16 tc_size[HNAE3_MAX_TC] = {0};
+
+	hclge_comm_get_rss_tc_info(rss_size, hdev->hw_tc_map,
+				   tc_offset, tc_valid, tc_size);
+	return hclge_comm_set_rss_tc_mode(&hdev->hw.hw, tc_offset, tc_valid,
+					  tc_size);
+}
+
 static int hclgevf_rss_init_hw(struct hclgevf_dev *hdev)
 {
 	struct hclge_comm_rss_cfg *rss_cfg = &hdev->rss_cfg;
-	u16 tc_offset[HCLGE_COMM_MAX_TC_NUM];
-	u16 tc_valid[HCLGE_COMM_MAX_TC_NUM];
-	u16 tc_size[HCLGE_COMM_MAX_TC_NUM];
 	int ret;
 
 	if (hdev->ae_dev->dev_version >= HNAE3_DEVICE_VERSION_V2) {
@@ -2303,11 +2360,7 @@ static int hclgevf_rss_init_hw(struct hclgevf_dev *hdev)
 	if (ret)
 		return ret;
 
-	hclge_comm_get_rss_tc_info(rss_cfg->rss_size, hdev->hw_tc_map,
-				   tc_offset, tc_valid, tc_size);
-
-	return hclge_comm_set_rss_tc_mode(&hdev->hw.hw, tc_offset,
-					  tc_valid, tc_size);
+	return hclgevf_init_rss_tc_mode(hdev, rss_cfg->rss_size);
 }
 
 static int hclgevf_init_vlan_config(struct hclgevf_dev *hdev)
@@ -3032,6 +3085,63 @@ static void hclgevf_uninit_rxd_adv_layout(struct hclgevf_dev *hdev)
 		hclgevf_write_dev(&hdev->hw, HCLGEVF_RXD_ADV_LAYOUT_EN_REG, 0);
 }
 
+int hclgevf_get_dscp_to_pri_map(struct hclgevf_dev *hdev)
+{
+#define HCLGEVF_DSCP_MAP_PRI_BD_NUM	2
+#define HCLGEVF_DSCP_PRI_SHIFT(n)	(((n) & 1) * 4)
+#define HCLGEVF_PRI_MASK	0xF
+
+	struct hnae3_knic_private_info *kinfo = &hdev->nic.kinfo;
+	struct hclge_desc desc[HCLGEVF_DSCP_MAP_PRI_BD_NUM];
+	u8 dscp_prio[HNAE3_MAX_DSCP] = {0};
+	u8 *req0 = (u8 *)desc[0].data;
+	u8 *req1 = (u8 *)desc[1].data;
+	u8 dscp_app_cnt = 0;
+	u8 i, j;
+	int ret;
+
+	if (!hnae3_ae_dev_vf_multi_tcs_supported(hdev))
+		return 0;
+
+	hclgevf_cmd_setup_basic_desc(&desc[0], HCLGE_OPC_DSCP_PRI_MAP, true);
+	desc[0].flag |= cpu_to_le16(HCLGE_COMM_CMD_FLAG_NEXT);
+	hclgevf_cmd_setup_basic_desc(&desc[1], HCLGE_OPC_DSCP_PRI_MAP, true);
+
+	ret = hclgevf_cmd_send(&hdev->hw, desc, HCLGEVF_DSCP_MAP_PRI_BD_NUM);
+	if (ret) {
+		dev_err(&hdev->pdev->dev,
+			"failed to get dscp pri map, ret = %d\n", ret);
+		return ret;
+	}
+
+	/* The low 32 dscp setting use bd0, high 32 dscp setting use bd1 */
+	for (i = 0; i < HNAE3_MAX_DSCP / HCLGEVF_DSCP_MAP_PRI_BD_NUM; i++) {
+		/* Each dscp setting has 4 bits, so each byte saves two dscp
+		 * setting
+		 */
+		dscp_prio[i] = (req0[i >> 1] >> HCLGEVF_DSCP_PRI_SHIFT(i)) &
+				HCLGEVF_PRI_MASK;
+
+		j = i + HNAE3_MAX_DSCP / HCLGEVF_DSCP_MAP_PRI_BD_NUM;
+		dscp_prio[j] = (req1[i >> 1] >> HCLGEVF_DSCP_PRI_SHIFT(i)) &
+				HCLGEVF_PRI_MASK;
+	}
+	dscp_app_cnt = 0;
+	for (i = 0; i < HNAE3_MAX_DSCP; i++) {
+		if (dscp_prio[i] >= HNAE3_MAX_USER_PRIO)
+			dscp_prio[i] = HNAE3_PRIO_ID_INVALID;
+		else
+			dscp_app_cnt++;
+	}
+
+	kinfo->dscp_app_cnt = dscp_app_cnt;
+	memcpy(kinfo->dscp_prio, dscp_prio, HNAE3_MAX_DSCP);
+	kinfo->tc_map_mode = kinfo->dscp_app_cnt ? HNAE3_TC_MAP_MODE_DSCP :
+		HNAE3_TC_MAP_MODE_PRIO;
+
+	return 0;
+}
+
 static int hclgevf_reset_hdev(struct hclgevf_dev *hdev)
 {
 	struct pci_dev *pdev = hdev->pdev;
@@ -3073,6 +3183,10 @@ static int hclgevf_reset_hdev(struct hclgevf_dev *hdev)
 
 	/* get current port based vlan state from PF */
 	ret = hclgevf_get_port_base_vlan_filter_state(hdev);
+	if (ret)
+		return ret;
+
+	ret = hclgevf_get_dscp_to_pri_map(hdev);
 	if (ret)
 		return ret;
 
@@ -3275,11 +3389,7 @@ static void hclgevf_uninit_ae_dev(struct hnae3_ae_dev *ae_dev)
 
 static u32 hclgevf_get_max_channels(struct hclgevf_dev *hdev)
 {
-	struct hnae3_handle *nic = &hdev->nic;
-	struct hnae3_knic_private_info *kinfo = &nic->kinfo;
-
-	return min_t(u32, hdev->rss_size_max,
-		     hdev->num_tqps / kinfo->tc_info.num_tc);
+	return min_t(u32, hdev->rss_size_max, hdev->num_tqps);
 }
 
 /**
@@ -3312,8 +3422,7 @@ static void hclgevf_get_tqps_and_rss_info(struct hnae3_handle *handle,
 	*max_rss_size = hdev->rss_size_max;
 }
 
-static void hclgevf_update_rss_size(struct hnae3_handle *handle,
-				    u32 new_tqps_num)
+void hclgevf_update_rss_size(struct hnae3_handle *handle, u32 new_tqps_num)
 {
 	struct hnae3_knic_private_info *kinfo = &handle->kinfo;
 	struct hclgevf_dev *hdev = hclgevf_ae_get_hdev(handle);
@@ -3335,6 +3444,8 @@ static void hclgevf_update_rss_size(struct hnae3_handle *handle,
 		kinfo->rss_size = max_rss_size;
 
 	kinfo->num_tqps = kinfo->tc_info.num_tc * kinfo->rss_size;
+
+	hdev->rss_cfg.rss_size = kinfo->rss_size;
 }
 
 static int hclgevf_set_channels(struct hnae3_handle *handle, u32 new_tqps_num,
@@ -3342,9 +3453,6 @@ static int hclgevf_set_channels(struct hnae3_handle *handle, u32 new_tqps_num,
 {
 	struct hclgevf_dev *hdev = hclgevf_ae_get_hdev(handle);
 	struct hnae3_knic_private_info *kinfo = &handle->kinfo;
-	u16 tc_offset[HCLGE_COMM_MAX_TC_NUM];
-	u16 tc_valid[HCLGE_COMM_MAX_TC_NUM];
-	u16 tc_size[HCLGE_COMM_MAX_TC_NUM];
 	u16 cur_rss_size = kinfo->rss_size;
 	u16 cur_tqps = kinfo->num_tqps;
 	u32 *rss_indir;
@@ -3352,11 +3460,8 @@ static int hclgevf_set_channels(struct hnae3_handle *handle, u32 new_tqps_num,
 	int ret;
 
 	hclgevf_update_rss_size(handle, new_tqps_num);
-
-	hclge_comm_get_rss_tc_info(kinfo->rss_size, hdev->hw_tc_map,
-				   tc_offset, tc_valid, tc_size);
-	ret = hclge_comm_set_rss_tc_mode(&hdev->hw.hw, tc_offset,
-					 tc_valid, tc_size);
+	hclgevf_update_tc_info(hdev);
+	ret = hclgevf_init_rss_tc_mode(hdev, kinfo->rss_size);
 	if (ret)
 		return ret;
 
@@ -3523,6 +3628,23 @@ void hclgevf_update_port_base_vlan_info(struct hclgevf_dev *hdev, u16 state,
 	rtnl_unlock();
 }
 
+static int hclgevf_get_dscp_prio(struct hnae3_handle *h, u8 dscp, u8 *tc_mode,
+				 u8 *priority)
+{
+	struct hnae3_knic_private_info *kinfo = &h->kinfo;
+
+	if (dscp >= HNAE3_MAX_DSCP)
+		return -EINVAL;
+
+	if (tc_mode)
+		*tc_mode = kinfo->tc_map_mode;
+	if (priority)
+		*priority = kinfo->dscp_prio[dscp] == HNAE3_PRIO_ID_INVALID ? 0 :
+			    kinfo->dscp_prio[dscp];
+
+	return 0;
+}
+
 static const struct hnae3_ae_ops hclgevf_ops = {
 	.init_ae_dev = hclgevf_init_ae_dev,
 	.uninit_ae_dev = hclgevf_uninit_ae_dev,
@@ -3582,6 +3704,7 @@ static const struct hnae3_ae_ops hclgevf_ops = {
 	.get_cmdq_stat = hclgevf_get_cmdq_stat,
 	.request_flush_qb_config = hclgevf_set_fd_qb,
 	.query_fd_qb_state = hclgevf_query_fd_qb_state,
+	.get_dscp_prio = hclgevf_get_dscp_prio,
 #ifdef CONFIG_HNS3_UBL
 	.add_addr = hclgevf_unic_add_addr,
 	.rm_addr = hclgevf_unic_rm_addr,

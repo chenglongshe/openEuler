@@ -23,12 +23,9 @@ config HISI_HBMDEV
 	depends on ACPI_HOTPLUG_MEMORY
 	select ACPI_CONTAINER
 	help
-	  This driver add two extra supports for memory devices. The driver
-	  provides methods for userpace to control the power of memory devices
-	  in a container. Besides, it provides extra locality information
-	  between cpus and memory devices for userspace, which can take
-	  advantage of this functionality to select the closet memory device
-	  to a certain cpu.
+	  This driver add extra supports for memory devices. The driver
+	  provides methods for userpace to control the power of memory
+	  devices in a container.
 
 	  To compile this driver as a module, choose M here:
 	  the module will be called hisi_hbmdev.
@@ -43,16 +40,6 @@ config HISI_HBMCACHE
 
 	  To compile the driver as a module, choose M here:
 	  the module will be called hisi_hbmcache.
-
-config HISI_HBMDEV_ACLS
-	bool "Add support for HISI ACLS repair"
-	depends on HISI_HBMDEV
-	help
-	  Add ACLS support for hbm device, which can be used to query and
-	  repair hardware error in HBM devices. This feature need to work with
-	  hardware firmwares.
-
-	  If not sure say no.
 
 config HISI_L3T
 	tristate "Add support for l3t"
@@ -69,6 +56,19 @@ config HISI_L0
 	help
 	  L0 driver for platforms such Kunpeng 920. This provides interfaces to
 	  for user to alloc and lock memory
+
+	  If not sure say no.
+
+config HISI_MEM_RAS
+	tristate "Add RAS support for Hisilicon memory device"
+	depends on ACPI
+	depends on PCC
+	depends on ARM64 || COMPILE_TEST
+	help
+	  Add RAS driver for Hisilicon memory device to repair hardware error of
+	  memory devices in OS side. The driver interacts with firmware through PCC
+	  and provides sysfs files as user-mode interfaces.It could support both
+	  HBM and DDR memory.
 
 	  If not sure say no.
 

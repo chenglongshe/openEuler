@@ -97,8 +97,8 @@
 #define HCLGE_UMV_TBL_SIZE		3072
 #define HCLGE_DEFAULT_UMV_SPACE_PER_PF \
 	(HCLGE_UMV_TBL_SIZE / HCLGE_MAX_PF_NUM)
-#define HCLGE_DEFAULT_GUID_TBL_SIZE	64
-#define HCLGE_DEFAULT_IP_TBL_SIZE		1024
+#define HCLGE_DEFAULT_GUID_TBL_SIZE	320
+#define HCLGE_DEFAULT_IP_TBL_SIZE	1024
 
 #define HCLGE_TQP_RESET_TRY_TIMES	200
 
@@ -968,6 +968,7 @@ struct hclge_dev {
 	unsigned long vf_vlan_full[BITS_TO_LONGS(HCLGE_VPORT_NUM)];
 
 	unsigned long vport_config_block[BITS_TO_LONGS(HCLGE_VPORT_NUM)];
+	unsigned long vf_multi_tcs_en[BITS_TO_LONGS(HCLGE_VPORT_NUM)];
 
 	struct hclge_fd_cfg fd_cfg;
 	struct hlist_head fd_rule_list;
@@ -1137,6 +1138,12 @@ struct hclge_link_mode_bmap {
 	enum ethtool_link_mode_bit_indices link_mode;
 };
 
+static inline u16 hclge_unic_real_mguid_tbl_size(struct hclge_dev *hdev)
+{
+	return min(HCLGE_UNIC_MC_GUID_NUM,
+		   hdev->ae_dev->dev_specs.guid_tbl_space - HCLGE_VPORT_NUM);
+}
+
 int hclge_set_vport_promisc_mode(struct hclge_vport *vport, bool en_uc_pmc,
 				 bool en_mc_pmc, bool en_bc_pmc);
 int hclge_add_uc_addr_common(struct hclge_vport *vport,
@@ -1229,4 +1236,5 @@ void hclge_get_media_type(struct hnae3_handle *handle, u8 *media_type,
 			  u8 *module_type);
 int hclge_cfg_mac_mode(struct hclge_dev *hdev, bool enable);
 int hclge_query_scc_version(struct hclge_dev *hdev, u32 *scc_version);
+int hclge_mbx_event_notify(struct hclge_vport *vport, u64 event_bits);
 #endif

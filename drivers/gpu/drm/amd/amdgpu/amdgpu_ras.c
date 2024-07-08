@@ -1348,11 +1348,14 @@ static void amdgpu_ras_interrupt_process_handler(struct work_struct *work)
 int amdgpu_ras_interrupt_dispatch(struct amdgpu_device *adev,
 		struct ras_dispatch_if *info)
 {
-	struct ras_manager *obj = amdgpu_ras_find_obj(adev, &info->head);
-	struct ras_ih_data *data = &obj->ih_data;
+	struct ras_manager *obj;
+	struct ras_ih_data *data;
 
+	obj = amdgpu_ras_find_obj(adev, &info->head);
 	if (!obj)
 		return -EINVAL;
+
+	data = &obj->ih_data;
 
 	if (data->inuse == 0)
 		return 0;
@@ -1571,9 +1574,11 @@ static void amdgpu_ras_do_recovery(struct work_struct *work)
 	struct amdgpu_device *remote_adev = NULL;
 	struct amdgpu_device *adev = ras->adev;
 	struct list_head device_list, *device_list_handle =  NULL;
+	struct amdgpu_hive_info *hive = amdgpu_get_xgmi_hive(adev);
 
+	if (hive)
+		atomic_set(&hive->ras_recovery, 1);
 	if (!ras->disable_ras_err_cnt_harvest) {
-		struct amdgpu_hive_info *hive = amdgpu_get_xgmi_hive(adev);
 
 		/* Build list of devices to query RAS related errors */
 		if  (hive && adev->gmc.xgmi.num_physical_nodes > 1) {
@@ -1590,12 +1595,15 @@ static void amdgpu_ras_do_recovery(struct work_struct *work)
 			amdgpu_ras_log_on_err_counter(remote_adev);
 		}
 
-		amdgpu_put_xgmi_hive(hive);
 	}
 
 	if (amdgpu_device_should_recover_gpu(ras->adev))
 		amdgpu_device_gpu_recover(ras->adev, NULL);
 	atomic_set(&ras->in_recovery, 0);
+	if (hive) {
+		atomic_set(&hive->ras_recovery, 0);
+		amdgpu_put_xgmi_hive(hive);
+	}
 }
 
 /* alloc/realloc bps array */

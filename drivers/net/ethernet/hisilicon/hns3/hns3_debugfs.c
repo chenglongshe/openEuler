@@ -7,7 +7,9 @@
 #include "hnae3.h"
 #include "hns3_debugfs.h"
 #include "hns3_enet.h"
+#ifdef CONFIG_HNS3_UBL
 #include "hns3_unic_debugfs.h"
+#endif
 
 static struct dentry *hns3_dbgfs_root;
 
@@ -61,7 +63,7 @@ static struct hns3_dbg_cmd_info hns3_dbg_cmd[] = {
 		.name = "tm_qset",
 		.cmd = HNAE3_DBG_CMD_TM_QSET,
 		.dentry = HNS3_DBG_DENTRY_TM,
-		.buf_len = HNS3_DBG_READ_LEN,
+		.buf_len = HNS3_DBG_READ_LEN_1MB,
 		.init = hns3_dbg_common_file_init,
 	},
 	{
@@ -419,6 +421,12 @@ static struct hns3_dbg_cap_info hns3_dbg_cap[] = {
 	}, {
 		.name = "support vf fault detect",
 		.cap_bit = HNAE3_DEV_SUPPORT_VF_FAULT_B,
+	}, {
+		.name = "support vf multi tcs",
+		.cap_bit = HNAE3_DEV_SUPPORT_VF_MULTI_TCS_B,
+	}, {
+		.name = "support tc buffer",
+		.cap_bit = HNAE3_DEV_SUPPORT_TC_BUFFER_B,
 	}
 };
 
@@ -1101,6 +1109,10 @@ hns3_dbg_dev_specs(struct hnae3_handle *h, char *buf, int len, int *pos)
 			  dev->watchdog_timeo / HZ);
 	*pos += scnprintf(buf + *pos, len - *pos, "Hilink Version: %u\n",
 			  dev_specs->hilink_version);
+	*pos += scnprintf(buf + *pos, len - *pos, "total rx buffer size: %u\n",
+			  dev_specs->total_rx_buffer_size);
+	*pos += scnprintf(buf + *pos, len - *pos, "min rx buffer size per tc: %u\n",
+			  dev_specs->min_rx_buffer_size_per_tc);
 }
 
 static int hns3_dbg_dev_info(struct hnae3_handle *h, char *buf, int len)
@@ -1295,8 +1307,10 @@ static ssize_t hns3_dbg_read(struct file *filp, char __user *buffer,
 
 		/* save the buffer addr until the last read operation */
 		*save_buf = read_buf;
+	}
 
-		/* get data ready for the first time to read */
+	/* get data ready for the first time to read */
+	if (!*ppos) {
 		ret = hns3_dbg_read_cmd(dbg_data, hns3_dbg_cmd[index].cmd,
 					read_buf, hns3_dbg_cmd[index].buf_len);
 		if (ret)

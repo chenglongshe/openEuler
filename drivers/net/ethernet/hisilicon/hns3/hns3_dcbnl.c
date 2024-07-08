@@ -104,6 +104,51 @@ static u8 hns3_dcbnl_setdcbx(struct net_device *ndev, u8 mode)
 	return 1;
 }
 
+static int hns3_dcbnl_ieee_setmaxrate(struct net_device *netdev,
+				      struct ieee_maxrate *maxrate)
+{
+	struct hnae3_handle *h = hns3_get_handle(netdev);
+
+	if (h->kinfo.dcb_ops->ieee_setmaxrate)
+		return h->kinfo.dcb_ops->ieee_setmaxrate(h, maxrate);
+
+	return -EOPNOTSUPP;
+}
+
+static int hns3_dcbnl_ieee_getmaxrate(struct net_device *netdev,
+				      struct ieee_maxrate *maxrate)
+{
+	struct hnae3_handle *h = hns3_get_handle(netdev);
+
+	if (h->kinfo.dcb_ops->ieee_getmaxrate)
+		return h->kinfo.dcb_ops->ieee_getmaxrate(h, maxrate);
+
+	return -EOPNOTSUPP;
+}
+
+static int hns3_dcbnl_setbuffer(struct net_device *ndev, struct dcbnl_buffer *buffer)
+{
+	struct hnae3_handle *h = hns3_get_handle(ndev);
+
+	if (hns3_nic_resetting(ndev))
+		return -EBUSY;
+
+	if (h->kinfo.dcb_ops->setbuffer)
+		return h->kinfo.dcb_ops->setbuffer(h, buffer);
+
+	return -EOPNOTSUPP;
+}
+
+static int hns3_dcbnl_getbuffer(struct net_device *ndev, struct dcbnl_buffer *buffer)
+{
+	struct hnae3_handle *h = hns3_get_handle(ndev);
+
+	if (h->kinfo.dcb_ops->getbuffer)
+		return h->kinfo.dcb_ops->getbuffer(h, buffer);
+
+	return -EOPNOTSUPP;
+}
+
 static const struct dcbnl_rtnl_ops hns3_dcbnl_ops = {
 	.ieee_getets	= hns3_dcbnl_ieee_getets,
 	.ieee_setets	= hns3_dcbnl_ieee_setets,
@@ -111,8 +156,12 @@ static const struct dcbnl_rtnl_ops hns3_dcbnl_ops = {
 	.ieee_setpfc	= hns3_dcbnl_ieee_setpfc,
 	.ieee_setapp    = hns3_dcbnl_ieee_setapp,
 	.ieee_delapp    = hns3_dcbnl_ieee_delapp,
+	.ieee_setmaxrate    = hns3_dcbnl_ieee_setmaxrate,
+	.ieee_getmaxrate    = hns3_dcbnl_ieee_getmaxrate,
 	.getdcbx	= hns3_dcbnl_getdcbx,
 	.setdcbx	= hns3_dcbnl_setdcbx,
+	.dcbnl_getbuffer	= hns3_dcbnl_getbuffer,
+	.dcbnl_setbuffer	= hns3_dcbnl_setbuffer,
 };
 
 static const struct dcbnl_rtnl_ops hns3_unic_dcbnl_ops = {
@@ -120,8 +169,12 @@ static const struct dcbnl_rtnl_ops hns3_unic_dcbnl_ops = {
 	.ieee_setets	= hns3_dcbnl_ieee_setets,
 	.ieee_setapp	= hns3_dcbnl_ieee_setapp,
 	.ieee_delapp	= hns3_dcbnl_ieee_delapp,
+	.ieee_setmaxrate    = hns3_dcbnl_ieee_setmaxrate,
+	.ieee_getmaxrate    = hns3_dcbnl_ieee_getmaxrate,
 	.getdcbx	= hns3_dcbnl_getdcbx,
 	.setdcbx	= hns3_dcbnl_setdcbx,
+	.dcbnl_getbuffer	= hns3_dcbnl_getbuffer,
+	.dcbnl_setbuffer	= hns3_dcbnl_setbuffer,
 };
 
 /* hclge_dcbnl_setup - DCBNL setup
@@ -132,7 +185,7 @@ void hns3_dcbnl_setup(struct hnae3_handle *handle)
 {
 	struct net_device *dev = handle->kinfo.netdev;
 
-	if ((!handle->kinfo.dcb_ops) || (handle->flags & HNAE3_SUPPORT_VF))
+	if (!handle->kinfo.dcb_ops)
 		return;
 
 #ifdef CONFIG_HNS3_UBL

@@ -21,9 +21,9 @@ static int config_gmv_table(struct udma_dev *udma_dev, struct udma_eid *udma_eid
 			    uint32_t eid_index)
 {
 	enum udma_sgid_type sgid_type = udma_eid->type;
+	struct udma_cmq_desc desc[UDMA_CMQ_DESC_SIZE];
 	struct udma_cfg_gmv_tb_a *tb_a;
 	struct udma_cfg_gmv_tb_b *tb_b;
-	struct udma_cmq_desc desc[2];
 	uint16_t guid_shift = 0;
 	uint16_t smac_l;
 
@@ -68,6 +68,7 @@ static int add_eid_entry(struct udma_dev *udma_dev, union ubcore_eid eid,
 			 uint32_t eid_index)
 {
 	struct udma_eid *udma_eid;
+	int local_ret;
 	int ret;
 
 	udma_eid = kcalloc(1, sizeof(*udma_eid), GFP_KERNEL);
@@ -92,7 +93,10 @@ static int add_eid_entry(struct udma_dev *udma_dev, union ubcore_eid eid,
 
 	return ret;
 err_store:
-	clear_gmv_table(udma_dev, eid_index);
+	local_ret = clear_gmv_table(udma_dev, eid_index);
+	if (local_ret)
+		dev_err(udma_dev->dev, "Failed to clear eid from GMV table, ret = %d.\n",
+			local_ret);
 err_config:
 	kfree(udma_eid);
 	return ret;
@@ -162,9 +166,9 @@ int udma_delete_ueid(struct ubcore_device *dev, uint16_t fe_idx,
 
 int udma_find_eid_idx(struct udma_dev *dev, union ubcore_eid eid)
 {
-	struct udma_eid *udma_eid;
+	struct udma_eid *udma_eid = NULL;
 	int eid_index = -EINVAL;
-	unsigned long index;
+	unsigned long index = 0;
 
 	xa_lock(&dev->eid_table);
 	xa_for_each(&dev->eid_table, index, udma_eid) {

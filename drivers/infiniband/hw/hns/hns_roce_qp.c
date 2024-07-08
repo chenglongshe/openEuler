@@ -544,7 +544,8 @@ static unsigned int get_sge_num_from_max_inl_data(bool is_ud_or_gsi,
 						  u32 max_inline_data)
 {
 	unsigned int inline_sge;
-
+	if (!max_inline_data)
+		return 0;
 	/*
 	 * if max_inline_data less than
 	 * HNS_ROCE_SGE_IN_WQE * HNS_ROCE_SGE_SIZE,
@@ -824,6 +825,8 @@ static int alloc_wqe_buf(struct hns_roce_dev *hr_dev, struct hns_roce_qp *hr_qp,
 			hns_roce_disable_dca(hr_dev, hr_qp, udata);
 		kvfree(hr_qp->mtr_node);
 		hr_qp->mtr_node = NULL;
+	} else if (dca_en) {
+		ret = hns_roce_map_dca_safe_page(hr_dev, hr_qp);
 	}
 
 	return ret;
@@ -844,6 +847,21 @@ static void free_wqe_buf(struct hns_roce_dev *hr_dev, struct hns_roce_qp *hr_qp,
 		hns_roce_disable_dca(hr_dev, hr_qp, udata);
 }
 
+static int alloc_dca_safe_page(struct hns_roce_dev *hr_dev)
+{
+	struct ib_device *ibdev = &hr_dev->ib_dev;
+
+	hr_dev->dca_safe_buf = dma_alloc_coherent(hr_dev->dev, PAGE_SIZE,
+						  &hr_dev->dca_safe_page,
+						  GFP_KERNEL);
+	if (!hr_dev->dca_safe_buf) {
+		ibdev_err(ibdev, "failed to alloc dca safe page.\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
 static int alloc_qp_wqe(struct hns_roce_dev *hr_dev, struct hns_roce_qp *hr_qp,
 			struct ib_qp_init_attr *init_attr,
 			struct ib_udata *udata,
@@ -861,6 +879,12 @@ static int alloc_qp_wqe(struct hns_roce_dev *hr_dev, struct hns_roce_qp *hr_qp,
 		page_shift = ucmd->pageshift;
 
 	dca_en = check_dca_is_enable(hr_dev, init_attr, !!udata, ucmd->buf_addr);
+	if (dca_en && !hr_dev->dca_safe_buf) {
+		ret = alloc_dca_safe_page(hr_dev);
+		if (ret)
+			return ret;
+	}
+
 	ret = set_wqe_buf_attr(hr_dev, hr_qp, dca_en, page_shift, &buf_attr);
 	if (ret) {
 		ibdev_err(ibdev, "failed to split WQE buf, ret = %d.\n", ret);
@@ -1409,8 +1433,8 @@ void hns_roce_qp_destroy(struct hns_roce_dev *hr_dev, struct hns_roce_qp *hr_qp,
 	free_kernel_wrid(hr_qp);
 	free_qp_db(hr_dev, hr_qp, udata);
 
-	kfree(hr_qp);
 	mutex_destroy(&hr_qp->mutex);
+	kfree(hr_qp);
 }
 
 static int check_qp_type(struct hns_roce_dev *hr_dev, enum ib_qp_type type,
@@ -1664,19 +1688,19 @@ void hns_roce_lock_cqs(struct hns_roce_cq *send_cq, struct hns_roce_cq *recv_cq)
 		__acquire(&send_cq->lock);
 		__acquire(&recv_cq->lock);
 	} else if (unlikely(send_cq != NULL && recv_cq == NULL)) {
-		spin_lock_irq(&send_cq->lock);
+		spin_lock(&send_cq->lock);
 		__acquire(&recv_cq->lock);
 	} else if (unlikely(send_cq == NULL && recv_cq != NULL)) {
-		spin_lock_irq(&recv_cq->lock);
+		spin_lock(&recv_cq->lock);
 		__acquire(&send_cq->lock);
 	} else if (send_cq == recv_cq) {
-		spin_lock_irq(&send_cq->lock);
+		spin_lock(&send_cq->lock);
 		__acquire(&recv_cq->lock);
 	} else if (send_cq->cqn < recv_cq->cqn) {
-		spin_lock_irq(&send_cq->lock);
+		spin_lock(&send_cq->lock);
 		spin_lock_nested(&recv_cq->lock, SINGLE_DEPTH_NESTING);
 	} else {
-		spin_lock_irq(&recv_cq->lock);
+		spin_lock(&recv_cq->lock);
 		spin_lock_nested(&send_cq->lock, SINGLE_DEPTH_NESTING);
 	}
 }
@@ -1696,13 +1720,13 @@ void hns_roce_unlock_cqs(struct hns_roce_cq *send_cq,
 		spin_unlock(&recv_cq->lock);
 	} else if (send_cq == recv_cq) {
 		__release(&recv_cq->lock);
-		spin_unlock_irq(&send_cq->lock);
+		spin_unlock(&send_cq->lock);
 	} else if (send_cq->cqn < recv_cq->cqn) {
 		spin_unlock(&recv_cq->lock);
-		spin_unlock_irq(&send_cq->lock);
+		spin_unlock(&send_cq->lock);
 	} else {
 		spin_unlock(&send_cq->lock);
-		spin_unlock_irq(&recv_cq->lock);
+		spin_unlock(&recv_cq->lock);
 	}
 }
 
@@ -1759,10 +1783,17 @@ int hns_roce_init_qp_table(struct hns_roce_dev *hr_dev)
 	unsigned int reserved_from_bot;
 	unsigned int i;
 
-	qp_table->idx_table.spare_idx = kcalloc(hr_dev->caps.num_qps,
-					sizeof(u32), GFP_KERNEL);
-	if (!qp_table->idx_table.spare_idx)
+	qp_table->idx_table.qpn_bitmap = bitmap_zalloc(hr_dev->caps.num_qps,
+						       GFP_KERNEL);
+	if (!qp_table->idx_table.qpn_bitmap)
 		return -ENOMEM;
+
+	qp_table->idx_table.dip_idx_bitmap = bitmap_zalloc(hr_dev->caps.num_qps,
+							   GFP_KERNEL);
+	if (!qp_table->idx_table.dip_idx_bitmap) {
+		bitmap_free(qp_table->idx_table.qpn_bitmap);
+		return -ENOMEM;
+	}
 
 	mutex_init(&qp_table->scc_mutex);
 	mutex_init(&qp_table->bank_mutex);
@@ -1792,6 +1823,6 @@ void hns_roce_cleanup_qp_table(struct hns_roce_dev *hr_dev)
 	for (i = 0; i < HNS_ROCE_QP_BANK_NUM; i++)
 		ida_destroy(&hr_dev->qp_table.bank[i].ida);
 	mutex_destroy(&hr_dev->qp_table.bank_mutex);
-	mutex_destroy(&hr_dev->qp_table.scc_mutex);
-	kfree(hr_dev->qp_table.idx_table.spare_idx);
+	bitmap_free(hr_dev->qp_table.idx_table.qpn_bitmap);
+	bitmap_free(hr_dev->qp_table.idx_table.dip_idx_bitmap);
 }

@@ -96,12 +96,12 @@ int udma_modify_tp(struct ubcore_tp *tp, struct ubcore_tp_attr *attr,
 	struct udma_qp *qp;
 	int ret = -EINVAL;
 
+	if (!tp)
+		goto error;
+
 	udma_device = to_udma_dev(tp->ub_dev);
 	utp = to_udma_tp(tp);
-
 	qp = &utp->qp;
-	if (!qp)
-		goto error;
 
 	curr_state = to_udma_qp_state(tp->state);
 
@@ -117,12 +117,10 @@ int udma_modify_tp(struct ubcore_tp *tp, struct ubcore_tp_attr *attr,
 	qp->udma_device = udma_device;
 	qp->send_jfc = qp->qp_attr.send_jfc;
 	qp->recv_jfc = qp->qp_attr.recv_jfc;
-	qp->m_attr = m_attr;
-	if (attr)
-		qp->ubcore_path_mtu = attr->mtu;
+	memcpy(&qp->m_attr, m_attr, sizeof(struct udma_modify_tp_attr));
+	qp->ubcore_path_mtu = attr->mtu;
 	ret = udma_modify_qp_common(qp, attr, mask, curr_state, target_state);
 	kfree(m_attr);
-	qp->m_attr = NULL;
 error:
 	return ret;
 }
@@ -250,7 +248,6 @@ int udma_destroy_tp(struct ubcore_tp *tp)
 	qp = &udma_tp->qp;
 	curr_state = to_udma_qp_state(tp->state);
 	ubcore_attr_mask.value = 0;
-	qp->m_attr = NULL;
 
 	if (qp->state != QPS_RESET) {
 		ret = udma_modify_qp_common(qp, NULL, ubcore_attr_mask, curr_state, QPS_RESET);
@@ -258,7 +255,6 @@ int udma_destroy_tp(struct ubcore_tp *tp)
 			dev_err(udma_device->dev,
 				"Modify QP 0x%06llx to Reset failed(%d).\n",
 				qp->qpn, ret);
-			goto error;
 		}
 	}
 
@@ -266,10 +262,7 @@ int udma_destroy_tp(struct ubcore_tp *tp)
 
 	kfree(udma_tp);
 
-	return ret;
-
-error:
-	return -EINVAL;
+	return 0;
 }
 
 static void udma_set_tp(struct ubcore_device *dev, const struct ubcore_tp_cfg *cfg,
@@ -342,7 +335,7 @@ static int udma_store_jetty_tp(struct udma_dev *udma_device,
 			*fail_ret_tp = &jetty->rc_node.tp->ubcore_tp;
 		} else {
 			dev_err(udma_device->dev,
-				"jetty has bind a target jetty, jetty_id = %d.\n",
+				"jetty has bind a target jetty, jetty_id = %u.\n",
 				jetty->rc_node.tjetty_id.id);
 			return -EEXIST;
 		}
@@ -421,6 +414,11 @@ struct ubcore_tp *udma_create_tp(struct ubcore_device *dev, struct ubcore_tp_cfg
 	struct udma_tp *tp;
 	int ret;
 
+	if (!udata || !udata->udrv_data || !udata->uctx) {
+		dev_err(udma_dev->dev, "tp udata or uctx is null.\n");
+		return ERR_PTR(-EINVAL);
+	}
+
 	tp = kzalloc(sizeof(*tp), GFP_KERNEL);
 	if (!tp)
 		return ERR_PTR(-ENOMEM);
@@ -432,6 +430,7 @@ struct ubcore_tp *udma_create_tp(struct ubcore_device *dev, struct ubcore_tp_cfg
 	}
 	tp->tjetty_id.id = tp->qp.qp_attr.tgt_id;
 	tp->tjetty_id.eid = cfg->peer_eid;
+	tp->sub_trans_mode = UDMA_SUB_TRANS_MODE_NORMAL_TP;
 
 	lock_jetty(&tp->qp.qp_attr);
 	ret = udma_create_qp_common(udma_dev, &tp->qp, udata);
@@ -492,6 +491,7 @@ struct udma_tp *udma_create_user_tp(struct udma_dev *udma_dev,
 
 	tp->ubcore_tp.tpn = tp->qp.qpn;
 	tp->ubcore_tp.ub_dev = &udma_dev->ub_dev;
+	tp->sub_trans_mode = UDMA_SUB_TRANS_MODE_USER_TP;
 	ret = udma_init_qpc(udma_dev, &tp->qp);
 	if (ret)
 		goto failed_init_qpc;
@@ -526,9 +526,17 @@ int udma_modify_user_tp(struct ubcore_device *dev, uint32_t tpn,
 		refcount_inc(&qp->refcount);
 	xa_unlock_irqrestore(&udma_dev->qp_table.xa, flags);
 
-	if (!qp)
+	if (!qp) {
+		dev_err(&dev->dev, "find qp failed, tpn = %u.\n", tpn);
 		return -EINVAL;
+	}
+
 	tp = container_of(qp, struct udma_tp, qp);
+	if (tp->sub_trans_mode != UDMA_SUB_TRANS_MODE_USER_TP) {
+		dev_err(&dev->dev, "invalid tp sub_trans_mode.\n");
+		ret = -EINVAL;
+		goto out;
+	}
 	udma_set_tp(dev, cfg, tp);
 	udma_ipv4_map_to_eid(attr->peer_net_addr.net_addr.in4.addr,
 			     &tp->ubcore_tp.peer_eid);
@@ -536,6 +544,7 @@ int udma_modify_user_tp(struct ubcore_device *dev, uint32_t tpn,
 	if (ret)
 		dev_err(&dev->dev, "modify user tp failed, ret = %d.\n", ret);
 
+out:
 	if (refcount_dec_and_test(&qp->refcount))
 		complete(&qp->free);
 

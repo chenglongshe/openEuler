@@ -161,12 +161,12 @@ static void free_srqc(struct hns_roce_dev *hr_dev, struct hns_roce_srq *srq)
 
 	ret = hns_roce_destroy_hw_ctx(hr_dev, HNS_ROCE_CMD_DESTROY_SRQ,
 				      srq->srqn);
-	if (ret)
+	if (ret) {
+		srq->delayed_destroy_flag = true;
 		dev_err_ratelimited(hr_dev->dev,
 				    "DESTROY_SRQ failed (%d) for SRQN %06lx\n",
 				    ret, srq->srqn);
-	if (ret == -EBUSY)
-		srq->delayed_destroy_flag = true;
+	}
 
 	xa_erase_irq(&srq_table->xa, srq->srqn);
 
@@ -338,7 +338,7 @@ static int set_srq_basic_param(struct hns_roce_srq *srq,
 	max_sge = proc_srq_sge(hr_dev, srq, !!udata);
 
 	if (init_attr->attr.max_wr > hr_dev->caps.max_srq_wrs ||
-	    init_attr->attr.max_sge > max_sge) {
+	    init_attr->attr.max_sge > max_sge || !init_attr->attr.max_sge) {
 		ibdev_err(&hr_dev->ib_dev,
 			  "invalid SRQ attr, depth = %u, sge = %u.\n",
 			   attr->max_wr, attr->max_sge);

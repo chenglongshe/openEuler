@@ -18,14 +18,15 @@
 #include <linux/inetdevice.h>
 #include "urma/ubcore_api.h"
 #include "hnae3.h"
-#include "hns3_udma_abi.h"
-#include "hns3_udma_cmd.h"
 #include "hns3_udma_hem.h"
+#include "hns3_udma_jfc.h"
 #include "hns3_udma_eq.h"
 #include "hns3_udma_qp.h"
 #include "hns3_udma_dfx.h"
 #include "hns3_udma_sysfs.h"
+#include "hns3_udma_device.h"
 #include "hns3_udma_debugfs.h"
+#include "hns3_udma_hw.h"
 
 bool dfx_switch;
 
@@ -37,22 +38,6 @@ static const struct pci_device_id udma_hw_pci_tbl[] = {
 	/* required last entry */
 	{}
 };
-
-static int udma_cmq_query_hw_info(struct udma_dev *udma_dev)
-{
-	struct udma_query_version *resp;
-	struct udma_cmq_desc desc;
-	int ret;
-
-	udma_cmq_setup_basic_desc(&desc, UDMA_OPC_QUERY_HW_VER, true);
-	ret = udma_cmq_send(udma_dev, &desc, 1);
-	if (ret)
-		return ret;
-
-	resp = (struct udma_query_version *)desc.data;
-
-	return 0;
-}
 
 static int udma_query_fw_ver(struct udma_dev *udma_dev)
 {
@@ -67,6 +52,8 @@ static int udma_query_fw_ver(struct udma_dev *udma_dev)
 
 	resp = (struct udma_query_fw_info *)desc.data;
 	udma_dev->caps.fw_ver = le32_to_cpu(resp->fw_ver);
+	udma_dev->caps.num_qp_en = le32_to_cpu(resp->hw_caps[1] & UDMA_NUM_QP_EN);
+	udma_dev->caps.cnp_en = le32_to_cpu(resp->hw_caps[1] & UDMA_CNP_EN);
 
 	return 0;
 }
@@ -173,10 +160,10 @@ static void set_default_jetty_caps(struct udma_dev *dev)
 {
 	struct udma_caps *caps = &dev->caps;
 
-	caps->num_jfc_shift = ilog2(caps->num_cqs);
-	caps->num_jfs_shift = caps->num_qps_shift;
-	caps->num_jfr_shift = caps->num_qps_shift;
-	caps->num_jetty_shift = caps->num_qps_shift;
+	caps->num_jfc = caps->num_cqs;
+	caps->num_jfs = caps->num_qps;
+	caps->num_jfr = caps->num_qps;
+	caps->num_jetty = caps->num_qps;
 }
 
 static void query_hw_speed(struct udma_dev *udma_dev)
@@ -197,9 +184,194 @@ static void query_hw_speed(struct udma_dev *udma_dev)
 	udma_dev->caps.speed = resp->speed;
 }
 
+static int udma_query_pf_qp_cfg(struct udma_dev *dev)
+{
+	struct udma_query_pf_caps_cfg *cmd;
+	struct udma_cmq_desc desc;
+	int ret;
+
+	if (!dev->caps.num_qp_en)
+		return 0;
+
+	udma_cmq_setup_basic_desc(&desc, UDMA_PF_QP_CFG_QUERY, true);
+	ret = udma_cmq_send(dev, &desc, 1);
+	if (ret) {
+		dev_err(dev->dev, "fail to query pf qp config, ret = %d.\n", ret);
+		return -EIO;
+	}
+
+	cmd = (struct udma_query_pf_caps_cfg *)desc.data;
+	dev->caps.num_qps = le32_to_cpu(cmd->num_qps);
+	dev->caps.num_qps_shift = ilog2(dev->caps.num_qps);
+	if ((dev->caps.num_qps & (dev->caps.num_qps - 1)) != 0)
+		dev->caps.num_qps_shift += 1;
+
+	dev->caps.num_srqs = le32_to_cpu(cmd->num_srqs);
+	dev->caps.num_cqs = le32_to_cpu(cmd->num_cqs);
+	dev->caps.num_mtpts = le32_to_cpu(cmd->num_mtpts);
+	dev->caps.num_pds = le32_to_cpu(cmd->num_pds);
+	dev->caps.num_xrcds = le32_to_cpu(cmd->num_xrcds);
+
+	return 0;
+}
+
+static void set_dev_cap_by_resp_ab(struct udma_caps *caps,
+				   struct udma_query_pf_caps_a *resp_a,
+				   struct udma_query_pf_caps_b *resp_b)
+{
+	caps->local_ca_ack_delay = resp_a->local_ca_ack_delay;
+	caps->max_sq_sg = le16_to_cpu(resp_a->max_sq_sg);
+	caps->max_sq_inline = le16_to_cpu(resp_a->max_sq_inline);
+	caps->max_rq_sg = le16_to_cpu(resp_a->max_rq_sg);
+	caps->max_rq_sg = roundup_pow_of_two(caps->max_rq_sg);
+	caps->max_extend_sg = le32_to_cpu(resp_a->max_extend_sg);
+	caps->num_qpc_timer = le16_to_cpu(resp_a->num_qpc_timer);
+	caps->max_srq_sges = le16_to_cpu(resp_a->max_srq_sges);
+	/* reserved for UM header */
+	caps->max_srq_sges = roundup_pow_of_two(caps->max_srq_sges) - 1;
+	caps->num_aeq_vectors = resp_a->num_aeq_vectors;
+	caps->num_other_vectors = resp_a->num_other_vectors;
+	caps->max_sq_desc_sz = resp_a->max_sq_desc_sz;
+	caps->max_rq_desc_sz = resp_a->max_rq_desc_sz;
+	caps->max_srq_desc_sz = resp_a->max_srq_desc_sz;
+	caps->cqe_sz = resp_a->cqe_sz;
+
+	caps->mtpt_entry_sz = resp_b->mtpt_entry_sz;
+	caps->irrl_entry_sz = resp_b->irrl_entry_sz;
+	caps->trrl_entry_sz = resp_b->trrl_entry_sz;
+	caps->cqc_entry_sz = resp_b->cqc_entry_sz;
+	caps->srqc_entry_sz = resp_b->srqc_entry_sz;
+	caps->idx_entry_sz = resp_b->idx_entry_sz;
+	caps->scc_ctx_sz = resp_b->sccc_sz;
+	caps->max_mtu = (enum ubcore_mtu)resp_b->max_mtu;
+	caps->qpc_sz = le16_to_cpu(resp_b->qpc_sz);
+	caps->min_cqes = resp_b->min_cqes;
+	caps->min_wqes = resp_b->min_wqes;
+	caps->page_size_cap = le32_to_cpu(resp_b->page_size_cap);
+	caps->pkey_table_len[0] = resp_b->pkey_table_len;
+	caps->phy_num_uars = resp_b->phy_num_uars;
+
+	caps->qpc_hop_num = resp_b->ctx_hop_num;
+	caps->sccc_hop_num = resp_b->ctx_hop_num;
+	caps->srqc_hop_num = resp_b->ctx_hop_num;
+	caps->cqc_hop_num = resp_b->ctx_hop_num;
+	caps->mpt_hop_num = resp_b->ctx_hop_num;
+	caps->mtt_hop_num = resp_b->pbl_hop_num;
+	caps->cqe_hop_num = resp_b->pbl_hop_num;
+	caps->srqwqe_hop_num = resp_b->pbl_hop_num;
+	caps->idx_hop_num = resp_b->pbl_hop_num;
+}
+
+static void set_dev_cap_by_resp_c(struct udma_caps *caps,
+				  struct udma_query_pf_caps_c *resp_c)
+{
+	caps->num_pds = 1U << udma_get_field(resp_c->cap_flags_num_pds,
+					     QUERY_PF_CAPS_C_NUM_PDS_M,
+					     QUERY_PF_CAPS_C_NUM_PDS_S);
+	caps->flags = udma_get_field(resp_c->cap_flags_num_pds,
+				     QUERY_PF_CAPS_C_CAP_FLAGS_M,
+				     QUERY_PF_CAPS_C_CAP_FLAGS_S);
+	caps->num_cqs = 1U << udma_get_field(resp_c->max_gid_num_cqs,
+					     QUERY_PF_CAPS_C_NUM_CQS_M,
+					     QUERY_PF_CAPS_C_NUM_CQS_S);
+
+	caps->max_cqes = 1U << udma_get_field(resp_c->cq_depth,
+					      QUERY_PF_CAPS_C_CQ_DEPTH_M,
+					      QUERY_PF_CAPS_C_CQ_DEPTH_S);
+	caps->num_mtpts = 1U << udma_get_field(resp_c->num_mrws,
+					       QUERY_PF_CAPS_C_NUM_MRWS_M,
+					       QUERY_PF_CAPS_C_NUM_MRWS_S);
+	caps->num_qps = 1U << udma_get_field(resp_c->ord_num_qps,
+					     QUERY_PF_CAPS_C_NUM_QPS_M,
+					     QUERY_PF_CAPS_C_NUM_QPS_S);
+	caps->num_qps_shift = udma_get_field(resp_c->ord_num_qps,
+					     QUERY_PF_CAPS_C_NUM_QPS_M,
+					     QUERY_PF_CAPS_C_NUM_QPS_S);
+	caps->max_qp_init_rdma = udma_get_field(resp_c->ord_num_qps,
+						QUERY_PF_CAPS_C_MAX_ORD_M,
+						QUERY_PF_CAPS_C_MAX_ORD_S);
+	caps->max_qp_dest_rdma = caps->max_qp_init_rdma;
+	caps->max_wqes = 1U << le16_to_cpu(resp_c->sq_depth);
+}
+
+static void set_dev_cap_by_resp_d(struct udma_caps *caps,
+				  struct udma_query_pf_caps_d *resp_d)
+{
+	caps->flags |= le16_to_cpu(resp_d->cap_flags_ex) <<
+				   UDMA_CAP_FLAGS_EX_SHIFT;
+	caps->num_srqs = 1U << udma_get_field(resp_d->wq_hop_num_max_srqs,
+					      QUERY_PF_CAPS_D_NUM_SRQS_M,
+					      QUERY_PF_CAPS_D_NUM_SRQS_S);
+	caps->cong_type = udma_get_field(resp_d->wq_hop_num_max_srqs,
+					 QUERY_PF_CAPS_D_CONG_TYPE_M,
+					 QUERY_PF_CAPS_D_CONG_TYPE_S);
+	caps->max_srq_wrs = 1U << le16_to_cpu(resp_d->srq_depth);
+
+	caps->ceqe_depth = 1U << udma_get_field(resp_d->num_ceqs_ceq_depth,
+						QUERY_PF_CAPS_D_CEQ_DEPTH_M,
+						QUERY_PF_CAPS_D_CEQ_DEPTH_S);
+	caps->num_comp_vectors = udma_get_field(resp_d->num_ceqs_ceq_depth,
+						QUERY_PF_CAPS_D_NUM_CEQS_M,
+						QUERY_PF_CAPS_D_NUM_CEQS_S);
+
+	caps->aeqe_depth = 1U << udma_get_field(resp_d->arm_st_aeq_depth,
+						QUERY_PF_CAPS_D_AEQ_DEPTH_M,
+						QUERY_PF_CAPS_D_AEQ_DEPTH_S);
+	caps->default_aeq_arm_st = udma_get_field(resp_d->arm_st_aeq_depth,
+						  QUERY_PF_CAPS_D_AEQ_ARM_ST_M,
+						  QUERY_PF_CAPS_D_AEQ_ARM_ST_S);
+	caps->default_ceq_arm_st = udma_get_field(resp_d->arm_st_aeq_depth,
+						  QUERY_PF_CAPS_D_CEQ_ARM_ST_M,
+						  QUERY_PF_CAPS_D_CEQ_ARM_ST_S);
+	caps->reserved_pds = udma_get_field(resp_d->num_uars_rsv_pds,
+					    QUERY_PF_CAPS_D_RSV_PDS_M,
+					    QUERY_PF_CAPS_D_RSV_PDS_S);
+	caps->num_uars = 1U << udma_get_field(resp_d->num_uars_rsv_pds,
+					      QUERY_PF_CAPS_D_NUM_UARS_M,
+					      QUERY_PF_CAPS_D_NUM_UARS_S);
+	caps->reserved_qps = udma_get_field(resp_d->rsv_uars_rsv_qps,
+					    QUERY_PF_CAPS_D_RSV_QPS_M,
+					    QUERY_PF_CAPS_D_RSV_QPS_S);
+	caps->reserved_uars = udma_get_field(resp_d->rsv_uars_rsv_qps,
+					     QUERY_PF_CAPS_D_RSV_UARS_M,
+					     QUERY_PF_CAPS_D_RSV_UARS_S);
+	caps->wqe_sq_hop_num = udma_get_field(resp_d->wq_hop_num_max_srqs,
+					      QUERY_PF_CAPS_D_SQWQE_HOP_NUM_M,
+					      QUERY_PF_CAPS_D_SQWQE_HOP_NUM_S);
+	caps->wqe_sge_hop_num = udma_get_field(resp_d->wq_hop_num_max_srqs,
+					       QUERY_PF_CAPS_D_EX_SGE_HOP_NUM_M,
+					       QUERY_PF_CAPS_D_EX_SGE_HOP_NUM_S);
+	caps->wqe_rq_hop_num = udma_get_field(resp_d->wq_hop_num_max_srqs,
+					      QUERY_PF_CAPS_D_RQWQE_HOP_NUM_M,
+					      QUERY_PF_CAPS_D_RQWQE_HOP_NUM_S);
+}
+
+static void set_dev_cap_by_resp_e(struct udma_caps *caps,
+				  struct udma_query_pf_caps_e *resp_e)
+{
+	caps->reserved_mrws = udma_get_field(resp_e->chunk_size_shift_rsv_mrws,
+					     QUERY_PF_CAPS_E_RSV_MRWS_M,
+					     QUERY_PF_CAPS_E_RSV_MRWS_S);
+	caps->chunk_sz = 1U << udma_get_field(resp_e->chunk_size_shift_rsv_mrws,
+					      QUERY_PF_CAPS_E_CHUNK_SIZE_SHIFT_M,
+					      QUERY_PF_CAPS_E_CHUNK_SIZE_SHIFT_S);
+	caps->reserved_cqs = udma_get_field(resp_e->rsv_cqs,
+					    QUERY_PF_CAPS_E_RSV_CQS_M,
+					    QUERY_PF_CAPS_E_RSV_CQS_S);
+	caps->reserved_srqs = udma_get_field(resp_e->rsv_srqs,
+					     QUERY_PF_CAPS_E_RSV_SRQS_M,
+					     QUERY_PF_CAPS_E_RSV_SRQS_S);
+	caps->reserved_lkey = udma_get_field(resp_e->rsv_lkey,
+					     QUERY_PF_CAPS_E_RSV_LKEYS_M,
+					     QUERY_PF_CAPS_E_RSV_LKEYS_S);
+	caps->default_ceq_max_cnt = le16_to_cpu(resp_e->ceq_max_cnt);
+	caps->default_ceq_period = le16_to_cpu(resp_e->ceq_period);
+	caps->default_aeq_max_cnt = le16_to_cpu(resp_e->aeq_max_cnt);
+	caps->default_aeq_period = le16_to_cpu(resp_e->aeq_period);
+}
+
 static int udma_query_caps(struct udma_dev *udma_dev)
 {
-	enum udma_opcode_type opcode = UDMA_OPC_QUERY_PF_CAPS_NUM;
 	struct udma_cmq_desc desc[UDMA_QUERY_PF_CAPS_CMD_NUM];
 	struct udma_caps *caps = &udma_dev->caps;
 	struct udma_query_pf_caps_a *resp_a;
@@ -207,10 +379,11 @@ static int udma_query_caps(struct udma_dev *udma_dev)
 	struct udma_query_pf_caps_c *resp_c;
 	struct udma_query_pf_caps_d *resp_d;
 	struct udma_query_pf_caps_e *resp_e;
-	int ctx_hop_num;
-	int pbl_hop_num;
+	enum udma_opcode_type opcode;
 	int ret;
 	int i;
+
+	opcode = UDMA_OPC_QUERY_PF_CAPS_NUM;
 
 	for (i = 0; i < UDMA_QUERY_PF_CAPS_CMD_NUM; i++) {
 		udma_cmq_setup_basic_desc(&desc[i], opcode, true);
@@ -230,144 +403,32 @@ static int udma_query_caps(struct udma_dev *udma_dev)
 	resp_d = (struct udma_query_pf_caps_d *)desc[3].data;
 	resp_e = (struct udma_query_pf_caps_e *)desc[4].data;
 
-	caps->local_ca_ack_delay     = resp_a->local_ca_ack_delay;
-	caps->max_sq_sg		     = le16_to_cpu(resp_a->max_sq_sg);
-	caps->max_sq_inline	     = le16_to_cpu(resp_a->max_sq_inline);
-	caps->max_rq_sg		     = le16_to_cpu(resp_a->max_rq_sg);
-	caps->max_rq_sg		     = roundup_pow_of_two(caps->max_rq_sg);
-	caps->max_extend_sg	     = le32_to_cpu(resp_a->max_extend_sg);
-	caps->num_qpc_timer	     = le16_to_cpu(resp_a->num_qpc_timer);
-	caps->max_srq_sges	     = le16_to_cpu(resp_a->max_srq_sges);
-	/* reserved for UM header */
-	caps->max_srq_sges	     = roundup_pow_of_two(caps->max_srq_sges) - 1;
-	caps->num_aeq_vectors	     = resp_a->num_aeq_vectors;
-	caps->num_other_vectors	     = resp_a->num_other_vectors;
-	caps->max_sq_desc_sz	     = resp_a->max_sq_desc_sz;
-	caps->max_rq_desc_sz	     = resp_a->max_rq_desc_sz;
-	caps->max_srq_desc_sz	     = resp_a->max_srq_desc_sz;
-	caps->cqe_sz		     = resp_a->cqe_sz;
+	set_dev_cap_by_resp_ab(caps, resp_a, resp_b);
+	set_dev_cap_by_resp_c(caps, resp_c);
+	set_dev_cap_by_resp_d(caps, resp_d);
+	set_dev_cap_by_resp_e(caps, resp_e);
 
-	caps->mtpt_entry_sz	     = resp_b->mtpt_entry_sz;
-	caps->irrl_entry_sz	     = resp_b->irrl_entry_sz;
-	caps->trrl_entry_sz	     = resp_b->trrl_entry_sz;
-	caps->cqc_entry_sz	     = resp_b->cqc_entry_sz;
-	caps->srqc_entry_sz	     = resp_b->srqc_entry_sz;
-	caps->idx_entry_sz	     = resp_b->idx_entry_sz;
-	caps->scc_ctx_sz	     = resp_b->sccc_sz;
-	caps->max_mtu		     = (enum ubcore_mtu)resp_b->max_mtu;
-	caps->qpc_sz		     = le16_to_cpu(resp_b->qpc_sz);
-	caps->min_cqes		     = resp_b->min_cqes;
-	caps->min_wqes		     = resp_b->min_wqes;
-	caps->page_size_cap	     = le32_to_cpu(resp_b->page_size_cap);
-	caps->pkey_table_len[0]	     = resp_b->pkey_table_len;
-	caps->phy_num_uars	     = resp_b->phy_num_uars;
-	ctx_hop_num		     = resp_b->ctx_hop_num;
-	pbl_hop_num		     = resp_b->pbl_hop_num;
+	if (caps->wqe_rq_hop_num > UDMA_MAX_BT_LEVEL) {
+		dev_err(udma_dev->dev, "invalid wqe rq hop num is %u.\n",
+			caps->wqe_rq_hop_num);
+		return -EINVAL;
+	}
 
-	caps->num_pds = 1 << udma_get_field(resp_c->cap_flags_num_pds,
-					    QUERY_PF_CAPS_C_NUM_PDS_M,
-					    QUERY_PF_CAPS_C_NUM_PDS_S);
-	caps->flags = udma_get_field(resp_c->cap_flags_num_pds,
-				     QUERY_PF_CAPS_C_CAP_FLAGS_M,
-				     QUERY_PF_CAPS_C_CAP_FLAGS_S);
-	caps->flags |= le16_to_cpu(resp_d->cap_flags_ex) <<
-		       UDMA_CAP_FLAGS_EX_SHIFT;
+	if (caps->wqe_sge_hop_num > UDMA_MAX_BT_LEVEL) {
+		dev_err(udma_dev->dev, "invalid wqe sge hop num is %u.\n",
+			caps->wqe_sge_hop_num);
+		return -EINVAL;
+	}
 
-	caps->num_cqs = 1 << udma_get_field(resp_c->max_gid_num_cqs,
-					    QUERY_PF_CAPS_C_NUM_CQS_M,
-					    QUERY_PF_CAPS_C_NUM_CQS_S);
+	if (caps->wqe_sq_hop_num > UDMA_MAX_BT_LEVEL) {
+		dev_err(udma_dev->dev, "invalid wqe sq hop num is %u.\n",
+			caps->wqe_sq_hop_num);
+		return -EINVAL;
+	}
 
-	caps->max_cqes = 1 << udma_get_field(resp_c->cq_depth,
-					     QUERY_PF_CAPS_C_CQ_DEPTH_M,
-					     QUERY_PF_CAPS_C_CQ_DEPTH_S);
-	caps->num_mtpts = 1 << udma_get_field(resp_c->num_mrws,
-					      QUERY_PF_CAPS_C_NUM_MRWS_M,
-					      QUERY_PF_CAPS_C_NUM_MRWS_S);
-	caps->num_qps = 1 << udma_get_field(resp_c->ord_num_qps,
-					    QUERY_PF_CAPS_C_NUM_QPS_M,
-					    QUERY_PF_CAPS_C_NUM_QPS_S);
-	caps->num_qps_shift = udma_get_field(resp_c->ord_num_qps,
-					     QUERY_PF_CAPS_C_NUM_QPS_M,
-					     QUERY_PF_CAPS_C_NUM_QPS_S);
-	caps->max_qp_init_rdma = udma_get_field(resp_c->ord_num_qps,
-						QUERY_PF_CAPS_C_MAX_ORD_M,
-						QUERY_PF_CAPS_C_MAX_ORD_S);
-	caps->max_qp_dest_rdma = caps->max_qp_init_rdma;
-	caps->max_wqes = 1 << le16_to_cpu(resp_c->sq_depth);
-	caps->num_srqs = 1 << udma_get_field(resp_d->wq_hop_num_max_srqs,
-					     QUERY_PF_CAPS_D_NUM_SRQS_M,
-					     QUERY_PF_CAPS_D_NUM_SRQS_S);
-	caps->cong_type = udma_get_field(resp_d->wq_hop_num_max_srqs,
-					 QUERY_PF_CAPS_D_CONG_TYPE_M,
-					 QUERY_PF_CAPS_D_CONG_TYPE_S);
-	caps->max_srq_wrs = 1 << le16_to_cpu(resp_d->srq_depth);
-
-	caps->ceqe_depth = 1 << udma_get_field(resp_d->num_ceqs_ceq_depth,
-					       QUERY_PF_CAPS_D_CEQ_DEPTH_M,
-					       QUERY_PF_CAPS_D_CEQ_DEPTH_S);
-	caps->num_comp_vectors = udma_get_field(resp_d->num_ceqs_ceq_depth,
-						QUERY_PF_CAPS_D_NUM_CEQS_M,
-						QUERY_PF_CAPS_D_NUM_CEQS_S);
-
-	caps->aeqe_depth = 1 << udma_get_field(resp_d->arm_st_aeq_depth,
-					       QUERY_PF_CAPS_D_AEQ_DEPTH_M,
-					       QUERY_PF_CAPS_D_AEQ_DEPTH_S);
-	caps->default_aeq_arm_st = udma_get_field(resp_d->arm_st_aeq_depth,
-						  QUERY_PF_CAPS_D_AEQ_ARM_ST_M,
-						  QUERY_PF_CAPS_D_AEQ_ARM_ST_S);
-	caps->default_ceq_arm_st = udma_get_field(resp_d->arm_st_aeq_depth,
-						  QUERY_PF_CAPS_D_CEQ_ARM_ST_M,
-						  QUERY_PF_CAPS_D_CEQ_ARM_ST_S);
-	caps->reserved_pds = udma_get_field(resp_d->num_uars_rsv_pds,
-					    QUERY_PF_CAPS_D_RSV_PDS_M,
-					    QUERY_PF_CAPS_D_RSV_PDS_S);
-	caps->num_uars = 1 << udma_get_field(resp_d->num_uars_rsv_pds,
-					     QUERY_PF_CAPS_D_NUM_UARS_M,
-					     QUERY_PF_CAPS_D_NUM_UARS_S);
-	caps->reserved_qps = udma_get_field(resp_d->rsv_uars_rsv_qps,
-					    QUERY_PF_CAPS_D_RSV_QPS_M,
-					    QUERY_PF_CAPS_D_RSV_QPS_S);
-	caps->reserved_uars = udma_get_field(resp_d->rsv_uars_rsv_qps,
-					     QUERY_PF_CAPS_D_RSV_UARS_M,
-					     QUERY_PF_CAPS_D_RSV_UARS_S);
-	caps->reserved_mrws = udma_get_field(resp_e->chunk_size_shift_rsv_mrws,
-					     QUERY_PF_CAPS_E_RSV_MRWS_M,
-					     QUERY_PF_CAPS_E_RSV_MRWS_S);
-	caps->chunk_sz = 1 << udma_get_field(resp_e->chunk_size_shift_rsv_mrws,
-					     QUERY_PF_CAPS_E_CHUNK_SIZE_SHIFT_M,
-					     QUERY_PF_CAPS_E_CHUNK_SIZE_SHIFT_S);
-	caps->reserved_cqs = udma_get_field(resp_e->rsv_cqs,
-					    QUERY_PF_CAPS_E_RSV_CQS_M,
-					    QUERY_PF_CAPS_E_RSV_CQS_S);
-	caps->reserved_srqs = udma_get_field(resp_e->rsv_srqs,
-					     QUERY_PF_CAPS_E_RSV_SRQS_M,
-					     QUERY_PF_CAPS_E_RSV_SRQS_S);
-	caps->reserved_lkey = udma_get_field(resp_e->rsv_lkey,
-					     QUERY_PF_CAPS_E_RSV_LKEYS_M,
-					     QUERY_PF_CAPS_E_RSV_LKEYS_S);
-	caps->default_ceq_max_cnt = le16_to_cpu(resp_e->ceq_max_cnt);
-	caps->default_ceq_period = le16_to_cpu(resp_e->ceq_period);
-	caps->default_aeq_max_cnt = le16_to_cpu(resp_e->aeq_max_cnt);
-	caps->default_aeq_period = le16_to_cpu(resp_e->aeq_period);
-
-	caps->qpc_hop_num = ctx_hop_num;
-	caps->sccc_hop_num = ctx_hop_num;
-	caps->srqc_hop_num = ctx_hop_num;
-	caps->cqc_hop_num = ctx_hop_num;
-	caps->mpt_hop_num = ctx_hop_num;
-	caps->mtt_hop_num = pbl_hop_num;
-	caps->cqe_hop_num = pbl_hop_num;
-	caps->srqwqe_hop_num = pbl_hop_num;
-	caps->idx_hop_num = pbl_hop_num;
-	caps->wqe_sq_hop_num = udma_get_field(resp_d->wq_hop_num_max_srqs,
-					      QUERY_PF_CAPS_D_SQWQE_HOP_NUM_M,
-					      QUERY_PF_CAPS_D_SQWQE_HOP_NUM_S);
-	caps->wqe_sge_hop_num = udma_get_field(resp_d->wq_hop_num_max_srqs,
-					       QUERY_PF_CAPS_D_EX_SGE_HOP_NUM_M,
-					       QUERY_PF_CAPS_D_EX_SGE_HOP_NUM_S);
-	caps->wqe_rq_hop_num = udma_get_field(resp_d->wq_hop_num_max_srqs,
-					      QUERY_PF_CAPS_D_RQWQE_HOP_NUM_M,
-					      QUERY_PF_CAPS_D_RQWQE_HOP_NUM_S);
+	ret = udma_query_pf_qp_cfg(udma_dev);
+	if (ret)
+		return ret;
 
 	set_default_jetty_caps(udma_dev);
 	query_hw_speed(udma_dev);
@@ -377,7 +438,7 @@ static int udma_query_caps(struct udma_dev *udma_dev)
 
 static int load_func_res_caps(struct udma_dev *udma_dev)
 {
-	struct udma_cmq_desc desc[2];
+	struct udma_cmq_desc desc[UDMA_CMQ_DESC_SIZE];
 	struct udma_cmq_req *r_a = (struct udma_cmq_req *)desc[0].data;
 	struct udma_cmq_req *r_b = (struct udma_cmq_req *)desc[1].data;
 	struct udma_caps *caps = &udma_dev->caps;
@@ -406,8 +467,6 @@ static int load_func_res_caps(struct udma_dev *udma_dev)
 	caps->sgid_bt_num = udma_reg_read(r_b, FUNC_RES_B_SGID_NUM) / func_num;
 	caps->sccc_bt_num =
 		udma_reg_read(r_b, FUNC_RES_B_SCCC_BT_NUM) / func_num;
-
-
 	caps->sl_num =
 		udma_reg_read(r_b, FUNC_RES_B_QID_NUM) / func_num;
 	caps->gmv_bt_num =
@@ -432,10 +491,6 @@ static int load_ext_cfg_caps(struct udma_dev *udma_dev)
 	func_num = max_t(uint32_t, 1, udma_dev->func_num);
 	qp_num = udma_reg_read(req, EXT_CFG_QP_PI_NUM) / func_num;
 	caps->num_pi_qps = round_down(qp_num, UDMA_QP_BANK_NUM);
-
-	qp_num = udma_reg_read(req, EXT_CFG_QP_NUM) / func_num;
-	caps->num_qps = round_down(qp_num, UDMA_QP_BANK_NUM);
-	caps->num_qps_shift = ilog2(caps->num_qps);
 
 	/* The extend doorbell memory on the PF is shared by all its VFs. */
 	caps->llm_ba_idx = udma_reg_read(req, EXT_CFG_LLM_INDEX);
@@ -540,26 +595,27 @@ static void calc_pg_sz(uint32_t obj_num, uint32_t obj_size, uint32_t hop_num,
 	uint64_t buf_chunk_size = PAGE_SIZE;
 	uint64_t bt_chunk_size = PAGE_SIZE;
 	uint64_t obj_per_chunk_default;
+	uint64_t ba_num_per_chunk;
 	uint64_t obj_per_chunk;
+	uint64_t obj_div;
+	uint32_t size;
 
 	obj_per_chunk_default = buf_chunk_size / obj_size;
 	*buf_page_size = 0;
 	*bt_page_size = 0;
+	ba_num_per_chunk = bt_chunk_size / BA_BYTE_LEN;
 
 	switch (hop_num) {
-	case 3:
-		obj_per_chunk = ctx_bt_num * (bt_chunk_size / BA_BYTE_LEN) *
-				(bt_chunk_size / BA_BYTE_LEN) *
-				(bt_chunk_size / BA_BYTE_LEN) *
-				 obj_per_chunk_default;
+	case UDMA_HOP_NUM_3:
+		obj_per_chunk = ctx_bt_num * ba_num_per_chunk * ba_num_per_chunk *
+				ba_num_per_chunk * obj_per_chunk_default;
 		break;
-	case 2:
-		obj_per_chunk = ctx_bt_num * (bt_chunk_size / BA_BYTE_LEN) *
-				(bt_chunk_size / BA_BYTE_LEN) *
-				 obj_per_chunk_default;
+	case UDMA_HOP_NUM_2:
+		obj_per_chunk = ctx_bt_num * ba_num_per_chunk * ba_num_per_chunk *
+				obj_per_chunk_default;
 		break;
-	case 1:
-		obj_per_chunk = ctx_bt_num * (bt_chunk_size / BA_BYTE_LEN) *
+	case UDMA_HOP_NUM_1:
+		obj_per_chunk = ctx_bt_num * ba_num_per_chunk *
 				obj_per_chunk_default;
 		break;
 	case UDMA_HOP_NUM_0:
@@ -571,10 +627,47 @@ static void calc_pg_sz(uint32_t obj_num, uint32_t obj_size, uint32_t hop_num,
 		return;
 	}
 
+	if (obj_per_chunk == 0) {
+		pr_err("divisor(obj_per_chunk) is zero!\n");
+		return;
+	}
+
+	obj_div = DIV_ROUND_UP(obj_num, obj_per_chunk);
+	size = ilog2(obj_div);
+	if ((obj_div & (obj_div - 1)) != 0)
+		size++;
+
 	if (hem_type >= HEM_TYPE_MTT)
-		*bt_page_size = ilog2(DIV_ROUND_UP(obj_num, obj_per_chunk));
+		*bt_page_size = size;
 	else
-		*buf_page_size = ilog2(DIV_ROUND_UP(obj_num, obj_per_chunk));
+		*buf_page_size = size;
+}
+
+static void set_udma_caps_srq(struct udma_caps *caps)
+{
+	/* SRQ */
+	if (caps->flags & UDMA_CAP_FLAG_SRQ) {
+		caps->srqc_ba_pg_sz = 0;
+		caps->srqc_buf_pg_sz = 0;
+		caps->srqwqe_ba_pg_sz = 0;
+		caps->srqwqe_buf_pg_sz = 0;
+		caps->idx_ba_pg_sz = 0;
+		caps->idx_buf_pg_sz = 0;
+		calc_pg_sz(caps->num_srqs, caps->srqc_entry_sz,
+			   caps->srqc_hop_num, caps->srqc_bt_num,
+			   &caps->srqc_buf_pg_sz, &caps->srqc_ba_pg_sz,
+			   HEM_TYPE_SRQC);
+		calc_pg_sz(caps->num_srqwqe_segs, caps->mtt_entry_sz,
+			   caps->srqwqe_hop_num, 1, &caps->srqwqe_buf_pg_sz,
+			   &caps->srqwqe_ba_pg_sz, HEM_TYPE_SRQWQE);
+		calc_pg_sz(caps->num_idx_segs, caps->idx_entry_sz,
+			   caps->idx_hop_num, 1, &caps->idx_buf_pg_sz,
+			   &caps->idx_ba_pg_sz, HEM_TYPE_INDEX);
+	}
+
+	/* GMV */
+	caps->gmv_ba_pg_sz = 0;
+	caps->gmv_buf_pg_sz = 0;
 }
 
 static void set_hem_page_size(struct udma_dev *udma_dev)
@@ -628,34 +721,13 @@ static void set_hem_page_size(struct udma_dev *udma_dev)
 	calc_pg_sz(caps->max_cqes, caps->cqe_sz, caps->cqe_hop_num,
 		   1, &caps->cqe_buf_pg_sz, &caps->cqe_ba_pg_sz, HEM_TYPE_CQE);
 
-	/* SRQ */
-	if (caps->flags & UDMA_CAP_FLAG_SRQ) {
-		caps->srqc_ba_pg_sz = 0;
-		caps->srqc_buf_pg_sz = 0;
-		caps->srqwqe_ba_pg_sz = 0;
-		caps->srqwqe_buf_pg_sz = 0;
-		caps->idx_ba_pg_sz = 0;
-		caps->idx_buf_pg_sz = 0;
-		calc_pg_sz(caps->num_srqs, caps->srqc_entry_sz,
-			   caps->srqc_hop_num, caps->srqc_bt_num,
-			   &caps->srqc_buf_pg_sz, &caps->srqc_ba_pg_sz,
-			   HEM_TYPE_SRQC);
-		calc_pg_sz(caps->num_srqwqe_segs, caps->mtt_entry_sz,
-			   caps->srqwqe_hop_num, 1, &caps->srqwqe_buf_pg_sz,
-			   &caps->srqwqe_ba_pg_sz, HEM_TYPE_SRQWQE);
-		calc_pg_sz(caps->num_idx_segs, caps->idx_entry_sz,
-			   caps->idx_hop_num, 1, &caps->idx_buf_pg_sz,
-			   &caps->idx_ba_pg_sz, HEM_TYPE_INDEX);
-	}
-
-	/* GMV */
-	caps->gmv_ba_pg_sz = 0;
-	caps->gmv_buf_pg_sz = 0;
+	set_udma_caps_srq(caps);
 }
 
 /* Apply all loaded caps before setting to hardware */
 static void apply_func_caps(struct udma_dev *udma_dev)
 {
+#define UDMA_MAC_CEQ_NUM 63
 	struct udma_caps *caps = &udma_dev->caps;
 	struct udma_priv *priv = (struct udma_priv *)udma_dev->priv;
 
@@ -679,6 +751,8 @@ static void apply_func_caps(struct udma_dev *udma_dev)
 			      (uint32_t)priv->handle->udmainfo.num_vectors -
 			      UDMA_FUNC_IRQ_RSV);
 	}
+	if (caps->num_comp_vectors > UDMA_MAC_CEQ_NUM)
+		caps->num_comp_vectors = UDMA_MAC_CEQ_NUM;
 	caps->qpc_sz = UDMA_QPC_SZ;
 	caps->cqe_sz = UDMA_CQE_SZ;
 	caps->scc_ctx_sz = UDMA_SCCC_SZ;
@@ -714,7 +788,7 @@ static int config_vf_ext_resource(struct udma_dev *udma_dev, uint32_t vf_id)
 
 static int config_vf_hem_resource(struct udma_dev *udma_dev, int vf_id)
 {
-	struct udma_cmq_desc desc[2];
+	struct udma_cmq_desc desc[UDMA_CMQ_DESC_SIZE];
 	struct udma_cmq_req *r_a = (struct udma_cmq_req *)desc[0].data;
 	struct udma_cmq_req *r_b = (struct udma_cmq_req *)desc[1].data;
 	struct udma_caps *caps = &udma_dev->caps;
@@ -912,12 +986,6 @@ static int udma_profile(struct udma_dev *udma_dev)
 	struct device *dev = udma_dev->dev;
 	int ret;
 
-	ret = udma_cmq_query_hw_info(udma_dev);
-	if (ret) {
-		dev_err(dev, "failed to query hardware info, ret = %d.\n", ret);
-		return ret;
-	}
-
 	ret = udma_query_fw_ver(udma_dev);
 	if (ret) {
 		dev_err(dev, "failed to query firmware info, ret = %d.\n", ret);
@@ -1114,8 +1182,8 @@ static void __udma_function_clear(struct udma_dev *udma_dev, int vf_id)
 	bool fclr_write_fail_flag = false;
 	struct udma_func_clear *resp;
 	struct udma_cmq_desc desc;
-	int end;
 	int ret = 0;
+	int end;
 
 	if (check_device_is_in_reset(udma_dev))
 		goto out;
@@ -1162,7 +1230,7 @@ out:
 static void udma_free_vf_resource(struct udma_dev *udma_dev, int vf_id)
 {
 	enum udma_opcode_type opcode = UDMA_OPC_ALLOC_VF_RES;
-	struct udma_cmq_desc desc[2];
+	struct udma_cmq_desc desc[UDMA_CMQ_DESC_SIZE];
 	struct udma_cmq_req *req_a;
 
 	req_a = (struct udma_cmq_req *)desc[0].data;
@@ -1210,7 +1278,7 @@ static void config_llm_table(struct udma_buf *data_buf, void *cfg_buf)
 static int set_llm_cfg_to_hw(struct udma_dev *udma_dev,
 			     struct udma_link_table *table)
 {
-	struct udma_cmq_desc desc[2];
+	struct udma_cmq_desc desc[UDMA_CMQ_DESC_SIZE];
 	struct udma_cmq_req *r_a = (struct udma_cmq_req *)desc[0].data;
 	struct udma_cmq_req *r_b = (struct udma_cmq_req *)desc[1].data;
 	struct udma_buf *buf = table->buf;
@@ -1439,7 +1507,6 @@ void put_hem_table(struct udma_dev *udma_dev)
 	for (i = 0; i < udma_dev->caps.gmv_entry_num; i++)
 		udma_table_put(udma_dev, &udma_dev->gmv_table, i);
 
-
 	for (i = 0; i < udma_dev->caps.qpc_timer_bt_num; i++)
 		udma_table_put(udma_dev, &udma_dev->qpc_timer_table, i);
 
@@ -1490,6 +1557,7 @@ static void udma_hw_exit(struct udma_dev *udma_dev)
 	udma_free_link_table(udma_dev);
 
 	put_hem_table(udma_dev);
+	udma_put_reset_page(udma_dev);
 	free_dip_list(udma_dev);
 }
 
@@ -1527,7 +1595,7 @@ static int get_op_for_set_hem(uint32_t type, int step_idx, uint16_t *mbox_op,
 		     UDMA_CMD_RESERVED;
 		break;
 	case HEM_TYPE_GMV:
-		op = is_create ? UDMA_CMD_RESERVED : UDMA_CMD_RESERVED;
+		op = UDMA_CMD_RESERVED;
 		break;
 	default:
 		return -EINVAL;
@@ -1619,7 +1687,12 @@ static int udma_set_hem(struct udma_dev *udma_dev, struct udma_hem_table *table,
 	if (!udma_check_whether_mhop(udma_dev, table->type))
 		return 0;
 
-	udma_calc_hem_mhop(udma_dev, table, &mhop_obj, &mhop);
+	ret = udma_calc_hem_mhop(udma_dev, table, &mhop_obj, &mhop);
+	if (ret) {
+		dev_err(udma_dev->dev, "failed to calc hem mhop, ret is %d.\n", ret);
+		return ret;
+	}
+
 	i = mhop.l0_idx;
 	j = mhop.l1_idx;
 	k = mhop.l2_idx;
@@ -1627,8 +1700,7 @@ static int udma_set_hem(struct udma_dev *udma_dev, struct udma_hem_table *table,
 	chunk_ba_num = mhop.bt_chunk_size / BA_BYTE_LEN;
 
 	if (hop_num == 2) {
-		hem_idx = i * chunk_ba_num * chunk_ba_num + j * chunk_ba_num +
-			  k;
+		hem_idx = i * chunk_ba_num * chunk_ba_num + j * chunk_ba_num + k;
 		l1_idx = i * chunk_ba_num + j;
 	} else if (hop_num == 1) {
 		hem_idx = i * chunk_ba_num + j;
@@ -1693,28 +1765,11 @@ static const struct udma_hw udma_hw = {
 	.cleanup_eq = udma_cleanup_eq_table,
 };
 
-bool udma_is_virtual_func(struct pci_dev *pdev)
-{
-	uint32_t dev_id = pdev->device;
-
-	switch (dev_id) {
-	case HNAE3_DEV_ID_UDMA_OVER_UBL:
-	case HNAE3_DEV_ID_UDMA:
-		return false;
-	case HNAE3_DEV_ID_UDMA_OVER_UBL_VF:
-		return true;
-	default:
-		dev_warn(&pdev->dev, "un-recognized pci deviced-id %x.\n",
-			 dev_id);
-	}
-
-	return false;
-}
-
 static void udma_get_cfg(struct udma_dev *udma_dev,
 			 struct hnae3_handle *handle)
 {
 	struct udma_priv *priv = (struct udma_priv *)udma_dev->priv;
+	int udma_vector_num;
 	int i;
 
 	udma_dev->pci_dev = handle->pdev;
@@ -1726,7 +1781,9 @@ static void udma_get_cfg(struct udma_dev *udma_dev,
 	udma_dev->caps.num_ports = 1;
 	udma_dev->uboe.netdevs[0] = handle->udmainfo.netdev;
 
-	for (i = 0; i < handle->udmainfo.num_vectors; i++)
+	udma_vector_num = handle->udmainfo.num_vectors > UDMA_MAX_IRQ_NUM ?
+			  UDMA_MAX_IRQ_NUM : handle->udmainfo.num_vectors;
+	for (i = 0; i < udma_vector_num; i++)
 		udma_dev->irq[i] = pci_irq_vector(handle->pdev,
 						  i +
 						  handle->udmainfo.base_vector);
@@ -1736,23 +1793,6 @@ static void udma_get_cfg(struct udma_dev *udma_dev,
 
 	udma_dev->reset_cnt = handle->ae_algo->ops->ae_dev_reset_cnt(handle);
 	priv->handle = handle;
-}
-
-static void udma_init_bank(struct udma_dev *dev)
-{
-	uint32_t qpn_shift;
-	int i;
-
-	dev->bank[0].min = 1;
-	dev->bank[0].inuse = 1;
-	dev->bank[0].next = dev->bank[0].min;
-
-	qpn_shift = dev->caps.num_qps_shift - UDMA_DEFAULT_MAX_JETTY_X_SHIFT -
-		    HNS3_UDMA_JETTY_X_PREFIX_BIT_NUM;
-	for (i = 0; i < UDMA_QP_BANK_NUM; i++) {
-		ida_init(&dev->bank[i].ida);
-		dev->bank[i].max = (1U << qpn_shift) / UDMA_QP_BANK_NUM - 1;
-	}
 }
 
 static int __udma_init_instance(struct hnae3_handle *handle)
@@ -1782,27 +1822,23 @@ static int __udma_init_instance(struct hnae3_handle *handle)
 	if (dfx_switch) {
 		ret = udma_dfx_init(udma_dev);
 		if (ret) {
-			dev_err(udma_dev->dev,
-				"UDMA dfx init failed(%d)!\n", ret);
+			dev_err(udma_dev->dev, "UDMA dfx init failed(%d)!\n", ret);
 			goto error_failed_dfx_init;
 		}
 	}
 
 	ret = udma_register_cc_sysfs(udma_dev);
 	if (ret) {
-		dev_err(udma_dev->dev,
-			"UDMA congest control init failed(%d)!\n", ret);
+		dev_err(udma_dev->dev, "UDMA congest control init failed(%d)!\n", ret);
 		goto error_failed_scc_init;
 	}
 
 	ret = udma_register_num_qp_sysfs(udma_dev);
 	if (ret) {
-		dev_err(udma_dev->dev,
-			"UDMA num_qp sysfs init failed(%d)!\n", ret);
+		dev_err(udma_dev->dev, "UDMA num_qp sysfs init failed(%d)!\n", ret);
 		goto error_failed_num_qp_init;
 	}
 
-	udma_init_bank(udma_dev);
 	return 0;
 
 error_failed_num_qp_init:
@@ -1830,12 +1866,12 @@ static void __udma_uninit_instance(struct hnae3_handle *handle,
 
 	udma_unregister_num_qp_sysfs(udma_dev);
 	udma_unregister_cc_sysfs(udma_dev);
+	udma_hnae_client_exit(udma_dev);
+
 	if (dfx_switch)
 		udma_dfx_uninit(handle->priv);
-
 	handle->priv = NULL;
 
-	udma_hnae_client_exit(udma_dev);
 	kfree(udma_dev->priv);
 	kfree(udma_dev);
 }
@@ -2049,8 +2085,8 @@ static int __init udma_init(void)
 
 static void __exit udma_exit(void)
 {
-	udma_cleanup_debugfs();
 	hnae3_unregister_client(&udma_client);
+	udma_cleanup_debugfs();
 }
 
 module_init(udma_init);

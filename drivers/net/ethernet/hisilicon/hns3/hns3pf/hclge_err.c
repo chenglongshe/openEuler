@@ -2,7 +2,9 @@
 /* Copyright (c) 2016-2017 Hisilicon Limited. */
 
 #include "hclge_err.h"
+#if IS_ENABLED(CONFIG_UB_UDMA_HNS3)
 #include "hclge_udma.h"
+#endif
 
 static const struct hclge_hw_error hclge_imp_tcm_ecc_int[] = {
 	{
@@ -1598,8 +1600,7 @@ static void hclge_query_reg_info_of_ssu(struct hclge_dev *hdev)
 {
 	u32 loop_para[HCLGE_MOD_MSG_PARA_ARRAY_MAX_SIZE] = {0};
 	struct hclge_mod_reg_common_msg msg;
-	u8 i, j, num;
-	u32 loop_time;
+	u8 i, j, num, loop_time;
 
 	num = ARRAY_SIZE(hclge_ssu_reg_common_msg);
 	for (i = 0; i < num; i++) {
@@ -1609,7 +1610,8 @@ static void hclge_query_reg_info_of_ssu(struct hclge_dev *hdev)
 		loop_time = 1;
 		loop_para[0] = 0;
 		if (msg.need_para) {
-			loop_time = hdev->ae_dev->dev_specs.tnl_num;
+			loop_time = min_t(u8, hdev->ae_dev->dev_specs.tnl_num,
+					  HCLGE_MOD_MSG_PARA_ARRAY_MAX_SIZE);
 			for (j = 0; j < loop_time; j++)
 				loop_para[j] = j + 1;
 		}
@@ -3193,7 +3195,7 @@ bool hclge_find_error_source(struct hclge_dev *hdev)
 			  HCLGE_RAS_REG_ERR_MASK;
 #if IS_ENABLED(CONFIG_UB_UDMA_HNS3)
 	udma_err_src_flag = hclge_get_udma_error_reg(hdev) &
-			   HCLGE_RAS_REG_ERR_MASK_UB;
+			    HCLGE_RAS_REG_ERR_MASK_UB;
 
 	return msix_src_flag || hw_err_src_flag || udma_err_src_flag;
 #else

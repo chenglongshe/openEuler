@@ -3532,13 +3532,20 @@ static int bpf_skb_net_grow(struct sk_buff *skb, u32 off, u32 len_diff,
 	if (skb_is_gso(skb)) {
 		struct skb_shared_info *shinfo = skb_shinfo(skb);
 
-		/* Due to header grow, MSS needs to be downgraded. */
-		if (!(flags & BPF_F_ADJ_ROOM_FIXED_GSO))
-			skb_decrease_gso_size(shinfo, len_diff);
-
 		/* Header must be checked, and gso_segs recomputed. */
 		shinfo->gso_type |= gso_type;
 		shinfo->gso_segs = 0;
+
+		/* Due to header growth, MSS needs to be downgraded.
+		 * There is a BUG_ON() when segmenting the frag_list with
+		 * head_frag true, so linearize the skb after downgrading
+		 * the MSS.
+		 */
+		if (!(flags & BPF_F_ADJ_ROOM_FIXED_GSO)) {
+			skb_decrease_gso_size(shinfo, len_diff);
+			if (shinfo->frag_list)
+				return skb_linearize(skb);
+		}
 	}
 
 	return 0;
@@ -10059,8 +10066,7 @@ int sk_detach_filter(struct sock *sk)
 }
 EXPORT_SYMBOL_GPL(sk_detach_filter);
 
-int sk_get_filter(struct sock *sk, struct sock_filter __user *ubuf,
-		  unsigned int len)
+int sk_get_filter(struct sock *sk, sockptr_t optval, unsigned int len)
 {
 	struct sock_fprog_kern *fprog;
 	struct sk_filter *filter;
@@ -10091,7 +10097,7 @@ int sk_get_filter(struct sock *sk, struct sock_filter __user *ubuf,
 		goto out;
 
 	ret = -EFAULT;
-	if (copy_to_user(ubuf, fprog->filter, bpf_classic_proglen(fprog)))
+	if (copy_to_sockptr(optval, fprog->filter, bpf_classic_proglen(fprog)))
 		goto out;
 
 	/* Instead of bytes, the API requests to return the number
@@ -10698,6 +10704,23 @@ struct gnet_bpf gnet_bpf_progs;
 EXPORT_SYMBOL(gnet_bpf_progs);
 struct static_key_false gnet_bpf_enabled_key[MAX_GNET_BPF_ATTACH_TYPE];
 EXPORT_SYMBOL(gnet_bpf_enabled_key);
+
+static inline enum gnet_bpf_attach_type
+to_gnet_bpf_attach_type(enum bpf_attach_type attach_type)
+{
+	switch (attach_type) {
+	case BPF_GNET_TCP_RECVMSG:
+		return GNET_TCP_RECVMSG;
+	case BPF_GNET_SK_DST_SET:
+		return GNET_SK_DST_SET;
+	case BPF_GNET_RCV_NIC_NODE:
+		return GNET_RCV_NIC_NODE;
+	case BPF_GNET_SEND_NIC_NODE:
+		return GNET_SEND_NIC_NODE;
+	default:
+	return GNET_BPF_ATTACH_TYPE_INVALID;
+	}
+}
 
 int gnet_bpf_prog_attach(const union bpf_attr *attr,
 			 enum bpf_prog_type ptype, struct bpf_prog *prog)

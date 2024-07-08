@@ -665,6 +665,7 @@ static void __tun_detach(struct tun_file *tfile, bool clean)
 				   tun->tfiles[tun->numqueues - 1]);
 		ntfile = rtnl_dereference(tun->tfiles[index]);
 		ntfile->queue_index = index;
+		ntfile->xdp_rxq.queue_index = index;
 		rcu_assign_pointer(tun->tfiles[tun->numqueues - 1],
 				   NULL);
 
@@ -2469,6 +2470,9 @@ static int tun_xdp_one(struct tun_struct *tun,
 	int err = 0;
 	bool skb_xdp = false;
 	struct page *page;
+
+	if (unlikely(datasize < ETH_HLEN))
+		return -EINVAL;
 
 	xdp_prog = rcu_dereference(tun->xdp_prog);
 	if (xdp_prog) {

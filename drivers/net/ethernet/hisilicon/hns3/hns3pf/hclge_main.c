@@ -16,7 +16,9 @@
 #include <net/ipv6.h>
 #include <net/rtnetlink.h>
 #include <net/vxlan.h>
+#if IS_ENABLED(CONFIG_UBL)
 #include "ubl.h"
+#endif
 #include "hclge_cmd.h"
 #include "hclge_dcb.h"
 #include "hclge_ext.h"
@@ -29,11 +31,15 @@
 #include "hnae3.h"
 #include "hclge_devlink.h"
 #include "hclge_comm_cmd.h"
+#if IS_ENABLED(CONFIG_UB_UDMA_HNS3)
 #include "hclge_udma.h"
+#endif
+#ifdef CONFIG_HNS3_UBL
 #include "hclge_comm_unic_addr.h"
 #include "hclge_unic_ip.h"
 #include "hclge_unic_guid.h"
 #include "hclge_unic_addr.h"
+#endif
 
 #include "hclge_trace.h"
 
@@ -1420,9 +1426,11 @@ static void hclge_parse_dev_specs(struct hclge_dev *hdev,
 	struct hnae3_ae_dev *ae_dev = pci_get_drvdata(hdev->pdev);
 	struct hclge_dev_specs_0_cmd *req0;
 	struct hclge_dev_specs_1_cmd *req1;
+	struct hclge_dev_specs_2_cmd *req2;
 
 	req0 = (struct hclge_dev_specs_0_cmd *)desc[0].data;
 	req1 = (struct hclge_dev_specs_1_cmd *)desc[1].data;
+	req2 = (struct hclge_dev_specs_2_cmd *)desc[2].data;
 
 	ae_dev->dev_specs.max_non_tso_bd_num = req0->max_non_tso_bd_num;
 	ae_dev->dev_specs.rss_ind_tbl_size =
@@ -1437,6 +1445,10 @@ static void hclge_parse_dev_specs(struct hclge_dev *hdev,
 	ae_dev->dev_specs.mc_mac_size = le16_to_cpu(req1->mc_mac_size);
 	ae_dev->dev_specs.tnl_num = req1->tnl_num;
 	ae_dev->dev_specs.hilink_version = req1->hilink_version;
+	ae_dev->dev_specs.total_rx_buffer_size =
+		le32_to_cpu(req2->total_rx_buffer_size);
+	ae_dev->dev_specs.min_rx_buffer_size_per_tc =
+		le32_to_cpu(req2->min_rx_buffer_size_per_tc);
 #ifdef CONFIG_HNS3_UBL
 	if (hnae3_dev_ubl_supported(ae_dev)) {
 		ae_dev->dev_specs.guid_tbl_space =
@@ -2754,8 +2766,16 @@ static int hclge_cfg_mac_speed_dup_h(struct hnae3_handle *handle, int speed,
 {
 	struct hclge_vport *vport = hclge_get_vport(handle);
 	struct hclge_dev *hdev = vport->back;
+	int ret;
 
-	return hclge_cfg_mac_speed_dup(hdev, speed, duplex);
+	ret = hclge_cfg_mac_speed_dup(hdev, speed, duplex);
+	if (ret)
+		return ret;
+
+	hdev->hw.mac.req_speed = speed;
+	hdev->hw.mac.req_duplex = duplex;
+
+	return 0;
 }
 
 static int hclge_set_autoneg_en(struct hclge_dev *hdev, bool enable)
@@ -2923,14 +2943,16 @@ static int hclge_mac_init(struct hclge_dev *hdev)
 	if (!test_bit(HCLGE_STATE_RST_HANDLING, &hdev->state))
 		hdev->hw.mac.duplex = HCLGE_MAC_FULL;
 
-	ret = hclge_cfg_mac_speed_dup_hw(hdev, hdev->hw.mac.speed,
-					 hdev->hw.mac.duplex,
-					 hdev->hw.mac.lane_num);
-	if (ret)
-		return ret;
-
 	if (hdev->hw.mac.support_autoneg) {
 		ret = hclge_set_autoneg_en(hdev, hdev->hw.mac.autoneg);
+		if (ret)
+			return ret;
+	}
+
+	if (!hdev->hw.mac.autoneg) {
+		ret = hclge_cfg_mac_speed_dup_hw(hdev, hdev->hw.mac.req_speed,
+						 hdev->hw.mac.req_duplex,
+						 hdev->hw.mac.lane_num);
 		if (ret)
 			return ret;
 	}
@@ -3546,6 +3568,17 @@ static int hclge_set_vf_link_state(struct hnae3_handle *handle, int vf,
 	return ret;
 }
 
+static void hclge_set_reset_pending(struct hclge_dev *hdev,
+				    enum hnae3_reset_type reset_type)
+{
+	/* When an incorrect reset type is executed, the get_reset_level
+	 * function generates the HNAE3_NONE_RESET flag. As a result, this
+	 * type do not need to pending.
+	 */
+	if (reset_type != HNAE3_NONE_RESET)
+		set_bit(reset_type, &hdev->reset_pending);
+}
+
 static u32 hclge_check_event_cause(struct hclge_dev *hdev, u32 *clearval)
 {
 	u32 cmdq_src_reg, msix_src_reg, hw_err_src_reg;
@@ -3569,7 +3602,7 @@ static u32 hclge_check_event_cause(struct hclge_dev *hdev, u32 *clearval)
 	 */
 	if (BIT(HCLGE_VECTOR0_IMPRESET_INT_B) & msix_src_reg) {
 		dev_info(&hdev->pdev->dev, "IMP reset interrupt\n");
-		set_bit(HNAE3_IMP_RESET, &hdev->reset_pending);
+		hclge_set_reset_pending(hdev, HNAE3_IMP_RESET);
 		set_bit(HCLGE_COMM_STATE_CMD_DISABLE, &hdev->hw.hw.comm_state);
 		*clearval = BIT(HCLGE_VECTOR0_IMPRESET_INT_B);
 		hdev->rst_stats.imp_rst_cnt++;
@@ -3579,7 +3612,7 @@ static u32 hclge_check_event_cause(struct hclge_dev *hdev, u32 *clearval)
 	if (BIT(HCLGE_VECTOR0_GLOBALRESET_INT_B) & msix_src_reg) {
 		dev_info(&hdev->pdev->dev, "global reset interrupt\n");
 		set_bit(HCLGE_COMM_STATE_CMD_DISABLE, &hdev->hw.hw.comm_state);
-		set_bit(HNAE3_GLOBAL_RESET, &hdev->reset_pending);
+		hclge_set_reset_pending(hdev, HNAE3_GLOBAL_RESET);
 		*clearval = BIT(HCLGE_VECTOR0_GLOBALRESET_INT_B);
 		hdev->rst_stats.global_rst_cnt++;
 		return HCLGE_VECTOR0_EVENT_RST;
@@ -4063,7 +4096,7 @@ static void hclge_do_reset(struct hclge_dev *hdev)
 	case HNAE3_FUNC_RESET:
 		dev_info(&pdev->dev, "PF reset requested\n");
 		/* schedule again to check later */
-		set_bit(HNAE3_FUNC_RESET, &hdev->reset_pending);
+		hclge_set_reset_pending(hdev, HNAE3_FUNC_RESET);
 		hclge_reset_task_schedule(hdev);
 		break;
 	default:
@@ -4096,6 +4129,8 @@ static enum hnae3_reset_type hclge_get_reset_level(struct hnae3_ae_dev *ae_dev,
 		rst_level = HNAE3_FLR_RESET;
 		clear_bit(HNAE3_FLR_RESET, addr);
 	}
+
+	clear_bit(HNAE3_NONE_RESET, addr);
 
 	if (hdev->reset_type != HNAE3_NONE_RESET &&
 	    rst_level < hdev->reset_type)
@@ -4238,7 +4273,7 @@ static bool hclge_reset_err_handle(struct hclge_dev *hdev)
 		return false;
 	} else if (hdev->rst_stats.reset_fail_cnt < HCLGE_RESET_MAX_FAIL_CNT) {
 		hdev->rst_stats.reset_fail_cnt++;
-		set_bit(hdev->reset_type, &hdev->reset_pending);
+		hclge_set_reset_pending(hdev, hdev->reset_type);
 		dev_info(&hdev->pdev->dev,
 			 "re-schedule reset task(%u)\n",
 			 hdev->rst_stats.reset_fail_cnt);
@@ -4536,7 +4571,19 @@ void hclge_reset_event(struct pci_dev *pdev, struct hnae3_handle *handle)
 static void hclge_set_def_reset_request(struct hnae3_ae_dev *ae_dev,
 					enum hnae3_reset_type rst_type)
 {
+#define HCLGE_SUPPORT_RESET_TYPE \
+	(BIT(HNAE3_FLR_RESET) | BIT(HNAE3_FUNC_RESET) | \
+	BIT(HNAE3_GLOBAL_RESET) | BIT(HNAE3_IMP_RESET))
+
 	struct hclge_dev *hdev = ae_dev->priv;
+
+	if (!(BIT(rst_type) & HCLGE_SUPPORT_RESET_TYPE)) {
+		/* To prevent reset triggered by hclge_reset_event */
+		set_bit(HNAE3_NONE_RESET, &hdev->default_reset_request);
+		dev_warn(&hdev->pdev->dev, "unsupported reset type %d\n",
+			 rst_type);
+		return;
+	}
 
 	set_bit(rst_type, &hdev->default_reset_request);
 }
@@ -12174,7 +12221,7 @@ static void hclge_pci_uninit(struct hclge_dev *hdev)
 	pcim_iounmap(pdev, hdev->hw.hw.io_base);
 	pci_free_irq_vectors(pdev);
 	pci_clear_master(pdev);
-	pci_release_mem_regions(pdev);
+	pci_release_regions(pdev);
 	pci_disable_device(pdev);
 }
 
@@ -12439,65 +12486,6 @@ static int hclge_set_wol(struct hnae3_handle *handle,
 	return ret;
 }
 
-#if IS_ENABLED(CONFIG_UB_UDMA_HNS3)
-static int hclge_set_fastpath_cmd(struct hnae3_ae_dev *ae_dev, bool fastpath_en)
-{
-	struct hclge_dev *hdev = ae_dev->priv;
-	struct hclge_config_fastpath_cmd *req;
-	struct hclge_desc desc;
-
-	if (!hnae3_dev_udma_supported(ae_dev))
-		return 0;
-
-	hclge_cmd_setup_basic_desc(&desc, HCLGE_OPC_COMM_CFG_FASTPATH, false);
-	req = (struct hclge_config_fastpath_cmd *)desc.data;
-	req->fastpath_en = fastpath_en;
-
-	return hclge_cmd_send(&hdev->hw, &desc, 1);
-}
-
-static int hclge_set_fastpath(struct hnae3_ae_dev *ae_dev, bool fastpath_en)
-{
-	struct hclge_dev *hdev = ae_dev->priv;
-	int last_bad_ret = 0;
-	int ret;
-
-	while (test_bit(HCLGE_STATE_RST_HANDLING, &hdev->state))
-		msleep(HCLGE_WAIT_RESET_DONE);
-
-	rtnl_lock();
-	ret = hclge_notify_client(hdev, HNAE3_DOWN_CLIENT);
-	if (ret) {
-		rtnl_unlock();
-		return ret;
-	}
-
-	ret = hclge_tm_flush_cfg(hdev, true);
-	if (ret) {
-		rtnl_unlock();
-		return ret;
-	}
-
-	ret = hclge_set_fastpath_cmd(ae_dev, fastpath_en);
-	if (ret) {
-		dev_err(&hdev->pdev->dev,
-			"failed to set fastpath, ret = %d\n", ret);
-		last_bad_ret = ret;
-	}
-
-	ret = hclge_tm_flush_cfg(hdev, false);
-	if (ret)
-		last_bad_ret = ret;
-
-	ret = hclge_notify_client(hdev, HNAE3_UP_CLIENT);
-	if (ret)
-		last_bad_ret = ret;
-
-	rtnl_unlock();
-	return last_bad_ret;
-}
-#endif
-
 static int hclge_init_ae_dev(struct hnae3_ae_dev *ae_dev)
 {
 	struct pci_dev *pdev = ae_dev->pdev;
@@ -12602,11 +12590,8 @@ static int hclge_init_ae_dev(struct hnae3_ae_dev *ae_dev)
 		goto err_mdiobus_unreg;
 
 #ifdef CONFIG_HNS3_UBL
-	if (hnae3_dev_ubl_supported(ae_dev)) {
-		ret = hclge_unic_init_iptbl_info(hdev);
-		if (ret)
-			goto err_mdiobus_unreg;
-	}
+	if (hnae3_dev_ubl_supported(ae_dev))
+		hclge_unic_init_iptbl_info(hdev);
 #endif
 
 	ret = hclge_mac_init(hdev);
@@ -13047,6 +13032,8 @@ static int hclge_reset_ae_dev(struct hnae3_ae_dev *ae_dev)
 		dev_err(&pdev->dev, "VLAN init fail, ret =%d\n", ret);
 		return ret;
 	}
+
+	hclge_reset_tc_config(hdev);
 
 	ret = hclge_tm_init_hw(hdev, true);
 	if (ret) {

@@ -88,6 +88,7 @@
 #define MR_TYPE_DMA				0x03
 
 #define HNS_ROCE_FRMR_MAX_PA			512
+#define HNS_ROCE_FRMR_ALIGN_SIZE		128
 
 #define PKEY_ID					0xffff
 #define NODE_DESC_SIZE				64
@@ -113,6 +114,8 @@
 
 #define HNS_ROCE_MAX_CQ_COUNT 0xFFFF
 #define HNS_ROCE_MAX_CQ_PERIOD 0xFFFF
+
+#define MAIN_PF_FUNC_ID 0
 
 enum {
 	SERV_TYPE_RC,
@@ -178,6 +181,10 @@ enum {
 	HNS_ROCE_CAP_FLAG_POE                   = BIT(27),
 };
 
+enum {
+	FW_CAP_FLAG_CNP_PRI = BIT(3),
+};
+
 #define HNS_ROCE_DB_TYPE_COUNT			2
 #define HNS_ROCE_DB_UNIT_SIZE			4
 
@@ -213,6 +220,9 @@ enum {
 /* The minimum page size is 4K for hardware */
 #define HNS_HW_PAGE_SHIFT			12
 #define HNS_HW_PAGE_SIZE			(1 << HNS_HW_PAGE_SHIFT)
+
+#define HNS_HW_MAX_PAGE_SHIFT			27
+#define HNS_HW_MAX_PAGE_SIZE			(1 << HNS_HW_MAX_PAGE_SHIFT)
 
 struct hns_roce_uar {
 	u64		pfn;
@@ -283,6 +293,7 @@ struct hns_roce_ucontext {
 	u32			config;
 	struct hns_roce_dca_ctx	dca_ctx;
 	struct hns_dca_ctx_debugfs dca_dbgfs;
+	u8 cq_bank_id;
 };
 
 struct hns_roce_pd {
@@ -596,9 +607,8 @@ struct hns_roce_bank {
 };
 
 struct hns_roce_idx_table {
-	u32 *spare_idx;
-	u32 head;
-	u32 tail;
+	unsigned long *qpn_bitmap;
+	unsigned long *dip_idx_bitmap;
 };
 
 struct hns_roce_qp_table {
@@ -617,6 +627,7 @@ struct hns_roce_cq_table {
 	struct hns_roce_hem_table	table;
 	struct hns_roce_bank bank[HNS_ROCE_CQ_BANK_NUM];
 	struct mutex			bank_mutex;
+	u32 ctx_num[HNS_ROCE_CQ_BANK_NUM];
 };
 
 struct hns_roce_srq_table {
@@ -758,6 +769,7 @@ struct hns_roce_qp {
 	u8			priority;
 	bool			delayed_destroy_flag;
 	struct hns_roce_mtr_node *mtr_node;
+	struct hns_roce_dip *dip;
 };
 
 struct hns_roce_ib_iboe {
@@ -824,6 +836,7 @@ struct hns_roce_eq {
 	int				shift;
 	int				event_type;
 	int				sub_type;
+	struct tasklet_struct		tasklet;
 };
 
 struct hns_roce_eq_table {
@@ -979,6 +992,7 @@ struct hns_roce_caps {
 	u8		congest_type;
 	u8		default_congest_type;
 	u8              poe_ch_num;
+	u32		fw_cap;
 };
 
 enum hns_roce_device_state {
@@ -1097,17 +1111,27 @@ struct hns_roce_hw {
 	int (*query_scc_param)(struct hns_roce_dev *hr_dev, u8 port_num,
 			       enum hns_roce_scc_algo alog);
 	int (*cfg_poe_ch)(struct hns_roce_dev *hr_dev, u32 index, u64 poe_addr);
+	int (*config_cnp_pri_param)(struct hns_roce_dev *hr_dev, u8 port_num);
+	int (*query_cnp_pri_param)(struct hns_roce_dev *hr_dev, u8 port_num);
+};
+
+struct hns_roce_cnp_pri_param {
+	__le32 param;
+	struct hns_roce_dev *hr_dev;
+	u8 port_num;
 };
 
 #define HNS_ROCE_SCC_PARAM_SIZE 4
 struct hns_roce_scc_param {
 	__le32 param[HNS_ROCE_SCC_PARAM_SIZE];
-	u32 lifespan;
+	__le32 lifespan;
 	unsigned long timestamp;
 	enum hns_roce_scc_algo algo_type;
 	struct delayed_work scc_cfg_dwork;
 	struct hns_roce_dev *hr_dev;
 	u8 port_num;
+	__le32 latest_param[HNS_ROCE_SCC_PARAM_SIZE];
+	struct mutex scc_mutex; /* protect @param and @latest_param */
 };
 
 struct hns_roce_port {
@@ -1115,6 +1139,7 @@ struct hns_roce_port {
 	u8 port_num;
 	struct kobject kobj;
 	struct hns_roce_scc_param *scc_param;
+	struct hns_roce_cnp_pri_param *cnp_pri_param;
 };
 
 struct hns_roce_mtr_node {
@@ -1198,7 +1223,6 @@ struct hns_roce_dev {
 	u32 congest_algo_tmpl_id;
 	u64 dwqe_page;
 
-	struct notifier_block bond_nb;
 	struct hns_roce_port port_data[HNS_ROCE_MAX_PORTS];
 	atomic64_t *dfx_cnt;
 	struct hns_roce_poe_ctx poe_ctx; /* poe ch array */
@@ -1206,9 +1230,12 @@ struct hns_roce_dev {
 	struct rdma_notify_mem *notify_tbl;
 	size_t notify_num;
 	struct list_head mtr_unfree_list; /* list of unfree mtr on this dev */
-	spinlock_t mtr_unfree_list_lock; /* protect mtr_unfree_list */
+	struct mutex mtr_unfree_list_mutex; /* protect mtr_unfree_list */
 	struct list_head umem_unfree_list; /* list of unfree umem on this dev */
-	spinlock_t umem_unfree_list_lock; /* protect umem_unfree_list */
+	struct mutex umem_unfree_list_mutex; /* protect umem_unfree_list */
+
+	void *dca_safe_buf;
+	dma_addr_t dca_safe_page;
 };
 
 static inline struct hns_roce_dev *to_hr_dev(struct ib_device *ib_dev)
@@ -1533,4 +1560,6 @@ int hns_roce_register_poe_channel(struct hns_roce_dev *hr_dev, u8 channel,
 				  u64 poe_addr);
 int hns_roce_unregister_poe_channel(struct hns_roce_dev *hr_dev, u8 channel);
 bool hns_roce_is_srq_exist(struct hns_roce_dev *hr_dev, u32 srqn);
+void hns_roce_put_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
+void hns_roce_get_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
 #endif /* _HNS_ROCE_DEVICE_H */

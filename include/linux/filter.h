@@ -835,14 +835,15 @@ bpf_ctx_narrow_access_offset(u32 off, u32 size, u32 size_default)
 
 #define bpf_classic_proglen(fprog) (fprog->len * sizeof(fprog->filter[0]))
 
-static inline void bpf_prog_lock_ro(struct bpf_prog *fp)
+static inline int __must_check bpf_prog_lock_ro(struct bpf_prog *fp)
 {
 #ifndef CONFIG_BPF_JIT_ALWAYS_ON
 	if (!fp->jited) {
 		set_vm_flush_reset_perms(fp);
-		set_memory_ro((unsigned long)fp, fp->pages);
+		return set_memory_ro((unsigned long)fp, fp->pages);
 	}
 #endif
+	return 0;
 }
 
 static inline void bpf_jit_binary_lock_ro(struct bpf_binary_header *hdr)
@@ -904,8 +905,7 @@ int sk_reuseport_attach_filter(struct sock_fprog *fprog, struct sock *sk);
 int sk_reuseport_attach_bpf(u32 ufd, struct sock *sk);
 void sk_reuseport_prog_free(struct bpf_prog *prog);
 int sk_detach_filter(struct sock *sk);
-int sk_get_filter(struct sock *sk, struct sock_filter __user *filter,
-		  unsigned int len);
+int sk_get_filter(struct sock *sk, sockptr_t optval, unsigned int len);
 
 bool sk_filter_charge(struct sock *sk, struct sk_filter *fp);
 void sk_filter_uncharge(struct sock *sk, struct sk_filter *fp);
@@ -1494,23 +1494,6 @@ enum gnet_bpf_attach_type {
 	GNET_SEND_NIC_NODE,
 	MAX_GNET_BPF_ATTACH_TYPE
 };
-
-static inline enum gnet_bpf_attach_type
-to_gnet_bpf_attach_type(enum bpf_attach_type attach_type)
-{
-	switch (attach_type) {
-	case BPF_GNET_TCP_RECVMSG:
-		return GNET_TCP_RECVMSG;
-	case BPF_GNET_SK_DST_SET:
-		return GNET_SK_DST_SET;
-	case BPF_GNET_RCV_NIC_NODE:
-		return GNET_RCV_NIC_NODE;
-	case BPF_GNET_SEND_NIC_NODE:
-		return GNET_SEND_NIC_NODE;
-	default:
-	return GNET_BPF_ATTACH_TYPE_INVALID;
-	}
-}
 
 struct gnet_bpf {
 	struct bpf_prog __rcu *progs[MAX_GNET_BPF_ATTACH_TYPE];

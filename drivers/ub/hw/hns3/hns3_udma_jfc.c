@@ -126,18 +126,27 @@ static int check_create_jfc(struct udma_dev *udma_dev,
 			    struct hns3_udma_create_jfc_ucmd *ucmd,
 			    struct ubcore_udata *udata)
 {
+	unsigned long byte;
 	int ret;
 
-	if (udata) {
-		ret = copy_from_user((void *)ucmd,
-				     (void *)udata->udrv_data->in_addr,
-				     min_t(uint32_t, udata->udrv_data->in_len,
-					   (uint32_t)sizeof(struct hns3_udma_create_jfc_ucmd)));
-		if (ret) {
-			dev_err(udma_dev->dev,
-				"failed to copy JFC udata, ret = %d.\n", ret);
-			return ret;
-		}
+	if (!udata || !udata->udrv_data) {
+		dev_err(udma_dev->dev, "jfc udata or udrv_data is null.\n");
+		return -EINVAL;
+	}
+
+	if (!udata->udrv_data->in_addr ||
+	    udata->udrv_data->in_len < sizeof(struct hns3_udma_create_jfc_ucmd)) {
+		dev_err(udma_dev->dev, "Invalid jfc in_len %u or addr is null.\n",
+			udata->udrv_data->in_len);
+		return -EINVAL;
+	}
+
+	byte = copy_from_user((void *)ucmd, (void *)udata->udrv_data->in_addr,
+			      sizeof(struct hns3_udma_create_jfc_ucmd));
+	if (byte) {
+		dev_err(udma_dev->dev,
+			"failed to copy JFC udata, byte = %lu.\n", byte);
+		return -EFAULT;
 	}
 
 	ret = check_jfc_cfg(udma_dev, cfg);
@@ -208,7 +217,16 @@ static int alloc_jfc_buf(struct udma_dev *udma_dev, struct udma_jfc *udma_jfc,
 {
 	struct udma_ucontext *udma_uctx = to_udma_ucontext(udata->uctx);
 	struct hns3_udma_create_jfc_resp resp = {};
+	unsigned long byte;
 	int ret;
+
+	if (!udata->udrv_data->out_addr ||
+	    udata->udrv_data->out_len < sizeof(resp)) {
+		dev_err(udma_dev->dev,
+			"Invalid jfc out: len %u or addr is null.\n",
+			udata->udrv_data->out_len);
+		return -EINVAL;
+	}
 
 	ret = alloc_jfc_cqe_buf(udma_dev, udma_jfc, udata, ucmd->buf_addr);
 	if (ret)
@@ -224,16 +242,14 @@ static int alloc_jfc_buf(struct udma_dev *udma_dev, struct udma_jfc *udma_jfc,
 		udma_jfc->jfc_caps |= HNS3_UDMA_JFC_CAP_RECORD_DB;
 	}
 
-	if (udata) {
-		resp.jfc_caps = udma_jfc->jfc_caps;
-		ret = copy_to_user((void *)udata->udrv_data->out_addr, &resp,
-				   min_t(uint32_t, udata->udrv_data->out_len,
-					 (uint32_t)sizeof(resp)));
-		if (ret) {
-			dev_err(udma_dev->dev,
-				"failed to copy jfc resp, ret = %d.\n", ret);
-			goto err_copy;
-		}
+	resp.jfc_caps = udma_jfc->jfc_caps;
+	byte = copy_to_user((void *)udata->udrv_data->out_addr, &resp,
+			    sizeof(resp));
+	if (byte) {
+		dev_err(udma_dev->dev,
+			"failed to copy jfc resp, byte = %lu.\n", byte);
+		ret = -EFAULT;
+		goto err_copy;
 	}
 
 	refcount_set(&udma_jfc->refcount, 1);
@@ -512,33 +528,53 @@ static void free_jfc_buf(struct udma_dev *udma_dev, struct udma_jfc *udma_jfc)
 	udma_mtr_destroy(udma_dev, &udma_jfc->mtr);
 }
 
-static uint8_t get_least_load_bankid_for_jfc(struct udma_bank *bank)
+void udma_put_cq_bankid_for_uctx(struct udma_ucontext *uctx)
 {
-	uint32_t least_load = bank[0].inuse;
+	struct udma_dev *ub_dev = to_udma_dev(uctx->uctx.ub_dev);
+	struct udma_jfc_table *jfc_table = &ub_dev->jfc_table;
+
+	mutex_lock(&jfc_table->bank_mutex);
+	jfc_table->ctx_num[uctx->cq_bank_id]--;
+	mutex_unlock(&jfc_table->bank_mutex);
+}
+
+uint8_t udma_get_cq_bankid_for_uctx(struct udma_dev *ub_dev)
+{
+	struct udma_jfc_table *jfc_table = &ub_dev->jfc_table;
+	uint32_t least_load;
 	uint8_t bankid = 0;
-	uint32_t bankcnt;
 	uint8_t i;
 
+	mutex_lock(&jfc_table->bank_mutex);
+	least_load = jfc_table->ctx_num[0];
 	for (i = 1; i < UDMA_CQ_BANK_NUM; i++) {
-		bankcnt = bank[i].inuse;
-		if (bankcnt < least_load) {
-			least_load = bankcnt;
+		if (jfc_table->ctx_num[i] < least_load) {
+			least_load = jfc_table->ctx_num[i];
 			bankid = i;
 		}
 	}
+	jfc_table->ctx_num[bankid]++;
+	mutex_unlock(&jfc_table->bank_mutex);
 
 	return bankid;
 }
 
-static int alloc_jfc_id(struct udma_dev *udma_dev, struct udma_jfc *udma_jfc)
+static inline uint8_t select_cq_bankid(struct ubcore_udata *udata)
+{
+	struct udma_ucontext *uctx = to_udma_ucontext(udata->uctx);
+
+	return uctx->cq_bank_id;
+}
+
+static int alloc_jfc_id(struct udma_dev *udma_dev, struct udma_jfc *udma_jfc,
+			struct ubcore_udata *udata)
 {
 	struct udma_jfc_table *jfc_table = &udma_dev->jfc_table;
 	struct udma_bank *bank;
 	uint8_t bankid;
 	int id;
 
-	mutex_lock(&jfc_table->bank_mutex);
-	bankid = get_least_load_bankid_for_jfc(jfc_table->bank);
+	bankid = select_cq_bankid(udata);
 	bank = &jfc_table->bank[bankid];
 
 	id = ida_alloc_range(&bank->ida, bank->min, bank->max, GFP_KERNEL);
@@ -549,8 +585,6 @@ static int alloc_jfc_id(struct udma_dev *udma_dev, struct udma_jfc *udma_jfc)
 
 	/* the lower 2 bits is bankid */
 	udma_jfc->cqn = (id << CQ_BANKID_SHIFT) | bankid;
-	bank->inuse++;
-	mutex_unlock(&jfc_table->bank_mutex);
 	udma_jfc->ubcore_jfc.id = udma_jfc->cqn;
 
 	return 0;
@@ -563,10 +597,6 @@ static void free_jfc_id(struct udma_dev *udma_dev, struct udma_jfc *udma_jfc)
 
 	bank = &jfc_table->bank[get_jfc_bankid(udma_jfc->cqn)];
 	ida_free(&bank->ida, udma_jfc->cqn >> CQ_BANKID_SHIFT);
-
-	mutex_lock(&jfc_table->bank_mutex);
-	bank->inuse--;
-	mutex_unlock(&jfc_table->bank_mutex);
 }
 
 struct ubcore_jfc *udma_create_jfc(struct ubcore_device *dev, struct ubcore_jfc_cfg *cfg,
@@ -593,7 +623,7 @@ struct ubcore_jfc *udma_create_jfc(struct ubcore_device *dev, struct ubcore_jfc_
 	if (ret)
 		goto err_jfc;
 
-	ret = alloc_jfc_id(udma_dev, udma_jfc);
+	ret = alloc_jfc_id(udma_dev, udma_jfc, udata);
 	if (ret)
 		goto err_jfc_buf;
 
@@ -643,11 +673,9 @@ int udma_modify_jfc(struct ubcore_jfc *ubcore_jfc, struct ubcore_jfc_attr *attr,
 	struct udma_jfc_context *cqc_mask;
 	struct udma_cmd_mailbox *mailbox;
 	struct udma_cmq_desc desc;
-	struct udma_jfc *udma_jfc;
 	struct udma_mbox *mb;
 	int ret;
 
-	udma_jfc = to_udma_jfc(ubcore_jfc);
 	ret = check_jfc_cfg(udma_device, &ubcore_jfc->jfc_cfg);
 	if (ret)
 		return ret;
@@ -718,12 +746,6 @@ void udma_jfc_event(struct udma_dev *udma_dev, uint32_t cqn, int event_type)
 	struct udma_jfc *udma_jfc;
 	struct ubcore_event event;
 
-	udma_jfc = (struct udma_jfc *)xa_load(&udma_dev->jfc_table.xa, cqn);
-	if (!udma_jfc) {
-		dev_warn(dev, "Async event for bogus CQ 0x%06x.\n", cqn);
-		return;
-	}
-
 	if (event_type != UDMA_EVENT_TYPE_JFC_ACCESS_ERROR &&
 	    event_type != UDMA_EVENT_TYPE_JFC_OVERFLOW) {
 		dev_err(dev, "Unexpected event type 0x%x on CQ 0x%06x.\n",
@@ -731,7 +753,16 @@ void udma_jfc_event(struct udma_dev *udma_dev, uint32_t cqn, int event_type)
 		return;
 	}
 
-	refcount_inc(&udma_jfc->refcount);
+	xa_lock(&udma_dev->jfc_table.xa);
+	udma_jfc = (struct udma_jfc *)xa_load(&udma_dev->jfc_table.xa, cqn);
+	if (udma_jfc)
+		refcount_inc(&udma_jfc->refcount);
+	xa_unlock(&udma_dev->jfc_table.xa);
+
+	if (!udma_jfc) {
+		dev_warn(dev, "Async event for bogus CQ 0x%06x.\n", cqn);
+		return;
+	}
 
 	ubcore_jfc = &udma_jfc->ubcore_jfc;
 	if (ubcore_jfc->jfae_handler) {

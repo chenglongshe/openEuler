@@ -13,13 +13,20 @@
  *
  */
 
+#include <linux/acpi.h>
+#include <linux/iommu.h>
+#include <linux/of_platform.h>
+#include <linux/module.h>
+#include <linux/pci.h>
+#include <linux/vmalloc.h>
 #include "urma/ubcore_uapi.h"
-#include "hns3_udma_abi.h"
 #include "hns3_udma_hem.h"
+#include "hns3_udma_abi.h"
 #include "hns3_udma_tp.h"
+#include "hns3_udma_db.h"
 #include "hns3_udma_jfc.h"
-#include "hns3_udma_dfx.h"
 #include "hns3_udma_jfs.h"
+#include "hns3_udma_dfx.h"
 
 static int init_jfs_cfg(struct udma_dev *dev, struct udma_jfs *jfs,
 			struct ubcore_jfs_cfg *cfg)
@@ -52,7 +59,7 @@ static int udma_modify_jfs_um_qp(struct udma_dev *dev, struct udma_jfs *jfs,
 
 	m_attr.sgid_index = qp->qp_attr.eid_index;
 	ubcore_attr_mask.value = 0;
-	qp->m_attr = &m_attr;
+	memcpy(&qp->m_attr, &m_attr, sizeof(struct udma_modify_tp_attr));
 
 	ret = udma_modify_qp_common(qp, NULL, ubcore_attr_mask, qp->state, target_state);
 	if (ret)
@@ -135,19 +142,7 @@ static int alloc_jfs_buf(struct udma_dev *udma_dev, struct udma_jfs *jfs,
 			 struct ubcore_jfs_cfg *cfg,
 			 struct ubcore_udata *udata)
 {
-	struct hns3_udma_create_jfs_ucmd ucmd = {};
-	int ret = 0;
-
-	if (udata) {
-		ret = copy_from_user(&ucmd, (void *)udata->udrv_data->in_addr,
-				     min_t(uint32_t, udata->udrv_data->in_len,
-					   (uint32_t)sizeof(ucmd)));
-		if (ret) {
-			dev_err(udma_dev->dev,
-				"failed to copy jfs udata, ret = %d.\n", ret);
-			return -EFAULT;
-		}
-	}
+	int ret;
 
 	ret = create_jfs_um_qp(udma_dev, jfs, cfg, udata);
 	if (ret)
@@ -277,6 +272,11 @@ struct ubcore_jfs *udma_create_jfs(struct ubcore_device *dev, struct ubcore_jfs_
 	struct udma_dev *udma_dev = to_udma_dev(dev);
 	struct udma_jfs *jfs;
 	int ret;
+
+	if (!udata) {
+		dev_err(udma_dev->dev, "udata is NULL.\n");
+		return NULL;
+	}
 
 	jfs = kcalloc(1, sizeof(struct udma_jfs), GFP_KERNEL);
 	if (!jfs)

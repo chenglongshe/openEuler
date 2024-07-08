@@ -13,12 +13,14 @@
  *
  */
 
+#include <linux/module.h>
+#include <linux/acpi.h>
 #include <linux/iommu.h>
+#include <linux/of_platform.h>
 #include <linux/pci.h>
+#include <linux/vmalloc.h>
 #include "urma/ubcore_api.h"
-#include "hns3_udma_abi.h"
 #include "hnae3.h"
-#include "hns3_udma_device.h"
 #include "hns3_udma_hem.h"
 #include "hns3_udma_tp.h"
 #include "hns3_udma_jfr.h"
@@ -29,6 +31,7 @@
 #include "hns3_udma_dca.h"
 #include "hns3_udma_cmd.h"
 #include "hns3_udma_dfx.h"
+#include "hns3_udma_sysfs.h"
 #include "hns3_udma_debugfs.h"
 #include "hns3_udma_eid.h"
 #include "hns3_udma_user_ctl.h"
@@ -49,12 +52,6 @@ static int udma_uar_alloc(struct udma_dev *udma_dev, struct udma_uar *uar)
 	}
 	uar->logic_idx = (uint64_t)id;
 
-	if (uar->logic_idx > 0 && udma_dev->caps.phy_num_uars > 1)
-		uar->index = (uar->logic_idx - 1) %
-			     (udma_dev->caps.phy_num_uars - 1) + 1;
-	else
-		uar->index = 0;
-
 	uar->pfn = ((pci_resource_start(udma_dev->pci_dev,
 					UDMA_DEV_START_OFFSET)) >> PAGE_SHIFT);
 	if (udma_dev->caps.flags & UDMA_CAP_FLAG_DIRECT_WQE)
@@ -69,13 +66,17 @@ static int udma_init_ctx_resp(struct udma_dev *dev, struct ubcore_udrv_priv *udr
 			      struct udma_dca_ctx *dca_ctx)
 {
 	struct hns3_udma_create_ctx_resp resp = {};
-	int ret;
+	unsigned long byte;
+
+	if (!udrv_data->out_addr || udrv_data->out_len < sizeof(resp)) {
+		dev_err(dev->dev,
+			"Invalid out: len %u or addr is null.\n",
+			udrv_data->out_len);
+		return -EINVAL;
+	}
 
 	resp.num_comp_vectors = dev->caps.num_comp_vectors;
 	resp.num_qps_shift = dev->caps.num_qps_shift;
-	resp.num_jfs_shift = dev->caps.num_jfs_shift;
-	resp.num_jfr_shift = dev->caps.num_jfr_shift;
-	resp.num_jetty_shift = dev->caps.num_jetty_shift;
 	resp.max_jfc_cqe = dev->caps.max_cqes;
 	resp.cqe_size = dev->caps.cqe_sz;
 	resp.max_jfr_wr = dev->caps.max_srq_wrs;
@@ -95,14 +96,14 @@ static int udma_init_ctx_resp(struct udma_dev *dev, struct ubcore_udrv_priv *udr
 		resp.dca_mode = dev->caps.flags & UDMA_CAP_FLAG_DCA_MODE;
 	}
 
-	ret = copy_to_user((void *)udrv_data->out_addr, &resp,
-			   min_t(uint32_t, udrv_data->out_len,
-				 (uint32_t)sizeof(resp)));
-	if (ret)
+	byte = copy_to_user((void *)udrv_data->out_addr, &resp, sizeof(resp));
+	if (byte) {
 		dev_err(dev->dev,
-			"copy ctx resp to user failed, ret = %d.\n", ret);
+			"copy ctx resp to user failed, byte = %lu.\n", byte);
+		return -EFAULT;
+	}
 
-	return ret;
+	return 0;
 }
 
 static void udma_uar_free(struct udma_dev *udma_dev,
@@ -129,6 +130,11 @@ static struct ubcore_ucontext *udma_alloc_ucontext(struct ubcore_device *dev,
 	struct udma_ucontext *context;
 	struct udma_eid *udma_eid;
 	int ret;
+
+	if (!udrv_data) {
+		dev_err(udma_dev->dev, "ucontext udrv_data is null\n.");
+		return NULL;
+	}
 
 	context = kzalloc(sizeof(struct udma_ucontext), GFP_KERNEL);
 	if (!context)
@@ -170,6 +176,7 @@ static struct ubcore_ucontext *udma_alloc_ucontext(struct ubcore_device *dev,
 	    UDMA_CAP_FLAG_DCA_MODE)
 		udma_register_uctx_debugfs(udma_dev, context);
 
+	context->cq_bank_id = udma_get_cq_bankid_for_uctx(udma_dev);
 	init_ucontext_list(udma_dev, context);
 
 	return &context->uctx;
@@ -186,6 +193,7 @@ static int udma_free_ucontext(struct ubcore_ucontext *uctx)
 	struct udma_ucontext *context = to_udma_ucontext(uctx);
 	struct udma_dev *udma_dev = to_udma_dev(uctx->ub_dev);
 
+	udma_put_cq_bankid_for_uctx(context);
 	if (udma_dev->caps.flags & UDMA_CAP_FLAG_DCA_MODE)
 		udma_unregister_udca(udma_dev, context);
 
@@ -363,10 +371,11 @@ static int udma_query_device_attr(struct ubcore_device *dev,
 	int i;
 
 	attr->dev_cap.max_eid_cnt = udma_dev->caps.max_eid_cnt;
-	attr->dev_cap.max_jfc = (1 << udma_dev->caps.num_jfc_shift);
-	attr->dev_cap.max_jfs = (1 << udma_dev->caps.num_jfs_shift);
-	attr->dev_cap.max_jfr = (1 << udma_dev->caps.num_jfr_shift);
-	attr->dev_cap.max_jetty = (1 << udma_dev->caps.num_jetty_shift);
+	attr->dev_cap.max_netaddr_cnt = udma_dev->caps.max_eid_cnt;
+	attr->dev_cap.max_jfc = udma_dev->caps.num_jfc;
+	attr->dev_cap.max_jfs = udma_dev->caps.num_jfs;
+	attr->dev_cap.max_jfr = udma_dev->caps.num_jfr;
+	attr->dev_cap.max_jetty = udma_dev->caps.num_jetty;
 	attr->dev_cap.max_jfc_depth = udma_dev->caps.max_cqes;
 	attr->dev_cap.max_jfs_depth = udma_dev->caps.max_wqes;
 	attr->dev_cap.max_jfr_depth = udma_dev->caps.max_srq_wrs;
@@ -380,6 +389,7 @@ static int udma_query_device_attr(struct ubcore_device *dev,
 	attr->dev_cap.feature.bs.jfc_inline = !!(udma_dev->caps.flags & UDMA_CAP_FLAG_CQE_INLINE);
 	attr->dev_cap.feature.bs.spray_en = !!(udma_dev->caps.flags & UDMA_CAP_FLAG_AR);
 	attr->dev_cap.max_jfs_rsge = udma_dev->caps.max_sq_sg;
+	attr->dev_cap.sub_trans_mode_cap = UBCORE_RC_USER_TP | UBCORE_RC_TP_DST_ORDERING;
 	attr->dev_cap.congestion_ctrl_alg = query_congest_alg(udma_dev->caps.cong_type);
 	attr->dev_cap.max_fe_cnt = udma_dev->func_num - 1;
 	attr->port_cnt = udma_dev->caps.num_ports;
@@ -448,7 +458,8 @@ static int udma_query_device_status(struct ubcore_device *dev,
 		mtu = ubcore_get_mtu(net_dev->mtu);
 
 		dev_status->port_status[i].active_mtu = (enum ubcore_mtu)
-						(mtu ? min(net_dev_mtu, mtu) : UBCORE_MTU_256);
+							(mtu ? min(net_dev_mtu, mtu) :
+							 UBCORE_MTU_256);
 
 		ret = udma_get_active_speed(udma_dev->caps.speed, &dev_status->port_status[i]);
 		if (ret) {
@@ -460,7 +471,7 @@ static int udma_query_device_status(struct ubcore_device *dev,
 	return 0;
 }
 
-int udma_send_req(struct ubcore_device *dev, struct ubcore_req *msg)
+static int udma_send_req(struct ubcore_device *dev, struct ubcore_req *msg)
 {
 	struct udma_dev *udma_dev = to_udma_dev(dev);
 	struct ubcore_req_host *req_host_msg;
@@ -485,7 +496,7 @@ int udma_send_req(struct ubcore_device *dev, struct ubcore_req *msg)
 	return ret;
 }
 
-int udma_send_resp(struct ubcore_device *dev, struct ubcore_resp_host *msg)
+static int udma_send_resp(struct ubcore_device *dev, struct ubcore_resp_host *msg)
 {
 	struct udma_dev *udma_dev = to_udma_dev(dev);
 	struct ubcore_resp *resp_msg;
@@ -587,8 +598,8 @@ static void udma_init_seg_table(struct udma_dev *udma_dev)
 static void udma_cleanup_jfc_table(struct udma_dev *udma_dev)
 {
 	struct udma_jfc_table *jfc_table = &udma_dev->jfc_table;
+	unsigned long index = 0;
 	struct udma_jfc *jfc;
-	unsigned long index;
 	int i;
 
 	for (i = 0; i < UDMA_CQ_BANK_NUM; i++) {
@@ -611,6 +622,7 @@ static void udma_init_jfc_table(struct udma_dev *udma_dev)
 {
 	struct udma_jfc_table *jfc_table = &udma_dev->jfc_table;
 	uint32_t reserved_from_bot;
+	uint32_t max;
 	uint32_t i;
 
 	mutex_init(&jfc_table->bank_mutex);
@@ -618,15 +630,14 @@ static void udma_init_jfc_table(struct udma_dev *udma_dev)
 
 	reserved_from_bot = 1;
 
-	for (i = 0; i < reserved_from_bot; i++) {
-		jfc_table->bank[get_jfc_bankid(i)].inuse++;
+	for (i = 0; i < reserved_from_bot; i++)
 		jfc_table->bank[get_jfc_bankid(i)].min++;
-	}
+
+	max = udma_dev->caps.num_jfc / UDMA_CQ_BANK_NUM - 1;
 
 	for (i = 0; i < UDMA_CQ_BANK_NUM; i++) {
 		ida_init(&jfc_table->bank[i].ida);
-		jfc_table->bank[i].max = (1 << udma_dev->caps.num_jfc_shift) /
-					UDMA_CQ_BANK_NUM - 1;
+		jfc_table->bank[i].max = max;
 	}
 }
 
@@ -656,7 +667,7 @@ static void udma_init_jfr_table(struct udma_dev *dev)
 
 	xa_init(&jfr_table->xa);
 	ida_init(&jfr_ida->ida);
-	jfr_ida->max = (1 << dev->caps.num_jfr_shift) - 1;
+	jfr_ida->max = dev->caps.num_jfr - 1;
 	/* reserve jfr id 0 */
 	jfr_ida->min = 1;
 }
@@ -682,7 +693,7 @@ static void udma_init_jfs_table(struct udma_dev *dev)
 
 	xa_init(&jfs_table->xa);
 	ida_init(&jfs_ida->ida);
-	jfs_ida->max = (1 << dev->caps.num_jfs_shift) - 1;
+	jfs_ida->max = dev->caps.num_jfs - 1;
 	/* reserve jfs id 0 */
 	jfs_ida->min = 1;
 }
@@ -708,7 +719,7 @@ static void udma_init_jetty_table(struct udma_dev *dev)
 
 	xa_init(&jetty_table->xa);
 	ida_init(&jetty_ida->ida);
-	jetty_ida->max = (1 << dev->caps.num_jetty_shift) - 1;
+	jetty_ida->max = dev->caps.num_jetty - 1;
 	/* reserve jetty id 0 */
 	jetty_ida->min = 1;
 }
@@ -994,6 +1005,9 @@ void udma_set_poe_ch_num(struct udma_dev *dev)
 static void udma_set_devname(struct udma_dev *udma_dev,
 			     struct ubcore_device *ub_dev)
 {
+#define UB_DEV_BASE_NAME "ubl"
+#define UB_DEV_NAME_SHIFT 3
+
 	if (strncasecmp(ub_dev->netdev->name, UB_DEV_BASE_NAME, UB_DEV_NAME_SHIFT))
 		scnprintf(udma_dev->dev_name, UBCORE_MAX_DEV_NAME, "hns3_udma_c%ud%uf%u",
 			  udma_dev->chip_id, udma_dev->die_id, udma_dev->func_id);
@@ -1008,11 +1022,8 @@ static void udma_set_devname(struct udma_dev *udma_dev,
 static int udma_register_device(struct udma_dev *udma_dev)
 {
 	struct ubcore_device *ub_dev = NULL;
-	struct udma_netdev *uboe = NULL;
 
 	ub_dev = &udma_dev->ub_dev;
-	uboe = &udma_dev->uboe;
-	spin_lock_init(&uboe->lock);
 	ub_dev->transport_type = UBCORE_TRANSPORT_HNS_UB;
 	ub_dev->ops = &g_udma_dev_ops;
 	ub_dev->dev.parent = udma_dev->dev;

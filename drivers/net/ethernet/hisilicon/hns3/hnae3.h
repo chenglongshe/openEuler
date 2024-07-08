@@ -142,6 +142,8 @@ enum HNAE3_DEV_CAP_BITS {
 	HNAE3_DEV_SUPPORT_TM_FLUSH_B,
 	HNAE3_DEV_SUPPORT_VF_FAULT_B,
 	HNAE3_DEV_SUPPORT_ERR_MOD_GEN_REG_B,
+	HNAE3_DEV_SUPPORT_VF_MULTI_TCS_B,
+	HNAE3_DEV_SUPPORT_TC_BUFFER_B,
 };
 
 #define hnae3_ae_dev_fd_supported(ae_dev) \
@@ -222,8 +224,15 @@ enum HNAE3_DEV_CAP_BITS {
 #define hnae3_ae_dev_gen_reg_dfx_supported(hdev) \
 	test_bit(HNAE3_DEV_SUPPORT_ERR_MOD_GEN_REG_B, (hdev)->ae_dev->caps)
 
+#define hnae3_ae_dev_vf_multi_tcs_supported(hdev) \
+	test_bit(HNAE3_DEV_SUPPORT_VF_MULTI_TCS_B, (hdev)->ae_dev->caps)
+
+#define hnae3_ae_dev_tc_buffer_supported(hdev) \
+	test_bit(HNAE3_DEV_SUPPORT_TC_BUFFER_B, (hdev)->ae_dev->caps)
+
 enum HNAE3_PF_CAP_BITS {
 	HNAE3_PF_SUPPORT_VLAN_FLTR_MDF_B = 0,
+	HNAE3_PF_SUPPORT_VF_MULTI_TCS_B = 1,
 };
 #define ring_ptr_move_fw(ring, p) \
 	((ring)->p = ((ring)->p + 1) % (ring)->desc_num)
@@ -383,11 +392,13 @@ enum hnae3_dbg_cmd {
 	HNAE3_DBG_CMD_PAGE_POOL_INFO,
 	HNAE3_DBG_CMD_COAL_INFO,
 	HNAE3_DBG_CMD_WOL_INFO,
+#ifdef CONFIG_HNS3_UBL
 	HNAE3_DBG_CMD_IP_SPEC,
 	HNAE3_DBG_CMD_GUID_SPEC,
 	HNAE3_DBG_CMD_IP_LIST,
 	HNAE3_DBG_CMD_GUID_LIST,
 	HNAE3_DBG_CMD_FASTPATH_INFO,
+#endif
 	HNAE3_DBG_CMD_UNKNOWN,
 };
 
@@ -456,6 +467,8 @@ struct hnae3_dev_specs {
 	u16 guid_tbl_space;
 	u16 ip_tbl_space;
 	u8 hilink_version;
+	u32 total_rx_buffer_size;
+	u32 min_rx_buffer_size_per_tc;
 };
 
 struct hnae3_client_ops {
@@ -879,10 +892,20 @@ struct hnae3_dcb_ops {
 	int (*ieee_setpfc)(struct hnae3_handle *, struct ieee_pfc *);
 	int (*ieee_setapp)(struct hnae3_handle *h, struct dcb_app *app);
 	int (*ieee_delapp)(struct hnae3_handle *h, struct dcb_app *app);
+	int (*ieee_setmaxrate)(struct hnae3_handle *h,
+			       struct ieee_maxrate *maxrate);
+	int (*ieee_getmaxrate)(struct hnae3_handle *h,
+			       struct ieee_maxrate *maxrate);
 
 	/* DCBX configuration */
 	u8   (*getdcbx)(struct hnae3_handle *);
 	u8   (*setdcbx)(struct hnae3_handle *, u8);
+
+	/* buffer settings */
+	int (*setbuffer)(struct hnae3_handle *h,
+			 struct dcbnl_buffer *buffer);
+	int (*getbuffer)(struct hnae3_handle *h,
+			 struct dcbnl_buffer *buffer);
 
 	int (*setup_tc)(struct hnae3_handle *handle,
 			struct tc_mqprio_qopt_offload *mqprio_qopt);
@@ -906,12 +929,14 @@ struct hnae3_tc_info {
 	u8 max_tc; /* Total number of TCs */
 	u8 num_tc; /* Total number of enabled TCs */
 	bool mqprio_active;
+	bool mqprio_destroy;
 	bool dcb_ets_active;
 	u64 max_rate[HNAE3_MAX_TC];     /* Unit Bps */
 };
 
 #define HNAE3_MAX_DSCP			64
 #define HNAE3_PRIO_ID_INVALID		0xff
+#define HNAE3_PRIO_ID_MAP_INVALID	0xf
 struct hnae3_knic_private_info {
 	struct net_device *netdev; /* Set by KNIC client when init instance */
 	u16 rss_size;		   /* Allocated RSS queues */
@@ -922,6 +947,7 @@ struct hnae3_knic_private_info {
 	u32 tx_spare_buf_size;
 
 	struct hnae3_tc_info tc_info;
+	u32 buffer_size[HNAE3_MAX_TC];
 	u8 tc_map_mode;
 	u8 dscp_app_cnt;
 	u8 dscp_prio[HNAE3_MAX_DSCP];
