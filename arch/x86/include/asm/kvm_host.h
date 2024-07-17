@@ -1268,6 +1268,7 @@ struct kvm_arch {
 	KABI_EXTEND(u8 vm_type)
 	KABI_EXTEND(bool has_private_mem)
 	KABI_EXTEND(bool has_protected_state)
+	KABI_EXTEND(bool pre_fault_allowed)
 	struct hlist_head mmu_page_hash[KVM_NUM_MMU_PAGES];
 	struct list_head active_mmu_pages;
 	struct list_head zapped_obsolete_pages;
