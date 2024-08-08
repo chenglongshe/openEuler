@@ -925,6 +925,9 @@ static __init void svm_set_cpu_caps(void)
 
 	/* Enable INVPCID feature */
 	kvm_cpu_cap_check_and_set(X86_FEATURE_INVPCID);
+
+	/* Don't advertise Bus Lock Detect to guest if SVM support is absent */
+	kvm_cpu_cap_clear(X86_FEATURE_BUS_LOCK_DETECT);
 }
 
 static __init int svm_hardware_setup(void)
