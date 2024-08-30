@@ -1141,10 +1141,10 @@ int do_journal_get_write_access(handle_t *handle,
 	if (!buffer_mapped(bh) || buffer_freed(bh))
 		return 0;
 	/*
-	 * __block_write_begin() could have dirtied some buffers. Clean
+	 * ext4_block_write_begin() could have dirtied some buffers. Clean
 	 * the dirty bit as jbd2_journal_get_write_access() could complain
 	 * otherwise about fs integrity issues. Setting of the dirty bit
-	 * by __block_write_begin() isn't a real problem here as we clear
+	 * by ext4_block_write_begin() isn't a real problem here as we clear
 	 * the bit before releasing a page lock and thus writeback cannot
 	 * ever write the buffer.
 	 */
@@ -1157,9 +1157,8 @@ int do_journal_get_write_access(handle_t *handle,
 	return ret;
 }
 
-#ifdef CONFIG_EXT4_FS_ENCRYPTION
-static int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
-				  get_block_t *get_block)
+int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
+			   get_block_t *get_block)
 {
 	unsigned from = pos & (PAGE_SIZE - 1);
 	unsigned to = from + len;
@@ -1243,7 +1242,6 @@ static int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
 				PAGE_SIZE, 0, page->index);
 	return err;
 }
-#endif
 
 static int ext4_write_begin(struct file *file, struct address_space *mapping,
 			    loff_t pos, unsigned len, unsigned flags,
@@ -1310,20 +1308,11 @@ retry_journal:
 	/* In case writeback began while the page was unlocked */
 	wait_for_stable_page(page);
 
-#ifdef CONFIG_EXT4_FS_ENCRYPTION
 	if (ext4_should_dioread_nolock(inode))
 		ret = ext4_block_write_begin(page, pos, len,
 					     ext4_get_block_unwritten);
 	else
-		ret = ext4_block_write_begin(page, pos, len,
-					     ext4_get_block);
-#else
-	if (ext4_should_dioread_nolock(inode))
-		ret = __block_write_begin(page, pos, len,
-					  ext4_get_block_unwritten);
-	else
-		ret = __block_write_begin(page, pos, len, ext4_get_block);
-#endif
+		ret = ext4_block_write_begin(page, pos, len, ext4_get_block);
 	if (!ret && ext4_should_journal_data(inode)) {
 		ret = ext4_walk_page_buffers(handle, page_buffers(page),
 					     from, to, NULL,
@@ -1333,7 +1322,7 @@ retry_journal:
 	if (ret) {
 		unlock_page(page);
 		/*
-		 * __block_write_begin may have instantiated a few blocks
+		 * ext4_block_write_begin may have instantiated a few blocks
 		 * outside i_size.  Trim these off again. Don't need
 		 * i_size_read because we hold i_mutex.
 		 *
@@ -3080,12 +3069,7 @@ retry:
 	if (!page)
 		return -ENOMEM;
 
-#ifdef CONFIG_EXT4_FS_ENCRYPTION
-	ret = ext4_block_write_begin(page, pos, len,
-				     ext4_da_get_block_prep);
-#else
-	ret = __block_write_begin(page, pos, len, ext4_da_get_block_prep);
-#endif
+	ret = ext4_block_write_begin(page, pos, len, ext4_da_get_block_prep);
 	if (ret < 0) {
 		unlock_page(page);
 		put_page(page);
