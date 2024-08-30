@@ -1365,9 +1365,9 @@ static void ext4_journalled_zero_new_buffers(handle_t *handle,
 					size = min(to, block_end) - start;
 
 					zero_user(page, start, size);
-					write_end_fn(handle, bh);
 				}
 				clear_buffer_new(bh);
+				write_end_fn(handle, bh);
 			}
 		}
 		block_start = block_end;
