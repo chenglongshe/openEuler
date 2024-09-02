@@ -30,6 +30,11 @@
 #include "arm-smmu-v3.h"
 #include "../../dma-iommu.h"
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_tmi.h>
+#include "arm-s-smmu-v3.h"
+#endif
+
 static bool disable_bypass = true;
 module_param(disable_bypass, bool, 0444);
 MODULE_PARM_DESC(disable_bypass,
@@ -102,6 +107,10 @@ static int arm_smmu_bypass_dev_domain_type(struct device *dev)
 enum arm_smmu_msi_index {
 	EVTQ_MSI_INDEX,
 	GERROR_MSI_INDEX,
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	S_EVTQ_MSI_INDEX,
+	S_GERROR_MSI_INDEX,
+#endif
 	PRIQ_MSI_INDEX,
 	ARM_SMMU_MAX_MSIS,
 };
@@ -117,6 +126,18 @@ static phys_addr_t arm_smmu_msi_cfg[ARM_SMMU_MAX_MSIS][3] = {
 		ARM_SMMU_GERROR_IRQ_CFG1,
 		ARM_SMMU_GERROR_IRQ_CFG2,
 	},
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	[S_EVTQ_MSI_INDEX] = {
+		ARM_SMMU_S_EVTQ_IRQ_CFG0,
+		ARM_SMMU_S_EVTQ_IRQ_CFG1,
+		ARM_SMMU_S_EVTQ_IRQ_CFG2,
+	},
+	[S_GERROR_MSI_INDEX] = {
+		ARM_SMMU_S_GERROR_IRQ_CFG0,
+		ARM_SMMU_S_GERROR_IRQ_CFG1,
+		ARM_SMMU_S_GERROR_IRQ_CFG2,
+	},
+#endif
 	[PRIQ_MSI_INDEX] = {
 		ARM_SMMU_PRIQ_IRQ_CFG0,
 		ARM_SMMU_PRIQ_IRQ_CFG1,
@@ -995,11 +1016,16 @@ static int arm_smmu_cmdq_issue_cmdlist(struct arm_smmu_device *smmu,
 	 * Dependency ordering from the cmpxchg() loop above.
 	 */
 	arm_smmu_cmdq_write_entries(cmdq, cmds, llq.prod, n);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	arm_s_smmu_cmdq_write_entries(smmu, cmds, n);
+#endif
 	if (sync) {
 		prod = queue_inc_prod_n(&llq, n);
 		arm_smmu_cmdq_build_sync_cmd(cmd_sync, smmu, &cmdq->q, prod);
 		queue_write(Q_ENT(&cmdq->q, prod), cmd_sync, CMDQ_ENT_DWORDS);
-
+		#ifdef CONFIG_HISI_VIRTCCA_HOST
+		s_queue_write(smmu, cmd_sync, CMDQ_ENT_DWORDS);
+		#endif
 		/*
 		 * In order to determine completion of our CMD_SYNC, we must
 		 * ensure that the queue can't wrap twice without us noticing.
@@ -2376,6 +2402,12 @@ static int arm_smmu_domain_finalise(struct iommu_domain *domain)
 	if (!(smmu->features & ARM_SMMU_FEAT_TRANS_S2))
 		smmu_domain->stage = ARM_SMMU_DOMAIN_S1;
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (smmu_domain->secure) {
+		smmu_domain->stage = ARM_SMMU_DOMAIN_S2;
+	}
+#endif
+
 	switch (smmu_domain->stage) {
 	case ARM_SMMU_DOMAIN_S1:
 		ias = (smmu->features & ARM_SMMU_FEAT_VAX) ? 52 : 48;
@@ -2596,6 +2628,52 @@ static void arm_smmu_detach_dev(struct arm_smmu_master *master)
 		arm_smmu_write_ctx_desc(master, IOMMU_NO_PASID, NULL);
 }
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+static void arm_smmu_secure_sync_ste_for_sid(struct arm_smmu_device *smmu, u32 sid)
+{
+	struct arm_smmu_cmdq_ent prefetch_cmd = {
+		.opcode         = CMDQ_OP_PREFETCH_CFG,
+		.prefetch       = {
+		.sid            = sid,
+		},
+	};
+	arm_smmu_sync_ste_for_sid(smmu, sid);
+
+	/* It's likely that we'll want to use the new STE soon */
+	if (!(smmu->options & ARM_SMMU_OPT_SKIP_PREFETCH))
+		arm_smmu_cmdq_issue_cmd(smmu, &prefetch_cmd);
+}
+
+static int arm_smmu_secure_dev_operator(struct arm_smmu_domain *smmu_domain,
+	struct arm_smmu_device *smmu, struct arm_smmu_master *master, struct device *dev)
+{
+	int i, j;
+	int ret;
+
+	ret = arm_smmu_secure_set_dev(smmu_domain, master, dev);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < master->num_streams; ++i) {
+		u32 sid = master->streams[i].id;
+		/* Bridged PCI devices may end up with duplicated IDs */
+		for (j = 0; j < i; j++)
+			if (master->streams[j].id == sid)
+				break;
+		if (j < i)
+			continue;
+		if (arm_smmu_secure_dev_ste_create(smmu, master, sid))
+			return -ENOMEM;
+
+		arm_smmu_secure_sync_ste_for_sid(smmu, sid);
+	}
+
+	dev_info(smmu->dev, "attach confidential dev: %s", dev_name(dev));
+
+	return ret;
+}
+#endif
+
 static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev)
 {
 	int ret = 0;
@@ -2676,6 +2754,11 @@ static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	}
 
 	arm_smmu_install_ste_for_dev(master);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (smmu_domain->secure)
+		ret = arm_smmu_secure_dev_operator(smmu_domain, smmu, master, dev);
+#endif
 
 	arm_smmu_enable_ats(master);
 	return 0;
@@ -3311,6 +3394,9 @@ static struct iommu_ops arm_smmu_ops = {
 	.def_domain_type	= arm_smmu_def_domain_type,
 	.pgsize_bitmap		= -1UL, /* Restricted during device attach */
 	.owner			= THIS_MODULE,
+	#ifdef CONFIG_HISI_VIRTCCA_HOST
+	.iommu_enable_secure = arm_smmu_enable_secure,
+	#endif
 	.default_domain_ops = &(const struct iommu_domain_ops) {
 		.attach_dev		= arm_smmu_attach_dev,
 		.map_pages		= arm_smmu_map_pages,
@@ -3373,6 +3459,13 @@ static int arm_smmu_init_one_queue(struct arm_smmu_device *smmu,
 	q->q_base |= FIELD_PREP(Q_BASE_LOG2SIZE, q->llq.max_n_shift);
 
 	q->llq.prod = q->llq.cons = 0;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (arm_s_smmu_init_one_queue(smmu, q, qsz, name)) {
+		return -ENOMEM;
+	};
+#endif
+
 	return 0;
 }
 
@@ -3676,6 +3769,15 @@ static void arm_smmu_write_msi_msg(struct msi_desc *desc, struct msi_msg *msg)
 	desc->msg.data = msg->data;
 #endif
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if ((desc->msi_index == S_EVTQ_MSI_INDEX ||
+		desc->msi_index == S_GERROR_MSI_INDEX) &&
+		smmu->id != ARM_SMMU_INVALID_ID) {
+		arm_smmu_write_s_msi_msg(smmu, cfg, msg, doorbell);
+		return;
+	}
+#endif
+
 	writeq_relaxed(doorbell, smmu->base + cfg[0]);
 	writel_relaxed(msg->data, smmu->base + cfg[1]);
 	writel_relaxed(ARM_SMMU_MEMATTR_DEVICE_nGnRE, smmu->base + cfg[2]);
@@ -3689,6 +3791,15 @@ static void arm_smmu_setup_msis(struct arm_smmu_device *smmu)
 	/* Clear the MSI address regs */
 	writeq_relaxed(0, smmu->base + ARM_SMMU_GERROR_IRQ_CFG0);
 	writeq_relaxed(0, smmu->base + ARM_SMMU_EVTQ_IRQ_CFG0);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (smmu->id != ARM_SMMU_INVALID_ID) {
+		if (tmi_smmu_write(smmu->ioaddr, ARM_SMMU_S_GERROR_IRQ_CFG0, 0, 64))
+			return;
+		if (tmi_smmu_write(smmu->ioaddr, ARM_SMMU_S_EVTQ_IRQ_CFG0, 0, 64))
+			return;
+	}
+#endif
 
 	if (smmu->features & ARM_SMMU_FEAT_PRI)
 		writeq_relaxed(0, smmu->base + ARM_SMMU_PRIQ_IRQ_CFG0);
@@ -3713,6 +3824,13 @@ static void arm_smmu_setup_msis(struct arm_smmu_device *smmu)
 	smmu->evtq.q.irq = msi_get_virq(dev, EVTQ_MSI_INDEX);
 	smmu->gerr_irq = msi_get_virq(dev, GERROR_MSI_INDEX);
 	smmu->priq.q.irq = msi_get_virq(dev, PRIQ_MSI_INDEX);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (smmu->id != ARM_SMMU_INVALID_ID) {
+		smmu->s_evtq_irq = msi_get_virq(dev, S_EVTQ_MSI_INDEX);
+		smmu->s_gerr_irq = msi_get_virq(dev, S_GERROR_MSI_INDEX);
+	}
+#endif
 
 	/* Add callback to free MSIs on teardown */
 	devm_add_action(dev, arm_smmu_free_msis, dev);
@@ -3802,6 +3920,11 @@ static void arm_smmu_setup_unique_irqs(struct arm_smmu_device *smmu, bool resume
 			dev_warn(smmu->dev, "no priq irq - PRI will be broken\n");
 		}
 	}
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	arm_s_smmu_setup_unique_irqs(smmu);
+#endif
+
 }
 
 static int arm_smmu_setup_irqs(struct arm_smmu_device *smmu, bool resume)
@@ -3816,6 +3939,12 @@ static int arm_smmu_setup_irqs(struct arm_smmu_device *smmu, bool resume)
 		dev_err(smmu->dev, "failed to disable irqs\n");
 		return ret;
 	}
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	ret = arm_smmu_disable_s_irq(smmu);
+	if (ret)
+		return ret;
+#endif
 
 	irq = smmu->combined_irq;
 	if (irq) {
@@ -3842,6 +3971,12 @@ static int arm_smmu_setup_irqs(struct arm_smmu_device *smmu, bool resume)
 	if (ret)
 		dev_warn(smmu->dev, "failed to enable irqs\n");
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	ret = arm_smmu_enable_s_irq(smmu, IRQ_CTRL_EVTQ_IRQEN | IRQ_CTRL_GERROR_IRQEN);
+	if (ret)
+		return ret;
+#endif
+
 	return 0;
 }
 
@@ -3852,6 +3987,10 @@ static int arm_smmu_device_disable(struct arm_smmu_device *smmu)
 	ret = arm_smmu_write_reg_sync(smmu, 0, ARM_SMMU_CR0, ARM_SMMU_CR0ACK);
 	if (ret)
 		dev_err(smmu->dev, "failed to clear cr0\n");
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	ret = arm_s_smmu_device_disable(smmu);
+#endif
 
 	return ret;
 }
@@ -3946,6 +4085,12 @@ static int arm_smmu_device_reset(struct arm_smmu_device *smmu, bool resume)
 	      FIELD_PREP(CR1_QUEUE_IC, CR1_CACHE_WB);
 	writel_relaxed(reg, smmu->base + ARM_SMMU_CR1);
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	ret = arm_s_smmu_device_reset(smmu);
+	if (ret)
+		return ret;
+#endif
+
 	/* CR2 (random crap) */
 	reg = CR2_PTM | CR2_RECINVSID;
 
@@ -4037,6 +4182,14 @@ static int arm_smmu_device_reset(struct arm_smmu_device *smmu, bool resume)
 
 	if (is_kdump_kernel())
 		enables &= ~(CR0_EVTQEN | CR0_PRIQEN);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	ret = arm_s_smmu_device_enable(smmu, enables, smmu->bypass, disable_bypass);
+	if (ret) {
+		dev_err(smmu->dev, "failed to enable secure SMMU interface\n");
+		return ret;
+	}
+#endif
 
 	/* Enable the SMMU interface, or ensure bypass */
 	if (!smmu->bypass || disable_bypass) {
@@ -4404,7 +4557,7 @@ static int arm_smmu_device_hw_probe(struct arm_smmu_device *smmu)
 	}
 
 #ifdef CONFIG_ARM_SMMU_V3_ECMDQ
-	if (reg & IDR1_ECMDQ)
+	if ((reg & IDR1_ECMDQ) && !virtcca_is_available())
 		smmu->features |= ARM_SMMU_FEAT_ECMDQ;
 #endif
 
@@ -4439,6 +4592,11 @@ static int arm_smmu_device_hw_probe(struct arm_smmu_device *smmu)
 	 */
 	if (smmu->sid_bits <= STRTAB_SPLIT)
 		smmu->features &= ~ARM_SMMU_FEAT_2_LVL_STRTAB;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (arm_smmu_s_idr1_support_secure(smmu))
+		return -ENXIO;
+#endif
 
 	/* IDR3 */
 	reg = readl_relaxed(smmu->base + ARM_SMMU_IDR3);
@@ -4800,6 +4958,10 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
 	}
 	ioaddr = res->start;
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	arm_smmu_map_init(smmu, ioaddr);
+#endif
+
 	/*
 	 * Don't map the IMPLEMENTATION DEFINED regions, since they may contain
 	 * the PMCG registers which are reserved by the PMU driver.
@@ -4834,6 +4996,11 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
 		irq = platform_get_irq_byname_optional(pdev, "gerror");
 		if (irq > 0)
 			smmu->gerr_irq = irq;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		platform_get_s_irq_byname_optional(pdev, smmu);
+#endif
+
 	}
 	/* Probe the h/w */
 	ret = arm_smmu_device_hw_probe(smmu);
@@ -4881,6 +5048,10 @@ static void arm_smmu_device_remove(struct platform_device *pdev)
 	arm_smmu_device_disable(smmu);
 	iopf_queue_free(smmu->evtq.iopf);
 	ida_destroy(&smmu->vmid_map);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	free_g_cc_dev_htable();
+	arm_smmu_id_free(smmu->id);
+#endif
 }
 
 static void arm_smmu_device_shutdown(struct platform_device *pdev)
