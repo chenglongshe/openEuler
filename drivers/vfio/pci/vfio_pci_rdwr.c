@@ -18,6 +18,9 @@
 #include <linux/vgaarb.h>
 
 #include "vfio_pci_priv.h"
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_tmi.h>
+#endif
 
 #ifdef __LITTLE_ENDIAN
 #define vfio_ioread64	ioread64
@@ -37,6 +40,34 @@
 #define vfio_ioread8	ioread8
 #define vfio_iowrite8	iowrite8
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#define VFIO_IOWRITE(size) \
+static int vfio_pci_iowrite##size(struct vfio_pci_core_device *vdev,		\
+			bool test_mem, u##size val, void __iomem *io)	\
+{									\
+	struct pci_dev *pdev = vdev->pdev;				\
+	bool cc_dev = pdev == NULL ? false : is_cc_dev(pci_dev_id(pdev)); \
+									\
+	if (test_mem) {							\
+		down_read(&vdev->memory_lock);				\
+		if (!__vfio_pci_memory_enabled(vdev)) {			\
+			up_read(&vdev->memory_lock);			\
+			return -EIO;					\
+		}							\
+	}								\
+									\
+	if (cc_dev) {							\
+		WARN_ON(tmi_mmio_write(va_to_pa(io), val, size, pci_dev_id(pdev)));	\
+	} else {							\
+		vfio_iowrite##size(val, io);				\
+	}								\
+									\
+	if (test_mem)							\
+		up_read(&vdev->memory_lock);				\
+									\
+	return 0;							\
+}
+#else /* not CONFIG_HISI_VIRTCCA_HOST */
 #define VFIO_IOWRITE(size) \
 static int vfio_pci_iowrite##size(struct vfio_pci_core_device *vdev,		\
 			bool test_mem, u##size val, void __iomem *io)	\
@@ -56,6 +87,7 @@ static int vfio_pci_iowrite##size(struct vfio_pci_core_device *vdev,		\
 									\
 	return 0;							\
 }
+#endif /* CONFIG_HISI_VIRTCCA_HOST */
 
 VFIO_IOWRITE(8)
 VFIO_IOWRITE(16)
@@ -64,6 +96,34 @@ VFIO_IOWRITE(32)
 VFIO_IOWRITE(64)
 #endif
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#define VFIO_IOREAD(size) \
+static int vfio_pci_ioread##size(struct vfio_pci_core_device *vdev,		\
+			bool test_mem, u##size *val, void __iomem *io)	\
+{									\
+	struct pci_dev *pdev = vdev->pdev;				\
+	bool cc_dev = pdev == NULL ? false : is_cc_dev(pci_dev_id(pdev)); \
+									\
+	if (test_mem) {							\
+		down_read(&vdev->memory_lock);				\
+		if (!__vfio_pci_memory_enabled(vdev)) {			\
+			up_read(&vdev->memory_lock);			\
+			return -EIO;					\
+		}							\
+	}								\
+									\
+	if (cc_dev) {							\
+		*val = tmi_mmio_read(va_to_pa(io), size, pci_dev_id(pdev));		\
+	} else {							\
+		*val = vfio_ioread##size(io);				\
+	}								\
+									\
+	if (test_mem)							\
+		up_read(&vdev->memory_lock);				\
+									\
+	return 0;							\
+}
+#else /* not CONFIG_HISI_VIRTCCA_HOST */
 #define VFIO_IOREAD(size) \
 static int vfio_pci_ioread##size(struct vfio_pci_core_device *vdev,		\
 			bool test_mem, u##size *val, void __iomem *io)	\
@@ -83,6 +143,7 @@ static int vfio_pci_ioread##size(struct vfio_pci_core_device *vdev,		\
 									\
 	return 0;							\
 }
+#endif
 
 VFIO_IOREAD(8)
 VFIO_IOREAD(16)

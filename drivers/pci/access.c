@@ -7,6 +7,10 @@
 
 #include "pci.h"
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_tmi.h>
+#endif
+
 /*
  * This interrupt-safe spinlock protects all accesses to PCI
  * configuration space.
@@ -86,6 +90,19 @@ int pci_generic_config_read(struct pci_bus *bus, unsigned int devfn,
 	if (!addr)
 		return PCIBIOS_DEVICE_NOT_FOUND;
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (is_cc_dev((bus->number << 8) | devfn)) {
+		if (size == 1)
+			*val = tmi_mmio_read(va_to_pa(addr), 8, ((bus->number << 8) | devfn));
+		else if (size == 2)
+			*val = tmi_mmio_read(va_to_pa(addr), 16, ((bus->number << 8) | devfn));
+		else
+			*val = tmi_mmio_read(va_to_pa(addr), 32, ((bus->number << 8) | devfn));
+
+		return PCIBIOS_SUCCESSFUL;
+	}
+#endif
+
 	if (size == 1)
 		*val = readb(addr);
 	else if (size == 2)
@@ -105,6 +122,22 @@ int pci_generic_config_write(struct pci_bus *bus, unsigned int devfn,
 	addr = bus->ops->map_bus(bus, devfn, where);
 	if (!addr)
 		return PCIBIOS_DEVICE_NOT_FOUND;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (is_cc_dev((bus->number << 8) | devfn)) {
+		if (size == 1)
+			WARN_ON(tmi_mmio_write(va_to_pa(addr), val,
+				8, ((bus->number << 8) | devfn)));
+		else if (size == 2)
+			WARN_ON(tmi_mmio_write(va_to_pa(addr), val,
+				16, ((bus->number << 8) | devfn)));
+		else
+			WARN_ON(tmi_mmio_write(va_to_pa(addr), val,
+				32, ((bus->number << 8) | devfn)));
+
+		return PCIBIOS_SUCCESSFUL;
+	}
+#endif
 
 	if (size == 1)
 		writeb(val, addr);

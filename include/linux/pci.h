@@ -2739,4 +2739,8 @@ void pci_uevent_ers(struct pci_dev *pdev, enum  pci_ers_result err_type);
 	WARN_ONCE(condition, "%s %s: " fmt, \
 		  dev_driver_string(&(pdev)->dev), pci_name(pdev), ##arg)
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+bool is_cc_dev(u32 sid);
+#endif
+
 #endif /* LINUX_PCI_H */
