@@ -521,7 +521,7 @@ static int kvm_tmm_config_cvm(struct kvm *kvm, struct kvm_enable_cap *cap)
 	return r;
 }
 
-static int kvm_cvm_map_range(struct kvm *kvm)
+int kvm_cvm_map_range(struct kvm *kvm)
 {
 	int ret;
 	u64 curr_numa_set;
@@ -887,3 +887,11 @@ int kvm_init_cvm_vm(struct kvm *kvm)
 
 	return 0;
 }
+
+bool virtcca_is_available(void)
+{
+	if (static_branch_unlikely(&virtcca_cvm_is_available))
+		return true;
+	return false;
+}
+EXPORT_SYMBOL(virtcca_is_available);
