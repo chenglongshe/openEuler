@@ -123,6 +123,11 @@ struct vfio_device_ops {
 				  void __user *arg, size_t argsz);
 };
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+extern bool vfio_iommu_group(struct vfio_group *vfio_group, struct iommu_group *iommu_group);
+extern struct iommu_group *vfio_get_iommu_group(struct vfio_group *vfio_group);
+#endif
+
 #if IS_ENABLED(CONFIG_IOMMUFD)
 struct iommufd_ctx *vfio_iommufd_device_ictx(struct vfio_device *vdev);
 int vfio_iommufd_get_dev_id(struct vfio_device *vdev, struct iommufd_ctx *ictx);

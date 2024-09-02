@@ -521,7 +521,7 @@ static int kvm_tmm_config_cvm(struct kvm *kvm, struct kvm_enable_cap *cap)
 	return r;
 }
 
-static int kvm_cvm_map_range(struct kvm *kvm)
+int kvm_cvm_map_range(struct kvm *kvm)
 {
 	int ret;
 	u64 curr_numa_set;
