@@ -308,6 +308,12 @@ static ssize_t rx_desc_info_show(struct device *dev,
 	int ret = 0;
 	union rnp_rx_desc *desc;
 
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
+
 	desc = RNP_RX_DESC(ring, rx_desc_num);
 	ret += sprintf(buf + ret, "rx ring %d desc %d:\n", rx_ring_num,
 		       rx_desc_num);
@@ -582,6 +588,12 @@ static ssize_t tx_desc_info_show(struct device *dev,
 	int ret = 0;
 	struct rnp_tx_desc *desc;
 
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
+
 	desc = RNP_TX_DESC(ring, tx_desc_num);
 	ret += sprintf(buf + ret, "tx ring %d desc %d:\n", tx_ring_num,
 		       tx_desc_num);
@@ -677,6 +689,12 @@ static ssize_t rx_ring_info_show(struct device *dev,
 	int ret = 0;
 	union rnp_rx_desc *rx_desc;
 
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
+
 	ret += sprintf(buf + ret, "queue %d info:\n", rx_ring_num);
 	ret += sprintf(buf + ret, "next_to_use %d\n", ring->next_to_use);
 	ret += sprintf(buf + ret, "next_to_clean %d\n",
@@ -720,6 +738,12 @@ static ssize_t tx_ring_info_show(struct device *dev,
 	struct rnp_tx_buffer *tx_buffer;
 	struct rnp_tx_desc *eop_desc;
 
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
+
 	/* print all tx_ring_num info */
 	ret += sprintf(buf + ret, "queue %d info:\n", tx_ring_num);
 	ret += sprintf(buf + ret, "next_to_use %d\n", ring->next_to_use);
@@ -758,56 +782,6 @@ static ssize_t tx_ring_info_store(struct device *dev,
 		ret = -EINVAL;
 
 	return ret;
-}
-
-static ssize_t queue_mapping_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
-{
-	int ret = 0;
-	int i;
-	struct net_device *netdev = to_net_device(dev);
-	struct rnp_adapter *adapter = netdev_priv(netdev);
-	struct rnp_ring *ring;
-	struct rnp_q_vector *q_vector;
-
-	ret += sprintf(buf + ret, "tx_queue count %d\n",
-		       adapter->num_tx_queues);
-	ret += sprintf(buf + ret, "queue-mapping :\n");
-	for (i = 0; i < adapter->num_tx_queues; i++) {
-		ring = adapter->tx_ring[i];
-		ret += sprintf(buf + ret, "tx queue %d <---> ring %d\n", i,
-			       ring->rnp_queue_idx);
-	}
-	ret += sprintf(buf + ret, "rx_queue count %d\n",
-		       adapter->num_rx_queues);
-	ret += sprintf(buf + ret, "queue-mapping :\n");
-	for (i = 0; i < adapter->num_rx_queues; i++) {
-		ring = adapter->rx_ring[i];
-		ret += sprintf(buf + ret, "rx queue %d <---> ring %d\n", i,
-			       ring->rnp_queue_idx);
-	}
-	ret += sprintf(buf + ret, "vector-queue mapping:\n");
-	for (i = 0; i < adapter->num_q_vectors; i++) {
-		q_vector = adapter->q_vector[i];
-		ret += sprintf(buf + ret, "---vector %d---\n", i);
-		rnp_for_each_ring(ring, q_vector->tx) {
-			ret += sprintf(buf + ret, "tx ring %d\n",
-				       ring->rnp_queue_idx);
-		}
-		rnp_for_each_ring(ring, q_vector->rx) {
-			ret += sprintf(buf + ret, "rx ring %d\n",
-				       ring->rnp_queue_idx);
-		}
-	}
-
-	return ret;
-}
-
-static ssize_t queue_mapping_store(struct device *dev,
-				   struct device_attribute *attr,
-				   const char *buf, size_t count)
-{
-	return count;
 }
 
 static ssize_t tx_counter_show(struct device *dev,
@@ -1572,8 +1546,6 @@ static ssize_t pcs_reg_show(struct device *dev, struct device_attribute *attr,
 			       adapter->sysfs_bar4_reg_val);
 		break;
 	default:
-		e_err(drv, "Error: Invalid input_arg_cnt value =%d\n",
-		      adapter->sysfs_input_arg_cnt);
 		break;
 	}
 
@@ -2013,7 +1985,6 @@ static DEVICE_ATTR_WO(switch_loopback_off);
 static DEVICE_ATTR_RO(root_slot_info);
 static DEVICE_ATTR_RO(temperature);
 static DEVICE_ATTR_RW(active_vid);
-static DEVICE_ATTR_RW(queue_mapping);
 static DEVICE_ATTR_RW(tx_ring_info);
 static DEVICE_ATTR_RW(rx_ring_info);
 static DEVICE_ATTR_RO(para_info);
@@ -2028,7 +1999,6 @@ static struct attribute *dev_attrs[] = {
 	&dev_attr_tx_stags_info.attr,
 	&dev_attr_root_slot_info.attr,
 	&dev_attr_active_vid.attr,
-	&dev_attr_queue_mapping.attr,
 	&dev_attr_rx_drop_info.attr,
 	&dev_attr_outer_vlan_info.attr,
 	&dev_attr_tcp_sync_info.attr,
