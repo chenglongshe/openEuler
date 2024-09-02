@@ -113,6 +113,44 @@
 	(cond) ? 0 : -ETIMEDOUT; \
 })
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#define kvm_cvm_read_poll_timeout_atomic(op, val, cond, delay_us, timeout_us, \
+					delay_before_read, args...) \
+({ \
+	u64 __timeout_us = (timeout_us); \
+	u64 rv = 0; \
+	int result = 0; \
+	unsigned long __delay_us = (delay_us); \
+	ktime_t __timeout = ktime_add_us(ktime_get(), __timeout_us); \
+	if (delay_before_read && __delay_us) \
+		udelay(__delay_us); \
+	for (;;) { \
+		rv = op(args); \
+		if (rv >> 32) { \
+			result = -ENXIO; \
+			break; \
+		} \
+		(val) = (u32)rv; \
+		if (cond) \
+			break; \
+		if (__timeout_us && \
+		    ktime_compare(ktime_get(), __timeout) > 0) { \
+			rv = op(args); \
+			if (rv >> 32) { \
+				result = -ENXIO; \
+				break; \
+			} \
+			(val) = (u32)rv; \
+			break; \
+		} \
+		if (__delay_us) \
+			udelay(__delay_us); \
+		cpu_relax(); \
+	} \
+	result ? result : ((cond) ? 0 : -ETIMEDOUT); \
+})
+#endif
+
 /**
  * readx_poll_timeout - Periodically poll an address until a condition is met or a timeout occurs
  * @op: accessor function (takes @addr as its only argument)

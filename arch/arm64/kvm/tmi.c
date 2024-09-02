@@ -6,6 +6,30 @@
 #include <asm/kvm_tmi.h>
 #include <asm/memory.h>
 
+u64 va_to_pa(void *addr)
+{
+	uint64_t pa, par_el1;
+
+	asm volatile(
+		"AT S1E1W, %0\n"
+		::"r"((uint64_t)(addr))
+	);
+	isb();
+	asm volatile(
+		"mrs %0, par_el1\n"
+		: "=r"(par_el1)
+	);
+
+	pa = ((uint64_t)(addr) & (PAGE_SIZE - 1)) |
+		(par_el1 & ULL(0x000ffffffffff000));
+
+	if (par_el1 & UL(1 << 0))
+		return (uint64_t)(addr);
+	else
+		return pa;
+}
+EXPORT_SYMBOL(va_to_pa);
+
 u64 tmi_version(void)
 {
 	struct arm_smccc_res res;
@@ -139,3 +163,117 @@ u64 tmi_tmm_inf_test(u64 x1, u64 x2, u64 x3, u64 x4, u64 x5)
 	return res.a1;
 }
 EXPORT_SYMBOL_GPL(tmi_tmm_inf_test);
+
+u64 tmi_smmu_queue_create(u64 params_ptr)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_SMMU_QUEUE_CREATE, params_ptr, &res);
+	return res.a1;
+}
+
+u64 tmi_smmu_queue_write(uint64_t cmd0, uint64_t cmd1, u64 smmu_id)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_SMMU_QUEUE_WRITE, cmd0, cmd1, smmu_id, &res);
+	return res.a1;
+}
+
+u64 tmi_smmu_ste_create(u64 params_ptr)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_SMMU_STE_CREATE, params_ptr, &res);
+	return res.a1;
+}
+
+u64 tmi_mmio_map(u64 rd, u64 map_addr, u64 level, u64 ttte)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MMIO_MAP, rd, map_addr, level, ttte, &res);
+	return res.a1;
+}
+
+u64 tmi_mmio_unmap(u64 rd, u64 map_addr, u64 level)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MMIO_UNMAP, rd, map_addr, level, &res);
+	return res.a1;
+}
+
+u64 tmi_mmio_write(u64 addr, u64 val, u64 bits, u64 dev_num)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MMIO_WRITE, addr, val, bits, dev_num, &res);
+	return res.a1;
+}
+EXPORT_SYMBOL(tmi_mmio_write);
+
+u64 tmi_mmio_read(u64 addr, u64 bits, u64 dev_num)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MMIO_READ, addr, bits, dev_num, &res);
+	return res.a1;
+}
+EXPORT_SYMBOL(tmi_mmio_read);
+
+u64 tmi_dev_delegate(u64 params)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_DEV_DELEGATE, params, &res);
+	return res.a1;
+}
+
+u64 tmi_dev_attach(u64 vdev, u64 rd, u64 smmu_id)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_DEV_ATTACH, vdev, rd, smmu_id, &res);
+	return res.a1;
+}
+
+u64 tmi_handle_s_evtq(u64 smmu_id)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_HANDLE_S_EVTQ, smmu_id, &res);
+	return res.a1;
+}
+
+u64 tmi_smmu_device_reset(u64 params)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_SMMU_DEVICE_RESET, params, &res);
+	return res.a1;
+}
+
+u64 tmi_smmu_pcie_core_check(u64 smmu_base)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_SMMU_PCIE_CORE_CHECK, smmu_base, &res);
+	return res.a1;
+}
+
+u64 tmi_smmu_write(u64 smmu_base, u64 reg_offset, u64 val, u64 bits)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_SMMU_WRITE, smmu_base, reg_offset, val, bits, &res);
+	return res.a1;
+}
+
+u64 tmi_smmu_read(u64 smmu_base, u64 reg_offset, u64 bits)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_SMMU_READ, smmu_base, reg_offset, bits, &res);
+	return res.a1;
+}
