@@ -6624,7 +6624,8 @@ do_more:
 	 */
 	if (ext4_handle_valid(handle) &&
 	    ((flags & EXT4_FREE_BLOCKS_METADATA) ||
-	     !ext4_should_writeback_data(inode))) {
+	     !ext4_should_writeback_data(inode) ||
+	     ext4_test_inode_state(inode, EXT4_STATE_BUFFERED_IOMAP))) {
 		struct ext4_free_data *new_entry;
 		/*
 		 * We use __GFP_NOFAIL because ext4_free_blocks() is not allowed
