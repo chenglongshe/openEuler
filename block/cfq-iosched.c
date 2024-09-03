@@ -101,7 +101,7 @@ struct cfq_rb_root {
 };
 #define CFQ_RB_ROOT	(struct cfq_rb_root) { .rb = RB_ROOT_CACHED, \
 			.rb_rightmost = NULL,			     \
-			.ttime = {.last_end_request = ktime_get_ns(),},}
+			.ttime = {.last_end_request = blk_time_get_ns(),},}
 
 /*
  * Per process-grouping structure
@@ -496,7 +496,7 @@ static void cfqg_stats_update_group_wait_time(struct cfqg_stats *stats)
 	if (!cfqg_stats_waiting(stats))
 		return;
 
-	now = ktime_get_ns();
+	now = blk_time_get_ns();
 	if (now > stats->start_group_wait_time)
 		blkg_stat_add(&stats->group_wait_time,
 			      now - stats->start_group_wait_time);
@@ -513,7 +513,7 @@ static void cfqg_stats_set_start_group_wait_time(struct cfq_group *cfqg,
 		return;
 	if (cfqg == curr_cfqg)
 		return;
-	stats->start_group_wait_time = ktime_get_ns();
+	stats->start_group_wait_time = blk_time_get_ns();
 	cfqg_stats_mark_waiting(stats);
 }
 
@@ -525,7 +525,7 @@ static void cfqg_stats_end_empty_time(struct cfqg_stats *stats)
 	if (!cfqg_stats_empty(stats))
 		return;
 
-	now = ktime_get_ns();
+	now = blk_time_get_ns();
 	if (now > stats->start_empty_time)
 		blkg_stat_add(&stats->empty_time,
 			      now - stats->start_empty_time);
@@ -552,7 +552,7 @@ static void cfqg_stats_set_start_empty_time(struct cfq_group *cfqg)
 	if (cfqg_stats_empty(stats))
 		return;
 
-	stats->start_empty_time = ktime_get_ns();
+	stats->start_empty_time = blk_time_get_ns();
 	cfqg_stats_mark_empty(stats);
 }
 
@@ -561,7 +561,7 @@ static void cfqg_stats_update_idle_time(struct cfq_group *cfqg)
 	struct cfqg_stats *stats = &cfqg->stats;
 
 	if (cfqg_stats_idling(stats)) {
-		u64 now = ktime_get_ns();
+		u64 now = blk_time_get_ns();
 
 		if (now > stats->start_idle_time)
 			blkg_stat_add(&stats->idle_time,
@@ -576,7 +576,7 @@ static void cfqg_stats_set_start_idle_time(struct cfq_group *cfqg)
 
 	BUG_ON(cfqg_stats_idling(stats));
 
-	stats->start_idle_time = ktime_get_ns();
+	stats->start_idle_time = blk_time_get_ns();
 	cfqg_stats_mark_idling(stats);
 }
 
@@ -706,7 +706,7 @@ static inline void cfqg_stats_update_completion(struct cfq_group *cfqg,
 						unsigned int op)
 {
 	struct cfqg_stats *stats = &cfqg->stats;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	if (now > io_start_time_ns)
 		blkg_rwstat_add(&stats->service_time, op,
@@ -1056,7 +1056,7 @@ static inline void
 cfq_set_prio_slice(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 {
 	u64 slice = cfq_scaled_cfqq_slice(cfqd, cfqq);
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	cfqq->slice_start = now;
 	cfqq->slice_end = now + slice;
@@ -1073,7 +1073,7 @@ static inline bool cfq_slice_used(struct cfq_queue *cfqq)
 {
 	if (cfq_cfqq_slice_new(cfqq))
 		return false;
-	if (ktime_get_ns() < cfqq->slice_end)
+	if (blk_time_get_ns() < cfqq->slice_end)
 		return false;
 
 	return true;
@@ -1429,7 +1429,7 @@ static inline u64 cfq_cfqq_slice_usage(struct cfq_queue *cfqq,
 				       u64 *unaccounted_time)
 {
 	u64 slice_used;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	/*
 	 * Queue got expired before even a single request completed or
@@ -1466,7 +1466,7 @@ static void cfq_group_served(struct cfq_data *cfqd, struct cfq_group *cfqg,
 	int nr_sync = cfqg->nr_cfqq - cfqg_busy_async_queues(cfqd, cfqg)
 			- cfqg->service_tree_idle.count;
 	unsigned int vfr;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	BUG_ON(nr_sync < 0);
 	used_sl = charge = cfq_cfqq_slice_usage(cfqq, &unaccounted_sl);
@@ -1521,7 +1521,7 @@ static void cfq_init_cfqg_base(struct cfq_group *cfqg)
 		*st = CFQ_RB_ROOT;
 	RB_CLEAR_NODE(&cfqg->rb_node);
 
-	cfqg->ttime.last_end_request = ktime_get_ns();
+	cfqg->ttime.last_end_request = blk_time_get_ns();
 }
 
 #ifdef CONFIG_CFQ_GROUP_IOSCHED
@@ -2208,7 +2208,7 @@ static void cfq_service_tree_add(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 	struct cfq_rb_root *st;
 	bool leftmost = true;
 	int new_cfqq = 1;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	st = st_for(cfqq->cfqg, cfqq_class(cfqq), cfqq_type(cfqq));
 	if (cfq_class_idle(cfqq)) {
@@ -2622,7 +2622,7 @@ static void __cfq_set_active_queue(struct cfq_data *cfqd,
 				cfqd->serving_wl_class, cfqd->serving_wl_type);
 		cfqg_stats_update_avg_queue_size(cfqq->cfqg);
 		cfqq->slice_start = 0;
-		cfqq->dispatch_start = ktime_get_ns();
+		cfqq->dispatch_start = blk_time_get_ns();
 		cfqq->allocated_slice = 0;
 		cfqq->slice_end = 0;
 		cfqq->slice_dispatch = 0;
@@ -2671,7 +2671,7 @@ __cfq_slice_expired(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 		if (cfq_cfqq_slice_new(cfqq))
 			cfqq->slice_resid = cfq_scaled_cfqq_slice(cfqd, cfqq);
 		else
-			cfqq->slice_resid = cfqq->slice_end - ktime_get_ns();
+			cfqq->slice_resid = cfqq->slice_end - blk_time_get_ns();
 		cfq_log_cfqq(cfqd, cfqq, "resid=%lld", cfqq->slice_resid);
 	}
 
@@ -2909,7 +2909,7 @@ static void cfq_arm_slice_timer(struct cfq_data *cfqd)
 	struct cfq_rb_root *st = cfqq->service_tree;
 	struct cfq_io_cq *cic;
 	u64 sl, group_idle = 0;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	/*
 	 * SSD device without seek penalty, disable idling. But only do so
@@ -3018,7 +3018,7 @@ static struct request *cfq_check_fifo(struct cfq_queue *cfqq)
 		return NULL;
 
 	rq = rq_entry_fifo(cfqq->fifo.next);
-	if (ktime_get_ns() < rq->fifo_time)
+	if (blk_time_get_ns() < rq->fifo_time)
 		rq = NULL;
 
 	return rq;
@@ -3120,7 +3120,7 @@ choose_wl_class_and_type(struct cfq_data *cfqd, struct cfq_group *cfqg)
 	struct cfq_rb_root *st;
 	u64 group_slice;
 	enum wl_class_t original_class = cfqd->serving_wl_class;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	/* Choose next priority. RT > BE > IDLE */
 	if (cfq_group_busy_queues_wl(RT_WORKLOAD, cfqd, cfqg))
@@ -3211,7 +3211,7 @@ static struct cfq_group *cfq_get_next_cfqg(struct cfq_data *cfqd)
 static void cfq_choose_cfqg(struct cfq_data *cfqd)
 {
 	struct cfq_group *cfqg = cfq_get_next_cfqg(cfqd);
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	cfqd->serving_group = cfqg;
 
@@ -3233,7 +3233,7 @@ static void cfq_choose_cfqg(struct cfq_data *cfqd)
 static struct cfq_queue *cfq_select_queue(struct cfq_data *cfqd)
 {
 	struct cfq_queue *cfqq, *new_cfqq = NULL;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	cfqq = cfqd->active_queue;
 	if (!cfqq)
@@ -3383,7 +3383,7 @@ static int cfq_forced_dispatch(struct cfq_data *cfqd)
 static inline bool cfq_slice_used_soon(struct cfq_data *cfqd,
 	struct cfq_queue *cfqq)
 {
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	/* the queue hasn't finished any request, can't estimate */
 	if (cfq_cfqq_slice_new(cfqq))
@@ -3466,7 +3466,7 @@ static bool cfq_may_dispatch(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 	 * based on the last sync IO we serviced
 	 */
 	if (!cfq_cfqq_sync(cfqq) && cfqd->cfq_latency) {
-		u64 last_sync = ktime_get_ns() - cfqd->last_delayed_sync;
+		u64 last_sync = blk_time_get_ns() - cfqd->last_delayed_sync;
 		unsigned int depth;
 
 		depth = div64_u64(last_sync, cfqd->cfq_slice[1]);
@@ -3557,7 +3557,7 @@ static int cfq_dispatch_requests(struct request_queue *q, int force)
 	if (cfqd->busy_queues > 1 && ((!cfq_cfqq_sync(cfqq) &&
 	    cfqq->slice_dispatch >= cfq_prio_to_maxrq(cfqd, cfqq)) ||
 	    cfq_class_idle(cfqq))) {
-		cfqq->slice_end = ktime_get_ns() + 1;
+		cfqq->slice_end = blk_time_get_ns() + 1;
 		cfq_slice_expired(cfqd, 0);
 	}
 
@@ -3635,7 +3635,7 @@ static void cfq_init_icq(struct io_cq *icq)
 {
 	struct cfq_io_cq *cic = icq_to_cic(icq);
 
-	cic->ttime.last_end_request = ktime_get_ns();
+	cic->ttime.last_end_request = blk_time_get_ns();
 }
 
 static void cfq_exit_icq(struct io_cq *icq)
@@ -3866,7 +3866,7 @@ out:
 static void
 __cfq_update_io_thinktime(struct cfq_ttime *ttime, u64 slice_idle)
 {
-	u64 elapsed = ktime_get_ns() - ttime->last_end_request;
+	u64 elapsed = blk_time_get_ns() - ttime->last_end_request;
 	elapsed = min(elapsed, 2UL * slice_idle);
 
 	ttime->ttime_samples = (7*ttime->ttime_samples + 256) / 8;
@@ -4131,7 +4131,7 @@ static void cfq_insert_request(struct request_queue *q, struct request *rq)
 	cfq_log_cfqq(cfqd, cfqq, "insert_request");
 	cfq_init_prio_data(cfqq, RQ_CIC(rq));
 
-	rq->fifo_time = ktime_get_ns() + cfqd->cfq_fifo_expire[rq_is_sync(rq)];
+	rq->fifo_time = blk_time_get_ns() + cfqd->cfq_fifo_expire[rq_is_sync(rq)];
 	list_add_tail(&rq->queuelist, &cfqq->fifo);
 	cfq_add_rq_rb(rq);
 	cfqg_stats_update_io_add(RQ_CFQG(rq), cfqd->serving_group,
@@ -4179,7 +4179,7 @@ static void cfq_update_hw_tag(struct cfq_data *cfqd)
 static bool cfq_should_wait_busy(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 {
 	struct cfq_io_cq *cic = cfqd->active_cic;
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	/* If the queue already has requests, don't wait */
 	if (!RB_EMPTY_ROOT(&cfqq->sort_list))
@@ -4219,7 +4219,7 @@ static void cfq_completed_request(struct request_queue *q, struct request *rq)
 	struct cfq_queue *cfqq = RQ_CFQQ(rq);
 	struct cfq_data *cfqd = cfqq->cfqd;
 	const int sync = rq_is_sync(rq);
-	u64 now = ktime_get_ns();
+	u64 now = blk_time_get_ns();
 
 	cfq_log_cfqq(cfqd, cfqq, "complete rqnoidle %d", req_noidle(rq));
 
@@ -4657,7 +4657,7 @@ static int cfq_init_queue(struct request_queue *q, struct elevator_type *e)
 	 * we optimistically start assuming sync ops weren't delayed in last
 	 * second, in order to have larger depth for async operations.
 	 */
-	cfqd->last_delayed_sync = ktime_get_ns() - NSEC_PER_SEC;
+	cfqd->last_delayed_sync = blk_time_get_ns() - NSEC_PER_SEC;
 	return 0;
 
 out_free:
