@@ -2129,6 +2129,8 @@ cifs_writedata_direct_alloc(struct page **pages, work_func_t complete)
 		INIT_LIST_HEAD(&wdata->list);
 		init_completion(&wdata->done);
 		INIT_WORK(&wdata->work, complete);
+	} else {
+		kvfree(pages);
 	}
 	return wdata;
 }
