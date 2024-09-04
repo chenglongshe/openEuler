@@ -175,6 +175,51 @@ static inline void blk_queue_enter_live(struct request_queue *q)
 	percpu_ref_get(&q->q_usage_counter);
 }
 
+#ifdef CONFIG_BLK_BIO_ALLOC_TIME
+static inline u64 blk_time_get_ns(void);
+static inline void blk_rq_init_bi_alloc_time(struct request *rq,
+					     struct request *first_rq)
+{
+	rq->bi_alloc_time_ns = first_rq ? first_rq->bi_alloc_time_ns :
+					  blk_time_get_ns();
+}
+
+/*
+ * Used in following cases to updated request bi_alloc_time_ns:
+ *
+ * 1) Allocate a new @rq for @bio;
+ * 2) @bio is merged to @rq, in this case @merged_rq should be NULL;
+ * 3) @merged_rq is merged to @rq, in this case @bio should be NULL;
+ */
+static inline void blk_rq_update_bi_alloc_time(struct request *rq,
+					       struct bio *bio,
+					       struct request *merged_rq)
+{
+	if (bio) {
+		if (rq->bi_alloc_time_ns > bio->bi_alloc_time_ns)
+			rq->bi_alloc_time_ns = bio->bi_alloc_time_ns;
+		return;
+	}
+
+	if (!merged_rq)
+		return;
+
+	if (rq->bi_alloc_time_ns > merged_rq->bi_alloc_time_ns)
+		rq->bi_alloc_time_ns = merged_rq->bi_alloc_time_ns;
+}
+#else /* CONFIG_BLK_BIO_ALLOC_TIME */
+static inline void blk_rq_init_bi_alloc_time(struct request *rq,
+					     struct request *first_rq)
+{
+}
+
+static inline void blk_rq_update_bi_alloc_time(struct request *rq,
+					       struct bio *bio,
+					       struct request *merged_rq)
+{
+}
+#endif
+
 #ifdef CONFIG_BLK_DEV_INTEGRITY
 void blk_flush_integrity(void);
 bool __bio_integrity_endio(struct bio *);
@@ -478,5 +523,18 @@ static inline void blk_free_queue_dispatch_async(struct request_queue *q)
 {
 }
 #endif
+
+static inline u64 blk_time_get_ns(void)
+{
+	struct blk_plug *plug = current->plug;
+
+	if (!plug || !in_task())
+		return ktime_get_ns();
+
+	if (!plug->cur_ktime)
+		plug->cur_ktime = ktime_get_ns();
+
+	return plug->cur_ktime;
+}
 
 #endif /* BLK_INTERNAL_H */

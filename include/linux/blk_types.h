@@ -203,6 +203,9 @@ struct bio {
 
 	struct bio_set		*bi_pool;
 
+	u64			bi_alloc_time_ns;
+	struct bio_hierarchy_data *hdata;
+	struct pid		*pid;
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
@@ -234,6 +237,13 @@ struct bio {
 				 * of this bio. */
 #define BIO_QUEUE_ENTERED 11	/* can use blk_queue_enter_live() */
 #define BIO_TRACKED 12		/* set if bio goes through the rq_qos path */
+#ifdef CONFIG_BLK_IO_HIERARCHY_STATS
+#define BIO_HAS_DATA 13		/* bio contain data. */
+#define BIO_HIERARCHY_ACCT 14	/*
+				 * This bio has already been subjected to
+				 * blk-io-hierarchy, don't do it again.
+				 */
+#endif
 
 /* See BVEC_POOL_OFFSET below before adding new flags */
 
@@ -368,7 +378,36 @@ enum stat_group {
 	STAT_WRITE,
 	STAT_DISCARD,
 
-	NR_STAT_GROUPS
+	NR_STAT_GROUPS,
+	STAT_FLUSH = NR_STAT_GROUPS,
+	NEW_NR_STAT_GROUPS,
+};
+
+enum stage_group {
+#ifdef CONFIG_BLK_DEV_THROTTLING
+	STAGE_THROTTLE,
+#endif
+#ifdef CONFIG_BLK_WBT
+	STAGE_WBT,
+#endif
+	STAGE_GETTAG,
+	NR_BIO_STAGE_GROUPS,
+	STAGE_PLUG = NR_BIO_STAGE_GROUPS,
+#if IS_ENABLED(CONFIG_MQ_IOSCHED_DEADLINE)
+	STAGE_DEADLINE,
+#endif
+#if IS_ENABLED(CONFIG_IOSCHED_BFQ)
+	STAGE_BFQ,
+#endif
+#if IS_ENABLED(CONFIG_MQ_IOSCHED_KYBER)
+	STAGE_KYBER,
+#endif
+	STAGE_HCTX,
+	STAGE_REQUEUE,
+	STAGE_RQ_DRIVER,
+	NR_RQ_STAGE_GROUPS,
+	STAGE_BIO = NR_RQ_STAGE_GROUPS,
+	NR_STAGE_GROUPS,
 };
 
 #define bio_op(bio) \

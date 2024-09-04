@@ -277,6 +277,12 @@ struct request {
 #ifdef CONFIG_BLK_CGROUP
 	struct request_list *rl;		/* rl this rq is alloced from */
 #endif
+
+	enum stage_group stage;
+	unsigned long hierarchy_time;
+	u64 io_end_time_ns;
+	u64 bi_alloc_time_ns;
+	struct pid *pid;
 };
 
 static inline bool blk_op_is_scsi(unsigned int op)
@@ -703,6 +709,8 @@ struct request_queue {
 
 #define BLK_MAX_WRITE_HINTS	5
 	u64			write_hints[BLK_MAX_WRITE_HINTS];
+
+	struct blk_io_hierarchy_stats *io_hierarchy_stats;
 };
 
 #define QUEUE_FLAG_QUEUED	0	/* uses generic tag queueing */
@@ -1372,6 +1380,7 @@ struct blk_plug {
 	struct list_head list; /* requests */
 	struct list_head mq_list; /* blk-mq requests */
 	struct list_head cb_list; /* md requires an unplug callback */
+	u64 cur_ktime;
 };
 #define BLK_MAX_REQUEST_COUNT 16
 #define BLK_PLUG_FLUSH_SIZE (128 * 1024)

@@ -75,6 +75,7 @@
 #include "blk-mq.h"
 #include "blk-mq-tag.h"
 #include "blk-mq-sched.h"
+#include "blk-io-hierarchy/stats.h"
 
 /* PREFLUSH/FUA sequences */
 enum {
@@ -187,6 +188,7 @@ static bool blk_flush_complete_seq(struct request *rq,
 		if (list_empty(pending))
 			fq->flush_pending_since = jiffies;
 		list_move_tail(&rq->flush.list, pending);
+		rq_hierarchy_start_io_acct(rq, STAGE_HCTX);
 		break;
 
 	case REQ_FSEQ_DATA:
@@ -245,6 +247,7 @@ static void flush_end_io(struct request *flush_rq, blk_status_t error)
 		 * avoiding use-after-free.
 		 */
 		WRITE_ONCE(flush_rq->state, MQ_RQ_IDLE);
+		blk_mq_put_alloc_task(flush_rq);
 		if (fq->rq_status != BLK_STS_OK) {
 			error = fq->rq_status;
 			fq->rq_status = BLK_STS_OK;
@@ -274,6 +277,7 @@ static void flush_end_io(struct request *flush_rq, blk_status_t error)
 		unsigned int seq = blk_flush_cur_seq(rq);
 
 		BUG_ON(seq != REQ_FSEQ_PREFLUSH && seq != REQ_FSEQ_POSTFLUSH);
+		rq_hierarchy_end_io_acct(rq, STAGE_HCTX);
 		queued |= blk_flush_complete_seq(rq, fq, seq, error);
 	}
 
@@ -377,6 +381,7 @@ static bool blk_kick_flush(struct request_queue *q, struct blk_flush_queue *fq,
 	flush_rq->rq_flags |= RQF_FLUSH_SEQ;
 	flush_rq->rq_disk = first_rq->rq_disk;
 	flush_rq->end_io = flush_end_io;
+	blk_mq_get_alloc_task(flush_rq, first_rq->bio);
 
 	/*
 	 * Order WRITE ->end_io and WRITE rq->ref, and its pair is the one

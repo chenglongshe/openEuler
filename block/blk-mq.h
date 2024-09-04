@@ -125,12 +125,7 @@ static inline struct blk_mq_ctx *__blk_mq_get_ctx(struct request_queue *q,
  */
 static inline struct blk_mq_ctx *blk_mq_get_ctx(struct request_queue *q)
 {
-	return __blk_mq_get_ctx(q, get_cpu());
-}
-
-static inline void blk_mq_put_ctx(struct blk_mq_ctx *ctx)
-{
-	put_cpu();
+	return __blk_mq_get_ctx(q, raw_smp_processor_id());
 }
 
 struct blk_mq_alloc_data {
@@ -142,6 +137,7 @@ struct blk_mq_alloc_data {
 	/* input & output parameter */
 	struct blk_mq_ctx *ctx;
 	struct blk_mq_hw_ctx *hctx;
+	struct bio *bio;
 };
 
 static inline struct blk_mq_tags *blk_mq_tags_from_data(struct blk_mq_alloc_data *data)
@@ -233,5 +229,33 @@ static inline void blk_mq_free_requests(struct list_head *list)
 		__blk_put_request(rq->q, rq);
 	}
 }
+
+static inline bool blk_mq_is_sbitmap_shared(unsigned int flags)
+{
+	return false;
+}
+
+#ifdef CONFIG_BLK_BIO_ALLOC_TASK
+static inline void blk_mq_get_alloc_task(struct request *rq, struct bio *bio)
+{
+	rq->pid = bio ? get_pid(bio->pid) : get_pid(task_pid(current));
+}
+
+static inline void blk_mq_put_alloc_task(struct request *rq)
+{
+	if (rq->pid) {
+		put_pid(rq->pid);
+		rq->pid = NULL;
+	}
+}
+#else
+static inline void blk_mq_get_alloc_task(struct request *rq, struct bio *bio)
+{
+}
+
+static inline void blk_mq_put_alloc_task(struct request *rq)
+{
+}
+#endif
 
 #endif
