@@ -627,6 +627,9 @@ struct arm_smmu_strtab_l1_desc {
 
 	struct arm_smmu_ste		*l2ptr;
 	dma_addr_t			l2ptr_dma;
+#ifdef CONFIG_CVM_HOST
+	bool                is_sync;
+#endif
 };
 
 struct arm_smmu_ctx_desc {
@@ -753,6 +756,12 @@ struct arm_smmu_device {
 	struct mutex			streams_mutex;
 
 	bool				bypass;
+#ifdef CONFIG_CVM_HOST
+	int				s_evtq_irq;
+	int				s_gerr_irq;
+	resource_size_t ioaddr;
+	uint64_t		id;
+#endif
 };
 
 struct arm_smmu_stream {
@@ -805,6 +814,11 @@ struct arm_smmu_domain {
 	spinlock_t			devices_lock;
 
 	struct list_head		mmu_notifiers;
+#ifdef CONFIG_CVM_HOST
+	bool secure;
+	struct list_head node;
+	struct kvm *kvm;
+#endif
 };
 
 static inline struct arm_smmu_domain *to_smmu_domain(struct iommu_domain *dom)
