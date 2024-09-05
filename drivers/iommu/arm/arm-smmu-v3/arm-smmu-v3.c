@@ -3296,6 +3296,20 @@ static void arm_smmu_remove_dev_pasid(struct device *dev, ioasid_t pasid)
 	arm_smmu_sva_remove_dev_pasid(domain, dev, pasid);
 }
 
+#ifdef CONFIG_CVM_HOST
+static int arm_smmu_enable_secure(struct iommu_domain *domain)
+{
+	int ret = 0;
+	struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
+
+	mutex_lock(&smmu_domain->init_mutex);
+	smmu_domain->secure = true;
+	mutex_unlock(&smmu_domain->init_mutex);
+
+	return ret;
+}
+#endif
+
 static struct iommu_ops arm_smmu_ops = {
 	.capable		= arm_smmu_capable,
 	.domain_alloc		= arm_smmu_domain_alloc,
@@ -3311,6 +3325,9 @@ static struct iommu_ops arm_smmu_ops = {
 	.def_domain_type	= arm_smmu_def_domain_type,
 	.pgsize_bitmap		= -1UL, /* Restricted during device attach */
 	.owner			= THIS_MODULE,
+#ifdef CONFIG_CVM_HOST
+	.iommu_enable_secure = arm_smmu_enable_secure,
+#endif
 	.default_domain_ops = &(const struct iommu_domain_ops) {
 		.attach_dev		= arm_smmu_attach_dev,
 		.map_pages		= arm_smmu_map_pages,
