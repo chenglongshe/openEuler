@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /* Broadcom NetXtreme-C/E network driver.
  *
- * Copyright (c) 2017 Broadcom Limited
+ * Copyright (c) 2017-2018 Broadcom Limited
+ * Copyright (c) 2018-2022 Broadcom Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -10,9 +12,11 @@
 #ifndef BNXT_DEVLINK_H
 #define BNXT_DEVLINK_H
 
+#if defined(CONFIG_VF_REPS) || defined(HAVE_DEVLINK_PARAM)
 /* Struct to hold housekeeping info needed by devlink interface */
 struct bnxt_dl {
 	struct bnxt *bp;	/* back ptr to the controlling dev */
+	bool remote_reset;
 };
 
 static inline struct bnxt *bnxt_get_bp_from_dl(struct devlink *dl)
@@ -20,32 +24,39 @@ static inline struct bnxt *bnxt_get_bp_from_dl(struct devlink *dl)
 	return ((struct bnxt_dl *)devlink_priv(dl))->bp;
 }
 
-/* To clear devlink pointer from bp, pass NULL dl */
-static inline void bnxt_link_bp_to_dl(struct bnxt *bp, struct devlink *dl)
+static inline bool bnxt_dl_get_remote_reset(struct devlink *dl)
 {
-	bp->dl = dl;
-
-	/* add a back pointer in dl to bp */
-	if (dl) {
-		struct bnxt_dl *bp_dl = devlink_priv(dl);
-
-		bp_dl->bp = bp;
-	}
+	return ((struct bnxt_dl *)devlink_priv(dl))->remote_reset;
 }
+
+static inline void bnxt_dl_set_remote_reset(struct devlink *dl, bool value)
+{
+	((struct bnxt_dl *)devlink_priv(dl))->remote_reset = value;
+}
+
+#endif /* CONFIG_VF_REPS || HAVE_DEVLINK_PARAM */
+
+union bnxt_nvm_data {
+	u8	val8;
+	__le32	val32;
+};
 
 #define NVM_OFF_MSIX_VEC_PER_PF_MAX	108
 #define NVM_OFF_MSIX_VEC_PER_PF_MIN	114
 #define NVM_OFF_IGNORE_ARI		164
 #define NVM_OFF_DIS_GRE_VER_CHECK	171
 #define NVM_OFF_ENABLE_SRIOV		401
+#define NVM_OFF_MSIX_VEC_PER_VF		406
 #define NVM_OFF_NVM_CFG_VER		602
 
-#define BNXT_NVM_CFG_VER_BITS		24
-#define BNXT_NVM_CFG_VER_BYTES		4
+#define BNXT_NVM_CFG_VER_BITS		8
+#define BNXT_NVM_CFG_VER_BYTES		1
 
 #define BNXT_MSIX_VEC_MAX	512
 #define BNXT_MSIX_VEC_MIN_MAX	128
 
+#if defined(CONFIG_VF_REPS) || defined(HAVE_DEVLINK_PARAM)
+#ifdef HAVE_DEVLINK_PARAM
 enum bnxt_nvm_dir_type {
 	BNXT_NVM_SHARED_CFG = 40,
 	BNXT_NVM_PORT_CFG,
@@ -65,13 +76,53 @@ enum bnxt_dl_version_type {
 	BNXT_VERSION_RUNNING,
 	BNXT_VERSION_STORED,
 };
+#else
+static inline int bnxt_dl_params_register(struct bnxt *bp)
+{
+	return 0;
+}
+#endif /* HAVE_DEVLINK_PARAM */
 
-void bnxt_devlink_health_report(struct bnxt *bp, unsigned long event);
-void bnxt_dl_health_status_update(struct bnxt *bp, bool healthy);
-void bnxt_dl_health_recovery_done(struct bnxt *bp);
-void bnxt_dl_fw_reporters_create(struct bnxt *bp);
-void bnxt_dl_fw_reporters_destroy(struct bnxt *bp, bool all);
 int bnxt_dl_register(struct bnxt *bp);
 void bnxt_dl_unregister(struct bnxt *bp);
 
+#else /* CONFIG_VF_REPS || HAVE_DEVLINK_PARAM */
+
+static inline int bnxt_dl_register(struct bnxt *bp)
+{
+	return 0;
+}
+
+static inline void bnxt_dl_unregister(struct bnxt *bp)
+{
+}
+
+#endif /* CONFIG_VF_REPS || HAVE_DEVLINK_PARAM */
+
+void bnxt_devlink_health_fw_report(struct bnxt *bp);
+void bnxt_dl_health_fw_status_update(struct bnxt *bp, bool healthy);
+void bnxt_dl_health_fw_recovery_done(struct bnxt *bp);
+#ifdef HAVE_DEVLINK_HEALTH_REPORT
+void bnxt_dl_fw_reporters_create(struct bnxt *bp);
+void bnxt_dl_fw_reporters_destroy(struct bnxt *bp);
+#else
+static inline void bnxt_dl_fw_reporters_create(struct bnxt *bp)
+{
+}
+
+static inline void bnxt_dl_fw_reporters_destroy(struct bnxt *bp)
+{
+}
+#endif /* HAVE_DEVLINK_HEALTH_REPORT */
+static inline void bnxt_dl_remote_reload(struct bnxt *bp)
+{
+#ifdef HAVE_DEVLINK_RELOAD_ACTION
+	devlink_remote_reload_actions_performed(bp->dl, 0,
+						BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT) |
+						BIT(DEVLINK_RELOAD_ACTION_FW_ACTIVATE));
+#endif
+}
+
+int bnxt_hwrm_nvm_get_var(struct bnxt *bp, dma_addr_t data_dma_addr,
+			  u16 offset, u16 dim, u16 index, u16 num_bits);
 #endif /* BNXT_DEVLINK_H */
