@@ -6,6 +6,14 @@ ifdef CONFIG_X86
 dsc_ccflags := -mhard-float -msse
 endif
 
+ifdef CONFIG_ARM64
+dsc_rcflags := -mgeneral-regs-only
+endif
+
+ifdef CONFIG_ARM64
+CFLAGS_REMOVE_$(AMDDALPATH)/dc/dsc/rc_calc.o := -mgeneral-regs-only
+endif
+
 ifdef CONFIG_PPC64
 dsc_ccflags := -mhard-float -maltivec
 endif
@@ -28,6 +36,10 @@ endif
 endif
 
 CFLAGS_$(AMDDALPATH)/dc/dsc/rc_calc.o := $(dsc_ccflags)
+CFLAGS_REMOVE_$(AMDDALPATH)/dc/dsc/rc_calc.o := $(dsc_rcflags)
+CFLAGS_REMOVE_$(AMDDALPATH)/dc/dsc/dc_dsc.o := $(dsc_rcflags)
+CFLAGS_REMOVE_$(AMDDALPATH)/dc/dsc/rc_calc_dpi.o := $(dsc_rcflags)
+CFLAGS_REMOVE_$(AMDDALPATH)/dc/dsc/rc_calc.o := $(dsc_rcflags)
 
 DSC = dc_dsc.o rc_calc.o rc_calc_dpi.o
 
