@@ -430,6 +430,7 @@ static inline int __do_cpuid_func(struct kvm_cpuid_entry2 *entry, u32 function,
 #endif
 	unsigned f_rdtscp = kvm_x86_ops->rdtscp_supported() ? F(RDTSCP) : 0;
 	unsigned f_xsaves = kvm_x86_ops->xsaves_supported() ? F(XSAVES) : 0;
+	u32 ign, zx_cap;
 
 	/* cpuid 1.edx */
 	const u32 kvm_cpuid_1_edx_x86_features =
@@ -737,18 +738,28 @@ static inline int __do_cpuid_func(struct kvm_cpuid_entry2 *entry, u32 function,
 		break;
 	/*Add support for Centaur's CPUID instruction*/
 	case 0xC0000000:
-		/*Just support up to 0xC0000004 now*/
-		entry->eax = min(entry->eax, 0xC0000004);
+		/* Extended to 0xC0000006 */
+		entry->eax = min(entry->eax, 0xC0000006);
 		break;
 	case 0xC0000001:
 		entry->edx &= kvm_cpuid_C000_0001_edx_x86_features;
 		cpuid_mask(&entry->edx, CPUID_C000_0001_EDX);
+		break;
+	case 0xC0000006:
+		rdmsr_safe(MSR_ZX_EXT_VMCS_CAPS, &zx_cap, &ign);
+		if (zx_cap & MSR_ZX_VMCS_EXEC_CTL3) {
+			/* Now only expose ZXPAUSE(VMCS exec ctl3) */
+			entry->eax &= F(ZXPAUSE);
+			cpuid_mask(&entry->eax, CPUID_C000_0006_EAX);
+		} else
+			entry->eax = 0;
 		break;
 	case 3: /* Processor serial number */
 	case 5: /* MONITOR/MWAIT */
 	case 0xC0000002:
 	case 0xC0000003:
 	case 0xC0000004:
+	case 0xC0000005:
 	default:
 		entry->eax = entry->ebx = entry->ecx = entry->edx = 0;
 		break;

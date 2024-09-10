@@ -86,6 +86,23 @@ static void delay_tsc(unsigned long __loops)
 }
 
 /*
+ * On ZHAOXIN the ZXPAUSE instruction waits until any of:
+ * 1) the delta of TSC counter exceeds the value provided in EDX:EAX
+ * 2) global timeout in ZX_PAUSE_CONTROL is exceeded
+ * 3) an external interrupt occurs
+ */
+static void __delay_zxpause(u64 unused, u64 cycles)
+{
+	u64 until = cycles;
+	u32 eax, edx;
+
+	eax = lower_32_bits(until);
+	edx = upper_32_bits(until);
+
+	__zxpause(ZXPAUSE_C01_STATE, edx, eax);
+}
+
+/*
  * On some AMD platforms, MWAITX has a configurable 32-bit timer, that
  * counts with TSC frequency. The input value is the loop of the
  * counter, it will exit when the timer expires.
@@ -131,6 +148,35 @@ static void delay_mwaitx(unsigned long __loops)
 }
 
 /*
+ * Call a vendor specific function to delay for a given amount of time. Because
+ * these functions may return earlier than requested, check for actual elapsed
+ * time and call again until done.
+ */
+static void delay_zxpause(unsigned long __cycles)
+{
+	u64 start, end, cycles = __cycles;
+
+	/*
+	 * Timer value of 0 causes MWAITX to wait indefinitely, unless there
+	 * is a store on the memory monitored by MONITORX.
+	 */
+	if (!cycles)
+		return;
+
+	start = rdtsc_ordered();
+
+	for (;;) {
+		__delay_zxpause(start, cycles);
+		end = rdtsc_ordered();
+
+		if (cycles <= end - start)
+			break;
+
+		cycles -= end - start;
+		start = end;
+	}
+}
+/*
  * Since we calibrate only once at boot, this
  * function should be set once at boot and not changed
  */
@@ -140,6 +186,11 @@ void use_tsc_delay(void)
 {
 	if (delay_fn == delay_loop)
 		delay_fn = delay_tsc;
+}
+
+void use_zxpause_delay(void)
+{
+	delay_fn = delay_zxpause;
 }
 
 void use_mwaitx_delay(void)

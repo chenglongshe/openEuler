@@ -23,6 +23,8 @@
 #define MWAITX_MAX_LOOPS		((u32)-1)
 #define MWAITX_DISABLE_CSTATES		0xf0
 
+#define ZXPAUSE_C01_STATE		1
+
 static inline void __monitor(const void *eax, unsigned long ecx,
 			     unsigned long edx)
 {
@@ -118,6 +120,26 @@ static inline void mwait_idle_with_hints(unsigned long eax, unsigned long ecx)
 			__mwait(eax, ecx);
 	}
 	current_clr_polling();
+}
+
+/*
+ * Caller can specify whether to enter C0.1 (low latency, less
+ * power saving) or C0.2 state (saves more power, but longer wakeup
+ * latency). This may be overridden by the ZX_PAUSE_CONTROL MSR
+ * which can force requests for C0.2 to be downgraded to C0.1.
+ */
+static inline void __zxpause(u32 ecx, u32 edx, u32 eax)
+{
+	/* "zxpause %ecx, %edx, %eax;" */
+	#ifdef CONFIG_AS_ZXPAUSE
+	asm volatile("zxpause %%ecx\n"
+		     :
+		     : "c"(ecx), "d"(edx), "a"(eax));
+	#else
+	asm volatile(".byte 0xf2, 0x0f, 0xa6, 0xd0\t\n"
+		     :
+		     : "c"(ecx), "d"(edx), "a"(eax));
+	#endif
 }
 
 #endif /* _ASM_X86_MWAIT_H */
