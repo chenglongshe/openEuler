@@ -126,6 +126,18 @@ extern unsigned long huge_anon_orders_always;
 extern unsigned long huge_anon_orders_madvise;
 extern unsigned long huge_anon_orders_inherit;
 extern unsigned long huge_pcp_allow_orders;
+extern unsigned long huge_file_orders_always;
+extern int huge_file_exec_order;
+
+static inline unsigned long file_orders_always(void)
+{
+	return READ_ONCE(huge_file_orders_always);
+}
+
+static inline int file_exec_order(void)
+{
+	return READ_ONCE(huge_file_exec_order);
+}
 
 static inline bool hugepage_global_enabled(void)
 {
@@ -138,6 +150,25 @@ static inline bool hugepage_global_always(void)
 {
 	return transparent_hugepage_flags &
 			(1<<TRANSPARENT_HUGEPAGE_FLAG);
+}
+
+static inline bool hugepage_flags_enabled(void)
+{
+	/*
+	 * We cover both the anon and the file-backed case here; we must return
+	 * true if globally enabled, even when all anon sizes are set to never.
+	 * So we don't need to look at huge_anon_orders_inherit.
+	 */
+	return hugepage_global_enabled() ||
+	       huge_anon_orders_always ||
+	       huge_anon_orders_madvise;
+}
+
+static inline int lowest_order(unsigned long orders)
+{
+	if (orders)
+		return __ffs(orders);
+	return -1;
 }
 
 static inline int highest_order(unsigned long orders)
@@ -383,6 +414,16 @@ static inline spinlock_t *pud_trans_huge_lock(pud_t *pud,
 		return __pud_trans_huge_lock(pud, vma);
 	else
 		return NULL;
+}
+
+static inline unsigned long file_orders_always(void)
+{
+	 return 0;
+}
+
+static inline int file_exec_order(void)
+{
+	return -1;
 }
 
 /**

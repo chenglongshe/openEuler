@@ -76,6 +76,10 @@ unsigned long huge_anon_orders_always __read_mostly;
 unsigned long huge_anon_orders_madvise __read_mostly;
 unsigned long huge_anon_orders_inherit __read_mostly;
 unsigned long huge_pcp_allow_orders __read_mostly;
+unsigned long huge_file_orders_always __read_mostly;
+int huge_file_exec_order __read_mostly = -1;
+static bool anon_orders_configured;
+static bool file_orders_configured;
 
 unsigned long __thp_vma_allowable_orders(struct vm_area_struct *vma,
 					 unsigned long vm_flags,
@@ -604,6 +608,7 @@ static const struct attribute_group hugepage_attr_group = {
 static void hugepage_exit_sysfs(struct kobject *hugepage_kobj);
 static void thpsize_release(struct kobject *kobj);
 static DEFINE_SPINLOCK(huge_anon_orders_lock);
+static DEFINE_SPINLOCK(huge_file_orders_lock);
 static LIST_HEAD(thpsize_list);
 
 static ssize_t thpsize_enabled_show(struct kobject *kobj,
@@ -668,8 +673,62 @@ static ssize_t thpsize_enabled_store(struct kobject *kobj,
 	return ret;
 }
 
+static ssize_t file_enabled_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	int order = to_thpsize(kobj)->order;
+	const char *output;
+	bool exec;
+
+	if (test_bit(order, &huge_file_orders_always)) {
+		exec = READ_ONCE(huge_file_exec_order) == order;
+		output = exec ? "always [always+exec] never" :
+				"[always] always+exec never";
+	} else {
+		output  = "always always+exec [never]";
+	}
+
+	return sysfs_emit(buf, "%s\n", output);
+}
+
+static ssize_t file_enabled_strore(struct kobject *kobj,
+				   struct kobj_attribute *attr,
+				   const char *buf, size_t count)
+{
+	int order = to_thpsize(kobj)->order;
+	ssize_t ret = count;
+
+	spin_lock(&huge_file_orders_lock);
+
+	if (sysfs_streq(buf, "always")) {
+		set_bit(order, &huge_file_orders_always);
+		if (huge_file_exec_order == order)
+			huge_file_exec_order = 1;
+	} else if (sysfs_streq(buf, "always+exec")) {
+		set_bit(order, &huge_file_orders_always);
+		huge_file_exec_order = order;
+	} else if (sysfs_streq(buf, "never")) {
+		clear_bit(order, &huge_file_orders_always);
+		if (huge_file_exec_order == order)
+			huge_file_exec_order = 1;
+	} else {
+		ret = -EINVAL;
+	}
+
+	spin_unlock(&huge_file_orders_lock);
+	return ret;
+}
+
 static struct kobj_attribute thpsize_enabled_attr =
 	__ATTR(enabled, 0644, thpsize_enabled_show, thpsize_enabled_store);
+
+static struct kobj_attribute file_enabled_attr =
+	__ATTR(file_enabled, 0644, file_enabled_show, file_enabled_store);
+
+static struct attibute *file_ctrl_attrs[] = {
+	&file_enabled_attr.attr,
+	NULL,
+}
 
 static struct attribute *thpsize_attrs[] = {
 	&thpsize_enabled_attr.attr,
@@ -796,7 +855,20 @@ static int __init hugepage_init_sysfs(struct kobject **hugepage_kobj)
 	 * disable all other sizes. powerpc's PMD_ORDER isn't a compile-time
 	 * constant so we have to do this here.
 	 */
-	huge_anon_orders_inherit = BIT(PMD_ORDER);
+	if (!annon_orders_configured) {
+		huge_anon_orders_inherit = BIT(PMD_ORDER);
+		anon_orders_configured = true;
+	}
+
+	/*
+	 * For pagecache, default to enabling all orders. powerpc's PMD_ORDER
+	 * (and therefore THP_ORDERS_ALL_FILE_DEFAULT) isn't a compile-time
+	 * const so we have to do this here.
+	 */
+	if (!file_orders_configured) {
+		huge_file_orders_always = THP_ORDERS_ALL_FILEDEFAULT;
+		file_orders_configured = true;
+	}
 
 	*hugepage_kobj = kobject_create_and_add("transparent_hugepage", mm_kobj);
 	if (unlikely(!*hugepage_kobj)) {
@@ -958,6 +1030,96 @@ out:
 	return ret;
 }
 __setup("transparent_hugepage=", setup_transparent_hugepage);
+
+static int __init setup_thp_anon(char *str)
+{
+	unsigned long size;
+	char *state;
+	int order;
+	int ret = 0;
+
+	if (!str)
+		goto out;
+
+	size = (unsigned long)memparse(str, &state);
+	order = ilog2(size >> PAGE_SHIFT);
+	if (*state != ':' || !is_power_of_2(size) || size <= PAGE_SIZE ||
+	    !BIT(order) & THP_ORDERS_ALL_ANON)
+		goto out;
+
+	state++;
+
+	if (!strcmp(state, "always")) {
+		clear_bit(order, &huge_anon_orders_inherit);
+		clear_bit(order, &huge_anon_orders_madvise);
+		set_bit(order, &huge_anon_orders_always);
+		ret = 1;
+	} else if (!strcmp(state, "inherit")) {
+		clear_bit(order, &huge_anon_orders_always);
+		clear_bit(order, &huge_anon_orders_madvise);
+		set_bit(order, &huge_anon_orders_inherit);
+		ret = 1;
+	} else if (!strcmp(state, "madvise")) {
+		clear_bit(order, &huge_anon_orders_always);
+		clear_bit(order, &huge_anon_orders_inherit);
+		set_bit(order, &huge_anon_orders_madvise);
+		ret = 1;
+	} else if (!strcmp(state, "never")) {
+		clear_bit(order, &huge_anon_orders_always);
+		clear_bit(order, &huge_anon_orders_inherit);
+		clear_bit(order, &huge_anon_orders_madvise);
+		ret = 1;
+	}
+
+	if (ret)
+		anon_orders_configured = true;
+
+out:
+	if (!ret)
+		pr_warn("thp_anon=%s: cannot parse, ignored\n", str);
+	return ret;
+}
+__setup("thp_anon=", setup_thp_anon);
+
+static int __init setup_thp_file(char *str)
+{
+	unsigned long size;
+	char *state;
+	int order;
+	int ret = 0;
+
+	if (!str)
+		goto out;
+
+	size = (unsigned long)memparse(str, &state);
+	order = ilog2(size >> PAGE_SHIFT);
+	if (*state != ':' || !is_power_of_2(size) || size <= PAGE_SIZE ||
+	    !BIT(order) & THP_ORDERS_ALL_FILE_DEFAULT)
+		goto out;
+
+	state++;
+
+	if (!strcmp(state, "always")) {
+		set_bit(order, &huge_file_orders_always);
+		ret = 1;
+	} else if (!strcmp(state, "always+exec")) {
+		set_bit(order, &huge_file_orders_always);
+		huge_file_exec_order = order;
+		ret = 1;
+	} else if (!strcmp(state, "never")) {
+		clear_bit(order, &huge_file_orders_always);
+		ret = 1;
+	}
+
+	if (ret)
+		file_orders_configured = true;
+
+out:
+	if (!ret)
+		pr_warn("thp_file=%s: cannot parse, ignored\n", str);
+	return ret;
+}
+__setup("thp_file=", setup_thp_file);
 
 pmd_t maybe_pmd_mkwrite(pmd_t pmd, struct vm_area_struct *vma)
 {

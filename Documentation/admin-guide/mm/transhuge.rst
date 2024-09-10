@@ -313,13 +313,67 @@ processes. Exceeding the number would block the collapse::
 
 A higher value may increase memory footprint for some workloads.
 
-Boot parameter
-==============
+File-Backed Hugepages
+---------------------
 
-You can change the sysfs boot time defaults of Transparent Hugepage
-Support by passing the parameter ``transparent_hugepage=always`` or
-``transparent_hugepage=madvise`` or ``transparent_hugepage=never``
-to the kernel command line.
+The kernel will automatically select an appropriate THP size file-backed
+memory from a set of allowed sizes. By default all THP sizes that the page cache
+supports are allowed, but this set can be modified with one of::
+
+		echo always >/sys/kernel/mm/transparent_hugepage/hugepages-<size>kB/file_enabled
+		echo always+exec >/sys/kernel/mm/transparent_hugepage/hugepages-<size>kB/file_enabled
+		echo never >/sys/kernel/mm/transparent_hugepage/hugepages-<size>/kB/file_enabled
+
+where <size> is the hugepage size being addressed, the available sizes for which
+vary by system. ``always`` adds the hugepage size to the set of allowed sizes,
+and ``never`` removes the hugepage size from the set of allowed sizes.
+
+``always+exec`` acts like ``always`` but additionally marks the hugepage size as
+the preferred hugepage size for sections of any file mapped executeable. A
+maximum of one hugepage size can be marked as ``exec`` at a time, so applying it
+to a new size implicitly removes it from any size it was previously set for.
+
+In some situations, constraining the allowed sizes can reduce memory
+fragmentation, resulting in fewer allocation fallbacks and improved system
+performance.
+
+Note that any changes to changes to the allowed set of sizes only applies to future
+file-backed THP allocations.
+
+Boot parameters
+===============
+
+You can change the sysfs boot time defaults for the top-level "enabled"
+control by passing the parameter ``transparent_hugepage=always`` or
+``transparent_hugepage=madvise`` or ``transparent_hugepage=never`` to the
+kernel command line.
+
+Alternatively, each supported anonymous THP size can be controlled by
+passing ``thp_anon=<size>[KMG]:<state>``, where ``<size>`` is the THP size
+and ``<state>`` is one of ``always``, ``madvise``, ``never`` or
+``inherit``.
+
+For example, the following will set 64K THP to ``always``::
+
+	thp_anon=64K:always
+
+``thp_anon=`` may be specified multiple times to configure all THP sizes as
+required. If ``thp_anon=`` is specified at least once, any anon THP sizes
+not explicitly configured on the command line are implicitly set to
+``never``.
+
+Each supported file-backed THP size can be controlled by passing
+``thp_file=<size>[KMG]:<state>``, where ``<size>`` is the THP size and
+``<state>>`` is one of ``always``, ``always+exec`` or ``never``.
+
+For example, the following will set 64K THP to ``always+exec``::
+
+	thp_file=64K:always+exec
+
+``thp_file=`` may be specified multiple times to configure all THP sizes as
+required. If ``thp_file=`` is specified at least once,any file-backed THP
+sizes not explicitly configured on the command line are implicitly set to
+``never``.
 
 Hugepages in tmpfs/shmem
 ========================
