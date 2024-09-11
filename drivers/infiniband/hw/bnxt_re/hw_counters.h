@@ -1,8 +1,6 @@
 /*
- * Broadcom NetXtreme-E RoCE driver.
- *
- * Copyright (c) 2016 - 2017, Broadcom. All rights reserved.  The term
- * Broadcom refers to Broadcom Limited and/or its subsidiaries.
+ * Copyright (c) 2023, Broadcom. All rights reserved.  The term
+ * Broadcom refers to Broadcom Inc. and/or its subsidiaries.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -37,21 +35,37 @@
  *
  */
 
-#ifndef __BNXT_RE_HW_STATS_H__
-#define __BNXT_RE_HW_STATS_H__
+#ifndef __HW_COUNTERS_H__
+#define __HW_COUNTERS_H__
 
 enum bnxt_re_hw_stats {
+	BNXT_RE_ACTIVE_PD,
+	BNXT_RE_ACTIVE_AH,
 	BNXT_RE_ACTIVE_QP,
+	BNXT_RE_ACTIVE_RC_QP,
+	BNXT_RE_ACTIVE_UD_QP,
 	BNXT_RE_ACTIVE_SRQ,
 	BNXT_RE_ACTIVE_CQ,
 	BNXT_RE_ACTIVE_MR,
 	BNXT_RE_ACTIVE_MW,
+	BNXT_RE_WATERMARK_PD,
+	BNXT_RE_WATERMARK_AH,
+	BNXT_RE_WATERMARK_QP,
+	BNXT_RE_WATERMARK_RC_QP,
+	BNXT_RE_WATERMARK_UD_QP,
+	BNXT_RE_WATERMARK_SRQ,
+	BNXT_RE_WATERMARK_CQ,
+	BNXT_RE_WATERMARK_MR,
+	BNXT_RE_WATERMARK_MW,
+	BNXT_RE_RESIZE_CQ_CNT,
 	BNXT_RE_RX_PKTS,
 	BNXT_RE_RX_BYTES,
 	BNXT_RE_TX_PKTS,
 	BNXT_RE_TX_BYTES,
 	BNXT_RE_RECOVERABLE_ERRORS,
-	BNXT_RE_RX_DROPS,
+	BNXT_RE_TX_ERRORS,
+	BNXT_RE_TX_DISCARDS,
+	BNXT_RE_RX_ERRORS,
 	BNXT_RE_RX_DISCARDS,
 	BNXT_RE_TO_RETRANSMITS,
 	BNXT_RE_SEQ_ERR_NAKS_RCVD,
@@ -93,12 +107,43 @@ enum bnxt_re_hw_stats {
 	BNXT_RE_RES_TX_PCI_ERR,
 	BNXT_RE_RES_RX_PCI_ERR,
 	BNXT_RE_OUT_OF_SEQ_ERR,
-	BNXT_RE_NUM_COUNTERS
+	BNXT_RE_TX_ATOMIC_REQ,
+	BNXT_RE_TX_READ_REQ,
+	BNXT_RE_TX_READ_RES,
+	BNXT_RE_TX_WRITE_REQ,
+	BNXT_RE_TX_SEND_REQ,
+	BNXT_RE_TX_ROCE_PKTS,
+	BNXT_RE_TX_ROCE_BYTES,
+	BNXT_RE_RX_ATOMIC_REQ,
+	BNXT_RE_RX_READ_REQ,
+	BNXT_RE_RX_READ_RESP,
+	BNXT_RE_RX_WRITE_REQ,
+	BNXT_RE_RX_SEND_REQ,
+	BNXT_RE_RX_ROCE_PKTS,
+	BNXT_RE_RX_ROCE_BYTES,
+	BNXT_RE_RX_ROCE_GOOD_PKTS,
+	BNXT_RE_RX_ROCE_GOOD_BYTES,
+	BNXT_RE_OOB,
+	BNXT_RE_TX_CNP,
+	BNXT_RE_RX_CNP,
+	BNXT_RE_RX_ECN,
+	BNXT_RE_PACING_RESCHED,
+	BNXT_RE_PACING_CMPL,
+	BNXT_RE_PACING_ALERT,
+	BNXT_RE_DB_FIFO_REG,
+	BNXT_RE_NUM_EXT_COUNTERS
 };
 
-struct rdma_hw_stats *bnxt_re_ib_alloc_hw_stats(struct ib_device *ibdev,
-						u8 port_num);
-int bnxt_re_ib_get_hw_stats(struct ib_device *ibdev,
-			    struct rdma_hw_stats *stats,
-			    u8 port, int index);
-#endif /* __BNXT_RE_HW_STATS_H__ */
+#define BNXT_RE_NUM_STD_COUNTERS (BNXT_RE_OUT_OF_SEQ_ERR + 1)
+
+int bnxt_re_get_hw_stats(struct ib_device *ibdev,
+			 struct rdma_hw_stats *stats,
+			 PORT_NUM port, int index);
+#ifdef HAVE_ALLOC_HW_PORT_STATS
+struct rdma_hw_stats *bnxt_re_alloc_hw_port_stats(struct ib_device *ibdev,
+						  PORT_NUM port_num);
+#else
+struct rdma_hw_stats *bnxt_re_alloc_hw_stats(struct ib_device *ibdev,
+					     PORT_NUM port_num);
+#endif
+#endif /* __HW_COUNTERS_H__ */

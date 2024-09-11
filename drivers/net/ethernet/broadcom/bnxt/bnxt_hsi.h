@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2014-2016 Broadcom Corporation
  * Copyright (c) 2014-2018 Broadcom Limited
- * Copyright (c) 2018-2020 Broadcom Inc.
+ * Copyright (c) 2018-2023 Broadcom Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,6 +40,8 @@ struct hwrm_resp_hdr {
 #define TLV_TYPE_ROCE_SP_COMMAND                 0x3UL
 #define TLV_TYPE_QUERY_ROCE_CC_GEN1              0x4UL
 #define TLV_TYPE_MODIFY_ROCE_CC_GEN1             0x5UL
+#define TLV_TYPE_QUERY_ROCE_CC_GEN2              0x6UL
+#define TLV_TYPE_MODIFY_ROCE_CC_GEN2             0x7UL
 #define TLV_TYPE_ENGINE_CKV_ALIAS_ECC_PUBLIC_KEY 0x8001UL
 #define TLV_TYPE_ENGINE_CKV_IV                   0x8003UL
 #define TLV_TYPE_ENGINE_CKV_AUTH_TAG             0x8004UL
@@ -103,6 +105,7 @@ struct hwrm_short_input {
 struct cmd_nums {
 	__le16	req_type;
 	#define HWRM_VER_GET                              0x0UL
+	#define HWRM_FUNC_ECHO_RESPONSE                   0xbUL
 	#define HWRM_ERROR_RECOVERY_QCFG                  0xcUL
 	#define HWRM_FUNC_DRV_IF_CHANGE                   0xdUL
 	#define HWRM_FUNC_BUF_UNRGTR                      0xeUL
@@ -164,6 +167,7 @@ struct cmd_nums {
 	#define HWRM_VNIC_PLCMODES_CFG                    0x48UL
 	#define HWRM_VNIC_PLCMODES_QCFG                   0x49UL
 	#define HWRM_VNIC_QCAPS                           0x4aUL
+	#define HWRM_VNIC_UPDATE                          0x4bUL
 	#define HWRM_RING_ALLOC                           0x50UL
 	#define HWRM_RING_FREE                            0x51UL
 	#define HWRM_RING_CMPL_RING_QAGGINT_PARAMS        0x52UL
@@ -184,6 +188,19 @@ struct cmd_nums {
 	#define HWRM_QUEUE_MPLS_QCAPS                     0x80UL
 	#define HWRM_QUEUE_MPLSTC2PRI_QCFG                0x81UL
 	#define HWRM_QUEUE_MPLSTC2PRI_CFG                 0x82UL
+	#define HWRM_QUEUE_VLANPRI_QCAPS                  0x83UL
+	#define HWRM_QUEUE_VLANPRI2PRI_QCFG               0x84UL
+	#define HWRM_QUEUE_VLANPRI2PRI_CFG                0x85UL
+	#define HWRM_QUEUE_GLOBAL_CFG                     0x86UL
+	#define HWRM_QUEUE_GLOBAL_QCFG                    0x87UL
+	#define HWRM_QUEUE_ADPTV_QOS_RX_FEATURE_QCFG      0x88UL
+	#define HWRM_QUEUE_ADPTV_QOS_RX_FEATURE_CFG       0x89UL
+	#define HWRM_QUEUE_ADPTV_QOS_TX_FEATURE_QCFG      0x8aUL
+	#define HWRM_QUEUE_ADPTV_QOS_TX_FEATURE_CFG       0x8bUL
+	#define HWRM_QUEUE_QCAPS                          0x8cUL
+	#define HWRM_QUEUE_ADPTV_QOS_RX_TUNING_QCFG       0x8dUL
+	#define HWRM_QUEUE_ADPTV_QOS_RX_TUNING_CFG        0x8eUL
+	#define HWRM_QUEUE_ADPTV_QOS_TX_TUNING_QCFG       0x8fUL
 	#define HWRM_CFA_L2_FILTER_ALLOC                  0x90UL
 	#define HWRM_CFA_L2_FILTER_FREE                   0x91UL
 	#define HWRM_CFA_L2_FILTER_CFG                    0x92UL
@@ -202,6 +219,7 @@ struct cmd_nums {
 	#define HWRM_TUNNEL_DST_PORT_QUERY                0xa0UL
 	#define HWRM_TUNNEL_DST_PORT_ALLOC                0xa1UL
 	#define HWRM_TUNNEL_DST_PORT_FREE                 0xa2UL
+	#define HWRM_QUEUE_ADPTV_QOS_TX_TUNING_CFG        0xa3UL
 	#define HWRM_STAT_CTX_ENG_QUERY                   0xafUL
 	#define HWRM_STAT_CTX_ALLOC                       0xb0UL
 	#define HWRM_STAT_CTX_FREE                        0xb1UL
@@ -217,6 +235,8 @@ struct cmd_nums {
 	#define HWRM_PORT_TX_FIR_CFG                      0xbbUL
 	#define HWRM_PORT_TX_FIR_QCFG                     0xbcUL
 	#define HWRM_PORT_ECN_QSTATS                      0xbdUL
+	#define HWRM_FW_LIVEPATCH_QUERY                   0xbeUL
+	#define HWRM_FW_LIVEPATCH                         0xbfUL
 	#define HWRM_FW_RESET                             0xc0UL
 	#define HWRM_FW_QSTATUS                           0xc1UL
 	#define HWRM_FW_HEALTH_CHECK                      0xc2UL
@@ -243,6 +263,11 @@ struct cmd_nums {
 	#define HWRM_PORT_SFP_SIDEBAND_QCFG               0xd7UL
 	#define HWRM_FW_STATE_UNQUIESCE                   0xd8UL
 	#define HWRM_PORT_DSC_DUMP                        0xd9UL
+	#define HWRM_PORT_EP_TX_QCFG                      0xdaUL
+	#define HWRM_PORT_EP_TX_CFG                       0xdbUL
+	#define HWRM_PORT_CFG                             0xdcUL
+	#define HWRM_PORT_QCFG                            0xddUL
+	#define HWRM_PORT_MAC_QCAPS                       0xdfUL
 	#define HWRM_TEMP_MONITOR_QUERY                   0xe0UL
 	#define HWRM_REG_POWER_QUERY                      0xe1UL
 	#define HWRM_CORE_FREQUENCY_QUERY                 0xe2UL
@@ -298,6 +323,11 @@ struct cmd_nums {
 	#define HWRM_CFA_EEM_OP                           0x123UL
 	#define HWRM_CFA_ADV_FLOW_MGNT_QCAPS              0x124UL
 	#define HWRM_CFA_TFLIB                            0x125UL
+	#define HWRM_CFA_LAG_GROUP_MEMBER_RGTR            0x126UL
+	#define HWRM_CFA_LAG_GROUP_MEMBER_UNRGTR          0x127UL
+	#define HWRM_CFA_TLS_FILTER_ALLOC                 0x128UL
+	#define HWRM_CFA_TLS_FILTER_FREE                  0x129UL
+	#define HWRM_CFA_RELEASE_AFM_FUNC                 0x12aUL
 	#define HWRM_ENGINE_CKV_STATUS                    0x12eUL
 	#define HWRM_ENGINE_CKV_CKEK_ADD                  0x12fUL
 	#define HWRM_ENGINE_CKV_CKEK_DELETE               0x130UL
@@ -347,6 +377,32 @@ struct cmd_nums {
 	#define HWRM_FUNC_HOST_PF_IDS_QUERY               0x197UL
 	#define HWRM_FUNC_QSTATS_EXT                      0x198UL
 	#define HWRM_STAT_EXT_CTX_QUERY                   0x199UL
+	#define HWRM_FUNC_SPD_CFG                         0x19aUL
+	#define HWRM_FUNC_SPD_QCFG                        0x19bUL
+	#define HWRM_FUNC_PTP_PIN_QCFG                    0x19cUL
+	#define HWRM_FUNC_PTP_PIN_CFG                     0x19dUL
+	#define HWRM_FUNC_PTP_CFG                         0x19eUL
+	#define HWRM_FUNC_PTP_TS_QUERY                    0x19fUL
+	#define HWRM_FUNC_PTP_EXT_CFG                     0x1a0UL
+	#define HWRM_FUNC_PTP_EXT_QCFG                    0x1a1UL
+	#define HWRM_FUNC_KEY_CTX_ALLOC                   0x1a2UL
+	#define HWRM_FUNC_BACKING_STORE_CFG_V2            0x1a3UL
+	#define HWRM_FUNC_BACKING_STORE_QCFG_V2           0x1a4UL
+	#define HWRM_FUNC_DBR_PACING_CFG                  0x1a5UL
+	#define HWRM_FUNC_DBR_PACING_QCFG                 0x1a6UL
+	#define HWRM_FUNC_DBR_PACING_BROADCAST_EVENT      0x1a7UL
+	#define HWRM_FUNC_BACKING_STORE_QCAPS_V2          0x1a8UL
+	#define HWRM_FUNC_DBR_PACING_NQLIST_QUERY         0x1a9UL
+	#define HWRM_FUNC_DBR_RECOVERY_COMPLETED          0x1aaUL
+	#define HWRM_FUNC_SYNCE_CFG                       0x1abUL
+	#define HWRM_FUNC_SYNCE_QCFG                      0x1acUL
+	#define HWRM_FUNC_KEY_CTX_FREE                    0x1adUL
+	#define HWRM_FUNC_LAG_MODE_CFG                    0x1aeUL
+	#define HWRM_FUNC_LAG_MODE_QCFG                   0x1afUL
+	#define HWRM_FUNC_LAG_CREATE                      0x1b0UL
+	#define HWRM_FUNC_LAG_UPDATE                      0x1b1UL
+	#define HWRM_FUNC_LAG_FREE                        0x1b2UL
+	#define HWRM_FUNC_LAG_QCFG                        0x1b3UL
 	#define HWRM_SELFTEST_QLIST                       0x200UL
 	#define HWRM_SELFTEST_EXEC                        0x201UL
 	#define HWRM_SELFTEST_IRQ                         0x202UL
@@ -359,10 +415,32 @@ struct cmd_nums {
 	#define HWRM_MFG_HDMA_TEST                        0x209UL
 	#define HWRM_MFG_FRU_EEPROM_WRITE                 0x20aUL
 	#define HWRM_MFG_FRU_EEPROM_READ                  0x20bUL
+	#define HWRM_MFG_SOC_IMAGE                        0x20cUL
+	#define HWRM_MFG_SOC_QSTATUS                      0x20dUL
+	#define HWRM_MFG_PARAM_CRITICAL_DATA_FINALIZE     0x20eUL
+	#define HWRM_MFG_PARAM_CRITICAL_DATA_READ         0x20fUL
+	#define HWRM_MFG_PARAM_CRITICAL_DATA_HEALTH       0x210UL
+	#define HWRM_MFG_PRVSN_EXPORT_CSR                 0x211UL
+	#define HWRM_MFG_PRVSN_IMPORT_CERT                0x212UL
+	#define HWRM_MFG_PRVSN_GET_STATE                  0x213UL
+	#define HWRM_MFG_GET_NVM_MEASUREMENT              0x214UL
+	#define HWRM_MFG_PSOC_QSTATUS                     0x215UL
+	#define HWRM_MFG_SELFTEST_QLIST                   0x216UL
+	#define HWRM_MFG_SELFTEST_EXEC                    0x217UL
+	#define HWRM_STAT_GENERIC_QSTATS                  0x218UL
+	#define HWRM_MFG_PRVSN_EXPORT_CERT                0x219UL
+	#define HWRM_UDCC_QCAPS                           0x258UL
+	#define HWRM_UDCC_CFG                             0x259UL
+	#define HWRM_UDCC_QCFG                            0x25aUL
+	#define HWRM_UDCC_SESSION_CFG                     0x25bUL
+	#define HWRM_UDCC_SESSION_QCFG                    0x25cUL
+	#define HWRM_UDCC_SESSION_QUERY                   0x25dUL
+	#define HWRM_UDCC_COMP_CFG                        0x25eUL
+	#define HWRM_UDCC_COMP_QCFG                       0x25fUL
+	#define HWRM_UDCC_COMP_QUERY                      0x260UL
 	#define HWRM_TF                                   0x2bcUL
 	#define HWRM_TF_VERSION_GET                       0x2bdUL
 	#define HWRM_TF_SESSION_OPEN                      0x2c6UL
-	#define HWRM_TF_SESSION_ATTACH                    0x2c7UL
 	#define HWRM_TF_SESSION_REGISTER                  0x2c8UL
 	#define HWRM_TF_SESSION_UNREGISTER                0x2c9UL
 	#define HWRM_TF_SESSION_CLOSE                     0x2caUL
@@ -371,19 +449,16 @@ struct cmd_nums {
 	#define HWRM_TF_SESSION_RESC_ALLOC                0x2cdUL
 	#define HWRM_TF_SESSION_RESC_FREE                 0x2ceUL
 	#define HWRM_TF_SESSION_RESC_FLUSH                0x2cfUL
+	#define HWRM_TF_SESSION_RESC_INFO                 0x2d0UL
+	#define HWRM_TF_SESSION_HOTUP_STATE_SET           0x2d1UL
+	#define HWRM_TF_SESSION_HOTUP_STATE_GET           0x2d2UL
 	#define HWRM_TF_TBL_TYPE_GET                      0x2daUL
 	#define HWRM_TF_TBL_TYPE_SET                      0x2dbUL
 	#define HWRM_TF_TBL_TYPE_BULK_GET                 0x2dcUL
-	#define HWRM_TF_CTXT_MEM_ALLOC                    0x2e2UL
-	#define HWRM_TF_CTXT_MEM_FREE                     0x2e3UL
-	#define HWRM_TF_CTXT_MEM_RGTR                     0x2e4UL
-	#define HWRM_TF_CTXT_MEM_UNRGTR                   0x2e5UL
-	#define HWRM_TF_EXT_EM_QCAPS                      0x2e6UL
-	#define HWRM_TF_EXT_EM_OP                         0x2e7UL
-	#define HWRM_TF_EXT_EM_CFG                        0x2e8UL
-	#define HWRM_TF_EXT_EM_QCFG                       0x2e9UL
 	#define HWRM_TF_EM_INSERT                         0x2eaUL
 	#define HWRM_TF_EM_DELETE                         0x2ebUL
+	#define HWRM_TF_EM_HASH_INSERT                    0x2ecUL
+	#define HWRM_TF_EM_MOVE                           0x2edUL
 	#define HWRM_TF_TCAM_SET                          0x2f8UL
 	#define HWRM_TF_TCAM_GET                          0x2f9UL
 	#define HWRM_TF_TCAM_MOVE                         0x2faUL
@@ -392,6 +467,34 @@ struct cmd_nums {
 	#define HWRM_TF_GLOBAL_CFG_GET                    0x2fdUL
 	#define HWRM_TF_IF_TBL_SET                        0x2feUL
 	#define HWRM_TF_IF_TBL_GET                        0x2ffUL
+	#define HWRM_TFC_TBL_SCOPE_QCAPS                  0x380UL
+	#define HWRM_TFC_TBL_SCOPE_ID_ALLOC               0x381UL
+	#define HWRM_TFC_TBL_SCOPE_CONFIG                 0x382UL
+	#define HWRM_TFC_TBL_SCOPE_DECONFIG               0x383UL
+	#define HWRM_TFC_TBL_SCOPE_FID_ADD                0x384UL
+	#define HWRM_TFC_TBL_SCOPE_FID_REM                0x385UL
+	#define HWRM_TFC_TBL_SCOPE_POOL_ALLOC             0x386UL
+	#define HWRM_TFC_TBL_SCOPE_POOL_FREE              0x387UL
+	#define HWRM_TFC_SESSION_ID_ALLOC                 0x388UL
+	#define HWRM_TFC_SESSION_FID_ADD                  0x389UL
+	#define HWRM_TFC_SESSION_FID_REM                  0x38aUL
+	#define HWRM_TFC_IDENT_ALLOC                      0x38bUL
+	#define HWRM_TFC_IDENT_FREE                       0x38cUL
+	#define HWRM_TFC_IDX_TBL_ALLOC                    0x38dUL
+	#define HWRM_TFC_IDX_TBL_ALLOC_SET                0x38eUL
+	#define HWRM_TFC_IDX_TBL_SET                      0x38fUL
+	#define HWRM_TFC_IDX_TBL_GET                      0x390UL
+	#define HWRM_TFC_IDX_TBL_FREE                     0x391UL
+	#define HWRM_TFC_GLOBAL_ID_ALLOC                  0x392UL
+	#define HWRM_TFC_TCAM_SET                         0x393UL
+	#define HWRM_TFC_TCAM_GET                         0x394UL
+	#define HWRM_TFC_TCAM_ALLOC                       0x395UL
+	#define HWRM_TFC_TCAM_ALLOC_SET                   0x396UL
+	#define HWRM_TFC_TCAM_FREE                        0x397UL
+	#define HWRM_TFC_IF_TBL_SET                       0x398UL
+	#define HWRM_TFC_IF_TBL_GET                       0x399UL
+	#define HWRM_TFC_TBL_SCOPE_CONFIG_GET             0x39aUL
+	#define HWRM_STAT_DB_ERROR_QSTATS                 0x39bUL
 	#define HWRM_SV                                   0x400UL
 	#define HWRM_DBG_READ_DIRECT                      0xff10UL
 	#define HWRM_DBG_READ_INDIRECT                    0xff11UL
@@ -412,6 +515,18 @@ struct cmd_nums {
 	#define HWRM_DBG_QCAPS                            0xff20UL
 	#define HWRM_DBG_QCFG                             0xff21UL
 	#define HWRM_DBG_CRASHDUMP_MEDIUM_CFG             0xff22UL
+	#define HWRM_DBG_USEQ_ALLOC                       0xff23UL
+	#define HWRM_DBG_USEQ_FREE                        0xff24UL
+	#define HWRM_DBG_USEQ_FLUSH                       0xff25UL
+	#define HWRM_DBG_USEQ_QCAPS                       0xff26UL
+	#define HWRM_DBG_USEQ_CW_CFG                      0xff27UL
+	#define HWRM_DBG_USEQ_SCHED_CFG                   0xff28UL
+	#define HWRM_DBG_USEQ_RUN                         0xff29UL
+	#define HWRM_DBG_USEQ_DELIVERY_REQ                0xff2aUL
+	#define HWRM_DBG_USEQ_RESP_HDR                    0xff2bUL
+	#define HWRM_NVM_GET_VPD_FIELD_INFO               0xffeaUL
+	#define HWRM_NVM_SET_VPD_FIELD_INFO               0xffebUL
+	#define HWRM_NVM_DEFRAG                           0xffecUL
 	#define HWRM_NVM_REQ_ARBITRATION                  0xffedUL
 	#define HWRM_NVM_FACTORY_DEFAULTS                 0xffeeUL
 	#define HWRM_NVM_VALIDATE_OPTION                  0xffefUL
@@ -456,6 +571,8 @@ struct ret_codes {
 	#define HWRM_ERR_CODE_HWRM_ERROR                   0xfUL
 	#define HWRM_ERR_CODE_BUSY                         0x10UL
 	#define HWRM_ERR_CODE_RESOURCE_LOCKED              0x11UL
+	#define HWRM_ERR_CODE_PF_UNAVAILABLE               0x12UL
+	#define HWRM_ERR_CODE_ENTITY_NOT_PRESENT           0x13UL
 	#define HWRM_ERR_CODE_TLV_ENCAPSULATED_RESPONSE    0x8000UL
 	#define HWRM_ERR_CODE_UNKNOWN_ERR                  0xfffeUL
 	#define HWRM_ERR_CODE_CMD_NOT_SUPPORTED            0xffffUL
@@ -486,9 +603,9 @@ struct hwrm_err_output {
 #define HWRM_TARGET_ID_TOOLS 0xFFFD
 #define HWRM_VERSION_MAJOR 1
 #define HWRM_VERSION_MINOR 10
-#define HWRM_VERSION_UPDATE 1
-#define HWRM_VERSION_RSVD 68
-#define HWRM_VERSION_STR "1.10.1.68"
+#define HWRM_VERSION_UPDATE 3
+#define HWRM_VERSION_RSVD 9
+#define HWRM_VERSION_STR "1.10.3.9"
 
 /* hwrm_ver_get_input (size:192b/24B) */
 struct hwrm_ver_get_input {
@@ -541,6 +658,7 @@ struct hwrm_ver_get_output {
 	#define VER_GET_RESP_DEV_CAPS_CFG_CFA_ADV_FLOW_MGNT_SUPPORTED              0x1000UL
 	#define VER_GET_RESP_DEV_CAPS_CFG_CFA_TFLIB_SUPPORTED                      0x2000UL
 	#define VER_GET_RESP_DEV_CAPS_CFG_CFA_TRUFLOW_SUPPORTED                    0x4000UL
+	#define VER_GET_RESP_DEV_CAPS_CFG_SECURE_BOOT_CAPABLE                      0x8000UL
 	u8	roce_fw_maj_8b;
 	u8	roce_fw_min_8b;
 	u8	roce_fw_bld_8b;
@@ -563,8 +681,9 @@ struct hwrm_ver_get_output {
 	__le16	max_resp_len;
 	__le16	def_req_timeout;
 	u8	flags;
-	#define VER_GET_RESP_FLAGS_DEV_NOT_RDY       0x1UL
-	#define VER_GET_RESP_FLAGS_EXT_VER_AVAIL     0x2UL
+	#define VER_GET_RESP_FLAGS_DEV_NOT_RDY                   0x1UL
+	#define VER_GET_RESP_FLAGS_EXT_VER_AVAIL                 0x2UL
+	#define VER_GET_RESP_FLAGS_DEV_NOT_RDY_BACKING_STORE     0x4UL
 	u8	unused_0[2];
 	u8	always_1;
 	__le16	hwrm_intf_major;
@@ -588,7 +707,8 @@ struct hwrm_ver_get_output {
 	__le16	roce_fw_build;
 	__le16	roce_fw_patch;
 	__le16	max_ext_req_len;
-	u8	unused_1[5];
+	__le16	max_req_timeout;
+	u8	unused_1[3];
 	u8	valid;
 };
 
@@ -674,43 +794,54 @@ struct hwrm_async_event_cmpl {
 	#define ASYNC_EVENT_CMPL_TYPE_HWRM_ASYNC_EVENT  0x2eUL
 	#define ASYNC_EVENT_CMPL_TYPE_LAST             ASYNC_EVENT_CMPL_TYPE_HWRM_ASYNC_EVENT
 	__le16	event_id;
-	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_STATUS_CHANGE         0x0UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_MTU_CHANGE            0x1UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_SPEED_CHANGE          0x2UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_DCB_CONFIG_CHANGE          0x3UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_PORT_CONN_NOT_ALLOWED      0x4UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_SPEED_CFG_NOT_ALLOWED 0x5UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_SPEED_CFG_CHANGE      0x6UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_PORT_PHY_CFG_CHANGE        0x7UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_RESET_NOTIFY               0x8UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_ERROR_RECOVERY             0x9UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_RING_MONITOR_MSG           0xaUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_FUNC_DRVR_UNLOAD           0x10UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_FUNC_DRVR_LOAD             0x11UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_FUNC_FLR_PROC_CMPLT        0x12UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_PF_DRVR_UNLOAD             0x20UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_PF_DRVR_LOAD               0x21UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_VF_FLR                     0x30UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_VF_MAC_ADDR_CHANGE         0x31UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_PF_VF_COMM_STATUS_CHANGE   0x32UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_VF_CFG_CHANGE              0x33UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_LLFC_PFC_CHANGE            0x34UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_DEFAULT_VNIC_CHANGE        0x35UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_HW_FLOW_AGED               0x36UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_DEBUG_NOTIFICATION         0x37UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_CACHE_FLUSH_REQ        0x38UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_CACHE_FLUSH_DONE       0x39UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_TCP_FLAG_ACTION_CHANGE     0x3aUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_FLOW_ACTIVE            0x3bUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_CFG_CHANGE             0x3cUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_TFLIB_DEFAULT_VNIC_CHANGE  0x3dUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_TFLIB_LINK_STATUS_CHANGE   0x3eUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_QUIESCE_DONE               0x3fUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_DEFERRED_RESPONSE          0x40UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_PFC_WATCHDOG_CFG_CHANGE    0x41UL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_FW_TRACE_MSG               0xfeUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_HWRM_ERROR                 0xffUL
-	#define ASYNC_EVENT_CMPL_EVENT_ID_LAST                      ASYNC_EVENT_CMPL_EVENT_ID_HWRM_ERROR
+	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_STATUS_CHANGE              0x0UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_MTU_CHANGE                 0x1UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_SPEED_CHANGE               0x2UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_DCB_CONFIG_CHANGE               0x3UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PORT_CONN_NOT_ALLOWED           0x4UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_SPEED_CFG_NOT_ALLOWED      0x5UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_LINK_SPEED_CFG_CHANGE           0x6UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PORT_PHY_CFG_CHANGE             0x7UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_RESET_NOTIFY                    0x8UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_ERROR_RECOVERY                  0x9UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_RING_MONITOR_MSG                0xaUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_FUNC_DRVR_UNLOAD                0x10UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_FUNC_DRVR_LOAD                  0x11UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_FUNC_FLR_PROC_CMPLT             0x12UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PF_DRVR_UNLOAD                  0x20UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PF_DRVR_LOAD                    0x21UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_VF_FLR                          0x30UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_VF_MAC_ADDR_CHANGE              0x31UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PF_VF_COMM_STATUS_CHANGE        0x32UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_VF_CFG_CHANGE                   0x33UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_LLFC_PFC_CHANGE                 0x34UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_DEFAULT_VNIC_CHANGE             0x35UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_HW_FLOW_AGED                    0x36UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_DEBUG_NOTIFICATION              0x37UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_CACHE_FLUSH_REQ             0x38UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_CACHE_FLUSH_DONE            0x39UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_TCP_FLAG_ACTION_CHANGE          0x3aUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_FLOW_ACTIVE                 0x3bUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_EEM_CFG_CHANGE                  0x3cUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_TFLIB_DEFAULT_VNIC_CHANGE       0x3dUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_TFLIB_LINK_STATUS_CHANGE        0x3eUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_QUIESCE_DONE                    0x3fUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_DEFERRED_RESPONSE               0x40UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PFC_WATCHDOG_CFG_CHANGE         0x41UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_ECHO_REQUEST                    0x42UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PHC_UPDATE                      0x43UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_PPS_TIMESTAMP                   0x44UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_ERROR_REPORT                    0x45UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_DOORBELL_PACING_THRESHOLD       0x46UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_RSS_CHANGE                      0x47UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_DOORBELL_PACING_NQ_UPDATE       0x48UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_HW_DOORBELL_RECOVERY_READ_ERROR 0x49UL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_CTX_ERROR                       0x4aUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_UDCC_SESSION_CHANGE             0x4bUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_MAX_RGTR_EVENT_ID               0x4cUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_FW_TRACE_MSG                    0xfeUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_HWRM_ERROR                      0xffUL
+	#define ASYNC_EVENT_CMPL_EVENT_ID_LAST                           ASYNC_EVENT_CMPL_EVENT_ID_HWRM_ERROR
 	__le32	event_data2;
 	u8	opaque_v;
 	#define ASYNC_EVENT_CMPL_V          0x1UL
@@ -751,6 +882,98 @@ struct hwrm_async_event_cmpl_link_status_change {
 	#define ASYNC_EVENT_CMPL_LINK_STATUS_CHANGE_EVENT_DATA1_PF_ID_SFT       20
 };
 
+/* hwrm_async_event_cmpl_link_mtu_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_link_mtu_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_EVENT_ID_LINK_MTU_CHANGE 0x1UL
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_EVENT_ID_LAST           ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_EVENT_ID_LINK_MTU_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_EVENT_DATA1_NEW_MTU_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_LINK_MTU_CHANGE_EVENT_DATA1_NEW_MTU_SFT 0
+};
+
+/* hwrm_async_event_cmpl_link_speed_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_link_speed_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_ID_LINK_SPEED_CHANGE 0x2UL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_ID_LAST             ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_ID_LINK_SPEED_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_FORCE                       0x1UL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_MASK 0xfffeUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_SFT  1
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_100MB  (0x1UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_1GB    (0xaUL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_2GB    (0x14UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_2_5GB  (0x19UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_10GB   (0x64UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_20GB   (0xc8UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_25GB   (0xfaUL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_40GB   (0x190UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_50GB   (0x1f4UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_100GB  (0x3e8UL << 1)
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_LAST  ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_NEW_LINK_SPEED_100MBPS_100GB
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_PORT_ID_MASK                0xffff0000UL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CHANGE_EVENT_DATA1_PORT_ID_SFT                 16
+};
+
+/* hwrm_async_event_cmpl_dcb_config_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_dcb_config_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_ID_DCB_CONFIG_CHANGE 0x3UL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_ID_LAST             ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_ID_DCB_CONFIG_CHANGE
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA2_ETS      0x1UL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA2_PFC      0x2UL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA2_APP      0x4UL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA2_DSCP     0x8UL
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_PORT_ID_MASK                0xffffUL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_PORT_ID_SFT                 0
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_ROCE_PRIORITY_MASK 0xff0000UL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_ROCE_PRIORITY_SFT 16
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_ROCE_PRIORITY_NONE  (0xffUL << 16)
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_ROCE_PRIORITY_LAST ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_ROCE_PRIORITY_NONE
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_L2_PRIORITY_MASK  0xff000000UL
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_L2_PRIORITY_SFT   24
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_L2_PRIORITY_NONE    (0xffUL << 24)
+	#define ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_L2_PRIORITY_LAST   ASYNC_EVENT_CMPL_DCB_CONFIG_CHANGE_EVENT_DATA1_RECOMMEND_L2_PRIORITY_NONE
+};
+
 /* hwrm_async_event_cmpl_port_conn_not_allowed (size:128b/16B) */
 struct hwrm_async_event_cmpl_port_conn_not_allowed {
 	__le16	type;
@@ -780,6 +1003,28 @@ struct hwrm_async_event_cmpl_port_conn_not_allowed {
 	#define ASYNC_EVENT_CMPL_PORT_CONN_NOT_ALLOWED_EVENT_DATA1_ENFORCEMENT_POLICY_LAST       ASYNC_EVENT_CMPL_PORT_CONN_NOT_ALLOWED_EVENT_DATA1_ENFORCEMENT_POLICY_PWRDOWN
 };
 
+/* hwrm_async_event_cmpl_link_speed_cfg_not_allowed (size:128b/16B) */
+struct hwrm_async_event_cmpl_link_speed_cfg_not_allowed {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_TYPE_LAST             ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_EVENT_ID_LINK_SPEED_CFG_NOT_ALLOWED 0x5UL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_EVENT_ID_LAST                      ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_EVENT_ID_LINK_SPEED_CFG_NOT_ALLOWED
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_V          0x1UL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_EVENT_DATA1_PORT_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_NOT_ALLOWED_EVENT_DATA1_PORT_ID_SFT 0
+};
+
 /* hwrm_async_event_cmpl_link_speed_cfg_change (size:128b/16B) */
 struct hwrm_async_event_cmpl_link_speed_cfg_change {
 	__le16	type;
@@ -804,6 +1049,31 @@ struct hwrm_async_event_cmpl_link_speed_cfg_change {
 	#define ASYNC_EVENT_CMPL_LINK_SPEED_CFG_CHANGE_EVENT_DATA1_ILLEGAL_LINK_SPEED_CFG           0x20000UL
 };
 
+/* hwrm_async_event_cmpl_port_phy_cfg_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_port_phy_cfg_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_ID_PORT_PHY_CFG_CHANGE 0x7UL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_ID_LAST               ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_ID_PORT_PHY_CFG_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_DATA1_PORT_ID_MASK         0xffffUL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_DATA1_PORT_ID_SFT          0
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_DATA1_FEC_CFG_CHANGE       0x10000UL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_DATA1_EEE_CFG_CHANGE       0x20000UL
+	#define ASYNC_EVENT_CMPL_PORT_PHY_CFG_CHANGE_EVENT_DATA1_PAUSE_CFG_CHANGE     0x40000UL
+};
+
 /* hwrm_async_event_cmpl_reset_notify (size:128b/16B) */
 struct hwrm_async_event_cmpl_reset_notify {
 	__le16	type;
@@ -815,6 +1085,8 @@ struct hwrm_async_event_cmpl_reset_notify {
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_ID_RESET_NOTIFY 0x8UL
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_ID_LAST        ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_ID_RESET_NOTIFY
 	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA2_FW_STATUS_CODE_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA2_FW_STATUS_CODE_SFT 0
 	u8	opaque_v;
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_V          0x1UL
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_OPAQUE_MASK 0xfeUL
@@ -832,7 +1104,9 @@ struct hwrm_async_event_cmpl_reset_notify {
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_MANAGEMENT_RESET_REQUEST  (0x1UL << 8)
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_FW_EXCEPTION_FATAL        (0x2UL << 8)
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_FW_EXCEPTION_NON_FATAL    (0x3UL << 8)
-	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_LAST                     ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_FW_EXCEPTION_NON_FATAL
+	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_FAST_RESET                (0x4UL << 8)
+	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_FW_ACTIVATION             (0x5UL << 8)
+	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_LAST                     ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_REASON_CODE_FW_ACTIVATION
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_DELAY_IN_100MS_TICKS_MASK           0xffff0000UL
 	#define ASYNC_EVENT_CMPL_RESET_NOTIFY_EVENT_DATA1_DELAY_IN_100MS_TICKS_SFT            16
 };
@@ -887,6 +1161,187 @@ struct hwrm_async_event_cmpl_ring_monitor_msg {
 	__le32	event_data1;
 };
 
+/* hwrm_async_event_cmpl_func_drvr_unload (size:128b/16B) */
+struct hwrm_async_event_cmpl_func_drvr_unload {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_TYPE_LAST             ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_EVENT_ID_FUNC_DRVR_UNLOAD 0x10UL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_EVENT_ID_LAST            ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_EVENT_ID_FUNC_DRVR_UNLOAD
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_V          0x1UL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_EVENT_DATA1_FUNC_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_UNLOAD_EVENT_DATA1_FUNC_ID_SFT 0
+};
+
+/* hwrm_async_event_cmpl_func_drvr_load (size:128b/16B) */
+struct hwrm_async_event_cmpl_func_drvr_load {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_TYPE_LAST             ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_EVENT_ID_FUNC_DRVR_LOAD 0x11UL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_EVENT_ID_LAST          ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_EVENT_ID_FUNC_DRVR_LOAD
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_V          0x1UL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_EVENT_DATA1_FUNC_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_FUNC_DRVR_LOAD_EVENT_DATA1_FUNC_ID_SFT 0
+};
+
+/* hwrm_async_event_cmpl_func_flr_proc_cmplt (size:128b/16B) */
+struct hwrm_async_event_cmpl_func_flr_proc_cmplt {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_TYPE_LAST             ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_EVENT_ID_FUNC_FLR_PROC_CMPLT 0x12UL
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_EVENT_ID_LAST               ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_EVENT_ID_FUNC_FLR_PROC_CMPLT
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_V          0x1UL
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_EVENT_DATA1_FUNC_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_FUNC_FLR_PROC_CMPLT_EVENT_DATA1_FUNC_ID_SFT 0
+};
+
+/* hwrm_async_event_cmpl_pf_drvr_unload (size:128b/16B) */
+struct hwrm_async_event_cmpl_pf_drvr_unload {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_TYPE_LAST             ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_EVENT_ID_PF_DRVR_UNLOAD 0x20UL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_EVENT_ID_LAST          ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_EVENT_ID_PF_DRVR_UNLOAD
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_V          0x1UL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_EVENT_DATA1_FUNC_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_EVENT_DATA1_FUNC_ID_SFT 0
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_EVENT_DATA1_PORT_MASK   0x70000UL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_UNLOAD_EVENT_DATA1_PORT_SFT    16
+};
+
+/* hwrm_async_event_cmpl_pf_drvr_load (size:128b/16B) */
+struct hwrm_async_event_cmpl_pf_drvr_load {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_TYPE_LAST             ASYNC_EVENT_CMPL_PF_DRVR_LOAD_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_EVENT_ID_PF_DRVR_LOAD 0x21UL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_EVENT_ID_LAST        ASYNC_EVENT_CMPL_PF_DRVR_LOAD_EVENT_ID_PF_DRVR_LOAD
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_V          0x1UL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_EVENT_DATA1_FUNC_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_EVENT_DATA1_FUNC_ID_SFT 0
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_EVENT_DATA1_PORT_MASK   0x70000UL
+	#define ASYNC_EVENT_CMPL_PF_DRVR_LOAD_EVENT_DATA1_PORT_SFT    16
+};
+
+/* hwrm_async_event_cmpl_vf_flr (size:128b/16B) */
+struct hwrm_async_event_cmpl_vf_flr {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_VF_FLR_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_VF_FLR_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_VF_FLR_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_VF_FLR_TYPE_LAST             ASYNC_EVENT_CMPL_VF_FLR_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_VF_FLR_EVENT_ID_VF_FLR 0x30UL
+	#define ASYNC_EVENT_CMPL_VF_FLR_EVENT_ID_LAST  ASYNC_EVENT_CMPL_VF_FLR_EVENT_ID_VF_FLR
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_VF_FLR_V          0x1UL
+	#define ASYNC_EVENT_CMPL_VF_FLR_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_VF_FLR_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_VF_FLR_EVENT_DATA1_VF_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_VF_FLR_EVENT_DATA1_VF_ID_SFT 0
+	#define ASYNC_EVENT_CMPL_VF_FLR_EVENT_DATA1_PF_ID_MASK 0xff0000UL
+	#define ASYNC_EVENT_CMPL_VF_FLR_EVENT_DATA1_PF_ID_SFT 16
+};
+
+/* hwrm_async_event_cmpl_vf_mac_addr_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_vf_mac_addr_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_EVENT_ID_VF_MAC_ADDR_CHANGE 0x31UL
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_EVENT_ID_LAST              ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_EVENT_ID_VF_MAC_ADDR_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_EVENT_DATA1_VF_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_VF_MAC_ADDR_CHANGE_EVENT_DATA1_VF_ID_SFT 0
+};
+
+/* hwrm_async_event_cmpl_pf_vf_comm_status_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_pf_vf_comm_status_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_EVENT_ID_PF_VF_COMM_STATUS_CHANGE 0x32UL
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_EVENT_ID_LAST                    ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_EVENT_ID_PF_VF_COMM_STATUS_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_PF_VF_COMM_STATUS_CHANGE_EVENT_DATA1_COMM_ESTABLISHED     0x1UL
+};
+
 /* hwrm_async_event_cmpl_vf_cfg_change (size:128b/16B) */
 struct hwrm_async_event_cmpl_vf_cfg_change {
 	__le16	type;
@@ -898,6 +1353,8 @@ struct hwrm_async_event_cmpl_vf_cfg_change {
 	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_ID_VF_CFG_CHANGE 0x33UL
 	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_ID_LAST         ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_ID_VF_CFG_CHANGE
 	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_DATA2_VF_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_DATA2_VF_ID_SFT 0
 	u8	opaque_v;
 	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_V          0x1UL
 	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_OPAQUE_MASK 0xfeUL
@@ -910,6 +1367,38 @@ struct hwrm_async_event_cmpl_vf_cfg_change {
 	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_DATA1_DFLT_MAC_ADDR_CHANGE      0x4UL
 	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_DATA1_DFLT_VLAN_CHANGE          0x8UL
 	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_DATA1_TRUSTED_VF_CFG_CHANGE     0x10UL
+	#define ASYNC_EVENT_CMPL_VF_CFG_CHANGE_EVENT_DATA1_TF_OWNERSHIP_RELEASE      0x20UL
+};
+
+/* hwrm_async_event_cmpl_llfc_pfc_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_llfc_pfc_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_UNUSED1_MASK         0xffc0UL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_UNUSED1_SFT          6
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_ID_LLFC_PFC_CHANGE 0x34UL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_ID_LAST           ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_ID_LLFC_PFC_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_LLFC_PFC_MASK 0x3UL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_LLFC_PFC_SFT 0
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_LLFC_PFC_LLFC  0x1UL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_LLFC_PFC_PFC   0x2UL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_LLFC_PFC_LAST ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_LLFC_PFC_PFC
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_PORT_MASK    0x1cUL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_PORT_SFT     2
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_PORT_ID_MASK 0x1fffe0UL
+	#define ASYNC_EVENT_CMPL_LLFC_PFC_CHANGE_EVENT_DATA1_PORT_ID_SFT  5
 };
 
 /* hwrm_async_event_cmpl_default_vnic_change (size:128b/16B) */
@@ -1011,6 +1500,119 @@ struct hwrm_async_event_cmpl_eem_cache_flush_done {
 	#define ASYNC_EVENT_CMPL_EEM_CACHE_FLUSH_DONE_EVENT_DATA1_FID_SFT 0
 };
 
+/* hwrm_async_event_cmpl_tcp_flag_action_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_tcp_flag_action_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_EVENT_ID_TCP_FLAG_ACTION_CHANGE 0x3aUL
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_EVENT_ID_LAST                  ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_EVENT_ID_TCP_FLAG_ACTION_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_TCP_FLAG_ACTION_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+};
+
+/* hwrm_async_event_cmpl_eem_flow_active (size:128b/16B) */
+struct hwrm_async_event_cmpl_eem_flow_active {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_TYPE_LAST             ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_ID_EEM_FLOW_ACTIVE 0x3bUL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_ID_LAST           ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_ID_EEM_FLOW_ACTIVE
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA2_GLOBAL_ID_2_MASK   0x3fffffffUL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA2_GLOBAL_ID_2_SFT    0
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA2_FLOW_DIRECTION     0x40000000UL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA2_FLOW_DIRECTION_RX    (0x0UL << 30)
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA2_FLOW_DIRECTION_TX    (0x1UL << 30)
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA2_FLOW_DIRECTION_LAST ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA2_FLOW_DIRECTION_TX
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_GLOBAL_ID_1_MASK   0x3fffffffUL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_GLOBAL_ID_1_SFT    0
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_FLOW_DIRECTION     0x40000000UL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_FLOW_DIRECTION_RX    (0x0UL << 30)
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_FLOW_DIRECTION_TX    (0x1UL << 30)
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_FLOW_DIRECTION_LAST ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_FLOW_DIRECTION_TX
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_MODE               0x80000000UL
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_MODE_0               (0x0UL << 31)
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_MODE_1               (0x1UL << 31)
+	#define ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_MODE_LAST           ASYNC_EVENT_CMPL_EEM_FLOW_ACTIVE_EVENT_DATA1_MODE_1
+};
+
+/* hwrm_async_event_cmpl_eem_cfg_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_eem_cfg_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_EVENT_ID_EEM_CFG_CHANGE 0x3cUL
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_EVENT_ID_LAST          ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_EVENT_ID_EEM_CFG_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_EVENT_DATA1_EEM_TX_ENABLE     0x1UL
+	#define ASYNC_EVENT_CMPL_EEM_CFG_CHANGE_EVENT_DATA1_EEM_RX_ENABLE     0x2UL
+};
+
+/* hwrm_async_event_cmpl_quiesce_done (size:128b/16B) */
+struct hwrm_async_event_cmpl_quiesce_done {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_TYPE_LAST             ASYNC_EVENT_CMPL_QUIESCE_DONE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_ID_QUIESCE_DONE 0x3fUL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_ID_LAST        ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_ID_QUIESCE_DONE
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_QUIESCE_STATUS_MASK                0xffUL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_QUIESCE_STATUS_SFT                 0
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_QUIESCE_STATUS_SUCCESS               0x0UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_QUIESCE_STATUS_TIMEOUT               0x1UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_QUIESCE_STATUS_ERROR                 0x2UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_QUIESCE_STATUS_LAST                 ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_QUIESCE_STATUS_ERROR
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_OPAQUE_MASK                        0xff00UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_OPAQUE_SFT                         8
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_IDLE_STATE_FLAGS_MASK              0xff0000UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_IDLE_STATE_FLAGS_SFT               16
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_IDLE_STATE_FLAGS_INCOMPLETE_NQ      0x10000UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_IDLE_STATE_FLAGS_IDLE_STATUS_1      0x20000UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_IDLE_STATE_FLAGS_IDLE_STATUS_2      0x40000UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA2_IDLE_STATE_FLAGS_IDLE_STATUS_3      0x80000UL
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_QUIESCE_DONE_EVENT_DATA1_TIMESTAMP     0x1UL
+};
+
 /* hwrm_async_event_cmpl_deferred_response (size:128b/16B) */
 struct hwrm_async_event_cmpl_deferred_response {
 	__le16	type;
@@ -1031,6 +1633,691 @@ struct hwrm_async_event_cmpl_deferred_response {
 	u8	timestamp_lo;
 	__le16	timestamp_hi;
 	__le32	event_data1;
+};
+
+/* hwrm_async_event_cmpl_pfc_watchdog_cfg_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_pfc_watchdog_cfg_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_ID_PFC_WATCHDOG_CFG_CHANGE 0x41UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_ID_LAST                   ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_ID_PFC_WATCHDOG_CFG_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_MASK            0xffUL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_SFT             0
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS0      0x1UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS1      0x2UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS2      0x4UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS3      0x8UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS4      0x10UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS5      0x20UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS6      0x40UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PFC_WD_COS_PFC_WD_COS7      0x80UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PORT_ID_MASK               0xffff00UL
+	#define ASYNC_EVENT_CMPL_PFC_WATCHDOG_CFG_CHANGE_EVENT_DATA1_PORT_ID_SFT                8
+};
+
+/* hwrm_async_event_cmpl_echo_request (size:128b/16B) */
+struct hwrm_async_event_cmpl_echo_request {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_TYPE_LAST             ASYNC_EVENT_CMPL_ECHO_REQUEST_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_EVENT_ID_ECHO_REQUEST 0x42UL
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ECHO_REQUEST_EVENT_ID_ECHO_REQUEST
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ECHO_REQUEST_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+};
+
+/* hwrm_async_event_cmpl_phc_update (size:128b/16B) */
+struct hwrm_async_event_cmpl_phc_update {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_TYPE_LAST             ASYNC_EVENT_CMPL_PHC_UPDATE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_ID_PHC_UPDATE 0x43UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_ID_LAST      ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_ID_PHC_UPDATE
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA2_PHC_MASTER_FID_MASK 0xffffUL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA2_PHC_MASTER_FID_SFT 0
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA2_PHC_SEC_FID_MASK   0xffff0000UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA2_PHC_SEC_FID_SFT    16
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_MASK          0xfUL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_SFT           0
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_PHC_MASTER      0x1UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_PHC_SECONDARY   0x2UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_PHC_FAILOVER    0x3UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_PHC_RTC_UPDATE  0x4UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_LAST           ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_FLAGS_PHC_RTC_UPDATE
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_PHC_TIME_MSB_MASK   0xffff0UL
+	#define ASYNC_EVENT_CMPL_PHC_UPDATE_EVENT_DATA1_PHC_TIME_MSB_SFT    4
+};
+
+/* hwrm_async_event_cmpl_pps_timestamp (size:128b/16B) */
+struct hwrm_async_event_cmpl_pps_timestamp {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_TYPE_LAST             ASYNC_EVENT_CMPL_PPS_TIMESTAMP_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_ID_PPS_TIMESTAMP 0x44UL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_ID_LAST         ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_ID_PPS_TIMESTAMP
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_EVENT_TYPE              0x1UL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_EVENT_TYPE_INTERNAL       0x0UL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_EVENT_TYPE_EXTERNAL       0x1UL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_EVENT_TYPE_LAST          ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_EVENT_TYPE_EXTERNAL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_PIN_NUMBER_MASK         0xeUL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_PIN_NUMBER_SFT          1
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_PPS_TIMESTAMP_UPPER_MASK 0xffff0UL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA2_PPS_TIMESTAMP_UPPER_SFT 4
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_V          0x1UL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA1_PPS_TIMESTAMP_LOWER_MASK 0xffffffffUL
+	#define ASYNC_EVENT_CMPL_PPS_TIMESTAMP_EVENT_DATA1_PPS_TIMESTAMP_LOWER_SFT 0
+};
+
+/* hwrm_async_event_cmpl_error_report (size:128b/16B) */
+struct hwrm_async_event_cmpl_error_report {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_TYPE_LAST             ASYNC_EVENT_CMPL_ERROR_REPORT_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_EVENT_ID_ERROR_REPORT 0x45UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_EVENT_ID_ERROR_REPORT
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_EVENT_DATA1_ERROR_TYPE_MASK 0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_EVENT_DATA1_ERROR_TYPE_SFT 0
+};
+
+/* hwrm_async_event_cmpl_doorbell_pacing_threshold (size:128b/16B) */
+struct hwrm_async_event_cmpl_doorbell_pacing_threshold {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_TYPE_LAST             ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_EVENT_ID_DOORBELL_PACING_THRESHOLD 0x46UL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_EVENT_ID_LAST                     ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_EVENT_ID_DOORBELL_PACING_THRESHOLD
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_V          0x1UL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_THRESHOLD_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+};
+
+/* hwrm_async_event_cmpl_rss_change (size:128b/16B) */
+struct hwrm_async_event_cmpl_rss_change {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_TYPE_LAST             ASYNC_EVENT_CMPL_RSS_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_EVENT_ID_RSS_CHANGE 0x47UL
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_EVENT_ID_LAST      ASYNC_EVENT_CMPL_RSS_CHANGE_EVENT_ID_RSS_CHANGE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_RSS_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+};
+
+/* hwrm_async_event_cmpl_doorbell_pacing_nq_update (size:128b/16B) */
+struct hwrm_async_event_cmpl_doorbell_pacing_nq_update {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_TYPE_LAST             ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_EVENT_ID_DOORBELL_PACING_NQ_UPDATE 0x48UL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_EVENT_ID_LAST                     ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_EVENT_ID_DOORBELL_PACING_NQ_UPDATE
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_DOORBELL_PACING_NQ_UPDATE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+};
+
+/* hwrm_async_event_cmpl_hw_doorbell_recovery_read_error (size:128b/16B) */
+struct hwrm_async_event_cmpl_hw_doorbell_recovery_read_error {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_TYPE_LAST             ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_ID_HW_DOORBELL_RECOVERY_READ_ERROR 0x49UL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_ID_LAST                           ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_ID_HW_DOORBELL_RECOVERY_READ_ERROR
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_V          0x1UL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_DATA1_READ_ERROR_FLAGS_MASK        0xfUL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_DATA1_READ_ERROR_FLAGS_SFT         0
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_DATA1_READ_ERROR_FLAGS_SQ_ERR       0x1UL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_DATA1_READ_ERROR_FLAGS_RQ_ERR       0x2UL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_DATA1_READ_ERROR_FLAGS_SRQ_ERR      0x4UL
+	#define ASYNC_EVENT_CMPL_HW_DOORBELL_RECOVERY_READ_ERROR_EVENT_DATA1_READ_ERROR_FLAGS_CQ_ERR       0x8UL
+};
+
+/* hwrm_async_event_cmpl_ctx_error (size:128b/16B) */
+struct hwrm_async_event_cmpl_ctx_error {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_TYPE_LAST             ASYNC_EVENT_CMPL_CTX_ERROR_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_ID_CTX_ERROR 0x4aUL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_ID_LAST     ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_ID_CTX_ERROR
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_CTX_OP_CODE      0x1UL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_CTX_OP_CODE_ALLOC  0x0UL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_CTX_OP_CODE_FREE   0x1UL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_CTX_OP_CODE_LAST  ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_CTX_OP_CODE_FREE
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_NUM_CTXS_MASK    0xfffeUL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_NUM_CTXS_SFT     1
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_FID_MASK         0xffff0000UL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA2_FID_SFT          16
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_V          0x1UL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA1_START_XID_MASK 0xffffffffUL
+	#define ASYNC_EVENT_CMPL_CTX_ERROR_EVENT_DATA1_START_XID_SFT 0
+};
+
+/* hwrm_async_event_udcc_session_change (size:128b/16B) */
+struct hwrm_async_event_udcc_session_change {
+	__le16	type;
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_TYPE_SFT             0
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_TYPE_LAST             ASYNC_EVENT_UDCC_SESSION_CHANGE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_ID_UDCC_SESSION_CHANGE 0x4bUL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_ID_LAST               ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_ID_UDCC_SESSION_CHANGE
+	__le32	event_data2;
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA2_SESSION_ID_OP_CODE_MASK   0xffUL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA2_SESSION_ID_OP_CODE_SFT    0
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA2_SESSION_ID_OP_CODE_CREATED  0x0UL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA2_SESSION_ID_OP_CODE_FREED    0x1UL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA2_SESSION_ID_OP_CODE_LAST    ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA2_SESSION_ID_OP_CODE_FREED
+	u8	opaque_v;
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_V          0x1UL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA1_UDCC_SESSION_ID_MASK 0xffffUL
+	#define ASYNC_EVENT_UDCC_SESSION_CHANGE_EVENT_DATA1_UDCC_SESSION_ID_SFT 0
+};
+
+/* hwrm_async_event_cmpl_fw_trace_msg (size:128b/16B) */
+struct hwrm_async_event_cmpl_fw_trace_msg {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TYPE_LAST             ASYNC_EVENT_CMPL_FW_TRACE_MSG_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_ID_FW_TRACE_MSG 0xfeUL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_ID_LAST        ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_ID_FW_TRACE_MSG
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE0_MASK 0xffUL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE0_SFT 0
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE1_MASK 0xff00UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE1_SFT 8
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE2_MASK 0xff0000UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE2_SFT 16
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE3_MASK 0xff000000UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA2_BYTE3_SFT 24
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_V          0x1UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_STRING            0x1UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_STRING_COMPLETE     0x0UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_STRING_PARTIAL      0x1UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_STRING_LAST        ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_STRING_PARTIAL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_FIRMWARE          0x2UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_FIRMWARE_PRIMARY    (0x0UL << 1)
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_FIRMWARE_SECONDARY  (0x1UL << 1)
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_FIRMWARE_LAST      ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_LO_FIRMWARE_SECONDARY
+	__le16	timestamp_hi;
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_HI_BYTE4_MASK 0xffUL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_HI_BYTE4_SFT 0
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_HI_BYTE5_MASK 0xff00UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_TIMESTAMP_HI_BYTE5_SFT 8
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE6_MASK 0xffUL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE6_SFT 0
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE7_MASK 0xff00UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE7_SFT 8
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE8_MASK 0xff0000UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE8_SFT 16
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE9_MASK 0xff000000UL
+	#define ASYNC_EVENT_CMPL_FW_TRACE_MSG_EVENT_DATA1_BYTE9_SFT 24
+};
+
+/* hwrm_async_event_cmpl_hwrm_error (size:128b/16B) */
+struct hwrm_async_event_cmpl_hwrm_error {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_TYPE_LAST             ASYNC_EVENT_CMPL_HWRM_ERROR_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_ID_HWRM_ERROR 0xffUL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_ID_LAST      ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_ID_HWRM_ERROR
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA2_SEVERITY_MASK    0xffUL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA2_SEVERITY_SFT     0
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA2_SEVERITY_WARNING   0x0UL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA2_SEVERITY_NONFATAL  0x1UL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA2_SEVERITY_FATAL     0x2UL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA2_SEVERITY_LAST     ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA2_SEVERITY_FATAL
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_V          0x1UL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_HWRM_ERROR_EVENT_DATA1_TIMESTAMP     0x1UL
+};
+
+/* hwrm_async_event_cmpl_error_report_base (size:128b/16B) */
+struct hwrm_async_event_cmpl_error_report_base {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_TYPE_LAST             ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_ID_ERROR_REPORT 0x45UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_ID_ERROR_REPORT
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_MASK                   0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_SFT                    0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_RESERVED                 0x0UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_PAUSE_STORM              0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_INVALID_SIGNAL           0x2UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_NVM                      0x3UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_DOORBELL_DROP_THRESHOLD  0x4UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_THERMAL_THRESHOLD        0x5UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_LAST                    ASYNC_EVENT_CMPL_ERROR_REPORT_BASE_EVENT_DATA1_ERROR_TYPE_THERMAL_THRESHOLD
+};
+
+/* hwrm_async_event_cmpl_error_report_pause_storm (size:128b/16B) */
+struct hwrm_async_event_cmpl_error_report_pause_storm {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_TYPE_LAST             ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_ID_ERROR_REPORT 0x45UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_ID_ERROR_REPORT
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_DATA1_ERROR_TYPE_MASK       0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_DATA1_ERROR_TYPE_SFT        0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_DATA1_ERROR_TYPE_PAUSE_STORM  0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_DATA1_ERROR_TYPE_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_PAUSE_STORM_EVENT_DATA1_ERROR_TYPE_PAUSE_STORM
+};
+
+/* hwrm_async_event_cmpl_error_report_invalid_signal (size:128b/16B) */
+struct hwrm_async_event_cmpl_error_report_invalid_signal {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_TYPE_LAST             ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_ID_ERROR_REPORT 0x45UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_ID_ERROR_REPORT
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_DATA2_PIN_ID_MASK 0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_DATA2_PIN_ID_SFT 0
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_DATA1_ERROR_TYPE_MASK          0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_DATA1_ERROR_TYPE_SFT           0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_DATA1_ERROR_TYPE_INVALID_SIGNAL  0x2UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_DATA1_ERROR_TYPE_LAST           ASYNC_EVENT_CMPL_ERROR_REPORT_INVALID_SIGNAL_EVENT_DATA1_ERROR_TYPE_INVALID_SIGNAL
+};
+
+/* hwrm_async_event_cmpl_error_report_nvm (size:128b/16B) */
+struct hwrm_async_event_cmpl_error_report_nvm {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_TYPE_LAST             ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_ID_ERROR_REPORT 0x45UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_ID_ERROR_REPORT
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA2_ERR_ADDR_MASK 0xffffffffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA2_ERR_ADDR_SFT 0
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_ERROR_TYPE_MASK     0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_ERROR_TYPE_SFT      0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_ERROR_TYPE_NVM_ERROR  0x3UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_ERROR_TYPE_LAST      ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_ERROR_TYPE_NVM_ERROR
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_NVM_ERR_TYPE_MASK   0xff00UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_NVM_ERR_TYPE_SFT    8
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_NVM_ERR_TYPE_WRITE    (0x1UL << 8)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_NVM_ERR_TYPE_ERASE    (0x2UL << 8)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_NVM_ERR_TYPE_LAST    ASYNC_EVENT_CMPL_ERROR_REPORT_NVM_EVENT_DATA1_NVM_ERR_TYPE_ERASE
+};
+
+/* hwrm_async_event_cmpl_error_report_doorbell_drop_threshold (size:128b/16B) */
+struct hwrm_async_event_cmpl_error_report_doorbell_drop_threshold {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_TYPE_LAST             ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_ID_ERROR_REPORT 0x45UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_ID_ERROR_REPORT
+	__le32	event_data2;
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_DATA1_ERROR_TYPE_MASK                   0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_DATA1_ERROR_TYPE_SFT                    0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_DATA1_ERROR_TYPE_DOORBELL_DROP_THRESHOLD  0x4UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_DATA1_ERROR_TYPE_LAST                    ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_DATA1_ERROR_TYPE_DOORBELL_DROP_THRESHOLD
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_DATA1_EPOCH_MASK                        0xffffff00UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_DOORBELL_DROP_THRESHOLD_EVENT_DATA1_EPOCH_SFT                         8
+};
+
+/* hwrm_async_event_cmpl_error_report_thermal (size:128b/16B) */
+struct hwrm_async_event_cmpl_error_report_thermal {
+	__le16	type;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_TYPE_MASK            0x3fUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_TYPE_SFT             0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_TYPE_HWRM_ASYNC_EVENT  0x2eUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_TYPE_LAST             ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_TYPE_HWRM_ASYNC_EVENT
+	__le16	event_id;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_ID_ERROR_REPORT 0x45UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_ID_LAST        ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_ID_ERROR_REPORT
+	__le32	event_data2;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA2_CURRENT_TEMP_MASK  0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA2_CURRENT_TEMP_SFT   0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA2_THRESHOLD_TEMP_MASK 0xff00UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA2_THRESHOLD_TEMP_SFT 8
+	u8	opaque_v;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_V          0x1UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_OPAQUE_MASK 0xfeUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_OPAQUE_SFT 1
+	u8	timestamp_lo;
+	__le16	timestamp_hi;
+	__le32	event_data1;
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_ERROR_TYPE_MASK          0xffUL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_ERROR_TYPE_SFT           0
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_ERROR_TYPE_THERMAL_EVENT   0x5UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_ERROR_TYPE_LAST           ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_ERROR_TYPE_THERMAL_EVENT
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_MASK      0x700UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_SFT       8
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_WARN        (0x0UL << 8)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_CRITICAL    (0x1UL << 8)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_FATAL       (0x2UL << 8)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_SHUTDOWN    (0x3UL << 8)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_LAST       ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_THRESHOLD_TYPE_SHUTDOWN
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_TRANSITION_DIR           0x800UL
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_TRANSITION_DIR_DECREASING  (0x0UL << 11)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_TRANSITION_DIR_INCREASING  (0x1UL << 11)
+	#define ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_TRANSITION_DIR_LAST       ASYNC_EVENT_CMPL_ERROR_REPORT_THERMAL_EVENT_DATA1_TRANSITION_DIR_INCREASING
+};
+
+/* metadata_base_msg (size:64b/8B) */
+struct metadata_base_msg {
+	__le16	md_type_link;
+	#define METADATA_BASE_MSG_MD_TYPE_MASK      0x1fUL
+	#define METADATA_BASE_MSG_MD_TYPE_SFT       0
+	#define METADATA_BASE_MSG_MD_TYPE_NONE        0x0UL
+	#define METADATA_BASE_MSG_MD_TYPE_TLS_INSYNC  0x1UL
+	#define METADATA_BASE_MSG_MD_TYPE_TLS_RESYNC  0x2UL
+	#define METADATA_BASE_MSG_MD_TYPE_QUIC        0x3UL
+	#define METADATA_BASE_MSG_MD_TYPE_ILLEGAL     0x1fUL
+	#define METADATA_BASE_MSG_MD_TYPE_LAST       METADATA_BASE_MSG_MD_TYPE_ILLEGAL
+	#define METADATA_BASE_MSG_LINK_MASK         0x1e0UL
+	#define METADATA_BASE_MSG_LINK_SFT          5
+	__le16	unused0;
+	__le32	unused1;
+};
+
+/* tls_metadata_base_msg (size:64b/8B) */
+struct tls_metadata_base_msg {
+	__le32	md_type_link_flags_kid_lo;
+	#define TLS_METADATA_BASE_MSG_MD_TYPE_MASK                                 0x1fUL
+	#define TLS_METADATA_BASE_MSG_MD_TYPE_SFT                                  0
+	#define TLS_METADATA_BASE_MSG_MD_TYPE_TLS_INSYNC                             0x1UL
+	#define TLS_METADATA_BASE_MSG_MD_TYPE_TLS_RESYNC                             0x2UL
+	#define TLS_METADATA_BASE_MSG_MD_TYPE_LAST                                  TLS_METADATA_BASE_MSG_MD_TYPE_TLS_RESYNC
+	#define TLS_METADATA_BASE_MSG_LINK_MASK                                    0x1e0UL
+	#define TLS_METADATA_BASE_MSG_LINK_SFT                                     5
+	#define TLS_METADATA_BASE_MSG_FLAGS_MASK                                   0x1fffe00UL
+	#define TLS_METADATA_BASE_MSG_FLAGS_SFT                                    9
+	#define TLS_METADATA_BASE_MSG_FLAGS_DECRYPTED                               0x200UL
+	#define TLS_METADATA_BASE_MSG_FLAGS_GHASH_MASK                              0xc00UL
+	#define TLS_METADATA_BASE_MSG_FLAGS_GHASH_SFT                               10
+	#define TLS_METADATA_BASE_MSG_FLAGS_GHASH_NOT_VALID                           (0x0UL << 10)
+	#define TLS_METADATA_BASE_MSG_FLAGS_GHASH_CUR_REC                             (0x1UL << 10)
+	#define TLS_METADATA_BASE_MSG_FLAGS_GHASH_PRIOR_REC                           (0x2UL << 10)
+	#define TLS_METADATA_BASE_MSG_FLAGS_GHASH_LAST                               TLS_METADATA_BASE_MSG_FLAGS_GHASH_PRIOR_REC
+	#define TLS_METADATA_BASE_MSG_FLAGS_TAG_AUTH_STATUS_MASK                    0x3000UL
+	#define TLS_METADATA_BASE_MSG_FLAGS_TAG_AUTH_STATUS_SFT                     12
+	#define TLS_METADATA_BASE_MSG_FLAGS_TAG_AUTH_STATUS_NOT_CHECKED               (0x0UL << 12)
+	#define TLS_METADATA_BASE_MSG_FLAGS_TAG_AUTH_STATUS_SUCCESS                   (0x1UL << 12)
+	#define TLS_METADATA_BASE_MSG_FLAGS_TAG_AUTH_STATUS_FAILURE                   (0x2UL << 12)
+	#define TLS_METADATA_BASE_MSG_FLAGS_TAG_AUTH_STATUS_LAST                     TLS_METADATA_BASE_MSG_FLAGS_TAG_AUTH_STATUS_FAILURE
+	#define TLS_METADATA_BASE_MSG_FLAGS_HEADER_FLDS_VALID                       0x4000UL
+	#define TLS_METADATA_BASE_MSG_FLAGS_CTX_LOAD_ERR                            0x8000UL
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_MASK                0x70000UL
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_SFT                 16
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_IN_ORDER              (0x0UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_OUT_OF_ORDER          (0x1UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_HEADER_SEARCH         (0x2UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC                (0x3UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_WAIT           (0x4UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_WAIT_PARTIAL   (0x5UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS        (0x6UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS_WAIT   (0x7UL << 16)
+	#define TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_LAST                 TLS_METADATA_BASE_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS_WAIT
+	#define TLS_METADATA_BASE_MSG_KID_LO_MASK                                  0xfe000000UL
+	#define TLS_METADATA_BASE_MSG_KID_LO_SFT                                   25
+	__le16	kid_hi;
+	#define TLS_METADATA_BASE_MSG_KID_HI_MASK 0x1fffUL
+	#define TLS_METADATA_BASE_MSG_KID_HI_SFT 0
+	__le16	unused0;
+};
+
+/* tls_metadata_insync_msg (size:192b/24B) */
+struct tls_metadata_insync_msg {
+	__le32	md_type_link_flags_kid_lo;
+	#define TLS_METADATA_INSYNC_MSG_MD_TYPE_MASK                                 0x1fUL
+	#define TLS_METADATA_INSYNC_MSG_MD_TYPE_SFT                                  0
+	#define TLS_METADATA_INSYNC_MSG_MD_TYPE_TLS_INSYNC                             0x1UL
+	#define TLS_METADATA_INSYNC_MSG_MD_TYPE_LAST                                  TLS_METADATA_INSYNC_MSG_MD_TYPE_TLS_INSYNC
+	#define TLS_METADATA_INSYNC_MSG_LINK_MASK                                    0x1e0UL
+	#define TLS_METADATA_INSYNC_MSG_LINK_SFT                                     5
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_MASK                                   0x1fffe00UL
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_SFT                                    9
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_DECRYPTED                               0x200UL
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_GHASH_MASK                              0xc00UL
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_GHASH_SFT                               10
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_GHASH_NOT_VALID                           (0x0UL << 10)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_GHASH_CUR_REC                             (0x1UL << 10)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_GHASH_PRIOR_REC                           (0x2UL << 10)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_GHASH_LAST                               TLS_METADATA_INSYNC_MSG_FLAGS_GHASH_PRIOR_REC
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_TAG_AUTH_STATUS_MASK                    0x3000UL
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_TAG_AUTH_STATUS_SFT                     12
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_TAG_AUTH_STATUS_NOT_CHECKED               (0x0UL << 12)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_TAG_AUTH_STATUS_SUCCESS                   (0x1UL << 12)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_TAG_AUTH_STATUS_FAILURE                   (0x2UL << 12)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_TAG_AUTH_STATUS_LAST                     TLS_METADATA_INSYNC_MSG_FLAGS_TAG_AUTH_STATUS_FAILURE
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_HEADER_FLDS_VALID                       0x4000UL
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_CTX_LOAD_ERR                            0x8000UL
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_MASK                0x70000UL
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_SFT                 16
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_IN_ORDER              (0x0UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_OUT_OF_ORDER          (0x1UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_HEADER_SEARCH         (0x2UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC                (0x3UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_WAIT           (0x4UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_WAIT_PARTIAL   (0x5UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS        (0x6UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS_WAIT   (0x7UL << 16)
+	#define TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_LAST                 TLS_METADATA_INSYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS_WAIT
+	#define TLS_METADATA_INSYNC_MSG_KID_LO_MASK                                  0xfe000000UL
+	#define TLS_METADATA_INSYNC_MSG_KID_LO_SFT                                   25
+	__le16	kid_hi;
+	#define TLS_METADATA_INSYNC_MSG_KID_HI_MASK 0x1fffUL
+	#define TLS_METADATA_INSYNC_MSG_KID_HI_SFT 0
+	__le16	tls_header_offset;
+	__le64	record_seq_num;
+	u8	partial_ghash[8];
+};
+
+/* tls_metadata_resync_msg (size:256b/32B) */
+struct tls_metadata_resync_msg {
+	__le32	md_type_link_flags_kid_lo;
+	#define TLS_METADATA_RESYNC_MSG_MD_TYPE_MASK                                 0x1fUL
+	#define TLS_METADATA_RESYNC_MSG_MD_TYPE_SFT                                  0
+	#define TLS_METADATA_RESYNC_MSG_MD_TYPE_TLS_RESYNC                             0x2UL
+	#define TLS_METADATA_RESYNC_MSG_MD_TYPE_LAST                                  TLS_METADATA_RESYNC_MSG_MD_TYPE_TLS_RESYNC
+	#define TLS_METADATA_RESYNC_MSG_LINK_MASK                                    0x1e0UL
+	#define TLS_METADATA_RESYNC_MSG_LINK_SFT                                     5
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_MASK                                   0x1fffe00UL
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_SFT                                    9
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_DECRYPTED                               0x200UL
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_GHASH_MASK                              0xc00UL
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_GHASH_SFT                               10
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_GHASH_NOT_VALID                           (0x0UL << 10)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_GHASH_LAST                               TLS_METADATA_RESYNC_MSG_FLAGS_GHASH_NOT_VALID
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_TAG_AUTH_STATUS_MASK                    0x3000UL
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_TAG_AUTH_STATUS_SFT                     12
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_TAG_AUTH_STATUS_NOT_CHECKED               (0x0UL << 12)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_TAG_AUTH_STATUS_LAST                     TLS_METADATA_RESYNC_MSG_FLAGS_TAG_AUTH_STATUS_NOT_CHECKED
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_HEADER_FLDS_VALID                       0x4000UL
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_CTX_LOAD_ERR                            0x8000UL
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_MASK                0x70000UL
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_SFT                 16
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_IN_ORDER              (0x0UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_OUT_OF_ORDER          (0x1UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_HEADER_SEARCH         (0x2UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC                (0x3UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_WAIT           (0x4UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_WAIT_PARTIAL   (0x5UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS        (0x6UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS_WAIT   (0x7UL << 16)
+	#define TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_LAST                 TLS_METADATA_RESYNC_MSG_FLAGS_PKT_OPERATION_STATE_RESYNC_SUCCESS_WAIT
+	#define TLS_METADATA_RESYNC_MSG_KID_LO_MASK                                  0xfe000000UL
+	#define TLS_METADATA_RESYNC_MSG_KID_LO_SFT                                   25
+	__le16	kid_hi;
+	#define TLS_METADATA_RESYNC_MSG_KID_HI_MASK 0x1fffUL
+	#define TLS_METADATA_RESYNC_MSG_KID_HI_SFT 0
+	__le16	metadata_0;
+	__le32	resync_record_tcp_seq_num;
+	__le32	unused0;
+	__le64	metadata_2;
+	__le64	metadata_3;
 };
 
 /* hwrm_func_reset_input (size:192b/24B) */
@@ -1133,7 +2420,7 @@ struct hwrm_func_vf_free_output {
 	u8	valid;
 };
 
-/* hwrm_func_vf_cfg_input (size:448b/56B) */
+/* hwrm_func_vf_cfg_input (size:576b/72B) */
 struct hwrm_func_vf_cfg_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -1141,18 +2428,22 @@ struct hwrm_func_vf_cfg_input {
 	__le16	target_id;
 	__le64	resp_addr;
 	__le32	enables;
-	#define FUNC_VF_CFG_REQ_ENABLES_MTU                  0x1UL
-	#define FUNC_VF_CFG_REQ_ENABLES_GUEST_VLAN           0x2UL
-	#define FUNC_VF_CFG_REQ_ENABLES_ASYNC_EVENT_CR       0x4UL
-	#define FUNC_VF_CFG_REQ_ENABLES_DFLT_MAC_ADDR        0x8UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_RSSCOS_CTXS      0x10UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_CMPL_RINGS       0x20UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_TX_RINGS         0x40UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_RX_RINGS         0x80UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_L2_CTXS          0x100UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_VNICS            0x200UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_STAT_CTXS        0x400UL
-	#define FUNC_VF_CFG_REQ_ENABLES_NUM_HW_RING_GRPS     0x800UL
+	#define FUNC_VF_CFG_REQ_ENABLES_MTU                      0x1UL
+	#define FUNC_VF_CFG_REQ_ENABLES_GUEST_VLAN               0x2UL
+	#define FUNC_VF_CFG_REQ_ENABLES_ASYNC_EVENT_CR           0x4UL
+	#define FUNC_VF_CFG_REQ_ENABLES_DFLT_MAC_ADDR            0x8UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_RSSCOS_CTXS          0x10UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_CMPL_RINGS           0x20UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_TX_RINGS             0x40UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_RX_RINGS             0x80UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_L2_CTXS              0x100UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_VNICS                0x200UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_STAT_CTXS            0x400UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_HW_RING_GRPS         0x800UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_KTLS_TX_KEY_CTXS     0x1000UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_KTLS_RX_KEY_CTXS     0x2000UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_QUIC_TX_KEY_CTXS     0x4000UL
+	#define FUNC_VF_CFG_REQ_ENABLES_NUM_QUIC_RX_KEY_CTXS     0x8000UL
 	__le16	mtu;
 	__le16	guest_vlan;
 	__le16	async_event_cr;
@@ -1176,7 +2467,12 @@ struct hwrm_func_vf_cfg_input {
 	__le16	num_vnics;
 	__le16	num_stat_ctxs;
 	__le16	num_hw_ring_grps;
-	u8	unused_0[4];
+	__le32	num_ktls_tx_key_ctxs;
+	__le32	num_ktls_rx_key_ctxs;
+	__le16	num_msix;
+	u8	unused[2];
+	__le32	num_quic_tx_key_ctxs;
+	__le32	num_quic_rx_key_ctxs;
 };
 
 /* hwrm_func_vf_cfg_output (size:128b/16B) */
@@ -1200,7 +2496,7 @@ struct hwrm_func_qcaps_input {
 	u8	unused_0[6];
 };
 
-/* hwrm_func_qcaps_output (size:704b/88B) */
+/* hwrm_func_qcaps_output (size:1088b/136B) */
 struct hwrm_func_qcaps_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -1261,16 +2557,40 @@ struct hwrm_func_qcaps_output {
 	__le32	max_flow_id;
 	__le32	max_hw_ring_grps;
 	__le16	max_sp_tx_rings;
-	u8	unused_0[2];
+	__le16	max_msix_vfs;
 	__le32	flags_ext;
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_ECN_MARK_SUPPORTED                     0x1UL
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_ECN_STATS_SUPPORTED                    0x2UL
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_EXT_HW_STATS_SUPPORTED                 0x4UL
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_HOT_RESET_IF_SUPPORT                   0x8UL
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_PROXY_MODE_SUPPORT                     0x10UL
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_TX_PROXY_SRC_INTF_OVERRIDE_SUPPORT     0x20UL
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_SCHQ_SUPPORTED                         0x40UL
-	#define FUNC_QCAPS_RESP_FLAGS_EXT_PPP_PUSH_MODE_SUPPORTED                0x80UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_ECN_MARK_SUPPORTED                          0x1UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_ECN_STATS_SUPPORTED                         0x2UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_EXT_HW_STATS_SUPPORTED                      0x4UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_HOT_RESET_IF_SUPPORT                        0x8UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_PROXY_MODE_SUPPORT                          0x10UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_TX_PROXY_SRC_INTF_OVERRIDE_SUPPORT          0x20UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_SCHQ_SUPPORTED                              0x40UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_PPP_PUSH_MODE_SUPPORTED                     0x80UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_EVB_MODE_CFG_NOT_SUPPORTED                  0x100UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_SOC_SPD_SUPPORTED                           0x200UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_FW_LIVEPATCH_SUPPORTED                      0x400UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_FAST_RESET_CAPABLE                          0x800UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_TX_METADATA_CFG_CAPABLE                     0x1000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_NVM_OPTION_ACTION_SUPPORTED                 0x2000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_BD_METADATA_SUPPORTED                       0x4000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_ECHO_REQUEST_SUPPORTED                      0x8000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_NPAR_1_2_SUPPORTED                          0x10000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_PTP_PTM_SUPPORTED                           0x20000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_PTP_PPS_SUPPORTED                           0x40000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_VF_CFG_ASYNC_FOR_PF_SUPPORTED               0x80000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_PARTITION_BW_SUPPORTED                      0x100000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_DFLT_VLAN_TPID_PCP_SUPPORTED                0x200000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_KTLS_SUPPORTED                              0x400000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_EP_RATE_CONTROL                             0x800000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_MIN_BW_SUPPORTED                            0x1000000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_TX_COAL_CMPL_CAP                            0x2000000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_BS_V2_SUPPORTED                             0x4000000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_BS_V2_REQUIRED                              0x8000000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_PTP_64BIT_RTC_SUPPORTED                     0x10000000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_DBR_PACING_SUPPORTED                        0x20000000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_HW_DBR_DROP_RECOV_SUPPORTED                 0x40000000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT_DISABLE_CQ_OVERFLOW_DETECTION_SUPPORTED     0x80000000UL
 	u8	max_schqs;
 	u8	mpc_chnls_cap;
 	#define FUNC_QCAPS_RESP_MPC_CHNLS_CAP_TCE         0x1UL
@@ -1278,7 +2598,55 @@ struct hwrm_func_qcaps_output {
 	#define FUNC_QCAPS_RESP_MPC_CHNLS_CAP_TE_CFA      0x4UL
 	#define FUNC_QCAPS_RESP_MPC_CHNLS_CAP_RE_CFA      0x8UL
 	#define FUNC_QCAPS_RESP_MPC_CHNLS_CAP_PRIMATE     0x10UL
-	u8	unused_1;
+	__le16	max_key_ctxs_alloc;
+	__le32	flags_ext2;
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_RX_ALL_PKTS_TIMESTAMPS_SUPPORTED      0x1UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_QUIC_SUPPORTED                        0x2UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_KDNET_SUPPORTED                       0x4UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_DBR_PACING_EXT_SUPPORTED              0x8UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_SW_DBR_DROP_RECOVERY_SUPPORTED        0x10UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_GENERIC_STATS_SUPPORTED               0x20UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_UDP_GSO_SUPPORTED                     0x40UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_SYNCE_SUPPORTED                       0x80UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_DBR_PACING_V0_SUPPORTED               0x100UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_TX_PKT_TS_CMPL_SUPPORTED              0x200UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_HW_LAG_SUPPORTED                      0x400UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_ON_CHIP_CTX_SUPPORTED                 0x800UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_STEERING_TAG_SUPPORTED                0x1000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_ENHANCED_VF_SCALE_SUPPORTED           0x2000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_KEY_XID_PARTITION_SUPPORTED           0x4000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_CONCURRENT_KTLS_QUIC_SUPPORTED        0x8000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_SCHQ_CROSS_TC_CAP_SUPPORTED           0x10000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_SCHQ_PER_TC_CAP_SUPPORTED             0x20000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_SCHQ_PER_TC_RESERVATION_SUPPORTED     0x40000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_DB_ERROR_STATS_SUPPORTED              0x80000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_ROCE_VF_RESOURCE_MGMT_SUPPORTED       0x100000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_UDCC_SUPPORTED                        0x200000UL
+	#define FUNC_QCAPS_RESP_FLAGS_EXT2_TIMED_TX_SO_TXTIME_SUPPORTED          0x400000UL
+	__le16	tunnel_disable_flag;
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_VXLAN      0x1UL
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_NGE        0x2UL
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_NVGRE      0x4UL
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_L2GRE      0x8UL
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_GRE        0x10UL
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_IPINIP     0x20UL
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_MPLS       0x40UL
+	#define FUNC_QCAPS_RESP_TUNNEL_DISABLE_FLAG_DISABLE_PPPOE      0x80UL
+	__le16	xid_partition_cap;
+	#define FUNC_QCAPS_RESP_XID_PARTITION_CAP_KTLS_TKC     0x1UL
+	#define FUNC_QCAPS_RESP_XID_PARTITION_CAP_KTLS_RKC     0x2UL
+	#define FUNC_QCAPS_RESP_XID_PARTITION_CAP_QUIC_TKC     0x4UL
+	#define FUNC_QCAPS_RESP_XID_PARTITION_CAP_QUIC_RKC     0x8UL
+	u8	device_serial_number[8];
+	__le16	ctxs_per_partition;
+	u8	unused_2[2];
+	__le32	roce_vf_max_av;
+	__le32	roce_vf_max_cq;
+	__le32	roce_vf_max_mrw;
+	__le32	roce_vf_max_qp;
+	__le32	roce_vf_max_srq;
+	__le32	roce_vf_max_gid;
+	u8	unused_3[3];
 	u8	valid;
 };
 
@@ -1293,7 +2661,7 @@ struct hwrm_func_qcfg_input {
 	u8	unused_0[6];
 };
 
-/* hwrm_func_qcfg_output (size:768b/96B) */
+/* hwrm_func_qcfg_output (size:1280b/160B) */
 struct hwrm_func_qcfg_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -1315,6 +2683,9 @@ struct hwrm_func_qcfg_output {
 	#define FUNC_QCFG_RESP_FLAGS_HOT_RESET_ALLOWED            0x200UL
 	#define FUNC_QCFG_RESP_FLAGS_PPP_PUSH_MODE_ENABLED        0x400UL
 	#define FUNC_QCFG_RESP_FLAGS_RING_MONITOR_ENABLED         0x800UL
+	#define FUNC_QCFG_RESP_FLAGS_FAST_RESET_ALLOWED           0x1000UL
+	#define FUNC_QCFG_RESP_FLAGS_MULTI_ROOT                   0x2000UL
+	#define FUNC_QCFG_RESP_FLAGS_ENABLE_RDMA_SRIOV            0x4000UL
 	u8	mac_address[6];
 	__le16	pci_id;
 	__le16	alloc_rsscos_ctx;
@@ -1323,7 +2694,7 @@ struct hwrm_func_qcfg_output {
 	__le16	alloc_rx_rings;
 	__le16	alloc_l2_ctx;
 	__le16	alloc_vnics;
-	__le16	mtu;
+	__le16	admin_mtu;
 	__le16	mru;
 	__le16	stat_ctx_id;
 	u8	port_partition_type;
@@ -1332,6 +2703,7 @@ struct hwrm_func_qcfg_output {
 	#define FUNC_QCFG_RESP_PORT_PARTITION_TYPE_NPAR1_0 0x2UL
 	#define FUNC_QCFG_RESP_PORT_PARTITION_TYPE_NPAR1_5 0x3UL
 	#define FUNC_QCFG_RESP_PORT_PARTITION_TYPE_NPAR2_0 0x4UL
+	#define FUNC_QCFG_RESP_PORT_PARTITION_TYPE_NPAR1_2 0x5UL
 	#define FUNC_QCFG_RESP_PORT_PARTITION_TYPE_UNKNOWN 0xffUL
 	#define FUNC_QCFG_RESP_PORT_PARTITION_TYPE_LAST   FUNC_QCFG_RESP_PORT_PARTITION_TYPE_UNKNOWN
 	u8	port_pf_cnt;
@@ -1412,11 +2784,72 @@ struct hwrm_func_qcfg_output {
 	#define FUNC_QCFG_RESP_MPC_CHNLS_TE_CFA_ENABLED      0x4UL
 	#define FUNC_QCFG_RESP_MPC_CHNLS_RE_CFA_ENABLED      0x8UL
 	#define FUNC_QCFG_RESP_MPC_CHNLS_PRIMATE_ENABLED     0x10UL
-	u8	unused_2[6];
+	u8	db_page_size;
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_4KB   0x0UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_8KB   0x1UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_16KB  0x2UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_32KB  0x3UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_64KB  0x4UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_128KB 0x5UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_256KB 0x6UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_512KB 0x7UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_1MB   0x8UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_2MB   0x9UL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_4MB   0xaUL
+	#define FUNC_QCFG_RESP_DB_PAGE_SIZE_LAST FUNC_QCFG_RESP_DB_PAGE_SIZE_4MB
+	u8	unused_2[2];
+	__le32	partition_min_bw;
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_BW_VALUE_MASK             0xfffffffUL
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_BW_VALUE_SFT              0
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_SCALE                     0x10000000UL
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_SCALE_BITS                  (0x0UL << 28)
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_SCALE_BYTES                 (0x1UL << 28)
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_SCALE_LAST                 FUNC_QCFG_RESP_PARTITION_MIN_BW_SCALE_BYTES
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_BW_VALUE_UNIT_SFT         29
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define FUNC_QCFG_RESP_PARTITION_MIN_BW_BW_VALUE_UNIT_LAST         FUNC_QCFG_RESP_PARTITION_MIN_BW_BW_VALUE_UNIT_PERCENT1_100
+	__le32	partition_max_bw;
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_BW_VALUE_MASK             0xfffffffUL
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_BW_VALUE_SFT              0
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_SCALE                     0x10000000UL
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_SCALE_BITS                  (0x0UL << 28)
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_SCALE_BYTES                 (0x1UL << 28)
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_SCALE_LAST                 FUNC_QCFG_RESP_PARTITION_MAX_BW_SCALE_BYTES
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_BW_VALUE_UNIT_SFT         29
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define FUNC_QCFG_RESP_PARTITION_MAX_BW_BW_VALUE_UNIT_LAST         FUNC_QCFG_RESP_PARTITION_MAX_BW_BW_VALUE_UNIT_PERCENT1_100
+	__le16	host_mtu;
+	u8	unused_3[2];
+	u8	unused_4[2];
+	u8	port_kdnet_mode;
+	#define FUNC_QCFG_RESP_PORT_KDNET_MODE_DISABLED 0x0UL
+	#define FUNC_QCFG_RESP_PORT_KDNET_MODE_ENABLED  0x1UL
+	#define FUNC_QCFG_RESP_PORT_KDNET_MODE_LAST    FUNC_QCFG_RESP_PORT_KDNET_MODE_ENABLED
+	u8	kdnet_pcie_function;
+	__le16	port_kdnet_fid;
+	u8	unused_5[2];
+	__le32	num_ktls_tx_key_ctxs;
+	__le32	num_ktls_rx_key_ctxs;
+	u8	lag_id;
+	u8	parif;
+	u8	fw_lag_id;
+	u8	unused_6;
+	__le32	num_quic_tx_key_ctxs;
+	__le32	num_quic_rx_key_ctxs;
+	__le32	roce_max_av_per_vf;
+	__le32	roce_max_cq_per_vf;
+	__le32	roce_max_mrw_per_vf;
+	__le32	roce_max_qp_per_vf;
+	__le32	roce_max_srq_per_vf;
+	__le32	roce_max_gid_per_vf;
+	__le16	xid_partition_cfg;
+	u8	unused_7;
 	u8	valid;
 };
 
-/* hwrm_func_cfg_input (size:768b/96B) */
+/* hwrm_func_cfg_input (size:1280b/160B) */
 struct hwrm_func_cfg_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -1450,8 +2883,10 @@ struct hwrm_func_cfg_input {
 	#define FUNC_CFG_REQ_FLAGS_HOT_RESET_IF_EN_DIS            0x4000000UL
 	#define FUNC_CFG_REQ_FLAGS_PPP_PUSH_MODE_ENABLE           0x8000000UL
 	#define FUNC_CFG_REQ_FLAGS_PPP_PUSH_MODE_DISABLE          0x10000000UL
+	#define FUNC_CFG_REQ_FLAGS_BD_METADATA_ENABLE             0x20000000UL
+	#define FUNC_CFG_REQ_FLAGS_BD_METADATA_DISABLE            0x40000000UL
 	__le32	enables;
-	#define FUNC_CFG_REQ_ENABLES_MTU                      0x1UL
+	#define FUNC_CFG_REQ_ENABLES_ADMIN_MTU                0x1UL
 	#define FUNC_CFG_REQ_ENABLES_MRU                      0x2UL
 	#define FUNC_CFG_REQ_ENABLES_NUM_RSSCOS_CTXS          0x4UL
 	#define FUNC_CFG_REQ_ENABLES_NUM_CMPL_RINGS           0x8UL
@@ -1477,7 +2912,13 @@ struct hwrm_func_cfg_input {
 	#define FUNC_CFG_REQ_ENABLES_HOT_RESET_IF_SUPPORT     0x800000UL
 	#define FUNC_CFG_REQ_ENABLES_SCHQ_ID                  0x1000000UL
 	#define FUNC_CFG_REQ_ENABLES_MPC_CHNLS                0x2000000UL
-	__le16	mtu;
+	#define FUNC_CFG_REQ_ENABLES_PARTITION_MIN_BW         0x4000000UL
+	#define FUNC_CFG_REQ_ENABLES_PARTITION_MAX_BW         0x8000000UL
+	#define FUNC_CFG_REQ_ENABLES_TPID                     0x10000000UL
+	#define FUNC_CFG_REQ_ENABLES_HOST_MTU                 0x20000000UL
+	#define FUNC_CFG_REQ_ENABLES_KTLS_TX_KEY_CTXS         0x40000000UL
+	#define FUNC_CFG_REQ_ENABLES_KTLS_RX_KEY_CTXS         0x80000000UL
+	__le16	admin_mtu;
 	__le16	mru;
 	__le16	num_rsscos_ctxs;
 	__le16	num_cmpl_rings;
@@ -1562,7 +3003,79 @@ struct hwrm_func_cfg_input {
 	#define FUNC_CFG_REQ_MPC_CHNLS_RE_CFA_DISABLE      0x80UL
 	#define FUNC_CFG_REQ_MPC_CHNLS_PRIMATE_ENABLE      0x100UL
 	#define FUNC_CFG_REQ_MPC_CHNLS_PRIMATE_DISABLE     0x200UL
-	u8	unused_0[4];
+	__le32	partition_min_bw;
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_BW_VALUE_MASK             0xfffffffUL
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_BW_VALUE_SFT              0
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_SCALE                     0x10000000UL
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_SCALE_BITS                  (0x0UL << 28)
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_SCALE_BYTES                 (0x1UL << 28)
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_SCALE_LAST                 FUNC_CFG_REQ_PARTITION_MIN_BW_SCALE_BYTES
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_BW_VALUE_UNIT_SFT         29
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define FUNC_CFG_REQ_PARTITION_MIN_BW_BW_VALUE_UNIT_LAST         FUNC_CFG_REQ_PARTITION_MIN_BW_BW_VALUE_UNIT_PERCENT1_100
+	__le32	partition_max_bw;
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_BW_VALUE_MASK             0xfffffffUL
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_BW_VALUE_SFT              0
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_SCALE                     0x10000000UL
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_SCALE_BITS                  (0x0UL << 28)
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_SCALE_BYTES                 (0x1UL << 28)
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_SCALE_LAST                 FUNC_CFG_REQ_PARTITION_MAX_BW_SCALE_BYTES
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_BW_VALUE_UNIT_SFT         29
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define FUNC_CFG_REQ_PARTITION_MAX_BW_BW_VALUE_UNIT_LAST         FUNC_CFG_REQ_PARTITION_MAX_BW_BW_VALUE_UNIT_PERCENT1_100
+	__be16	tpid;
+	__le16	host_mtu;
+	__le32	flags2;
+	#define FUNC_CFG_REQ_FLAGS2_KTLS_KEY_CTX_ASSETS_TEST     0x1UL
+	#define FUNC_CFG_REQ_FLAGS2_QUIC_KEY_CTX_ASSETS_TEST     0x2UL
+	__le32	enables2;
+	#define FUNC_CFG_REQ_ENABLES2_KDNET                   0x1UL
+	#define FUNC_CFG_REQ_ENABLES2_DB_PAGE_SIZE            0x2UL
+	#define FUNC_CFG_REQ_ENABLES2_QUIC_TX_KEY_CTXS        0x4UL
+	#define FUNC_CFG_REQ_ENABLES2_QUIC_RX_KEY_CTXS        0x8UL
+	#define FUNC_CFG_REQ_ENABLES2_ROCE_MAX_AV_PER_VF      0x10UL
+	#define FUNC_CFG_REQ_ENABLES2_ROCE_MAX_CQ_PER_VF      0x20UL
+	#define FUNC_CFG_REQ_ENABLES2_ROCE_MAX_MRW_PER_VF     0x40UL
+	#define FUNC_CFG_REQ_ENABLES2_ROCE_MAX_QP_PER_VF      0x80UL
+	#define FUNC_CFG_REQ_ENABLES2_ROCE_MAX_SRQ_PER_VF     0x100UL
+	#define FUNC_CFG_REQ_ENABLES2_ROCE_MAX_GID_PER_VF     0x200UL
+	#define FUNC_CFG_REQ_ENABLES2_XID_PARTITION_CFG       0x400UL
+	u8	port_kdnet_mode;
+	#define FUNC_CFG_REQ_PORT_KDNET_MODE_DISABLED 0x0UL
+	#define FUNC_CFG_REQ_PORT_KDNET_MODE_ENABLED  0x1UL
+	#define FUNC_CFG_REQ_PORT_KDNET_MODE_LAST    FUNC_CFG_REQ_PORT_KDNET_MODE_ENABLED
+	u8	db_page_size;
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_4KB   0x0UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_8KB   0x1UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_16KB  0x2UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_32KB  0x3UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_64KB  0x4UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_128KB 0x5UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_256KB 0x6UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_512KB 0x7UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_1MB   0x8UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_2MB   0x9UL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_4MB   0xaUL
+	#define FUNC_CFG_REQ_DB_PAGE_SIZE_LAST FUNC_CFG_REQ_DB_PAGE_SIZE_4MB
+	u8	unused_1[2];
+	__le32	num_ktls_tx_key_ctxs;
+	__le32	num_ktls_rx_key_ctxs;
+	__le32	num_quic_tx_key_ctxs;
+	__le32	num_quic_rx_key_ctxs;
+	__le32	roce_max_av_per_vf;
+	__le32	roce_max_cq_per_vf;
+	__le32	roce_max_mrw_per_vf;
+	__le32	roce_max_qp_per_vf;
+	__le32	roce_max_srq_per_vf;
+	__le32	roce_max_gid_per_vf;
+	__le16	xid_partition_cfg;
+	#define FUNC_CFG_REQ_XID_PARTITION_CFG_KTLS_TKC     0x1UL
+	#define FUNC_CFG_REQ_XID_PARTITION_CFG_KTLS_RKC     0x2UL
+	#define FUNC_CFG_REQ_XID_PARTITION_CFG_QUIC_TKC     0x4UL
+	#define FUNC_CFG_REQ_XID_PARTITION_CFG_QUIC_RKC     0x8UL
+	__le16	unused_2;
 };
 
 /* hwrm_func_cfg_output (size:128b/16B) */
@@ -1575,6 +3088,18 @@ struct hwrm_func_cfg_output {
 	u8	valid;
 };
 
+/* hwrm_func_cfg_cmd_err (size:64b/8B) */
+struct hwrm_func_cfg_cmd_err {
+	u8	code;
+	#define FUNC_CFG_CMD_ERR_CODE_UNKNOWN                      0x0UL
+	#define FUNC_CFG_CMD_ERR_CODE_PARTITION_MIN_BW_RANGE       0x1UL
+	#define FUNC_CFG_CMD_ERR_CODE_PARTITION_MIN_MORE_THAN_MAX  0x2UL
+	#define FUNC_CFG_CMD_ERR_CODE_PARTITION_MIN_BW_UNSUPPORTED 0x3UL
+	#define FUNC_CFG_CMD_ERR_CODE_PARTITION_BW_PERCENT         0x4UL
+	#define FUNC_CFG_CMD_ERR_CODE_LAST                        FUNC_CFG_CMD_ERR_CODE_PARTITION_BW_PERCENT
+	u8	unused_0[7];
+};
+
 /* hwrm_func_qstats_input (size:192b/24B) */
 struct hwrm_func_qstats_input {
 	__le16	req_type;
@@ -1584,10 +3109,9 @@ struct hwrm_func_qstats_input {
 	__le64	resp_addr;
 	__le16	fid;
 	u8	flags;
-	#define FUNC_QSTATS_REQ_FLAGS_UNUSED       0x0UL
-	#define FUNC_QSTATS_REQ_FLAGS_ROCE_ONLY    0x1UL
-	#define FUNC_QSTATS_REQ_FLAGS_COUNTER_MASK 0x2UL
-	#define FUNC_QSTATS_REQ_FLAGS_LAST        FUNC_QSTATS_REQ_FLAGS_COUNTER_MASK
+	#define FUNC_QSTATS_REQ_FLAGS_ROCE_ONLY        0x1UL
+	#define FUNC_QSTATS_REQ_FLAGS_COUNTER_MASK     0x2UL
+	#define FUNC_QSTATS_REQ_FLAGS_L2_ONLY          0x4UL
 	u8	unused_0[5];
 };
 
@@ -1617,7 +3141,8 @@ struct hwrm_func_qstats_output {
 	__le64	rx_agg_bytes;
 	__le64	rx_agg_events;
 	__le64	rx_agg_aborts;
-	u8	unused_0[7];
+	u8	clear_seq;
+	u8	unused_0[6];
 	u8	valid;
 };
 
@@ -1630,10 +3155,8 @@ struct hwrm_func_qstats_ext_input {
 	__le64	resp_addr;
 	__le16	fid;
 	u8	flags;
-	#define FUNC_QSTATS_EXT_REQ_FLAGS_UNUSED       0x0UL
-	#define FUNC_QSTATS_EXT_REQ_FLAGS_ROCE_ONLY    0x1UL
-	#define FUNC_QSTATS_EXT_REQ_FLAGS_COUNTER_MASK 0x2UL
-	#define FUNC_QSTATS_EXT_REQ_FLAGS_LAST        FUNC_QSTATS_EXT_REQ_FLAGS_COUNTER_MASK
+	#define FUNC_QSTATS_EXT_REQ_FLAGS_ROCE_ONLY        0x1UL
+	#define FUNC_QSTATS_EXT_REQ_FLAGS_COUNTER_MASK     0x2UL
 	u8	unused_0[1];
 	__le32	enables;
 	#define FUNC_QSTATS_EXT_REQ_ENABLES_SCHQ_ID     0x1UL
@@ -1724,13 +3247,17 @@ struct hwrm_func_drv_rgtr_input {
 	__le16	target_id;
 	__le64	resp_addr;
 	__le32	flags;
-	#define FUNC_DRV_RGTR_REQ_FLAGS_FWD_ALL_MODE               0x1UL
-	#define FUNC_DRV_RGTR_REQ_FLAGS_FWD_NONE_MODE              0x2UL
-	#define FUNC_DRV_RGTR_REQ_FLAGS_16BIT_VER_MODE             0x4UL
-	#define FUNC_DRV_RGTR_REQ_FLAGS_FLOW_HANDLE_64BIT_MODE     0x8UL
-	#define FUNC_DRV_RGTR_REQ_FLAGS_HOT_RESET_SUPPORT          0x10UL
-	#define FUNC_DRV_RGTR_REQ_FLAGS_ERROR_RECOVERY_SUPPORT     0x20UL
-	#define FUNC_DRV_RGTR_REQ_FLAGS_MASTER_SUPPORT             0x40UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_FWD_ALL_MODE                     0x1UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_FWD_NONE_MODE                    0x2UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_16BIT_VER_MODE                   0x4UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_FLOW_HANDLE_64BIT_MODE           0x8UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_HOT_RESET_SUPPORT                0x10UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_ERROR_RECOVERY_SUPPORT           0x20UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_MASTER_SUPPORT                   0x40UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_FAST_RESET_SUPPORT               0x80UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_RSS_STRICT_HASH_TYPE_SUPPORT     0x100UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_NPAR_1_2_SUPPORT                 0x200UL
+	#define FUNC_DRV_RGTR_REQ_FLAGS_ASYM_QUEUE_CFG_SUPPORT           0x400UL
 	__le32	enables;
 	#define FUNC_DRV_RGTR_REQ_ENABLES_OS_TYPE             0x1UL
 	#define FUNC_DRV_RGTR_REQ_ENABLES_VER                 0x2UL
@@ -1846,6 +3373,29 @@ struct hwrm_func_buf_rgtr_output {
 	u8	valid;
 };
 
+/* hwrm_func_buf_unrgtr_input (size:192b/24B) */
+struct hwrm_func_buf_unrgtr_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define FUNC_BUF_UNRGTR_REQ_ENABLES_VF_ID     0x1UL
+	__le16	vf_id;
+	u8	unused_0[2];
+};
+
+/* hwrm_func_buf_unrgtr_output (size:128b/16B) */
+struct hwrm_func_buf_unrgtr_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
 /* hwrm_func_drv_qver_input (size:192b/24B) */
 struct hwrm_func_drv_qver_input {
 	__le16	req_type;
@@ -1855,7 +3405,11 @@ struct hwrm_func_drv_qver_input {
 	__le64	resp_addr;
 	__le32	reserved;
 	__le16	fid;
-	u8	unused_0[2];
+	u8	driver_type;
+	#define FUNC_DRV_QVER_REQ_DRIVER_TYPE_L2   0x0UL
+	#define FUNC_DRV_QVER_REQ_DRIVER_TYPE_ROCE 0x1UL
+	#define FUNC_DRV_QVER_REQ_DRIVER_TYPE_LAST FUNC_DRV_QVER_REQ_DRIVER_TYPE_ROCE
+	u8	unused_0;
 };
 
 /* hwrm_func_drv_qver_output (size:256b/32B) */
@@ -1900,7 +3454,7 @@ struct hwrm_func_resource_qcaps_input {
 	u8	unused_0[6];
 };
 
-/* hwrm_func_resource_qcaps_output (size:448b/56B) */
+/* hwrm_func_resource_qcaps_output (size:704b/88B) */
 struct hwrm_func_resource_qcaps_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -1932,11 +3486,20 @@ struct hwrm_func_resource_qcaps_output {
 	__le16	max_tx_scheduler_inputs;
 	__le16	flags;
 	#define FUNC_RESOURCE_QCAPS_RESP_FLAGS_MIN_GUARANTEED     0x1UL
-	u8	unused_0[5];
+	__le16	min_msix;
+	__le32	min_ktls_tx_key_ctxs;
+	__le32	max_ktls_tx_key_ctxs;
+	__le32	min_ktls_rx_key_ctxs;
+	__le32	max_ktls_rx_key_ctxs;
+	__le32	min_quic_tx_key_ctxs;
+	__le32	max_quic_tx_key_ctxs;
+	__le32	min_quic_rx_key_ctxs;
+	__le32	max_quic_rx_key_ctxs;
+	u8	unused_0[3];
 	u8	valid;
 };
 
-/* hwrm_func_vf_resource_cfg_input (size:448b/56B) */
+/* hwrm_func_vf_resource_cfg_input (size:704b/88B) */
 struct hwrm_func_vf_resource_cfg_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -1963,10 +3526,18 @@ struct hwrm_func_vf_resource_cfg_input {
 	__le16	max_hw_ring_grps;
 	__le16	flags;
 	#define FUNC_VF_RESOURCE_CFG_REQ_FLAGS_MIN_GUARANTEED     0x1UL
-	u8	unused_0[2];
+	__le16	min_msix;
+	__le32	min_ktls_tx_key_ctxs;
+	__le32	max_ktls_tx_key_ctxs;
+	__le32	min_ktls_rx_key_ctxs;
+	__le32	max_ktls_rx_key_ctxs;
+	__le32	min_quic_tx_key_ctxs;
+	__le32	max_quic_tx_key_ctxs;
+	__le32	min_quic_rx_key_ctxs;
+	__le32	max_quic_rx_key_ctxs;
 };
 
-/* hwrm_func_vf_resource_cfg_output (size:256b/32B) */
+/* hwrm_func_vf_resource_cfg_output (size:384b/48B) */
 struct hwrm_func_vf_resource_cfg_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -1980,6 +3551,10 @@ struct hwrm_func_vf_resource_cfg_output {
 	__le16	reserved_vnics;
 	__le16	reserved_stat_ctx;
 	__le16	reserved_hw_ring_grps;
+	__le32	reserved_ktls_tx_key_ctxs;
+	__le32	reserved_ktls_rx_key_ctxs;
+	__le32	reserved_quic_tx_key_ctxs;
+	__le32	reserved_quic_rx_key_ctxs;
 	u8	unused_0[7];
 	u8	valid;
 };
@@ -1993,7 +3568,7 @@ struct hwrm_func_backing_store_qcaps_input {
 	__le64	resp_addr;
 };
 
-/* hwrm_func_backing_store_qcaps_output (size:640b/80B) */
+/* hwrm_func_backing_store_qcaps_output (size:832b/104B) */
 struct hwrm_func_backing_store_qcaps_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -2024,13 +3599,58 @@ struct hwrm_func_backing_store_qcaps_output {
 	__le16	mrav_num_entries_units;
 	u8	tqm_entries_multiple;
 	u8	ctx_kind_initializer;
-	__le32	rsvd;
-	__le16	rsvd1;
+	__le16	ctx_init_mask;
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_QP       0x1UL
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_SRQ      0x2UL
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_CQ       0x4UL
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_VNIC     0x8UL
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_STAT     0x10UL
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_MRAV     0x20UL
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_TKC      0x40UL
+	#define FUNC_BACKING_STORE_QCAPS_RESP_CTX_INIT_MASK_RKC      0x80UL
+	u8	qp_init_offset;
+	u8	srq_init_offset;
+	u8	cq_init_offset;
+	u8	vnic_init_offset;
 	u8	tqm_fp_rings_count;
+	u8	stat_init_offset;
+	u8	mrav_init_offset;
+	u8	tqm_fp_rings_count_ext;
+	u8	tkc_init_offset;
+	u8	rkc_init_offset;
+	__le16	tkc_entry_size;
+	__le16	rkc_entry_size;
+	__le32	tkc_max_entries;
+	__le32	rkc_max_entries;
+	__le16	fast_qpmd_qp_num_entries;
+	u8	rsvd1[5];
 	u8	valid;
 };
 
-/* hwrm_func_backing_store_cfg_input (size:2048b/256B) */
+/* tqm_fp_ring_cfg (size:128b/16B) */
+struct tqm_fp_ring_cfg {
+	u8	tqm_ring_pg_size_tqm_ring_lvl;
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_LVL_MASK      0xfUL
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_LVL_SFT       0
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_LVL_LVL_0       0x0UL
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_LVL_LVL_1       0x1UL
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_LVL_LVL_2       0x2UL
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_LVL_LAST       TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_LVL_LVL_2
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_MASK  0xf0UL
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_SFT   4
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_LAST   TQM_FP_RING_CFG_TQM_RING_CFG_TQM_RING_PG_SIZE_PG_1G
+	u8	unused[3];
+	__le32	tqm_ring_num_entries;
+	__le64	tqm_ring_page_dir;
+};
+
+/* hwrm_func_backing_store_cfg_input (size:2688b/336B) */
 struct hwrm_func_backing_store_cfg_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -2041,22 +3661,28 @@ struct hwrm_func_backing_store_cfg_input {
 	#define FUNC_BACKING_STORE_CFG_REQ_FLAGS_PREBOOT_MODE               0x1UL
 	#define FUNC_BACKING_STORE_CFG_REQ_FLAGS_MRAV_RESERVATION_SPLIT     0x2UL
 	__le32	enables;
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_QP            0x1UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_SRQ           0x2UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_CQ            0x4UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_VNIC          0x8UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_STAT          0x10UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_SP        0x20UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING0     0x40UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING1     0x80UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING2     0x100UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING3     0x200UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING4     0x400UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING5     0x800UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING6     0x1000UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING7     0x2000UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_MRAV          0x4000UL
-	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TIM           0x8000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_QP               0x1UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_SRQ              0x2UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_CQ               0x4UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_VNIC             0x8UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_STAT             0x10UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_SP           0x20UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING0        0x40UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING1        0x80UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING2        0x100UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING3        0x200UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING4        0x400UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING5        0x800UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING6        0x1000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING7        0x2000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_MRAV             0x4000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TIM              0x8000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING8        0x10000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING9        0x20000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TQM_RING10       0x40000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_TKC              0x80000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_RKC              0x100000UL
+	#define FUNC_BACKING_STORE_CFG_REQ_ENABLES_QP_FAST_QPMD     0x200000UL
 	u8	qpc_pg_size_qpc_lvl;
 	#define FUNC_BACKING_STORE_CFG_REQ_QPC_LVL_MASK      0xfUL
 	#define FUNC_BACKING_STORE_CFG_REQ_QPC_LVL_SFT       0
@@ -2358,6 +3984,102 @@ struct hwrm_func_backing_store_cfg_input {
 	__le16	tqm_entry_size;
 	__le16	mrav_entry_size;
 	__le16	tim_entry_size;
+	u8	tqm_ring8_pg_size_tqm_ring_lvl;
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_LVL_SFT       0
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_LVL_LAST       FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_LVL_LVL_2
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_LAST   FUNC_BACKING_STORE_CFG_REQ_RING8_TQM_RING_PG_SIZE_PG_1G
+	u8	ring8_unused[3];
+	__le32	tqm_ring8_num_entries;
+	__le64	tqm_ring8_page_dir;
+	u8	tqm_ring9_pg_size_tqm_ring_lvl;
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_LVL_SFT       0
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_LVL_LAST       FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_LVL_LVL_2
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_LAST   FUNC_BACKING_STORE_CFG_REQ_RING9_TQM_RING_PG_SIZE_PG_1G
+	u8	ring9_unused[3];
+	__le32	tqm_ring9_num_entries;
+	__le64	tqm_ring9_page_dir;
+	u8	tqm_ring10_pg_size_tqm_ring_lvl;
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_LVL_SFT       0
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_LVL_LAST       FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_LVL_LVL_2
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_LAST   FUNC_BACKING_STORE_CFG_REQ_RING10_TQM_RING_PG_SIZE_PG_1G
+	u8	ring10_unused[3];
+	__le32	tqm_ring10_num_entries;
+	__le64	tqm_ring10_page_dir;
+	__le32	tkc_num_entries;
+	__le32	rkc_num_entries;
+	__le64	tkc_page_dir;
+	__le64	rkc_page_dir;
+	__le16	tkc_entry_size;
+	__le16	rkc_entry_size;
+	u8	tkc_pg_size_tkc_lvl;
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_LVL_SFT       0
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_LVL_LAST       FUNC_BACKING_STORE_CFG_REQ_TKC_LVL_LVL_2
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_LAST   FUNC_BACKING_STORE_CFG_REQ_TKC_PG_SIZE_PG_1G
+	u8	rkc_pg_size_rkc_lvl;
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_LVL_SFT       0
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_LVL_LAST       FUNC_BACKING_STORE_CFG_REQ_RKC_LVL_LVL_2
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_LAST   FUNC_BACKING_STORE_CFG_REQ_RKC_PG_SIZE_PG_1G
+	__le16	qp_num_fast_qpmd_entries;
 };
 
 /* hwrm_func_backing_store_cfg_output (size:128b/16B) */
@@ -2367,6 +4089,438 @@ struct hwrm_func_backing_store_cfg_output {
 	__le16	seq_id;
 	__le16	resp_len;
 	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_backing_store_qcfg_input (size:128b/16B) */
+struct hwrm_func_backing_store_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_func_backing_store_qcfg_output (size:2496b/312B) */
+struct hwrm_func_backing_store_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	flags;
+	#define FUNC_BACKING_STORE_QCFG_RESP_FLAGS_PREBOOT_MODE               0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_FLAGS_MRAV_RESERVATION_SPLIT     0x2UL
+	__le32	enables;
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_QP               0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_SRQ              0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_CQ               0x4UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_VNIC             0x8UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_STAT             0x10UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_SP           0x20UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING0        0x40UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING1        0x80UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING2        0x100UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING3        0x200UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING4        0x400UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING5        0x800UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING6        0x1000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING7        0x2000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_MRAV             0x4000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TIM              0x8000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING8        0x10000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING9        0x20000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TQM_RING10       0x40000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_TKC              0x80000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_RKC              0x100000UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_ENABLES_QP_FAST_QPMD     0x200000UL
+	u8	qpc_pg_size_qpc_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_QPC_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_QPC_PG_SIZE_PG_1G
+	u8	srq_pg_size_srq_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_SRQ_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_SRQ_PG_SIZE_PG_1G
+	u8	cq_pg_size_cq_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_CQ_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_CQ_PG_SIZE_PG_1G
+	u8	vnic_pg_size_vnic_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_VNIC_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_VNIC_PG_SIZE_PG_1G
+	u8	stat_pg_size_stat_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_STAT_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_STAT_PG_SIZE_PG_1G
+	u8	tqm_sp_pg_size_tqm_sp_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_SP_PG_SIZE_PG_1G
+	u8	tqm_ring0_pg_size_tqm_ring0_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING0_PG_SIZE_PG_1G
+	u8	tqm_ring1_pg_size_tqm_ring1_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING1_PG_SIZE_PG_1G
+	u8	tqm_ring2_pg_size_tqm_ring2_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING2_PG_SIZE_PG_1G
+	u8	tqm_ring3_pg_size_tqm_ring3_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING3_PG_SIZE_PG_1G
+	u8	tqm_ring4_pg_size_tqm_ring4_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING4_PG_SIZE_PG_1G
+	u8	tqm_ring5_pg_size_tqm_ring5_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING5_PG_SIZE_PG_1G
+	u8	tqm_ring6_pg_size_tqm_ring6_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING6_PG_SIZE_PG_1G
+	u8	tqm_ring7_pg_size_tqm_ring7_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TQM_RING7_PG_SIZE_PG_1G
+	u8	mrav_pg_size_mrav_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_MRAV_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_MRAV_PG_SIZE_PG_1G
+	u8	tim_pg_size_tim_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TIM_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TIM_PG_SIZE_PG_1G
+	__le64	qpc_page_dir;
+	__le64	srq_page_dir;
+	__le64	cq_page_dir;
+	__le64	vnic_page_dir;
+	__le64	stat_page_dir;
+	__le64	tqm_sp_page_dir;
+	__le64	tqm_ring0_page_dir;
+	__le64	tqm_ring1_page_dir;
+	__le64	tqm_ring2_page_dir;
+	__le64	tqm_ring3_page_dir;
+	__le64	tqm_ring4_page_dir;
+	__le64	tqm_ring5_page_dir;
+	__le64	tqm_ring6_page_dir;
+	__le64	tqm_ring7_page_dir;
+	__le64	mrav_page_dir;
+	__le64	tim_page_dir;
+	__le16	qp_num_qp1_entries;
+	__le16	qp_num_l2_entries;
+	__le32	qp_num_entries;
+	__le32	srq_num_entries;
+	__le16	srq_num_l2_entries;
+	__le16	cq_num_l2_entries;
+	__le32	cq_num_entries;
+	__le16	vnic_num_vnic_entries;
+	__le16	vnic_num_ring_table_entries;
+	__le32	stat_num_entries;
+	__le32	tqm_sp_num_entries;
+	__le32	tqm_ring0_num_entries;
+	__le32	tqm_ring1_num_entries;
+	__le32	tqm_ring2_num_entries;
+	__le32	tqm_ring3_num_entries;
+	__le32	tqm_ring4_num_entries;
+	__le32	tqm_ring5_num_entries;
+	__le32	tqm_ring6_num_entries;
+	__le32	tqm_ring7_num_entries;
+	__le32	mrav_num_entries;
+	__le32	tim_num_entries;
+	u8	tqm_ring8_pg_size_tqm_ring_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_RING8_TQM_RING_PG_SIZE_PG_1G
+	u8	ring8_unused[3];
+	__le32	tqm_ring8_num_entries;
+	__le64	tqm_ring8_page_dir;
+	u8	tqm_ring9_pg_size_tqm_ring_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_RING9_TQM_RING_PG_SIZE_PG_1G
+	u8	ring9_unused[3];
+	__le32	tqm_ring9_num_entries;
+	__le64	tqm_ring9_page_dir;
+	u8	tqm_ring10_pg_size_tqm_ring_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_RING10_TQM_RING_PG_SIZE_PG_1G
+	u8	ring10_unused[3];
+	__le32	tqm_ring10_num_entries;
+	__le64	tqm_ring10_page_dir;
+	__le32	tkc_num_entries;
+	__le32	rkc_num_entries;
+	__le64	tkc_page_dir;
+	__le64	rkc_page_dir;
+	u8	tkc_pg_size_tkc_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_TKC_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_TKC_PG_SIZE_PG_1G
+	u8	rkc_pg_size_rkc_lvl;
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_LVL_MASK      0xfUL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_LVL_SFT       0
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_LVL_LVL_0       0x0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_LVL_LVL_1       0x1UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_LVL_LVL_2       0x2UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_LVL_LAST       FUNC_BACKING_STORE_QCFG_RESP_RKC_LVL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_LAST   FUNC_BACKING_STORE_QCFG_RESP_RKC_PG_SIZE_PG_1G
+	__le16	qp_num_fast_qpmd_entries;
+	u8	unused_1[3];
 	u8	valid;
 };
 
@@ -2463,6 +4617,1332 @@ struct hwrm_error_recovery_qcfg_output {
 	u8	valid;
 };
 
+/* hwrm_func_echo_response_input (size:192b/24B) */
+struct hwrm_func_echo_response_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	event_data1;
+	__le32	event_data2;
+};
+
+/* hwrm_func_echo_response_output (size:128b/16B) */
+struct hwrm_func_echo_response_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_ptp_pin_qcfg_input (size:192b/24B) */
+struct hwrm_func_ptp_pin_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	unused_0[8];
+};
+
+/* hwrm_func_ptp_pin_qcfg_output (size:128b/16B) */
+struct hwrm_func_ptp_pin_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	num_pins;
+	u8	state;
+	#define FUNC_PTP_PIN_QCFG_RESP_STATE_PIN0_ENABLED     0x1UL
+	#define FUNC_PTP_PIN_QCFG_RESP_STATE_PIN1_ENABLED     0x2UL
+	#define FUNC_PTP_PIN_QCFG_RESP_STATE_PIN2_ENABLED     0x4UL
+	#define FUNC_PTP_PIN_QCFG_RESP_STATE_PIN3_ENABLED     0x8UL
+	u8	pin0_usage;
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN0_USAGE_NONE     0x0UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN0_USAGE_PPS_IN   0x1UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN0_USAGE_PPS_OUT  0x2UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN0_USAGE_SYNC_IN  0x3UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN0_USAGE_SYNC_OUT 0x4UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN0_USAGE_LAST    FUNC_PTP_PIN_QCFG_RESP_PIN0_USAGE_SYNC_OUT
+	u8	pin1_usage;
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN1_USAGE_NONE     0x0UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN1_USAGE_PPS_IN   0x1UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN1_USAGE_PPS_OUT  0x2UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN1_USAGE_SYNC_IN  0x3UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN1_USAGE_SYNC_OUT 0x4UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN1_USAGE_LAST    FUNC_PTP_PIN_QCFG_RESP_PIN1_USAGE_SYNC_OUT
+	u8	pin2_usage;
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_NONE                      0x0UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_PPS_IN                    0x1UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_PPS_OUT                   0x2UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_SYNC_IN                   0x3UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_SYNC_OUT                  0x4UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_SYNCE_PRIMARY_CLOCK_OUT   0x5UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_SYNCE_SECONDARY_CLOCK_OUT 0x6UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_LAST                     FUNC_PTP_PIN_QCFG_RESP_PIN2_USAGE_SYNCE_SECONDARY_CLOCK_OUT
+	u8	pin3_usage;
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_NONE                      0x0UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_PPS_IN                    0x1UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_PPS_OUT                   0x2UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_SYNC_IN                   0x3UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_SYNC_OUT                  0x4UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_SYNCE_PRIMARY_CLOCK_OUT   0x5UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_SYNCE_SECONDARY_CLOCK_OUT 0x6UL
+	#define FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_LAST                     FUNC_PTP_PIN_QCFG_RESP_PIN3_USAGE_SYNCE_SECONDARY_CLOCK_OUT
+	u8	unused_0;
+	u8	valid;
+};
+
+/* hwrm_func_ptp_pin_cfg_input (size:256b/32B) */
+struct hwrm_func_ptp_pin_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN0_STATE     0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN0_USAGE     0x2UL
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN1_STATE     0x4UL
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN1_USAGE     0x8UL
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN2_STATE     0x10UL
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN2_USAGE     0x20UL
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN3_STATE     0x40UL
+	#define FUNC_PTP_PIN_CFG_REQ_ENABLES_PIN3_USAGE     0x80UL
+	u8	pin0_state;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_STATE_DISABLED 0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_STATE_ENABLED  0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_STATE_LAST    FUNC_PTP_PIN_CFG_REQ_PIN0_STATE_ENABLED
+	u8	pin0_usage;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_USAGE_NONE     0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_USAGE_PPS_IN   0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_USAGE_PPS_OUT  0x2UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_USAGE_SYNC_IN  0x3UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_USAGE_SYNC_OUT 0x4UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN0_USAGE_LAST    FUNC_PTP_PIN_CFG_REQ_PIN0_USAGE_SYNC_OUT
+	u8	pin1_state;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_STATE_DISABLED 0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_STATE_ENABLED  0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_STATE_LAST    FUNC_PTP_PIN_CFG_REQ_PIN1_STATE_ENABLED
+	u8	pin1_usage;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_USAGE_NONE     0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_USAGE_PPS_IN   0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_USAGE_PPS_OUT  0x2UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_USAGE_SYNC_IN  0x3UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_USAGE_SYNC_OUT 0x4UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN1_USAGE_LAST    FUNC_PTP_PIN_CFG_REQ_PIN1_USAGE_SYNC_OUT
+	u8	pin2_state;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_STATE_DISABLED 0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_STATE_ENABLED  0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_STATE_LAST    FUNC_PTP_PIN_CFG_REQ_PIN2_STATE_ENABLED
+	u8	pin2_usage;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_NONE                      0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_PPS_IN                    0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_PPS_OUT                   0x2UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_SYNC_IN                   0x3UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_SYNC_OUT                  0x4UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_SYNCE_PRIMARY_CLOCK_OUT   0x5UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_SYNCE_SECONDARY_CLOCK_OUT 0x6UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_LAST                     FUNC_PTP_PIN_CFG_REQ_PIN2_USAGE_SYNCE_SECONDARY_CLOCK_OUT
+	u8	pin3_state;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_STATE_DISABLED 0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_STATE_ENABLED  0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_STATE_LAST    FUNC_PTP_PIN_CFG_REQ_PIN3_STATE_ENABLED
+	u8	pin3_usage;
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_NONE                      0x0UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_PPS_IN                    0x1UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_PPS_OUT                   0x2UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_SYNC_IN                   0x3UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_SYNC_OUT                  0x4UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_SYNCE_PRIMARY_CLOCK_OUT   0x5UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_SYNCE_SECONDARY_CLOCK_OUT 0x6UL
+	#define FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_LAST                     FUNC_PTP_PIN_CFG_REQ_PIN3_USAGE_SYNCE_SECONDARY_CLOCK_OUT
+	u8	unused_0[4];
+};
+
+/* hwrm_func_ptp_pin_cfg_output (size:128b/16B) */
+struct hwrm_func_ptp_pin_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_ptp_cfg_input (size:384b/48B) */
+struct hwrm_func_ptp_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	enables;
+	#define FUNC_PTP_CFG_REQ_ENABLES_PTP_PPS_EVENT               0x1UL
+	#define FUNC_PTP_CFG_REQ_ENABLES_PTP_FREQ_ADJ_DLL_SOURCE     0x2UL
+	#define FUNC_PTP_CFG_REQ_ENABLES_PTP_FREQ_ADJ_DLL_PHASE      0x4UL
+	#define FUNC_PTP_CFG_REQ_ENABLES_PTP_FREQ_ADJ_EXT_PERIOD     0x8UL
+	#define FUNC_PTP_CFG_REQ_ENABLES_PTP_FREQ_ADJ_EXT_UP         0x10UL
+	#define FUNC_PTP_CFG_REQ_ENABLES_PTP_FREQ_ADJ_EXT_PHASE      0x20UL
+	#define FUNC_PTP_CFG_REQ_ENABLES_PTP_SET_TIME                0x40UL
+	u8	ptp_pps_event;
+	#define FUNC_PTP_CFG_REQ_PTP_PPS_EVENT_INTERNAL     0x1UL
+	#define FUNC_PTP_CFG_REQ_PTP_PPS_EVENT_EXTERNAL     0x2UL
+	u8	ptp_freq_adj_dll_source;
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_NONE    0x0UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_TSIO_0  0x1UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_TSIO_1  0x2UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_TSIO_2  0x3UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_TSIO_3  0x4UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_PORT_0  0x5UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_PORT_1  0x6UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_PORT_2  0x7UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_PORT_3  0x8UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_INVALID 0xffUL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_LAST   FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_SOURCE_INVALID
+	u8	ptp_freq_adj_dll_phase;
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_PHASE_NONE 0x0UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_PHASE_4K   0x1UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_PHASE_8K   0x2UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_PHASE_10M  0x3UL
+	#define FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_PHASE_LAST FUNC_PTP_CFG_REQ_PTP_FREQ_ADJ_DLL_PHASE_10M
+	u8	unused_0[3];
+	__le32	ptp_freq_adj_ext_period;
+	__le32	ptp_freq_adj_ext_up;
+	__le32	ptp_freq_adj_ext_phase_lower;
+	__le32	ptp_freq_adj_ext_phase_upper;
+	__le64	ptp_set_time;
+};
+
+/* hwrm_func_ptp_cfg_output (size:128b/16B) */
+struct hwrm_func_ptp_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_ptp_ts_query_input (size:192b/24B) */
+struct hwrm_func_ptp_ts_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define FUNC_PTP_TS_QUERY_REQ_FLAGS_PPS_TIME     0x1UL
+	#define FUNC_PTP_TS_QUERY_REQ_FLAGS_PTM_TIME     0x2UL
+	u8	unused_0[4];
+};
+
+/* hwrm_func_ptp_ts_query_output (size:320b/40B) */
+struct hwrm_func_ptp_ts_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le64	pps_event_ts;
+	__le64	ptm_local_ts;
+	__le64	ptm_system_ts;
+	__le32	ptm_link_delay;
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_func_ptp_ext_cfg_input (size:256b/32B) */
+struct hwrm_func_ptp_ext_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	enables;
+	#define FUNC_PTP_EXT_CFG_REQ_ENABLES_PHC_MASTER_FID     0x1UL
+	#define FUNC_PTP_EXT_CFG_REQ_ENABLES_PHC_SEC_FID        0x2UL
+	#define FUNC_PTP_EXT_CFG_REQ_ENABLES_PHC_SEC_MODE       0x4UL
+	#define FUNC_PTP_EXT_CFG_REQ_ENABLES_FAILOVER_TIMER     0x8UL
+	__le16	phc_master_fid;
+	__le16	phc_sec_fid;
+	u8	phc_sec_mode;
+	#define FUNC_PTP_EXT_CFG_REQ_PHC_SEC_MODE_SWITCH  0x0UL
+	#define FUNC_PTP_EXT_CFG_REQ_PHC_SEC_MODE_ALL     0x1UL
+	#define FUNC_PTP_EXT_CFG_REQ_PHC_SEC_MODE_PF_ONLY 0x2UL
+	#define FUNC_PTP_EXT_CFG_REQ_PHC_SEC_MODE_LAST   FUNC_PTP_EXT_CFG_REQ_PHC_SEC_MODE_PF_ONLY
+	u8	unused_0;
+	__le32	failover_timer;
+	u8	unused_1[4];
+};
+
+/* hwrm_func_ptp_ext_cfg_output (size:128b/16B) */
+struct hwrm_func_ptp_ext_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_ptp_ext_qcfg_input (size:192b/24B) */
+struct hwrm_func_ptp_ext_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	unused_0[8];
+};
+
+/* hwrm_func_ptp_ext_qcfg_output (size:256b/32B) */
+struct hwrm_func_ptp_ext_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	phc_master_fid;
+	__le16	phc_sec_fid;
+	__le16	phc_active_fid0;
+	__le16	phc_active_fid1;
+	__le32	last_failover_event;
+	__le16	from_fid;
+	__le16	to_fid;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_key_ctx_alloc_input (size:384b/48B) */
+struct hwrm_func_key_ctx_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	num_key_ctxs;
+	__le32	dma_bufr_size_bytes;
+	u8	key_ctx_type;
+	#define FUNC_KEY_CTX_ALLOC_REQ_KEY_CTX_TYPE_TX      0x0UL
+	#define FUNC_KEY_CTX_ALLOC_REQ_KEY_CTX_TYPE_RX      0x1UL
+	#define FUNC_KEY_CTX_ALLOC_REQ_KEY_CTX_TYPE_QUIC_TX 0x2UL
+	#define FUNC_KEY_CTX_ALLOC_REQ_KEY_CTX_TYPE_QUIC_RX 0x3UL
+	#define FUNC_KEY_CTX_ALLOC_REQ_KEY_CTX_TYPE_LAST   FUNC_KEY_CTX_ALLOC_REQ_KEY_CTX_TYPE_QUIC_RX
+	u8	unused_0[7];
+	__le64	host_dma_addr;
+	__le32	partition_start_xid;
+	u8	unused_1[4];
+};
+
+/* hwrm_func_key_ctx_alloc_output (size:192b/24B) */
+struct hwrm_func_key_ctx_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	num_key_ctxs_allocated;
+	u8	flags;
+	#define FUNC_KEY_CTX_ALLOC_RESP_FLAGS_KEY_CTXS_CONTIGUOUS     0x1UL
+	u8	unused_0;
+	__le32	partition_start_xid;
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_func_key_ctx_free_input (size:256b/32B) */
+struct hwrm_func_key_ctx_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	key_ctx_type;
+	#define FUNC_KEY_CTX_FREE_REQ_KEY_CTX_TYPE_TX      0x0UL
+	#define FUNC_KEY_CTX_FREE_REQ_KEY_CTX_TYPE_RX      0x1UL
+	#define FUNC_KEY_CTX_FREE_REQ_KEY_CTX_TYPE_QUIC_TX 0x2UL
+	#define FUNC_KEY_CTX_FREE_REQ_KEY_CTX_TYPE_QUIC_RX 0x3UL
+	#define FUNC_KEY_CTX_FREE_REQ_KEY_CTX_TYPE_LAST   FUNC_KEY_CTX_FREE_REQ_KEY_CTX_TYPE_QUIC_RX
+	u8	unused_0;
+	__le32	partition_start_xid;
+	__le16	num_entries;
+	u8	unused_1[6];
+};
+
+/* hwrm_func_key_ctx_free_output (size:128b/16B) */
+struct hwrm_func_key_ctx_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	rsvd0[7];
+	u8	valid;
+};
+
+/* hwrm_func_backing_store_cfg_v2_input (size:448b/56B) */
+struct hwrm_func_backing_store_cfg_v2_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	type;
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_QP            0x0UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_SRQ           0x1UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_CQ            0x2UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_VNIC          0x3UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_STAT          0x4UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_SP_TQM_RING   0x5UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_FP_TQM_RING   0x6UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_MRAV          0xeUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_TIM           0xfUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_TKC           0x13UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_RKC           0x14UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_MP_TQM_RING   0x15UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_SQ_DB_SHADOW  0x16UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_RQ_DB_SHADOW  0x17UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_SRQ_DB_SHADOW 0x18UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_CQ_DB_SHADOW  0x19UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_QUIC_TKC      0x1aUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_QUIC_RKC      0x1bUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_TBL_SCOPE     0x1cUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_XID_PARTITION 0x1dUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_INVALID       0xffffUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_LAST         FUNC_BACKING_STORE_CFG_V2_REQ_TYPE_INVALID
+	__le16	instance;
+	__le32	flags;
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_FLAGS_PREBOOT_MODE        0x1UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_FLAGS_BS_CFG_ALL_DONE     0x2UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_FLAGS_BS_EXTEND           0x4UL
+	__le64	page_dir;
+	__le32	num_entries;
+	__le16	entry_size;
+	u8	page_size_pbl_level;
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PBL_LEVEL_MASK  0xfUL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PBL_LEVEL_SFT   0
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PBL_LEVEL_LVL_0   0x0UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PBL_LEVEL_LVL_1   0x1UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PBL_LEVEL_LVL_2   0x2UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PBL_LEVEL_LAST   FUNC_BACKING_STORE_CFG_V2_REQ_PBL_LEVEL_LVL_2
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_LAST   FUNC_BACKING_STORE_CFG_V2_REQ_PAGE_SIZE_PG_1G
+	u8	subtype_valid_cnt;
+	__le32	split_entry_0;
+	__le32	split_entry_1;
+	__le32	split_entry_2;
+	__le32	split_entry_3;
+};
+
+/* hwrm_func_backing_store_cfg_v2_output (size:128b/16B) */
+struct hwrm_func_backing_store_cfg_v2_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	rsvd0[7];
+	u8	valid;
+};
+
+/* hwrm_func_backing_store_qcfg_v2_input (size:192b/24B) */
+struct hwrm_func_backing_store_qcfg_v2_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	type;
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_QP                  0x0UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_SRQ                 0x1UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_CQ                  0x2UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_VNIC                0x3UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_STAT                0x4UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_SP_TQM_RING         0x5UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_FP_TQM_RING         0x6UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_MRAV                0xeUL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_TIM                 0xfUL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_TKC                 0x13UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_RKC                 0x14UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_MP_TQM_RING         0x15UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_SQ_DB_SHADOW        0x16UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_RQ_DB_SHADOW        0x17UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_SRQ_DB_SHADOW       0x18UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_CQ_DB_SHADOW        0x19UL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_QUIC_TKC            0x1aUL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_QUIC_RKC            0x1bUL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_TBL_SCOPE           0x1cUL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_XID_PARTITION_TABLE 0x1dUL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_INVALID             0xffffUL
+	#define FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_LAST               FUNC_BACKING_STORE_QCFG_V2_REQ_TYPE_INVALID
+	__le16	instance;
+	u8	rsvd[4];
+};
+
+/* hwrm_func_backing_store_qcfg_v2_output (size:448b/56B) */
+struct hwrm_func_backing_store_qcfg_v2_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	type;
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_QP            0x0UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_SRQ           0x1UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_CQ            0x2UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_VNIC          0x3UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_STAT          0x4UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_SP_TQM_RING   0x5UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_FP_TQM_RING   0x6UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_MRAV          0xeUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_TIM           0xfUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_TKC           0x13UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_RKC           0x14UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_MP_TQM_RING   0x15UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_QUIC_TKC      0x1aUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_QUIC_RKC      0x1bUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_TBL_SCOPE     0x1cUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_XID_PARTITION 0x1dUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_INVALID       0xffffUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_LAST         FUNC_BACKING_STORE_QCFG_V2_RESP_TYPE_INVALID
+	__le16	instance;
+	__le32	flags;
+	__le64	page_dir;
+	__le32	num_entries;
+	u8	page_size_pbl_level;
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PBL_LEVEL_MASK  0xfUL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PBL_LEVEL_SFT   0
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PBL_LEVEL_LVL_0   0x0UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PBL_LEVEL_LVL_1   0x1UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PBL_LEVEL_LVL_2   0x2UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PBL_LEVEL_LAST   FUNC_BACKING_STORE_QCFG_V2_RESP_PBL_LEVEL_LVL_2
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_MASK  0xf0UL
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_SFT   4
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_PG_4K   (0x0UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_PG_8K   (0x1UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_PG_64K  (0x2UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_PG_2M   (0x3UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_PG_8M   (0x4UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_PG_1G   (0x5UL << 4)
+	#define FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_LAST   FUNC_BACKING_STORE_QCFG_V2_RESP_PAGE_SIZE_PG_1G
+	u8	subtype_valid_cnt;
+	u8	rsvd[2];
+	__le32	split_entry_0;
+	__le32	split_entry_1;
+	__le32	split_entry_2;
+	__le32	split_entry_3;
+	u8	rsvd2[7];
+	u8	valid;
+};
+
+/* qpc_split_entries (size:128b/16B) */
+struct qpc_split_entries {
+	__le32	qp_num_l2_entries;
+	__le32	qp_num_qp1_entries;
+	__le32	qp_num_fast_qpmd_entries;
+	__le32	rsvd;
+};
+
+/* srq_split_entries (size:128b/16B) */
+struct srq_split_entries {
+	__le32	srq_num_l2_entries;
+	__le32	rsvd;
+	__le32	rsvd2[2];
+};
+
+/* cq_split_entries (size:128b/16B) */
+struct cq_split_entries {
+	__le32	cq_num_l2_entries;
+	__le32	rsvd;
+	__le32	rsvd2[2];
+};
+
+/* vnic_split_entries (size:128b/16B) */
+struct vnic_split_entries {
+	__le32	vnic_num_vnic_entries;
+	__le32	rsvd;
+	__le32	rsvd2[2];
+};
+
+/* mrav_split_entries (size:128b/16B) */
+struct mrav_split_entries {
+	__le32	mrav_num_av_entries;
+	__le32	rsvd;
+	__le32	rsvd2[2];
+};
+
+/* ts_split_entries (size:128b/16B) */
+struct ts_split_entries {
+	__le32	region_num_entries;
+	u8	tsid;
+	u8	lkup_static_bkt_cnt_exp[2];
+	u8	rsvd;
+	__le32	rsvd2[2];
+};
+
+/* hwrm_func_backing_store_qcaps_v2_input (size:192b/24B) */
+struct hwrm_func_backing_store_qcaps_v2_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	type;
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_QP            0x0UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_SRQ           0x1UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_CQ            0x2UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_VNIC          0x3UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_STAT          0x4UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_SP_TQM_RING   0x5UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_FP_TQM_RING   0x6UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_MRAV          0xeUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_TIM           0xfUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_KTLS_TKC      0x13UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_KTLS_RKC      0x14UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_MP_TQM_RING   0x15UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_SQ_DB_SHADOW  0x16UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_RQ_DB_SHADOW  0x17UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_SRQ_DB_SHADOW 0x18UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_CQ_DB_SHADOW  0x19UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_QUIC_TKC      0x1aUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_QUIC_RKC      0x1bUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_TBL_SCOPE     0x1cUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_XID_PARTITION 0x1dUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_INVALID       0xffffUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_LAST         FUNC_BACKING_STORE_QCAPS_V2_REQ_TYPE_INVALID
+	u8	rsvd[6];
+};
+
+/* hwrm_func_backing_store_qcaps_v2_output (size:448b/56B) */
+struct hwrm_func_backing_store_qcaps_v2_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	type;
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_QP            0x0UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_SRQ           0x1UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_CQ            0x2UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_VNIC          0x3UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_STAT          0x4UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_SP_TQM_RING   0x5UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_FP_TQM_RING   0x6UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_MRAV          0xeUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_TIM           0xfUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_KTLS_TKC      0x13UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_KTLS_RKC      0x14UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_MP_TQM_RING   0x15UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_SQ_DB_SHADOW  0x16UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_RQ_DB_SHADOW  0x17UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_SRQ_DB_SHADOW 0x18UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_CQ_DB_SHADOW  0x19UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_QUIC_TKC      0x1aUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_QUIC_RKC      0x1bUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_TBL_SCOPE     0x1cUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_XID_PARTITION 0x1dUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_INVALID       0xffffUL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_LAST         FUNC_BACKING_STORE_QCAPS_V2_RESP_TYPE_INVALID
+	__le16	entry_size;
+	__le32	flags;
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_FLAGS_ENABLE_CTX_KIND_INIT            0x1UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_FLAGS_TYPE_VALID                      0x2UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_FLAGS_DRIVER_MANAGED_MEMORY           0x4UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_FLAGS_ROCE_QP_PSEUDO_STATIC_ALLOC     0x8UL
+	__le32	instance_bit_map;
+	u8	ctx_init_value;
+	u8	ctx_init_offset;
+	u8	entry_multiple;
+	u8	rsvd;
+	__le32	max_num_entries;
+	__le32	min_num_entries;
+	__le16	next_valid_type;
+	u8	subtype_valid_cnt;
+	u8	exact_cnt_bit_map;
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_EXACT_CNT_BIT_MAP_SPLIT_ENTRY_0_EXACT     0x1UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_EXACT_CNT_BIT_MAP_SPLIT_ENTRY_1_EXACT     0x2UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_EXACT_CNT_BIT_MAP_SPLIT_ENTRY_2_EXACT     0x4UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_EXACT_CNT_BIT_MAP_SPLIT_ENTRY_3_EXACT     0x8UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_EXACT_CNT_BIT_MAP_UNUSED_MASK             0xf0UL
+	#define FUNC_BACKING_STORE_QCAPS_V2_RESP_EXACT_CNT_BIT_MAP_UNUSED_SFT              4
+	__le32	split_entry_0;
+	__le32	split_entry_1;
+	__le32	split_entry_2;
+	__le32	split_entry_3;
+	u8	rsvd3[3];
+	u8	valid;
+};
+
+/* hwrm_func_dbr_pacing_cfg_input (size:320b/40B) */
+struct hwrm_func_dbr_pacing_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define FUNC_DBR_PACING_CFG_REQ_FLAGS_DBR_NQ_EVENT_ENABLE      0x1UL
+	#define FUNC_DBR_PACING_CFG_REQ_FLAGS_DBR_NQ_EVENT_DISABLE     0x2UL
+	u8	unused_0[7];
+	__le32	enables;
+	#define FUNC_DBR_PACING_CFG_REQ_ENABLES_PRIMARY_NQ_ID_VALID        0x1UL
+	#define FUNC_DBR_PACING_CFG_REQ_ENABLES_PACING_THRESHOLD_VALID     0x2UL
+	__le32	primary_nq_id;
+	__le32	pacing_threshold;
+	u8	unused_1[4];
+};
+
+/* hwrm_func_dbr_pacing_cfg_output (size:128b/16B) */
+struct hwrm_func_dbr_pacing_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_dbr_pacing_qcfg_input (size:128b/16B) */
+struct hwrm_func_dbr_pacing_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_func_dbr_pacing_qcfg_output (size:512b/64B) */
+struct hwrm_func_dbr_pacing_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	flags;
+	#define FUNC_DBR_PACING_QCFG_RESP_FLAGS_DBR_NQ_EVENT_ENABLED     0x1UL
+	u8	unused_0[7];
+	__le32	dbr_stat_db_fifo_reg;
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_MASK    0x3UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_SFT     0
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_PCIE_CFG  0x0UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_GRC       0x1UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_BAR0      0x2UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_BAR1      0x3UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_LAST     FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SPACE_BAR1
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_MASK          0xfffffffcUL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_STAT_DB_FIFO_REG_ADDR_SFT           2
+	__le32	dbr_stat_db_fifo_reg_watermark_mask;
+	u8	dbr_stat_db_fifo_reg_watermark_shift;
+	u8	unused_1[3];
+	__le32	dbr_stat_db_fifo_reg_fifo_room_mask;
+	u8	dbr_stat_db_fifo_reg_fifo_room_shift;
+	u8	unused_2[3];
+	__le32	dbr_throttling_aeq_arm_reg;
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_MASK    0x3UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_SFT     0
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_PCIE_CFG  0x0UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_GRC       0x1UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_BAR0      0x2UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_BAR1      0x3UL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_LAST     FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SPACE_BAR1
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_MASK          0xfffffffcUL
+	#define FUNC_DBR_PACING_QCFG_RESP_DBR_THROTTLING_AEQ_ARM_REG_ADDR_SFT           2
+	u8	dbr_throttling_aeq_arm_reg_val;
+	u8	unused_3[3];
+	__le32	dbr_stat_db_max_fifo_depth;
+	__le32	primary_nq_id;
+	__le32	pacing_threshold;
+	u8	unused_4[7];
+	u8	valid;
+};
+
+/* hwrm_func_dbr_pacing_broadcast_event_input (size:128b/16B) */
+struct hwrm_func_dbr_pacing_broadcast_event_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_func_dbr_pacing_broadcast_event_output (size:128b/16B) */
+struct hwrm_func_dbr_pacing_broadcast_event_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_dbr_pacing_nqlist_query_input (size:128b/16B) */
+struct hwrm_func_dbr_pacing_nqlist_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_func_dbr_pacing_nqlist_query_output (size:384b/48B) */
+struct hwrm_func_dbr_pacing_nqlist_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	nq_ring_id0;
+	__le16	nq_ring_id1;
+	__le16	nq_ring_id2;
+	__le16	nq_ring_id3;
+	__le16	nq_ring_id4;
+	__le16	nq_ring_id5;
+	__le16	nq_ring_id6;
+	__le16	nq_ring_id7;
+	__le16	nq_ring_id8;
+	__le16	nq_ring_id9;
+	__le16	nq_ring_id10;
+	__le16	nq_ring_id11;
+	__le16	nq_ring_id12;
+	__le16	nq_ring_id13;
+	__le16	nq_ring_id14;
+	__le16	nq_ring_id15;
+	__le32	num_nqs;
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_func_dbr_recovery_completed_input (size:192b/24B) */
+struct hwrm_func_dbr_recovery_completed_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	epoch;
+	#define FUNC_DBR_RECOVERY_COMPLETED_REQ_EPOCH_VALUE_MASK 0xffffffUL
+	#define FUNC_DBR_RECOVERY_COMPLETED_REQ_EPOCH_VALUE_SFT 0
+	u8	unused_0[4];
+};
+
+/* hwrm_func_dbr_recovery_completed_output (size:128b/16B) */
+struct hwrm_func_dbr_recovery_completed_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_synce_cfg_input (size:192b/24B) */
+struct hwrm_func_synce_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	enables;
+	#define FUNC_SYNCE_CFG_REQ_ENABLES_FREQ_PROFILE        0x1UL
+	#define FUNC_SYNCE_CFG_REQ_ENABLES_PRIMARY_CLOCK       0x2UL
+	#define FUNC_SYNCE_CFG_REQ_ENABLES_SECONDARY_CLOCK     0x4UL
+	u8	freq_profile;
+	#define FUNC_SYNCE_CFG_REQ_FREQ_PROFILE_INVALID 0x0UL
+	#define FUNC_SYNCE_CFG_REQ_FREQ_PROFILE_25MHZ   0x1UL
+	#define FUNC_SYNCE_CFG_REQ_FREQ_PROFILE_LAST   FUNC_SYNCE_CFG_REQ_FREQ_PROFILE_25MHZ
+	u8	primary_clock_state;
+	#define FUNC_SYNCE_CFG_REQ_PRIMARY_CLOCK_STATE_DISABLE 0x0UL
+	#define FUNC_SYNCE_CFG_REQ_PRIMARY_CLOCK_STATE_ENABLE  0x1UL
+	#define FUNC_SYNCE_CFG_REQ_PRIMARY_CLOCK_STATE_LAST   FUNC_SYNCE_CFG_REQ_PRIMARY_CLOCK_STATE_ENABLE
+	u8	secondary_clock_state;
+	#define FUNC_SYNCE_CFG_REQ_SECONDARY_CLOCK_STATE_DISABLE 0x0UL
+	#define FUNC_SYNCE_CFG_REQ_SECONDARY_CLOCK_STATE_ENABLE  0x1UL
+	#define FUNC_SYNCE_CFG_REQ_SECONDARY_CLOCK_STATE_LAST   FUNC_SYNCE_CFG_REQ_SECONDARY_CLOCK_STATE_ENABLE
+	u8	unused_0[4];
+};
+
+/* hwrm_func_synce_cfg_output (size:128b/16B) */
+struct hwrm_func_synce_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_synce_qcfg_input (size:192b/24B) */
+struct hwrm_func_synce_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	unused_0[8];
+};
+
+/* hwrm_func_synce_qcfg_output (size:128b/16B) */
+struct hwrm_func_synce_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	freq_profile;
+	#define FUNC_SYNCE_QCFG_RESP_FREQ_PROFILE_INVALID 0x0UL
+	#define FUNC_SYNCE_QCFG_RESP_FREQ_PROFILE_25MHZ   0x1UL
+	#define FUNC_SYNCE_QCFG_RESP_FREQ_PROFILE_LAST   FUNC_SYNCE_QCFG_RESP_FREQ_PROFILE_25MHZ
+	u8	state;
+	#define FUNC_SYNCE_QCFG_RESP_STATE_PRIMARY_CLOCK_ENABLED       0x1UL
+	#define FUNC_SYNCE_QCFG_RESP_STATE_SECONDARY_CLOCK_ENABLED     0x2UL
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_func_lag_create_input (size:192b/24B) */
+struct hwrm_func_lag_create_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	enables;
+	#define FUNC_LAG_CREATE_REQ_ENABLES_ACTIVE_PORT_MAP     0x1UL
+	#define FUNC_LAG_CREATE_REQ_ENABLES_MEMBER_PORT_MAP     0x2UL
+	#define FUNC_LAG_CREATE_REQ_ENABLES_AGGR_MODE           0x4UL
+	#define FUNC_LAG_CREATE_REQ_ENABLES_RSVD1_MASK          0xf8UL
+	#define FUNC_LAG_CREATE_REQ_ENABLES_RSVD1_SFT           3
+	u8	active_port_map;
+	#define FUNC_LAG_CREATE_REQ_ACTIVE_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_CREATE_REQ_ACTIVE_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_CREATE_REQ_ACTIVE_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_CREATE_REQ_ACTIVE_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_CREATE_REQ_ACTIVE_PORT_MAP_RSVD3_MASK 0xf0UL
+	#define FUNC_LAG_CREATE_REQ_ACTIVE_PORT_MAP_RSVD3_SFT  4
+	u8	member_port_map;
+	#define FUNC_LAG_CREATE_REQ_MEMBER_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_CREATE_REQ_MEMBER_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_CREATE_REQ_MEMBER_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_CREATE_REQ_MEMBER_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_CREATE_REQ_MEMBER_PORT_MAP_RSVD4_MASK 0xf0UL
+	#define FUNC_LAG_CREATE_REQ_MEMBER_PORT_MAP_RSVD4_SFT  4
+	u8	link_aggr_mode;
+	#define FUNC_LAG_CREATE_REQ_AGGR_MODE_ACTIVE_ACTIVE 0x1UL
+	#define FUNC_LAG_CREATE_REQ_AGGR_MODE_ACTIVE_BACKUP 0x2UL
+	#define FUNC_LAG_CREATE_REQ_AGGR_MODE_BALANCE_XOR   0x3UL
+	#define FUNC_LAG_CREATE_REQ_AGGR_MODE_802_3_AD      0x4UL
+	#define FUNC_LAG_CREATE_REQ_AGGR_MODE_LAST         FUNC_LAG_CREATE_REQ_AGGR_MODE_802_3_AD
+	u8	unused_0[4];
+};
+
+/* hwrm_func_lag_create_output (size:128b/16B) */
+struct hwrm_func_lag_create_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	fw_lag_id;
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_func_lag_update_input (size:192b/24B) */
+struct hwrm_func_lag_update_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	fw_lag_id;
+	u8	enables;
+	#define FUNC_LAG_UPDATE_REQ_ENABLES_ACTIVE_PORT_MAP     0x1UL
+	#define FUNC_LAG_UPDATE_REQ_ENABLES_MEMBER_PORT_MAP     0x2UL
+	#define FUNC_LAG_UPDATE_REQ_ENABLES_AGGR_MODE           0x4UL
+	#define FUNC_LAG_UPDATE_REQ_ENABLES_RSVD1_MASK          0xf8UL
+	#define FUNC_LAG_UPDATE_REQ_ENABLES_RSVD1_SFT           3
+	u8	active_port_map;
+	#define FUNC_LAG_UPDATE_REQ_ACTIVE_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_UPDATE_REQ_ACTIVE_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_UPDATE_REQ_ACTIVE_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_UPDATE_REQ_ACTIVE_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_UPDATE_REQ_ACTIVE_PORT_MAP_RSVD3_MASK 0xf0UL
+	#define FUNC_LAG_UPDATE_REQ_ACTIVE_PORT_MAP_RSVD3_SFT  4
+	u8	member_port_map;
+	#define FUNC_LAG_UPDATE_REQ_MEMBER_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_UPDATE_REQ_MEMBER_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_UPDATE_REQ_MEMBER_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_UPDATE_REQ_MEMBER_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_UPDATE_REQ_MEMBER_PORT_MAP_RSVD4_MASK 0xf0UL
+	#define FUNC_LAG_UPDATE_REQ_MEMBER_PORT_MAP_RSVD4_SFT  4
+	u8	link_aggr_mode;
+	#define FUNC_LAG_UPDATE_REQ_AGGR_MODE_ACTIVE_ACTIVE 0x1UL
+	#define FUNC_LAG_UPDATE_REQ_AGGR_MODE_ACTIVE_BACKUP 0x2UL
+	#define FUNC_LAG_UPDATE_REQ_AGGR_MODE_BALANCE_XOR   0x3UL
+	#define FUNC_LAG_UPDATE_REQ_AGGR_MODE_802_3_AD      0x4UL
+	#define FUNC_LAG_UPDATE_REQ_AGGR_MODE_LAST         FUNC_LAG_UPDATE_REQ_AGGR_MODE_802_3_AD
+	u8	unused_0[3];
+};
+
+/* hwrm_func_lag_update_output (size:128b/16B) */
+struct hwrm_func_lag_update_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_lag_free_input (size:192b/24B) */
+struct hwrm_func_lag_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	fw_lag_id;
+	u8	unused_0[7];
+};
+
+/* hwrm_func_lag_free_output (size:128b/16B) */
+struct hwrm_func_lag_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_lag_qcfg_input (size:192b/24B) */
+struct hwrm_func_lag_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	fw_lag_id;
+	u8	unused_0[7];
+};
+
+/* hwrm_func_lag_qcfg_output (size:128b/16B) */
+struct hwrm_func_lag_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	active_port_map;
+	#define FUNC_LAG_QCFG_RESP_ACTIVE_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_QCFG_RESP_ACTIVE_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_QCFG_RESP_ACTIVE_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_QCFG_RESP_ACTIVE_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_QCFG_RESP_ACTIVE_PORT_MAP_RSVD3_MASK 0xf0UL
+	#define FUNC_LAG_QCFG_RESP_ACTIVE_PORT_MAP_RSVD3_SFT  4
+	u8	member_port_map;
+	#define FUNC_LAG_QCFG_RESP_MEMBER_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_QCFG_RESP_MEMBER_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_QCFG_RESP_MEMBER_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_QCFG_RESP_MEMBER_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_QCFG_RESP_MEMBER_PORT_MAP_RSVD4_MASK 0xf0UL
+	#define FUNC_LAG_QCFG_RESP_MEMBER_PORT_MAP_RSVD4_SFT  4
+	u8	link_aggr_mode;
+	#define FUNC_LAG_QCFG_RESP_AGGR_MODE_ACTIVE_ACTIVE 0x1UL
+	#define FUNC_LAG_QCFG_RESP_AGGR_MODE_ACTIVE_BACKUP 0x2UL
+	#define FUNC_LAG_QCFG_RESP_AGGR_MODE_BALANCE_XOR   0x3UL
+	#define FUNC_LAG_QCFG_RESP_AGGR_MODE_802_3_AD      0x4UL
+	#define FUNC_LAG_QCFG_RESP_AGGR_MODE_LAST         FUNC_LAG_QCFG_RESP_AGGR_MODE_802_3_AD
+	u8	unused_0[4];
+	u8	valid;
+};
+
+/* hwrm_func_lag_mode_cfg_input (size:192b/24B) */
+struct hwrm_func_lag_mode_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	enables;
+	#define FUNC_LAG_MODE_CFG_REQ_ENABLES_FLAGS               0x1UL
+	#define FUNC_LAG_MODE_CFG_REQ_ENABLES_ACTIVE_PORT_MAP     0x2UL
+	#define FUNC_LAG_MODE_CFG_REQ_ENABLES_MEMBER_PORT_MAP     0x4UL
+	#define FUNC_LAG_MODE_CFG_REQ_ENABLES_AGGR_MODE           0x8UL
+	#define FUNC_LAG_MODE_CFG_REQ_ENABLES_LAG_ID              0x10UL
+	#define FUNC_LAG_MODE_CFG_REQ_ENABLES_RSVD1_MASK          0xe0UL
+	#define FUNC_LAG_MODE_CFG_REQ_ENABLES_RSVD1_SFT           5
+	u8	flags;
+	#define FUNC_LAG_MODE_CFG_REQ_FLAGS_AGGR_DISABLE     0x1UL
+	#define FUNC_LAG_MODE_CFG_REQ_FLAGS_AGGR_ENABLE      0x2UL
+	#define FUNC_LAG_MODE_CFG_REQ_FLAGS_RSVD2_MASK       0xfcUL
+	#define FUNC_LAG_MODE_CFG_REQ_FLAGS_RSVD2_SFT        2
+	u8	active_port_map;
+	#define FUNC_LAG_MODE_CFG_REQ_ACTIVE_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_MODE_CFG_REQ_ACTIVE_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_MODE_CFG_REQ_ACTIVE_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_MODE_CFG_REQ_ACTIVE_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_MODE_CFG_REQ_ACTIVE_PORT_MAP_RSVD3_MASK 0xf0UL
+	#define FUNC_LAG_MODE_CFG_REQ_ACTIVE_PORT_MAP_RSVD3_SFT  4
+	u8	member_port_map;
+	#define FUNC_LAG_MODE_CFG_REQ_MEMBER_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_MODE_CFG_REQ_MEMBER_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_MODE_CFG_REQ_MEMBER_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_MODE_CFG_REQ_MEMBER_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_MODE_CFG_REQ_MEMBER_PORT_MAP_RSVD4_MASK 0xf0UL
+	#define FUNC_LAG_MODE_CFG_REQ_MEMBER_PORT_MAP_RSVD4_SFT  4
+	u8	link_aggr_mode;
+	#define FUNC_LAG_MODE_CFG_REQ_AGGR_MODE_ACTIVE_ACTIVE 0x1UL
+	#define FUNC_LAG_MODE_CFG_REQ_AGGR_MODE_ACTIVE_BACKUP 0x2UL
+	#define FUNC_LAG_MODE_CFG_REQ_AGGR_MODE_BALANCE_XOR   0x3UL
+	#define FUNC_LAG_MODE_CFG_REQ_AGGR_MODE_802_3_AD      0x4UL
+	#define FUNC_LAG_MODE_CFG_REQ_AGGR_MODE_LAST         FUNC_LAG_MODE_CFG_REQ_AGGR_MODE_802_3_AD
+	u8	lag_id;
+	u8	unused_0[2];
+};
+
+/* hwrm_func_lag_mode_cfg_output (size:128b/16B) */
+struct hwrm_func_lag_mode_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	lag_id;
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_func_lag_mode_qcfg_input (size:192b/24B) */
+struct hwrm_func_lag_mode_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	unused_0[8];
+};
+
+/* hwrm_func_lag_mode_qcfg_output (size:128b/16B) */
+struct hwrm_func_lag_mode_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	aggr_enabled;
+	#define FUNC_LAG_MODE_QCFG_RESP_AGGR_ENABLED     0x1UL
+	#define FUNC_LAG_MODE_QCFG_RESP_RSVD1_MASK       0xfeUL
+	#define FUNC_LAG_MODE_QCFG_RESP_RSVD1_SFT        1
+	u8	active_port_map;
+	#define FUNC_LAG_MODE_QCFG_RESP_ACTIVE_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_MODE_QCFG_RESP_ACTIVE_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_MODE_QCFG_RESP_ACTIVE_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_MODE_QCFG_RESP_ACTIVE_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_MODE_QCFG_RESP_ACTIVE_PORT_MAP_RSVD2_MASK 0xf0UL
+	#define FUNC_LAG_MODE_QCFG_RESP_ACTIVE_PORT_MAP_RSVD2_SFT  4
+	u8	member_port_map;
+	#define FUNC_LAG_MODE_QCFG_RESP_MEMBER_PORT_MAP_PORT_0     0x1UL
+	#define FUNC_LAG_MODE_QCFG_RESP_MEMBER_PORT_MAP_PORT_1     0x2UL
+	#define FUNC_LAG_MODE_QCFG_RESP_MEMBER_PORT_MAP_PORT_2     0x4UL
+	#define FUNC_LAG_MODE_QCFG_RESP_MEMBER_PORT_MAP_PORT_3     0x8UL
+	#define FUNC_LAG_MODE_QCFG_RESP_MEMBER_PORT_MAP_RSVD3_MASK 0xf0UL
+	#define FUNC_LAG_MODE_QCFG_RESP_MEMBER_PORT_MAP_RSVD3_SFT  4
+	u8	link_aggr_mode;
+	#define FUNC_LAG_MODE_QCFG_RESP_AGGR_MODE_ACTIVE_ACTIVE 0x1UL
+	#define FUNC_LAG_MODE_QCFG_RESP_AGGR_MODE_ACTIVE_BACKUP 0x2UL
+	#define FUNC_LAG_MODE_QCFG_RESP_AGGR_MODE_BALANCE_XOR   0x3UL
+	#define FUNC_LAG_MODE_QCFG_RESP_AGGR_MODE_802_3_AD      0x4UL
+	#define FUNC_LAG_MODE_QCFG_RESP_AGGR_MODE_LAST         FUNC_LAG_MODE_QCFG_RESP_AGGR_MODE_802_3_AD
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_func_vlan_qcfg_input (size:192b/24B) */
+struct hwrm_func_vlan_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	unused_0[6];
+};
+
+/* hwrm_func_vlan_qcfg_output (size:320b/40B) */
+struct hwrm_func_vlan_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le64	unused_0;
+	__le16	stag_vid;
+	u8	stag_pcp;
+	u8	unused_1;
+	__be16	stag_tpid;
+	__le16	ctag_vid;
+	u8	ctag_pcp;
+	u8	unused_2;
+	__be16	ctag_tpid;
+	__le32	rsvd2;
+	__le32	rsvd3;
+	u8	unused_3[3];
+	u8	valid;
+};
+
+/* hwrm_func_vlan_cfg_input (size:384b/48B) */
+struct hwrm_func_vlan_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	unused_0[2];
+	__le32	enables;
+	#define FUNC_VLAN_CFG_REQ_ENABLES_STAG_VID      0x1UL
+	#define FUNC_VLAN_CFG_REQ_ENABLES_CTAG_VID      0x2UL
+	#define FUNC_VLAN_CFG_REQ_ENABLES_STAG_PCP      0x4UL
+	#define FUNC_VLAN_CFG_REQ_ENABLES_CTAG_PCP      0x8UL
+	#define FUNC_VLAN_CFG_REQ_ENABLES_STAG_TPID     0x10UL
+	#define FUNC_VLAN_CFG_REQ_ENABLES_CTAG_TPID     0x20UL
+	__le16	stag_vid;
+	u8	stag_pcp;
+	u8	unused_1;
+	__be16	stag_tpid;
+	__le16	ctag_vid;
+	u8	ctag_pcp;
+	u8	unused_2;
+	__be16	ctag_tpid;
+	__le32	rsvd1;
+	__le32	rsvd2;
+	u8	unused_3[4];
+};
+
+/* hwrm_func_vlan_cfg_output (size:128b/16B) */
+struct hwrm_func_vlan_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_vf_vnic_ids_query_input (size:256b/32B) */
+struct hwrm_func_vf_vnic_ids_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	vf_id;
+	u8	unused_0[2];
+	__le32	max_vnic_id_cnt;
+	__le64	vnic_id_tbl_addr;
+};
+
+/* hwrm_func_vf_vnic_ids_query_output (size:128b/16B) */
+struct hwrm_func_vf_vnic_ids_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	vnic_id_cnt;
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_func_vf_bw_cfg_input (size:960b/120B) */
+struct hwrm_func_vf_bw_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	num_vfs;
+	__le16	unused[3];
+	__le16	vfn[48];
+	#define FUNC_VF_BW_CFG_REQ_VFN_VFID_MASK     0xfffUL
+	#define FUNC_VF_BW_CFG_REQ_VFN_VFID_SFT      0
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_MASK     0xf000UL
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_SFT      12
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_0      (0x0UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_6_66   (0x1UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_13_33  (0x2UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_20     (0x3UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_26_66  (0x4UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_33_33  (0x5UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_40     (0x6UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_46_66  (0x7UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_53_33  (0x8UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_60     (0x9UL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_66_66  (0xaUL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_73_33  (0xbUL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_80     (0xcUL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_86_66  (0xdUL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_93_33  (0xeUL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_100    (0xfUL << 12)
+	#define FUNC_VF_BW_CFG_REQ_VFN_RATE_LAST      FUNC_VF_BW_CFG_REQ_VFN_RATE_PCT_100
+};
+
+/* hwrm_func_vf_bw_cfg_output (size:128b/16B) */
+struct hwrm_func_vf_bw_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_vf_bw_qcfg_input (size:960b/120B) */
+struct hwrm_func_vf_bw_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	num_vfs;
+	__le16	unused[3];
+	__le16	vfn[48];
+	#define FUNC_VF_BW_QCFG_REQ_VFN_VFID_MASK 0xfffUL
+	#define FUNC_VF_BW_QCFG_REQ_VFN_VFID_SFT 0
+};
+
+/* hwrm_func_vf_bw_qcfg_output (size:960b/120B) */
+struct hwrm_func_vf_bw_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	num_vfs;
+	__le16	unused[3];
+	__le16	vfn[48];
+	#define FUNC_VF_BW_QCFG_RESP_VFN_VFID_MASK     0xfffUL
+	#define FUNC_VF_BW_QCFG_RESP_VFN_VFID_SFT      0
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_MASK     0xf000UL
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_SFT      12
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_0      (0x0UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_6_66   (0x1UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_13_33  (0x2UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_20     (0x3UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_26_66  (0x4UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_33_33  (0x5UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_40     (0x6UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_46_66  (0x7UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_53_33  (0x8UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_60     (0x9UL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_66_66  (0xaUL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_73_33  (0xbUL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_80     (0xcUL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_86_66  (0xdUL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_93_33  (0xeUL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_100    (0xfUL << 12)
+	#define FUNC_VF_BW_QCFG_RESP_VFN_RATE_LAST      FUNC_VF_BW_QCFG_RESP_VFN_RATE_PCT_100
+	u8	unused_0[7];
+	u8	valid;
+};
+
 /* hwrm_func_drv_if_change_input (size:192b/24B) */
 struct hwrm_func_drv_if_change_input {
 	__le16	req_type;
@@ -2488,7 +5968,144 @@ struct hwrm_func_drv_if_change_output {
 	u8	valid;
 };
 
-/* hwrm_port_phy_cfg_input (size:448b/56B) */
+/* hwrm_func_host_pf_ids_query_input (size:192b/24B) */
+struct hwrm_func_host_pf_ids_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	host;
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_HOST_SOC      0x1UL
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_HOST_EP_0     0x2UL
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_HOST_EP_1     0x4UL
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_HOST_EP_2     0x8UL
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_HOST_EP_3     0x10UL
+	u8	filter;
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_FILTER_ALL  0x0UL
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_FILTER_L2   0x1UL
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_FILTER_ROCE 0x2UL
+	#define FUNC_HOST_PF_IDS_QUERY_REQ_FILTER_LAST FUNC_HOST_PF_IDS_QUERY_REQ_FILTER_ROCE
+	u8	unused_1[6];
+};
+
+/* hwrm_func_host_pf_ids_query_output (size:128b/16B) */
+struct hwrm_func_host_pf_ids_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	first_pf_id;
+	__le16	pf_ordinal_mask;
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_0      0x1UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_1      0x2UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_2      0x4UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_3      0x8UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_4      0x10UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_5      0x20UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_6      0x40UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_7      0x80UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_8      0x100UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_9      0x200UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_10     0x400UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_11     0x800UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_12     0x1000UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_13     0x2000UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_14     0x4000UL
+	#define FUNC_HOST_PF_IDS_QUERY_RESP_PF_ORDINAL_MASK_FUNC_15     0x8000UL
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_func_spd_cfg_input (size:384b/48B) */
+struct hwrm_func_spd_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define FUNC_SPD_CFG_REQ_FLAGS_FWD_ENABLE       0x1UL
+	#define FUNC_SPD_CFG_REQ_FLAGS_FWD_DISABLE      0x2UL
+	#define FUNC_SPD_CFG_REQ_FLAGS_CSUM_ENABLE      0x4UL
+	#define FUNC_SPD_CFG_REQ_FLAGS_CSUM_DISABLE     0x8UL
+	#define FUNC_SPD_CFG_REQ_FLAGS_DBG_ENABLE       0x10UL
+	#define FUNC_SPD_CFG_REQ_FLAGS_DBG_DISABLE      0x20UL
+	__le32	enables;
+	#define FUNC_SPD_CFG_REQ_ENABLES_ETHERTYPE             0x1UL
+	#define FUNC_SPD_CFG_REQ_ENABLES_HASH_MODE_FLAGS       0x2UL
+	#define FUNC_SPD_CFG_REQ_ENABLES_HASH_TYPE             0x4UL
+	#define FUNC_SPD_CFG_REQ_ENABLES_RING_TBL_ADDR         0x8UL
+	#define FUNC_SPD_CFG_REQ_ENABLES_HASH_KEY_TBL_ADDR     0x10UL
+	__le16	ethertype;
+	u8	hash_mode_flags;
+	#define FUNC_SPD_CFG_REQ_HASH_MODE_FLAGS_DEFAULT         0x1UL
+	#define FUNC_SPD_CFG_REQ_HASH_MODE_FLAGS_INNERMOST_4     0x2UL
+	#define FUNC_SPD_CFG_REQ_HASH_MODE_FLAGS_INNERMOST_2     0x4UL
+	#define FUNC_SPD_CFG_REQ_HASH_MODE_FLAGS_OUTERMOST_4     0x8UL
+	#define FUNC_SPD_CFG_REQ_HASH_MODE_FLAGS_OUTERMOST_2     0x10UL
+	u8	unused_1;
+	__le32	hash_type;
+	#define FUNC_SPD_CFG_REQ_HASH_TYPE_IPV4         0x1UL
+	#define FUNC_SPD_CFG_REQ_HASH_TYPE_TCP_IPV4     0x2UL
+	#define FUNC_SPD_CFG_REQ_HASH_TYPE_UDP_IPV4     0x4UL
+	#define FUNC_SPD_CFG_REQ_HASH_TYPE_IPV6         0x8UL
+	#define FUNC_SPD_CFG_REQ_HASH_TYPE_TCP_IPV6     0x10UL
+	#define FUNC_SPD_CFG_REQ_HASH_TYPE_UDP_IPV6     0x20UL
+	__le64	ring_grp_tbl_addr;
+	__le64	hash_key_tbl_addr;
+};
+
+/* hwrm_func_spd_cfg_output (size:128b/16B) */
+struct hwrm_func_spd_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_func_spd_qcfg_input (size:128b/16B) */
+struct hwrm_func_spd_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_func_spd_qcfg_output (size:512b/64B) */
+struct hwrm_func_spd_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	flags;
+	#define FUNC_SPD_QCFG_RESP_FLAGS_FWD_ENABLED      0x1UL
+	#define FUNC_SPD_QCFG_RESP_FLAGS_CSUM_ENABLED     0x2UL
+	#define FUNC_SPD_QCFG_RESP_FLAGS_DBG_ENABLED      0x4UL
+	__le32	hash_type;
+	#define FUNC_SPD_QCFG_RESP_HASH_TYPE_IPV4         0x1UL
+	#define FUNC_SPD_QCFG_RESP_HASH_TYPE_TCP_IPV4     0x2UL
+	#define FUNC_SPD_QCFG_RESP_HASH_TYPE_UDP_IPV4     0x4UL
+	#define FUNC_SPD_QCFG_RESP_HASH_TYPE_IPV6         0x8UL
+	#define FUNC_SPD_QCFG_RESP_HASH_TYPE_TCP_IPV6     0x10UL
+	#define FUNC_SPD_QCFG_RESP_HASH_TYPE_UDP_IPV6     0x20UL
+	__le32	hash_key[10];
+	u8	hash_mode_flags;
+	#define FUNC_SPD_QCFG_RESP_HASH_MODE_FLAGS_DEFAULT         0x1UL
+	#define FUNC_SPD_QCFG_RESP_HASH_MODE_FLAGS_INNERMOST_4     0x2UL
+	#define FUNC_SPD_QCFG_RESP_HASH_MODE_FLAGS_INNERMOST_2     0x4UL
+	#define FUNC_SPD_QCFG_RESP_HASH_MODE_FLAGS_OUTERMOST_4     0x8UL
+	#define FUNC_SPD_QCFG_RESP_HASH_MODE_FLAGS_OUTERMOST_2     0x10UL
+	u8	unused_1;
+	__le16	ethertype;
+	u8	unused_2[3];
+	u8	valid;
+};
+
+/* hwrm_port_phy_cfg_input (size:512b/64B) */
 struct hwrm_port_phy_cfg_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -2533,6 +6150,8 @@ struct hwrm_port_phy_cfg_input {
 	#define PORT_PHY_CFG_REQ_ENABLES_TX_LPI_TIMER                  0x400UL
 	#define PORT_PHY_CFG_REQ_ENABLES_FORCE_PAM4_LINK_SPEED         0x800UL
 	#define PORT_PHY_CFG_REQ_ENABLES_AUTO_PAM4_LINK_SPEED_MASK     0x1000UL
+	#define PORT_PHY_CFG_REQ_ENABLES_FORCE_LINK_SPEEDS2            0x2000UL
+	#define PORT_PHY_CFG_REQ_ENABLES_AUTO_LINK_SPEEDS2_MASK        0x4000UL
 	__le16	port_id;
 	__le16	force_link_speed;
 	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEED_100MB 0x1UL
@@ -2563,7 +6182,9 @@ struct hwrm_port_phy_cfg_input {
 	#define PORT_PHY_CFG_REQ_AUTO_PAUSE_TX                0x1UL
 	#define PORT_PHY_CFG_REQ_AUTO_PAUSE_RX                0x2UL
 	#define PORT_PHY_CFG_REQ_AUTO_PAUSE_AUTONEG_PAUSE     0x4UL
-	u8	unused_0;
+	u8	mgmt_flag;
+	#define PORT_PHY_CFG_REQ_MGMT_FLAG_LINK_RELEASE     0x1UL
+	#define PORT_PHY_CFG_REQ_MGMT_FLAG_MGMT_VALID       0x80UL
 	__le16	auto_link_speed;
 	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEED_100MB 0x1UL
 	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEED_1GB   0xaUL
@@ -2627,7 +6248,36 @@ struct hwrm_port_phy_cfg_input {
 	#define PORT_PHY_CFG_REQ_AUTO_LINK_PAM4_SPEED_MASK_50G      0x1UL
 	#define PORT_PHY_CFG_REQ_AUTO_LINK_PAM4_SPEED_MASK_100G     0x2UL
 	#define PORT_PHY_CFG_REQ_AUTO_LINK_PAM4_SPEED_MASK_200G     0x4UL
-	u8	unused_2[2];
+	__le16	force_link_speeds2;
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_1GB            0xaUL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_10GB           0x64UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_25GB           0xfaUL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_40GB           0x190UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_50GB           0x1f4UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_100GB          0x3e8UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_50GB_PAM4_56   0x1f5UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_100GB_PAM4_56  0x3e9UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_200GB_PAM4_56  0x7d1UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_400GB_PAM4_56  0xfa1UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_100GB_PAM4_112 0x3eaUL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_200GB_PAM4_112 0x7d2UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_400GB_PAM4_112 0xfa2UL
+	#define PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_LAST          PORT_PHY_CFG_REQ_FORCE_LINK_SPEEDS2_400GB_PAM4_112
+	__le16	auto_link_speeds2_mask;
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_1GB                0x1UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_10GB               0x2UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_25GB               0x4UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_40GB               0x8UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_50GB               0x10UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_100GB              0x20UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_50GB_PAM4_56       0x40UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_100GB_PAM4_56      0x80UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_200GB_PAM4_56      0x100UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_400GB_PAM4_56      0x200UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_100GB_PAM4_112     0x400UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_200GB_PAM4_112     0x800UL
+	#define PORT_PHY_CFG_REQ_AUTO_LINK_SPEEDS2_MASK_400GB_PAM4_112     0x1000UL
+	u8	unused_2[6];
 };
 
 /* hwrm_port_phy_cfg_output (size:128b/16B) */
@@ -2661,7 +6311,7 @@ struct hwrm_port_phy_qcfg_input {
 	u8	unused_0[6];
 };
 
-/* hwrm_port_phy_qcfg_output (size:768b/96B) */
+/* hwrm_port_phy_qcfg_output (size:832b/104B) */
 struct hwrm_port_phy_qcfg_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -2677,7 +6327,8 @@ struct hwrm_port_phy_qcfg_output {
 	#define PORT_PHY_QCFG_RESP_SIGNAL_MODE_SFT                 0
 	#define PORT_PHY_QCFG_RESP_SIGNAL_MODE_NRZ                   0x0UL
 	#define PORT_PHY_QCFG_RESP_SIGNAL_MODE_PAM4                  0x1UL
-	#define PORT_PHY_QCFG_RESP_SIGNAL_MODE_LAST                 PORT_PHY_QCFG_RESP_SIGNAL_MODE_PAM4
+	#define PORT_PHY_QCFG_RESP_SIGNAL_MODE_PAM4_112              0x2UL
+	#define PORT_PHY_QCFG_RESP_SIGNAL_MODE_LAST                 PORT_PHY_QCFG_RESP_SIGNAL_MODE_PAM4_112
 	#define PORT_PHY_QCFG_RESP_ACTIVE_FEC_MASK                 0xf0UL
 	#define PORT_PHY_QCFG_RESP_ACTIVE_FEC_SFT                  4
 	#define PORT_PHY_QCFG_RESP_ACTIVE_FEC_FEC_NONE_ACTIVE        (0x0UL << 4)
@@ -2700,6 +6351,7 @@ struct hwrm_port_phy_qcfg_output {
 	#define PORT_PHY_QCFG_RESP_LINK_SPEED_50GB  0x1f4UL
 	#define PORT_PHY_QCFG_RESP_LINK_SPEED_100GB 0x3e8UL
 	#define PORT_PHY_QCFG_RESP_LINK_SPEED_200GB 0x7d0UL
+	#define PORT_PHY_QCFG_RESP_LINK_SPEED_400GB 0xfa0UL
 	#define PORT_PHY_QCFG_RESP_LINK_SPEED_10MB  0xffffUL
 	#define PORT_PHY_QCFG_RESP_LINK_SPEED_LAST PORT_PHY_QCFG_RESP_LINK_SPEED_10MB
 	u8	duplex_cfg;
@@ -2835,7 +6487,31 @@ struct hwrm_port_phy_qcfg_output {
 	#define PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASESR4     0x1dUL
 	#define PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASELR4     0x1eUL
 	#define PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASEER4     0x1fUL
-	#define PORT_PHY_QCFG_RESP_PHY_TYPE_LAST            PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASEER4
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_50G_BASECR       0x20UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_50G_BASESR       0x21UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_50G_BASELR       0x22UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_50G_BASEER       0x23UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASECR2     0x24UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASESR2     0x25UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASELR2     0x26UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASEER2     0x27UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASECR      0x28UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASESR      0x29UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASELR      0x2aUL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_100G_BASEER      0x2bUL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASECR2     0x2cUL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASESR2     0x2dUL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASELR2     0x2eUL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_200G_BASEER2     0x2fUL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASECR8     0x30UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASESR8     0x31UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASELR8     0x32UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASEER8     0x33UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASECR4     0x34UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASESR4     0x35UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASELR4     0x36UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASEER4     0x37UL
+	#define PORT_PHY_QCFG_RESP_PHY_TYPE_LAST            PORT_PHY_QCFG_RESP_PHY_TYPE_400G_BASEER4
 	u8	media_type;
 	#define PORT_PHY_QCFG_RESP_MEDIA_TYPE_UNKNOWN 0x0UL
 	#define PORT_PHY_QCFG_RESP_MEDIA_TYPE_TP      0x1UL
@@ -2930,6 +6606,8 @@ struct hwrm_port_phy_qcfg_output {
 	#define PORT_PHY_QCFG_RESP_DUPLEX_STATE_LAST PORT_PHY_QCFG_RESP_DUPLEX_STATE_FULL
 	u8	option_flags;
 	#define PORT_PHY_QCFG_RESP_OPTION_FLAGS_MEDIA_AUTO_DETECT     0x1UL
+	#define PORT_PHY_QCFG_RESP_OPTION_FLAGS_SIGNAL_MODE_KNOWN     0x2UL
+	#define PORT_PHY_QCFG_RESP_OPTION_FLAGS_SPEEDS2_SUPPORTED     0x4UL
 	char	phy_vendor_name[16];
 	char	phy_vendor_partnumber[16];
 	__le16	support_pam4_speeds;
@@ -2949,10 +6627,59 @@ struct hwrm_port_phy_qcfg_output {
 	#define PORT_PHY_QCFG_RESP_LINK_PARTNER_PAM4_ADV_SPEEDS_50GB      0x1UL
 	#define PORT_PHY_QCFG_RESP_LINK_PARTNER_PAM4_ADV_SPEEDS_100GB     0x2UL
 	#define PORT_PHY_QCFG_RESP_LINK_PARTNER_PAM4_ADV_SPEEDS_200GB     0x4UL
+	u8	link_down_reason;
+	#define PORT_PHY_QCFG_RESP_LINK_DOWN_REASON_RF     0x1UL
+	__le16	support_speeds2;
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_1GB                0x1UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_10GB               0x2UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_25GB               0x4UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_40GB               0x8UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_50GB               0x10UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_100GB              0x20UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_50GB_PAM4_56       0x40UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_100GB_PAM4_56      0x80UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_200GB_PAM4_56      0x100UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_400GB_PAM4_56      0x200UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_100GB_PAM4_112     0x400UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_200GB_PAM4_112     0x800UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_400GB_PAM4_112     0x1000UL
+	#define PORT_PHY_QCFG_RESP_SUPPORT_SPEEDS2_800GB_PAM4_112     0x2000UL
+	__le16	force_link_speeds2;
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_1GB            0xaUL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_10GB           0x64UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_25GB           0xfaUL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_40GB           0x190UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_50GB           0x1f4UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_100GB          0x3e8UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_50GB_PAM4_56   0x1f5UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_100GB_PAM4_56  0x3e9UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_200GB_PAM4_56  0x7d1UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_400GB_PAM4_56  0xfa1UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_100GB_PAM4_112 0x3eaUL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_200GB_PAM4_112 0x7d2UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_400GB_PAM4_112 0xfa2UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_800GB_PAM4_112 0x1f42UL
+	#define PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_LAST          PORT_PHY_QCFG_RESP_FORCE_LINK_SPEEDS2_800GB_PAM4_112
+	__le16	auto_link_speeds2;
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_1GB                0x1UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_10GB               0x2UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_25GB               0x4UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_40GB               0x8UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_50GB               0x10UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_100GB              0x20UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_50GB_PAM4_56       0x40UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_100GB_PAM4_56      0x80UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_200GB_PAM4_56      0x100UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_400GB_PAM4_56      0x200UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_100GB_PAM4_112     0x400UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_200GB_PAM4_112     0x800UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_400GB_PAM4_112     0x1000UL
+	#define PORT_PHY_QCFG_RESP_AUTO_LINK_SPEEDS2_800GB_PAM4_112     0x2000UL
+	u8	active_lanes;
 	u8	valid;
 };
 
-/* hwrm_port_mac_cfg_input (size:384b/48B) */
+/* hwrm_port_mac_cfg_input (size:448b/56B) */
 struct hwrm_port_mac_cfg_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -2974,6 +6701,8 @@ struct hwrm_port_mac_cfg_input {
 	#define PORT_MAC_CFG_REQ_FLAGS_TUNNEL_PRI2COS_DISABLE        0x800UL
 	#define PORT_MAC_CFG_REQ_FLAGS_IP_DSCP2COS_DISABLE           0x1000UL
 	#define PORT_MAC_CFG_REQ_FLAGS_PTP_ONE_STEP_TX_TS            0x2000UL
+	#define PORT_MAC_CFG_REQ_FLAGS_ALL_RX_TS_CAPTURE_ENABLE      0x4000UL
+	#define PORT_MAC_CFG_REQ_FLAGS_ALL_RX_TS_CAPTURE_DISABLE     0x8000UL
 	__le32	enables;
 	#define PORT_MAC_CFG_REQ_ENABLES_IPG                            0x1UL
 	#define PORT_MAC_CFG_REQ_ENABLES_LPBK                           0x2UL
@@ -2984,6 +6713,8 @@ struct hwrm_port_mac_cfg_input {
 	#define PORT_MAC_CFG_REQ_ENABLES_TX_TS_CAPTURE_PTP_MSG_TYPE     0x80UL
 	#define PORT_MAC_CFG_REQ_ENABLES_COS_FIELD_CFG                  0x100UL
 	#define PORT_MAC_CFG_REQ_ENABLES_PTP_FREQ_ADJ_PPB               0x200UL
+	#define PORT_MAC_CFG_REQ_ENABLES_PTP_ADJ_PHASE                  0x400UL
+	#define PORT_MAC_CFG_REQ_ENABLES_PTP_LOAD_CONTROL               0x800UL
 	__le16	port_id;
 	u8	ipg;
 	u8	lpbk;
@@ -3017,7 +6748,13 @@ struct hwrm_port_mac_cfg_input {
 	#define PORT_MAC_CFG_REQ_COS_FIELD_CFG_DEFAULT_COS_SFT           5
 	u8	unused_0[3];
 	__s32	ptp_freq_adj_ppb;
-	u8	unused_1[4];
+	u8	unused_1[3];
+	u8	ptp_load_control;
+	#define PORT_MAC_CFG_REQ_PTP_LOAD_CONTROL_NONE      0x0UL
+	#define PORT_MAC_CFG_REQ_PTP_LOAD_CONTROL_IMMEDIATE 0x1UL
+	#define PORT_MAC_CFG_REQ_PTP_LOAD_CONTROL_PPS_EVENT 0x2UL
+	#define PORT_MAC_CFG_REQ_PTP_LOAD_CONTROL_LAST     PORT_MAC_CFG_REQ_PTP_LOAD_CONTROL_PPS_EVENT
+	__s64	ptp_adj_phase;
 };
 
 /* hwrm_port_mac_cfg_output (size:128b/16B) */
@@ -3038,6 +6775,75 @@ struct hwrm_port_mac_cfg_output {
 	u8	valid;
 };
 
+/* hwrm_port_mac_qcfg_input (size:192b/24B) */
+struct hwrm_port_mac_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_port_mac_qcfg_output (size:256b/32B) */
+struct hwrm_port_mac_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	mru;
+	__le16	mtu;
+	u8	ipg;
+	u8	lpbk;
+	#define PORT_MAC_QCFG_RESP_LPBK_NONE   0x0UL
+	#define PORT_MAC_QCFG_RESP_LPBK_LOCAL  0x1UL
+	#define PORT_MAC_QCFG_RESP_LPBK_REMOTE 0x2UL
+	#define PORT_MAC_QCFG_RESP_LPBK_LAST  PORT_MAC_QCFG_RESP_LPBK_REMOTE
+	u8	vlan_pri2cos_map_pri;
+	u8	flags;
+	#define PORT_MAC_QCFG_RESP_FLAGS_VLAN_PRI2COS_ENABLE          0x1UL
+	#define PORT_MAC_QCFG_RESP_FLAGS_TUNNEL_PRI2COS_ENABLE        0x2UL
+	#define PORT_MAC_QCFG_RESP_FLAGS_IP_DSCP2COS_ENABLE           0x4UL
+	#define PORT_MAC_QCFG_RESP_FLAGS_OOB_WOL_ENABLE               0x8UL
+	#define PORT_MAC_QCFG_RESP_FLAGS_PTP_RX_TS_CAPTURE_ENABLE     0x10UL
+	#define PORT_MAC_QCFG_RESP_FLAGS_PTP_TX_TS_CAPTURE_ENABLE     0x20UL
+	u8	tunnel_pri2cos_map_pri;
+	u8	dscp2pri_map_pri;
+	__le16	rx_ts_capture_ptp_msg_type;
+	__le16	tx_ts_capture_ptp_msg_type;
+	u8	cos_field_cfg;
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_RSVD                      0x1UL
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_MASK         0x6UL
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_SFT          1
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_INNERMOST      (0x0UL << 1)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_OUTER          (0x1UL << 1)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_OUTERMOST      (0x2UL << 1)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_UNSPECIFIED    (0x3UL << 1)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_LAST          PORT_MAC_QCFG_RESP_COS_FIELD_CFG_VLAN_PRI_SEL_UNSPECIFIED
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_MASK       0x18UL
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_SFT        3
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_INNERMOST    (0x0UL << 3)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_OUTER        (0x1UL << 3)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_OUTERMOST    (0x2UL << 3)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_UNSPECIFIED  (0x3UL << 3)
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_LAST        PORT_MAC_QCFG_RESP_COS_FIELD_CFG_T_VLAN_PRI_SEL_UNSPECIFIED
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_DEFAULT_COS_MASK          0xe0UL
+	#define PORT_MAC_QCFG_RESP_COS_FIELD_CFG_DEFAULT_COS_SFT           5
+	u8	unused_1;
+	__le16	port_svif_info;
+	#define PORT_MAC_QCFG_RESP_PORT_SVIF_INFO_PORT_SVIF_MASK      0x7fffUL
+	#define PORT_MAC_QCFG_RESP_PORT_SVIF_INFO_PORT_SVIF_SFT       0
+	#define PORT_MAC_QCFG_RESP_PORT_SVIF_INFO_PORT_SVIF_VALID     0x8000UL
+	u8	ptp_load_control;
+	#define PORT_MAC_QCFG_RESP_PTP_LOAD_CONTROL_NONE      0x0UL
+	#define PORT_MAC_QCFG_RESP_PTP_LOAD_CONTROL_IMMEDIATE 0x1UL
+	#define PORT_MAC_QCFG_RESP_PTP_LOAD_CONTROL_PPS_EVENT 0x2UL
+	#define PORT_MAC_QCFG_RESP_PTP_LOAD_CONTROL_LAST     PORT_MAC_QCFG_RESP_PTP_LOAD_CONTROL_PPS_EVENT
+	u8	unused_2[4];
+	u8	valid;
+};
+
 /* hwrm_port_mac_ptp_qcfg_input (size:192b/24B) */
 struct hwrm_port_mac_ptp_qcfg_input {
 	__le16	req_type;
@@ -3049,16 +6855,19 @@ struct hwrm_port_mac_ptp_qcfg_input {
 	u8	unused_0[6];
 };
 
-/* hwrm_port_mac_ptp_qcfg_output (size:640b/80B) */
+/* hwrm_port_mac_ptp_qcfg_output (size:704b/88B) */
 struct hwrm_port_mac_ptp_qcfg_output {
 	__le16	error_code;
 	__le16	req_type;
 	__le16	seq_id;
 	__le16	resp_len;
 	u8	flags;
-	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_DIRECT_ACCESS      0x1UL
-	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_ONE_STEP_TX_TS     0x4UL
-	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_HWRM_ACCESS        0x8UL
+	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_DIRECT_ACCESS                       0x1UL
+	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_ONE_STEP_TX_TS                      0x4UL
+	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_HWRM_ACCESS                         0x8UL
+	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_PARTIAL_DIRECT_ACCESS_REF_CLOCK     0x10UL
+	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_RTC_CONFIGURED                      0x20UL
+	#define PORT_MAC_PTP_QCFG_RESP_FLAGS_64B_PHC_TIME                        0x40UL
 	u8	unused_0[3];
 	__le32	rx_ts_reg_off_lower;
 	__le32	rx_ts_reg_off_upper;
@@ -3075,6 +6884,8 @@ struct hwrm_port_mac_ptp_qcfg_output {
 	__le32	tx_ts_reg_off_seq_id;
 	__le32	tx_ts_reg_off_fifo;
 	__le32	tx_ts_reg_off_granularity;
+	__le32	ts_ref_clock_reg_lower;
+	__le32	ts_ref_clock_reg_upper;
 	u8	unused_1[7];
 	u8	valid;
 };
@@ -3213,9 +7024,7 @@ struct hwrm_port_qstats_input {
 	__le64	resp_addr;
 	__le16	port_id;
 	u8	flags;
-	#define PORT_QSTATS_REQ_FLAGS_UNUSED       0x0UL
-	#define PORT_QSTATS_REQ_FLAGS_COUNTER_MASK 0x1UL
-	#define PORT_QSTATS_REQ_FLAGS_LAST        PORT_QSTATS_REQ_FLAGS_COUNTER_MASK
+	#define PORT_QSTATS_REQ_FLAGS_COUNTER_MASK     0x1UL
 	u8	unused_0[5];
 	__le64	tx_stat_host_addr;
 	__le64	rx_stat_host_addr;
@@ -3269,7 +7078,7 @@ struct tx_port_stats_ext {
 	__le64	pfc_pri7_tx_transitions;
 };
 
-/* rx_port_stats_ext (size:3648b/456B) */
+/* rx_port_stats_ext (size:3904b/488B) */
 struct rx_port_stats_ext {
 	__le64	link_down_events;
 	__le64	continuous_pause_events;
@@ -3328,6 +7137,94 @@ struct rx_port_stats_ext {
 	__le64	rx_discard_packets_cos5;
 	__le64	rx_discard_packets_cos6;
 	__le64	rx_discard_packets_cos7;
+	__le64	rx_fec_corrected_blocks;
+	__le64	rx_fec_uncorrectable_blocks;
+	__le64	rx_filter_miss;
+	__le64	rx_fec_symbol_err;
+};
+
+/* rx_port_stats_ext_pfc_wd (size:5120b/640B) */
+struct rx_port_stats_ext_pfc_wd {
+	__le64	rx_pfc_watchdog_storms_detected_pri0;
+	__le64	rx_pfc_watchdog_storms_detected_pri1;
+	__le64	rx_pfc_watchdog_storms_detected_pri2;
+	__le64	rx_pfc_watchdog_storms_detected_pri3;
+	__le64	rx_pfc_watchdog_storms_detected_pri4;
+	__le64	rx_pfc_watchdog_storms_detected_pri5;
+	__le64	rx_pfc_watchdog_storms_detected_pri6;
+	__le64	rx_pfc_watchdog_storms_detected_pri7;
+	__le64	rx_pfc_watchdog_storms_reverted_pri0;
+	__le64	rx_pfc_watchdog_storms_reverted_pri1;
+	__le64	rx_pfc_watchdog_storms_reverted_pri2;
+	__le64	rx_pfc_watchdog_storms_reverted_pri3;
+	__le64	rx_pfc_watchdog_storms_reverted_pri4;
+	__le64	rx_pfc_watchdog_storms_reverted_pri5;
+	__le64	rx_pfc_watchdog_storms_reverted_pri6;
+	__le64	rx_pfc_watchdog_storms_reverted_pri7;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri0;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri1;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri2;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri3;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri4;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri5;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri6;
+	__le64	rx_pfc_watchdog_storms_rx_packets_pri7;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri0;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri1;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri2;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri3;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri4;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri5;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri6;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_pri7;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri0;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri1;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri2;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri3;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri4;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri5;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri6;
+	__le64	rx_pfc_watchdog_storms_rx_packets_dropped_pri7;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri0;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri1;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri2;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri3;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri4;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri5;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri6;
+	__le64	rx_pfc_watchdog_storms_rx_bytes_dropped_pri7;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri0;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri1;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri2;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri3;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri4;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri5;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri6;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_pri7;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri0;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri1;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri2;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri3;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri4;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri5;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri6;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_pri7;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri0;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri1;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri2;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri3;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri4;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri5;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri6;
+	__le64	rx_pfc_watchdog_last_storm_rx_packets_dropped_pri7;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri0;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri1;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri2;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri3;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri4;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri5;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri6;
+	__le64	rx_pfc_watchdog_last_storm_rx_bytes_dropped_pri7;
 };
 
 /* hwrm_port_qstats_ext_input (size:320b/40B) */
@@ -3341,9 +7238,7 @@ struct hwrm_port_qstats_ext_input {
 	__le16	tx_stat_size;
 	__le16	rx_stat_size;
 	u8	flags;
-	#define PORT_QSTATS_EXT_REQ_FLAGS_UNUSED       0x0UL
-	#define PORT_QSTATS_EXT_REQ_FLAGS_COUNTER_MASK 0x1UL
-	#define PORT_QSTATS_EXT_REQ_FLAGS_LAST        PORT_QSTATS_EXT_REQ_FLAGS_COUNTER_MASK
+	#define PORT_QSTATS_EXT_REQ_FLAGS_COUNTER_MASK     0x1UL
 	u8	unused_0;
 	__le64	tx_stat_host_addr;
 	__le64	rx_stat_host_addr;
@@ -3361,6 +7256,31 @@ struct hwrm_port_qstats_ext_output {
 	u8	flags;
 	#define PORT_QSTATS_EXT_RESP_FLAGS_CLEAR_ROCE_COUNTERS_SUPPORTED     0x1UL
 	u8	valid;
+};
+
+/* hwrm_port_qstats_ext_pfc_wd_input (size:256b/32B) */
+struct hwrm_port_qstats_ext_pfc_wd_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	__le16	pfc_wd_stat_size;
+	u8	unused_0[4];
+	__le64	pfc_wd_stat_host_addr;
+};
+
+/* hwrm_port_qstats_ext_pfc_wd_output (size:128b/16B) */
+struct hwrm_port_qstats_ext_pfc_wd_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	pfc_wd_stat_size;
+	u8	flags;
+	u8	valid;
+	u8	unused_0[4];
 };
 
 /* hwrm_port_lpbk_qstats_input (size:128b/16B) */
@@ -3402,9 +7322,7 @@ struct hwrm_port_ecn_qstats_input {
 	__le16	port_id;
 	__le16	ecn_stat_buf_size;
 	u8	flags;
-	#define PORT_ECN_QSTATS_REQ_FLAGS_UNUSED       0x0UL
-	#define PORT_ECN_QSTATS_REQ_FLAGS_COUNTER_MASK 0x1UL
-	#define PORT_ECN_QSTATS_REQ_FLAGS_LAST        PORT_ECN_QSTATS_REQ_FLAGS_COUNTER_MASK
+	#define PORT_ECN_QSTATS_REQ_FLAGS_COUNTER_MASK     0x1UL
 	u8	unused_0[3];
 	__le64	ecn_stat_host_addr;
 };
@@ -3475,7 +7393,7 @@ struct hwrm_port_lpbk_clr_stats_output {
 	u8	valid;
 };
 
-/* hwrm_port_ts_query_input (size:192b/24B) */
+/* hwrm_port_ts_query_input (size:320b/40B) */
 struct hwrm_port_ts_query_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -3490,6 +7408,14 @@ struct hwrm_port_ts_query_input {
 	#define PORT_TS_QUERY_REQ_FLAGS_CURRENT_TIME     0x2UL
 	__le16	port_id;
 	u8	unused_0[2];
+	__le16	enables;
+	#define PORT_TS_QUERY_REQ_ENABLES_TS_REQ_TIMEOUT     0x1UL
+	#define PORT_TS_QUERY_REQ_ENABLES_PTP_SEQ_ID         0x2UL
+	#define PORT_TS_QUERY_REQ_ENABLES_PTP_HDR_OFFSET     0x4UL
+	__le16	ts_req_timeout;
+	__le32	ptp_seq_id;
+	__le16	ptp_hdr_offset;
+	u8	unused_1[6];
 };
 
 /* hwrm_port_ts_query_output (size:192b/24B) */
@@ -3515,7 +7441,7 @@ struct hwrm_port_phy_qcaps_input {
 	u8	unused_0[6];
 };
 
-/* hwrm_port_phy_qcaps_output (size:256b/32B) */
+/* hwrm_port_phy_qcaps_output (size:320b/40B) */
 struct hwrm_port_phy_qcaps_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -3528,15 +7454,16 @@ struct hwrm_port_phy_qcaps_output {
 	#define PORT_PHY_QCAPS_RESP_FLAGS_SHARED_PHY_CFG_SUPPORTED         0x8UL
 	#define PORT_PHY_QCAPS_RESP_FLAGS_CUMULATIVE_COUNTERS_ON_RESET     0x10UL
 	#define PORT_PHY_QCAPS_RESP_FLAGS_LOCAL_LPBK_NOT_SUPPORTED         0x20UL
-	#define PORT_PHY_QCAPS_RESP_FLAGS_RSVD1_MASK                       0xc0UL
-	#define PORT_PHY_QCAPS_RESP_FLAGS_RSVD1_SFT                        6
+	#define PORT_PHY_QCAPS_RESP_FLAGS_FW_MANAGED_LINK_DOWN             0x40UL
+	#define PORT_PHY_QCAPS_RESP_FLAGS_NO_FCS                           0x80UL
 	u8	port_cnt;
 	#define PORT_PHY_QCAPS_RESP_PORT_CNT_UNKNOWN 0x0UL
 	#define PORT_PHY_QCAPS_RESP_PORT_CNT_1       0x1UL
 	#define PORT_PHY_QCAPS_RESP_PORT_CNT_2       0x2UL
 	#define PORT_PHY_QCAPS_RESP_PORT_CNT_3       0x3UL
 	#define PORT_PHY_QCAPS_RESP_PORT_CNT_4       0x4UL
-	#define PORT_PHY_QCAPS_RESP_PORT_CNT_LAST   PORT_PHY_QCAPS_RESP_PORT_CNT_4
+	#define PORT_PHY_QCAPS_RESP_PORT_CNT_12      0xcUL
+	#define PORT_PHY_QCAPS_RESP_PORT_CNT_LAST   PORT_PHY_QCAPS_RESP_PORT_CNT_12
 	__le16	supported_speeds_force_mode;
 	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS_FORCE_MODE_100MBHD     0x1UL
 	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS_FORCE_MODE_100MB       0x2UL
@@ -3593,7 +7520,75 @@ struct hwrm_port_phy_qcaps_output {
 	#define PORT_PHY_QCAPS_RESP_SUPPORTED_PAM4_SPEEDS_FORCE_MODE_50G      0x1UL
 	#define PORT_PHY_QCAPS_RESP_SUPPORTED_PAM4_SPEEDS_FORCE_MODE_100G     0x2UL
 	#define PORT_PHY_QCAPS_RESP_SUPPORTED_PAM4_SPEEDS_FORCE_MODE_200G     0x4UL
-	u8	unused_0[3];
+	__le16	flags2;
+	#define PORT_PHY_QCAPS_RESP_FLAGS2_PAUSE_UNSUPPORTED       0x1UL
+	#define PORT_PHY_QCAPS_RESP_FLAGS2_PFC_UNSUPPORTED         0x2UL
+	#define PORT_PHY_QCAPS_RESP_FLAGS2_BANK_ADDR_SUPPORTED     0x4UL
+	#define PORT_PHY_QCAPS_RESP_FLAGS2_SPEEDS2_SUPPORTED       0x8UL
+	u8	internal_port_cnt;
+	u8	unused_0;
+	__le16	supported_speeds2_force_mode;
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_1GB                0x1UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_10GB               0x2UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_25GB               0x4UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_40GB               0x8UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_50GB               0x10UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_100GB              0x20UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_50GB_PAM4_56       0x40UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_100GB_PAM4_56      0x80UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_200GB_PAM4_56      0x100UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_400GB_PAM4_56      0x200UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_100GB_PAM4_112     0x400UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_200GB_PAM4_112     0x800UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_400GB_PAM4_112     0x1000UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_FORCE_MODE_800GB_PAM4_112     0x2000UL
+	__le16	supported_speeds2_auto_mode;
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_1GB                0x1UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_10GB               0x2UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_25GB               0x4UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_40GB               0x8UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_50GB               0x10UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_100GB              0x20UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_50GB_PAM4_56       0x40UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_100GB_PAM4_56      0x80UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_200GB_PAM4_56      0x100UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_400GB_PAM4_56      0x200UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_100GB_PAM4_112     0x400UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_200GB_PAM4_112     0x800UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_400GB_PAM4_112     0x1000UL
+	#define PORT_PHY_QCAPS_RESP_SUPPORTED_SPEEDS2_AUTO_MODE_800GB_PAM4_112     0x2000UL
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_port_phy_i2c_write_input (size:832b/104B) */
+struct hwrm_port_phy_i2c_write_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	__le32	enables;
+	#define PORT_PHY_I2C_WRITE_REQ_ENABLES_PAGE_OFFSET     0x1UL
+	#define PORT_PHY_I2C_WRITE_REQ_ENABLES_BANK_NUMBER     0x2UL
+	__le16	port_id;
+	u8	i2c_slave_addr;
+	u8	bank_number;
+	__le16	page_number;
+	__le16	page_offset;
+	u8	data_length;
+	u8	unused_1[7];
+	__le32	data[16];
+};
+
+/* hwrm_port_phy_i2c_write_output (size:128b/16B) */
+struct hwrm_port_phy_i2c_write_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
 	u8	valid;
 };
 
@@ -3607,9 +7602,10 @@ struct hwrm_port_phy_i2c_read_input {
 	__le32	flags;
 	__le32	enables;
 	#define PORT_PHY_I2C_READ_REQ_ENABLES_PAGE_OFFSET     0x1UL
+	#define PORT_PHY_I2C_READ_REQ_ENABLES_BANK_NUMBER     0x2UL
 	__le16	port_id;
 	u8	i2c_slave_addr;
-	u8	unused_0;
+	u8	bank_number;
 	__le16	page_number;
 	__le16	page_offset;
 	u8	data_length;
@@ -4013,6 +8009,443 @@ struct hwrm_port_led_qcaps_output {
 	u8	valid;
 };
 
+/* hwrm_port_prbs_test_input (size:384b/48B) */
+struct hwrm_port_prbs_test_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	resp_data_addr;
+	__le16	data_len;
+	__le16	flags;
+	#define PORT_PRBS_TEST_REQ_FLAGS_INTERNAL     0x1UL
+	__le32	unused_1;
+	__le16	port_id;
+	__le16	poly;
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS7   0x0UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS9   0x1UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS11  0x2UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS15  0x3UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS23  0x4UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS31  0x5UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS58  0x6UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS49  0x7UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS10  0x8UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS20  0x9UL
+	#define PORT_PRBS_TEST_REQ_POLY_PRBS13  0xaUL
+	#define PORT_PRBS_TEST_REQ_POLY_INVALID 0xffUL
+	#define PORT_PRBS_TEST_REQ_POLY_LAST   PORT_PRBS_TEST_REQ_POLY_INVALID
+	__le16	prbs_config;
+	#define PORT_PRBS_TEST_REQ_PRBS_CONFIG_START_STOP            0x1UL
+	#define PORT_PRBS_TEST_REQ_PRBS_CONFIG_TX_LANE_MAP_VALID     0x2UL
+	#define PORT_PRBS_TEST_REQ_PRBS_CONFIG_RX_LANE_MAP_VALID     0x4UL
+	#define PORT_PRBS_TEST_REQ_PRBS_CONFIG_FEC_STAT_T0_T7        0x8UL
+	#define PORT_PRBS_TEST_REQ_PRBS_CONFIG_FEC_STAT_T8_T15       0x10UL
+	__le16	timeout;
+	__le32	tx_lane_map;
+	__le32	rx_lane_map;
+};
+
+/* hwrm_port_prbs_test_output (size:128b/16B) */
+struct hwrm_port_prbs_test_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	total_data_len;
+	u8	ber_format;
+	#define PORT_PRBS_TEST_RESP_BER_FORMAT_PRBS 0x0UL
+	#define PORT_PRBS_TEST_RESP_BER_FORMAT_FEC  0x1UL
+	#define PORT_PRBS_TEST_RESP_BER_FORMAT_LAST PORT_PRBS_TEST_RESP_BER_FORMAT_FEC
+	u8	unused_0;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_port_dsc_dump_input (size:320b/40B) */
+struct hwrm_port_dsc_dump_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	resp_data_addr;
+	__le16	data_len;
+	__le16	unused_0;
+	__le32	unused_1;
+	__le16	port_id;
+	__le16	diag_level;
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_LANE       0x0UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_CORE       0x1UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_EVENT      0x2UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_EYE        0x3UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_REG_CORE   0x4UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_REG_LANE   0x5UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_UC_CORE    0x6UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_UC_LANE    0x7UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_LANE_DEBUG 0x8UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_BER_VERT   0x9UL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_BER_HORZ   0xaUL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_EVENT_SAFE 0xbUL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_TIMESTAMP  0xcUL
+	#define PORT_DSC_DUMP_REQ_DIAG_LEVEL_LAST                PORT_DSC_DUMP_REQ_DIAG_LEVEL_SRDS_DIAG_TIMESTAMP
+	__le16	lane_number;
+	__le16	dsc_dump_config;
+	#define PORT_DSC_DUMP_REQ_DSC_DUMP_CONFIG_START_RETRIEVE     0x1UL
+};
+
+/* hwrm_port_dsc_dump_output (size:128b/16B) */
+struct hwrm_port_dsc_dump_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	total_data_len;
+	__le16	unused_0;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_port_sfp_sideband_cfg_input (size:256b/32B) */
+struct hwrm_port_sfp_sideband_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	u8	unused_0[6];
+	__le32	enables;
+	#define PORT_SFP_SIDEBAND_CFG_REQ_ENABLES_RS0         0x1UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_ENABLES_RS1         0x2UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_ENABLES_TX_DIS      0x4UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_ENABLES_MOD_SEL     0x8UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_ENABLES_RESET_L     0x10UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_ENABLES_LP_MODE     0x20UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_ENABLES_PWR_DIS     0x40UL
+	__le32	flags;
+	#define PORT_SFP_SIDEBAND_CFG_REQ_FLAGS_RS0         0x1UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_FLAGS_RS1         0x2UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_FLAGS_TX_DIS      0x4UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_FLAGS_MOD_SEL     0x8UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_FLAGS_RESET_L     0x10UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_FLAGS_LP_MODE     0x20UL
+	#define PORT_SFP_SIDEBAND_CFG_REQ_FLAGS_PWR_DIS     0x40UL
+};
+
+/* hwrm_port_sfp_sideband_cfg_output (size:128b/16B) */
+struct hwrm_port_sfp_sideband_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused[7];
+	u8	valid;
+};
+
+/* hwrm_port_sfp_sideband_qcfg_input (size:192b/24B) */
+struct hwrm_port_sfp_sideband_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_port_sfp_sideband_qcfg_output (size:192b/24B) */
+struct hwrm_port_sfp_sideband_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	supported_mask;
+	__le32	sideband_signals;
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_MOD_ABS      0x1UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_RX_LOS       0x2UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_RS0          0x4UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_RS1          0x8UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_TX_DIS       0x10UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_TX_FAULT     0x20UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_MOD_SEL      0x40UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_RESET_L      0x80UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_LP_MODE      0x100UL
+	#define PORT_SFP_SIDEBAND_QCFG_RESP_SIDEBAND_SIGNALS_PWR_DIS      0x200UL
+	u8	unused[7];
+	u8	valid;
+};
+
+/* hwrm_port_phy_mdio_bus_acquire_input (size:192b/24B) */
+struct hwrm_port_phy_mdio_bus_acquire_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	__le16	client_id;
+	__le16	mdio_bus_timeout;
+	u8	unused_0[2];
+};
+
+/* hwrm_port_phy_mdio_bus_acquire_output (size:128b/16B) */
+struct hwrm_port_phy_mdio_bus_acquire_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	unused_0;
+	__le16	client_id;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_port_phy_mdio_bus_release_input (size:192b/24B) */
+struct hwrm_port_phy_mdio_bus_release_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	__le16	client_id;
+	u8	unused_0[4];
+};
+
+/* hwrm_port_phy_mdio_bus_release_output (size:128b/16B) */
+struct hwrm_port_phy_mdio_bus_release_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	unused_0;
+	__le16	clients_id;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_port_tx_fir_cfg_input (size:320b/40B) */
+struct hwrm_port_tx_fir_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	mod_type;
+	#define PORT_TX_FIR_CFG_REQ_MOD_TYPE_NRZ      0x0UL
+	#define PORT_TX_FIR_CFG_REQ_MOD_TYPE_PAM4     0x1UL
+	#define PORT_TX_FIR_CFG_REQ_MOD_TYPE_C2M_NRZ  0x2UL
+	#define PORT_TX_FIR_CFG_REQ_MOD_TYPE_C2M_PAM4 0x3UL
+	#define PORT_TX_FIR_CFG_REQ_MOD_TYPE_LAST    PORT_TX_FIR_CFG_REQ_MOD_TYPE_C2M_PAM4
+	u8	lane_mask;
+	u8	unused_0[2];
+	__le32	txfir_val_1;
+	__le32	txfir_val_2;
+	__le32	txfir_val_3;
+	__le32	txfir_val_4;
+	u8	unused_1[4];
+};
+
+/* hwrm_port_tx_fir_cfg_output (size:128b/16B) */
+struct hwrm_port_tx_fir_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused[7];
+	u8	valid;
+};
+
+/* hwrm_port_tx_fir_qcfg_input (size:192b/24B) */
+struct hwrm_port_tx_fir_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	mod_type;
+	#define PORT_TX_FIR_QCFG_REQ_MOD_TYPE_NRZ      0x0UL
+	#define PORT_TX_FIR_QCFG_REQ_MOD_TYPE_PAM4     0x1UL
+	#define PORT_TX_FIR_QCFG_REQ_MOD_TYPE_C2M_NRZ  0x2UL
+	#define PORT_TX_FIR_QCFG_REQ_MOD_TYPE_C2M_PAM4 0x3UL
+	#define PORT_TX_FIR_QCFG_REQ_MOD_TYPE_LAST    PORT_TX_FIR_QCFG_REQ_MOD_TYPE_C2M_PAM4
+	u8	lane_id;
+	u8	unused[6];
+};
+
+/* hwrm_port_tx_fir_qcfg_output (size:256b/32B) */
+struct hwrm_port_tx_fir_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	txfir_val_1;
+	__le32	txfir_val_2;
+	__le32	txfir_val_3;
+	__le32	txfir_val_4;
+	u8	unused[7];
+	u8	valid;
+};
+
+/* hwrm_port_ep_tx_cfg_input (size:256b/32B) */
+struct hwrm_port_ep_tx_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	enables;
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP0_MIN_BW     0x1UL
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP0_MAX_BW     0x2UL
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP1_MIN_BW     0x4UL
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP1_MAX_BW     0x8UL
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP2_MIN_BW     0x10UL
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP2_MAX_BW     0x20UL
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP3_MIN_BW     0x40UL
+	#define PORT_EP_TX_CFG_REQ_ENABLES_EP3_MAX_BW     0x80UL
+	u8	port_id;
+	u8	unused;
+	u8	ep0_min_bw;
+	u8	ep0_max_bw;
+	u8	ep1_min_bw;
+	u8	ep1_max_bw;
+	u8	ep2_min_bw;
+	u8	ep2_max_bw;
+	u8	ep3_min_bw;
+	u8	ep3_max_bw;
+	u8	unused_1[4];
+};
+
+/* hwrm_port_ep_tx_cfg_output (size:128b/16B) */
+struct hwrm_port_ep_tx_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_port_ep_tx_cfg_cmd_err (size:64b/8B) */
+struct hwrm_port_ep_tx_cfg_cmd_err {
+	u8	code;
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_UNKNOWN            0x0UL
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_PORT_ID_INVALID    0x1UL
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_EP_INACTIVE        0x2UL
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_MIN_BW_RANGE       0x3UL
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_MIN_MORE_THAN_MAX  0x4UL
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_MIN_BW_SUM         0x5UL
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_MIN_BW_UNSUPPORTED 0x6UL
+	#define PORT_EP_TX_CFG_CMD_ERR_CODE_LAST              PORT_EP_TX_CFG_CMD_ERR_CODE_MIN_BW_UNSUPPORTED
+	u8	unused_0[7];
+};
+
+/* hwrm_port_ep_tx_qcfg_input (size:192b/24B) */
+struct hwrm_port_ep_tx_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	port_id;
+	u8	unused[7];
+};
+
+/* hwrm_port_ep_tx_qcfg_output (size:192b/24B) */
+struct hwrm_port_ep_tx_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	ep0_min_bw;
+	u8	ep0_max_bw;
+	u8	ep1_min_bw;
+	u8	ep1_max_bw;
+	u8	ep2_min_bw;
+	u8	ep2_max_bw;
+	u8	ep3_min_bw;
+	u8	ep3_max_bw;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_port_cfg_input (size:256b/32B) */
+struct hwrm_port_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	__le32	enables;
+	#define PORT_CFG_REQ_ENABLES_TX_RATE_LIMIT     0x1UL
+	__le16	port_id;
+	__le16	unused_0;
+	__le32	tx_rate_limit;
+};
+
+/* hwrm_port_cfg_output (size:128b/16B) */
+struct hwrm_port_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_port_qcfg_input (size:192b/24B) */
+struct hwrm_port_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_port_qcfg_output (size:192b/24B) */
+struct hwrm_port_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	supported;
+	#define PORT_QCFG_RESP_SUPPORTED_TX_RATE_LIMIT     0x1UL
+	__le32	enabled;
+	#define PORT_QCFG_RESP_ENABLED_TX_RATE_LIMIT     0x1UL
+	__le32	tx_rate_limit;
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_port_mac_qcaps_input (size:192b/24B) */
+struct hwrm_port_mac_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	port_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_port_mac_qcaps_output (size:128b/16B) */
+struct hwrm_port_mac_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	flags;
+	#define PORT_MAC_QCAPS_RESP_FLAGS_LOCAL_LPBK_NOT_SUPPORTED     0x1UL
+	#define PORT_MAC_QCAPS_RESP_FLAGS_REMOTE_LPBK_SUPPORTED        0x2UL
+	u8	unused_0[6];
+	u8	valid;
+};
+
 /* hwrm_queue_qportcfg_input (size:192b/24B) */
 struct hwrm_queue_qportcfg_input {
 	__le16	req_type;
@@ -4043,7 +8476,8 @@ struct hwrm_queue_qportcfg_output {
 	u8	max_configurable_lossless_queues;
 	u8	queue_cfg_allowed;
 	u8	queue_cfg_info;
-	#define QUEUE_QPORTCFG_RESP_QUEUE_CFG_INFO_ASYM_CFG     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_CFG_INFO_ASYM_CFG             0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_CFG_INFO_USE_PROFILE_TYPE     0x2UL
 	u8	queue_pfcenable_cfg_allowed;
 	u8	queue_pri2cos_cfg_allowed;
 	u8	queue_cos2bw_cfg_allowed;
@@ -4119,7 +8553,10 @@ struct hwrm_queue_qportcfg_output {
 	#define QUEUE_QPORTCFG_RESP_QUEUE_ID7_SERVICE_PROFILE_LOSSLESS_NIC   0x3UL
 	#define QUEUE_QPORTCFG_RESP_QUEUE_ID7_SERVICE_PROFILE_UNKNOWN        0xffUL
 	#define QUEUE_QPORTCFG_RESP_QUEUE_ID7_SERVICE_PROFILE_LAST          QUEUE_QPORTCFG_RESP_QUEUE_ID7_SERVICE_PROFILE_UNKNOWN
-	u8	unused_0;
+	u8	queue_id0_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID0_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID0_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID0_SERVICE_PROFILE_TYPE_CNP      0x4UL
 	char	qid0_name[16];
 	char	qid1_name[16];
 	char	qid2_name[16];
@@ -4128,7 +8565,34 @@ struct hwrm_queue_qportcfg_output {
 	char	qid5_name[16];
 	char	qid6_name[16];
 	char	qid7_name[16];
-	u8	unused_1[7];
+	u8	queue_id1_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID1_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID1_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID1_SERVICE_PROFILE_TYPE_CNP      0x4UL
+	u8	queue_id2_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID2_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID2_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID2_SERVICE_PROFILE_TYPE_CNP      0x4UL
+	u8	queue_id3_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID3_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID3_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID3_SERVICE_PROFILE_TYPE_CNP      0x4UL
+	u8	queue_id4_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID4_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID4_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID4_SERVICE_PROFILE_TYPE_CNP      0x4UL
+	u8	queue_id5_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID5_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID5_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID5_SERVICE_PROFILE_TYPE_CNP      0x4UL
+	u8	queue_id6_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID6_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID6_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID6_SERVICE_PROFILE_TYPE_CNP      0x4UL
+	u8	queue_id7_service_profile_type;
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID7_SERVICE_PROFILE_TYPE_ROCE     0x1UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID7_SERVICE_PROFILE_TYPE_NIC      0x2UL
+	#define QUEUE_QPORTCFG_RESP_QUEUE_ID7_SERVICE_PROFILE_TYPE_CNP      0x4UL
 	u8	valid;
 };
 
@@ -5134,6 +9598,678 @@ struct hwrm_queue_dscp2pri_cfg_output {
 	u8	valid;
 };
 
+/* hwrm_queue_mpls_qcaps_input (size:192b/24B) */
+struct hwrm_queue_mpls_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	port_id;
+	u8	unused_0[7];
+};
+
+/* hwrm_queue_mpls_qcaps_output (size:128b/16B) */
+struct hwrm_queue_mpls_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	queue_mplstc2pri_cfg_allowed;
+	u8	hw_default_pri;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_queue_mplstc2pri_qcfg_input (size:192b/24B) */
+struct hwrm_queue_mplstc2pri_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	port_id;
+	u8	unused_0[7];
+};
+
+/* hwrm_queue_mplstc2pri_qcfg_output (size:192b/24B) */
+struct hwrm_queue_mplstc2pri_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	tc0_pri_queue_id;
+	u8	tc1_pri_queue_id;
+	u8	tc2_pri_queue_id;
+	u8	tc3_pri_queue_id;
+	u8	tc4_pri_queue_id;
+	u8	tc5_pri_queue_id;
+	u8	tc6_pri_queue_id;
+	u8	tc7_pri_queue_id;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_mplstc2pri_cfg_input (size:256b/32B) */
+struct hwrm_queue_mplstc2pri_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC0_PRI_QUEUE_ID     0x1UL
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC1_PRI_QUEUE_ID     0x2UL
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC2_PRI_QUEUE_ID     0x4UL
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC3_PRI_QUEUE_ID     0x8UL
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC4_PRI_QUEUE_ID     0x10UL
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC5_PRI_QUEUE_ID     0x20UL
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC6_PRI_QUEUE_ID     0x40UL
+	#define QUEUE_MPLSTC2PRI_CFG_REQ_ENABLES_TC7_PRI_QUEUE_ID     0x80UL
+	u8	port_id;
+	u8	unused_0[3];
+	u8	tc0_pri_queue_id;
+	u8	tc1_pri_queue_id;
+	u8	tc2_pri_queue_id;
+	u8	tc3_pri_queue_id;
+	u8	tc4_pri_queue_id;
+	u8	tc5_pri_queue_id;
+	u8	tc6_pri_queue_id;
+	u8	tc7_pri_queue_id;
+};
+
+/* hwrm_queue_mplstc2pri_cfg_output (size:128b/16B) */
+struct hwrm_queue_mplstc2pri_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_vlanpri_qcaps_input (size:192b/24B) */
+struct hwrm_queue_vlanpri_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	port_id;
+	u8	unused_0[7];
+};
+
+/* hwrm_queue_vlanpri_qcaps_output (size:128b/16B) */
+struct hwrm_queue_vlanpri_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	hw_default_pri;
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_queue_vlanpri2pri_qcfg_input (size:192b/24B) */
+struct hwrm_queue_vlanpri2pri_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	port_id;
+	u8	unused_0[7];
+};
+
+/* hwrm_queue_vlanpri2pri_qcfg_output (size:192b/24B) */
+struct hwrm_queue_vlanpri2pri_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	vlanpri0_user_pri_id;
+	u8	vlanpri1_user_pri_id;
+	u8	vlanpri2_user_pri_id;
+	u8	vlanpri3_user_pri_id;
+	u8	vlanpri4_user_pri_id;
+	u8	vlanpri5_user_pri_id;
+	u8	vlanpri6_user_pri_id;
+	u8	vlanpri7_user_pri_id;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_vlanpri2pri_cfg_input (size:256b/32B) */
+struct hwrm_queue_vlanpri2pri_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI0_USER_PRI_ID     0x1UL
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI1_USER_PRI_ID     0x2UL
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI2_USER_PRI_ID     0x4UL
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI3_USER_PRI_ID     0x8UL
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI4_USER_PRI_ID     0x10UL
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI5_USER_PRI_ID     0x20UL
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI6_USER_PRI_ID     0x40UL
+	#define QUEUE_VLANPRI2PRI_CFG_REQ_ENABLES_VLANPRI7_USER_PRI_ID     0x80UL
+	u8	port_id;
+	u8	unused_0[3];
+	u8	vlanpri0_user_pri_id;
+	u8	vlanpri1_user_pri_id;
+	u8	vlanpri2_user_pri_id;
+	u8	vlanpri3_user_pri_id;
+	u8	vlanpri4_user_pri_id;
+	u8	vlanpri5_user_pri_id;
+	u8	vlanpri6_user_pri_id;
+	u8	vlanpri7_user_pri_id;
+};
+
+/* hwrm_queue_vlanpri2pri_cfg_output (size:128b/16B) */
+struct hwrm_queue_vlanpri2pri_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_global_cfg_input (size:192b/24B) */
+struct hwrm_queue_global_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	mode;
+	#define QUEUE_GLOBAL_CFG_REQ_MODE_SHARED      0x0UL
+	#define QUEUE_GLOBAL_CFG_REQ_MODE_INDEPENDENT 0x1UL
+	#define QUEUE_GLOBAL_CFG_REQ_MODE_LAST       QUEUE_GLOBAL_CFG_REQ_MODE_INDEPENDENT
+	u8	unused_0;
+	__le16	enables;
+	#define QUEUE_GLOBAL_CFG_REQ_ENABLES_MODE          0x1UL
+	#define QUEUE_GLOBAL_CFG_REQ_ENABLES_G0_MAX_BW     0x2UL
+	#define QUEUE_GLOBAL_CFG_REQ_ENABLES_G1_MAX_BW     0x4UL
+	#define QUEUE_GLOBAL_CFG_REQ_ENABLES_G2_MAX_BW     0x8UL
+	#define QUEUE_GLOBAL_CFG_REQ_ENABLES_G3_MAX_BW     0x10UL
+	u8	g0_max_bw;
+	u8	g1_max_bw;
+	u8	g2_max_bw;
+	u8	g3_max_bw;
+};
+
+/* hwrm_queue_global_cfg_output (size:128b/16B) */
+struct hwrm_queue_global_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_global_qcfg_input (size:128b/16B) */
+struct hwrm_queue_global_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_queue_global_qcfg_output (size:320b/40B) */
+struct hwrm_queue_global_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	buffer_pool_id0_map;
+	u8	buffer_pool_id1_map;
+	u8	buffer_pool_id2_map;
+	u8	buffer_pool_id3_map;
+	__le32	buffer_pool_id0_size;
+	__le32	buffer_pool_id1_size;
+	__le32	buffer_pool_id2_size;
+	__le32	buffer_pool_id3_size;
+	__le16	flags;
+	#define QUEUE_GLOBAL_QCFG_RESP_FLAGS_MAPPING                     0x1UL
+	#define QUEUE_GLOBAL_QCFG_RESP_FLAGS_MAPPING_MAPPING_PER_PORT      0x0UL
+	#define QUEUE_GLOBAL_QCFG_RESP_FLAGS_MAPPING_MAPPING_PER_ENDPOINT  0x1UL
+	#define QUEUE_GLOBAL_QCFG_RESP_FLAGS_MAPPING_LAST                 QUEUE_GLOBAL_QCFG_RESP_FLAGS_MAPPING_MAPPING_PER_ENDPOINT
+	u8	mode;
+	#define QUEUE_GLOBAL_QCFG_RESP_MODE_SHARED      0x0UL
+	#define QUEUE_GLOBAL_QCFG_RESP_MODE_INDEPENDENT 0x1UL
+	#define QUEUE_GLOBAL_QCFG_RESP_MODE_LAST       QUEUE_GLOBAL_QCFG_RESP_MODE_INDEPENDENT
+	u8	unused_0;
+	u8	g0_max_bw;
+	u8	g1_max_bw;
+	u8	g2_max_bw;
+	u8	g3_max_bw;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_rx_feature_qcfg_input (size:128b/16B) */
+struct hwrm_queue_adptv_qos_rx_feature_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_queue_adptv_qos_rx_feature_qcfg_output (size:128b/16B) */
+struct hwrm_queue_adptv_qos_rx_feature_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	queue_enable;
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE         0x1UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_DISABLED  0x0UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_ENABLED   0x1UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE         0x2UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_DISABLED  (0x0UL << 1)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_ENABLED   (0x1UL << 1)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE         0x4UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_DISABLED  (0x0UL << 2)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_ENABLED   (0x1UL << 2)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE         0x8UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_DISABLED  (0x0UL << 3)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_ENABLED   (0x1UL << 3)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE         0x10UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_DISABLED  (0x0UL << 4)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_ENABLED   (0x1UL << 4)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE         0x20UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_DISABLED  (0x0UL << 5)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_ENABLED   (0x1UL << 5)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE         0x40UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_DISABLED  (0x0UL << 6)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_ENABLED   (0x1UL << 6)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE         0x80UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_DISABLED  (0x0UL << 7)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_ENABLED   (0x1UL << 7)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_ENABLED
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_rx_feature_cfg_input (size:192b/24B) */
+struct hwrm_queue_adptv_qos_rx_feature_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_ENABLES_QUEUE_ENABLE     0x1UL
+	u8	queue_enable;
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE         0x1UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_DISABLED  0x0UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_ENABLED   0x1UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE         0x2UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_DISABLED  (0x0UL << 1)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_ENABLED   (0x1UL << 1)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE         0x4UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_DISABLED  (0x0UL << 2)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_ENABLED   (0x1UL << 2)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE         0x8UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_DISABLED  (0x0UL << 3)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_ENABLED   (0x1UL << 3)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE         0x10UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_DISABLED  (0x0UL << 4)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_ENABLED   (0x1UL << 4)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE         0x20UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_DISABLED  (0x0UL << 5)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_ENABLED   (0x1UL << 5)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE         0x40UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_DISABLED  (0x0UL << 6)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_ENABLED   (0x1UL << 6)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE         0x80UL
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_DISABLED  (0x0UL << 7)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_ENABLED   (0x1UL << 7)
+	#define QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_LAST     QUEUE_ADPTV_QOS_RX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_ENABLED
+	u8	unused_0[3];
+};
+
+/* hwrm_queue_adptv_qos_rx_feature_cfg_output (size:128b/16B) */
+struct hwrm_queue_adptv_qos_rx_feature_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_tx_feature_qcfg_input (size:128b/16B) */
+struct hwrm_queue_adptv_qos_tx_feature_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_queue_adptv_qos_tx_feature_qcfg_output (size:128b/16B) */
+struct hwrm_queue_adptv_qos_tx_feature_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	queue_enable;
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE         0x1UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_DISABLED  0x0UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_ENABLED   0x1UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID0_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE         0x2UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_DISABLED  (0x0UL << 1)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_ENABLED   (0x1UL << 1)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID1_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE         0x4UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_DISABLED  (0x0UL << 2)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_ENABLED   (0x1UL << 2)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID2_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE         0x8UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_DISABLED  (0x0UL << 3)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_ENABLED   (0x1UL << 3)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID3_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE         0x10UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_DISABLED  (0x0UL << 4)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_ENABLED   (0x1UL << 4)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID4_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE         0x20UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_DISABLED  (0x0UL << 5)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_ENABLED   (0x1UL << 5)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID5_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE         0x40UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_DISABLED  (0x0UL << 6)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_ENABLED   (0x1UL << 6)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID6_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE         0x80UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_DISABLED  (0x0UL << 7)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_ENABLED   (0x1UL << 7)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_QCFG_RESP_QUEUE_ENABLE_QID7_ENABLE_ENABLED
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_tx_feature_cfg_input (size:192b/24B) */
+struct hwrm_queue_adptv_qos_tx_feature_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_ENABLES_QUEUE_ENABLE     0x1UL
+	u8	queue_enable;
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE         0x1UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_DISABLED  0x0UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_ENABLED   0x1UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID0_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE         0x2UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_DISABLED  (0x0UL << 1)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_ENABLED   (0x1UL << 1)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID1_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE         0x4UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_DISABLED  (0x0UL << 2)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_ENABLED   (0x1UL << 2)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID2_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE         0x8UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_DISABLED  (0x0UL << 3)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_ENABLED   (0x1UL << 3)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID3_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE         0x10UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_DISABLED  (0x0UL << 4)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_ENABLED   (0x1UL << 4)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID4_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE         0x20UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_DISABLED  (0x0UL << 5)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_ENABLED   (0x1UL << 5)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID5_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE         0x40UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_DISABLED  (0x0UL << 6)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_ENABLED   (0x1UL << 6)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID6_ENABLE_ENABLED
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE         0x80UL
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_DISABLED  (0x0UL << 7)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_ENABLED   (0x1UL << 7)
+	#define QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_LAST     QUEUE_ADPTV_QOS_TX_FEATURE_CFG_REQ_QUEUE_ENABLE_QID7_ENABLE_ENABLED
+	u8	unused_0[3];
+};
+
+/* hwrm_queue_adptv_qos_tx_feature_cfg_output (size:128b/16B) */
+struct hwrm_queue_adptv_qos_tx_feature_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_qcaps_input (size:128b/16B) */
+struct hwrm_queue_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_queue_qcaps_output (size:256b/32B) */
+struct hwrm_queue_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	rx_feature_params;
+	#define QUEUE_QCAPS_RESP_RX_FEATURE_PARAMS_QUEUE_ENABLE_CAP     0x1UL
+	#define QUEUE_QCAPS_RESP_RX_FEATURE_PARAMS_QUEUE_MODE_CAP       0x2UL
+	__le32	tx_feature_params;
+	#define QUEUE_QCAPS_RESP_TX_FEATURE_PARAMS_QUEUE_ENABLE_CAP     0x1UL
+	u8	max_configurable_queues;
+	u8	unused_0[3];
+	__le32	rx_tuning_params;
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_WFQ_COST_CAP                    0x1UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_WFQ_UPPER_FACTOR_CAP            0x2UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_HYST_WINDOW_SIZE_FACTOR_CAP     0x4UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_PCIE_BW_EFF_CAP                 0x8UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_XOFF_HEADROOM_FACTOR_CAP        0x10UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_L2_MIN_LATENCY_CAP              0x20UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_L2_MAX_LATENCY_CAP              0x40UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_ROCE_MIN_LATENCY_CAP            0x80UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_ROCE_MAX_LATENCY_CAP            0x100UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_L2_PIPE_COS_LATENCY_CAP         0x200UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_ROCE_PIPE_COS_LATENCY_CAP       0x400UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_COS_SHARED_MIN_RATIO_CAP        0x800UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_RSVD_CELLS_LIMIT_RATIO_CAP      0x1000UL
+	#define QUEUE_QCAPS_RESP_RX_TUNING_PARAMS_SHAPER_REFILL_TIMER_CAP         0x2000UL
+	__le32	tx_tuning_params;
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_WFQ_COST_CAP                      0x1UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_WFQ_UPPER_FACTOR_CAP              0x2UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_HYST_WINDOW_SIZE_FACTOR_CAP       0x4UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_RSVD_CELLS_LIMIT_RATIO_CAP        0x8UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_L2_MIN_LATENCY_CAP                0x10UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_L2_MAX_LATENCY_CAP                0x20UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_ROCE_MIN_LATENCY_CAP              0x40UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_ROCE_MAX_LATENCY_CAP              0x80UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_MAX_TBM_CELLS_PRERESERVED_CAP     0x100UL
+	#define QUEUE_QCAPS_RESP_TX_TUNING_PARAMS_SHAPER_REFILL_TIMER_CAP           0x200UL
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_rx_tuning_qcfg_input (size:128b/16B) */
+struct hwrm_queue_adptv_qos_rx_tuning_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_queue_adptv_qos_rx_tuning_qcfg_output (size:576b/72B) */
+struct hwrm_queue_adptv_qos_rx_tuning_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	wfq_cost;
+	__le32	wfq_upper_factor;
+	__le32	hyst_window_size_factor;
+	__le32	pcie_bw_eff;
+	__le32	xoff_headroom_factor;
+	__le32	l2_min_latency;
+	__le32	l2_max_latency;
+	__le32	roce_min_latency;
+	__le32	roce_max_latency;
+	__le32	l2_pipe_cos_latency;
+	__le32	roce_pipe_cos_latency;
+	__le32	cos_shared_min_ratio;
+	__le32	rsvd_cells_limit_ratio;
+	__le32	shaper_refill_timer;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_rx_tuning_cfg_input (size:640b/80B) */
+struct hwrm_queue_adptv_qos_rx_tuning_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_WFQ_COST                    0x1UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_WFQ_UPPER_FACTOR            0x2UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_HYST_WINDOW_SIZE_FACTOR     0x4UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_PCIE_BW_EFF                 0x8UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_XOFF_HEADROOM_FACTOR        0x10UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_L2_MIN_LATENCY              0x20UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_L2_MAX_LATENCY              0x40UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_ROCE_MIN_LATENCY            0x80UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_ROCE_MAX_LATENCY            0x100UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_L2_PIPE_COS_LATENCY         0x200UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_ROCE_PIPE_COS_LATENCY       0x400UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_COS_SHARED_MIN_RATIO        0x800UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_RSVD_CELLS_LIMIT_RATIO      0x1000UL
+	#define QUEUE_ADPTV_QOS_RX_TUNING_CFG_REQ_ENABLES_SHAPER_REFILL_TIMER         0x2000UL
+	__le32	wfq_cost;
+	__le32	wfq_upper_factor;
+	__le32	hyst_window_size_factor;
+	__le32	pcie_bw_eff;
+	__le32	xoff_headroom_factor;
+	__le32	l2_min_latency;
+	__le32	l2_max_latency;
+	__le32	roce_min_latency;
+	__le32	roce_max_latency;
+	__le32	l2_pipe_cos_latency;
+	__le32	roce_pipe_cos_latency;
+	__le32	cos_shared_min_ratio;
+	__le32	rsvd_cells_limit_ratio;
+	__le32	shaper_refill_timer;
+	u8	unused_0[4];
+};
+
+/* hwrm_queue_adptv_qos_rx_tuning_cfg_output (size:128b/16B) */
+struct hwrm_queue_adptv_qos_rx_tuning_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_tx_tuning_qcfg_input (size:128b/16B) */
+struct hwrm_queue_adptv_qos_tx_tuning_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_queue_adptv_qos_tx_tuning_qcfg_output (size:448b/56B) */
+struct hwrm_queue_adptv_qos_tx_tuning_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	wfq_cost;
+	__le32	wfq_upper_factor;
+	__le32	hyst_window_size_factor;
+	__le32	rsvd_cells_limit_ratio;
+	__le32	l2_min_latency;
+	__le32	l2_max_latency;
+	__le32	roce_min_latency;
+	__le32	roce_max_latency;
+	__le32	max_tbm_cells_prereserved;
+	__le32	shaper_refill_timer;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_queue_adptv_qos_tx_tuning_cfg_input (size:512b/64B) */
+struct hwrm_queue_adptv_qos_tx_tuning_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_WFQ_COST                      0x1UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_WFQ_UPPER_FACTOR              0x2UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_HYST_WINDOW_SIZE_FACTOR       0x4UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_RSVD_CELLS_LIMIT_RATIO        0x8UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_L2_MIN_LATENCY                0x10UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_L2_MAX_LATENCY                0x20UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_ROCE_MIN_LATENCY              0x40UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_ROCE_MAX_LATENCY              0x80UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_MAX_TBM_CELLS_PRERESERVED     0x100UL
+	#define QUEUE_ADPTV_QOS_TX_TUNING_CFG_REQ_ENABLES_SHAPER_REFILL_TIMER           0x200UL
+	__le32	wfq_cost;
+	__le32	wfq_upper_factor;
+	__le32	hyst_window_size_factor;
+	__le32	rsvd_cells_limit_ratio;
+	__le32	l2_min_latency;
+	__le32	l2_max_latency;
+	__le32	roce_min_latency;
+	__le32	roce_max_latency;
+	__le32	max_tbm_cells_prereserved;
+	__le32	shaper_refill_timer;
+	u8	unused_0[4];
+};
+
+/* hwrm_queue_adptv_qos_tx_tuning_cfg_output (size:128b/16B) */
+struct hwrm_queue_adptv_qos_tx_tuning_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
 /* hwrm_vnic_alloc_input (size:192b/24B) */
 struct hwrm_vnic_alloc_input {
 	__le16	req_type;
@@ -5142,8 +10278,10 @@ struct hwrm_vnic_alloc_input {
 	__le16	target_id;
 	__le64	resp_addr;
 	__le32	flags;
-	#define VNIC_ALLOC_REQ_FLAGS_DEFAULT     0x1UL
-	u8	unused_0[4];
+	#define VNIC_ALLOC_REQ_FLAGS_DEFAULT                  0x1UL
+	#define VNIC_ALLOC_REQ_FLAGS_VIRTIO_NET_FID_VALID     0x2UL
+	__le16	virtio_net_fid;
+	u8	unused_0[2];
 };
 
 /* hwrm_vnic_alloc_output (size:128b/16B) */
@@ -5154,6 +10292,43 @@ struct hwrm_vnic_alloc_output {
 	__le16	resp_len;
 	__le32	vnic_id;
 	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_vnic_update_input (size:256b/32B) */
+struct hwrm_vnic_update_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	vnic_id;
+	__le32	enables;
+	#define VNIC_UPDATE_REQ_ENABLES_VNIC_STATE_VALID               0x1UL
+	#define VNIC_UPDATE_REQ_ENABLES_MRU_VALID                      0x2UL
+	#define VNIC_UPDATE_REQ_ENABLES_METADATA_FORMAT_TYPE_VALID     0x4UL
+	u8	vnic_state;
+	#define VNIC_UPDATE_REQ_VNIC_STATE_NORMAL 0x0UL
+	#define VNIC_UPDATE_REQ_VNIC_STATE_DROP   0x1UL
+	#define VNIC_UPDATE_REQ_VNIC_STATE_LAST  VNIC_UPDATE_REQ_VNIC_STATE_DROP
+	u8	metadata_format_type;
+	#define VNIC_UPDATE_REQ_METADATA_FORMAT_TYPE_0 0x0UL
+	#define VNIC_UPDATE_REQ_METADATA_FORMAT_TYPE_1 0x1UL
+	#define VNIC_UPDATE_REQ_METADATA_FORMAT_TYPE_2 0x2UL
+	#define VNIC_UPDATE_REQ_METADATA_FORMAT_TYPE_3 0x3UL
+	#define VNIC_UPDATE_REQ_METADATA_FORMAT_TYPE_4 0x4UL
+	#define VNIC_UPDATE_REQ_METADATA_FORMAT_TYPE_LAST VNIC_UPDATE_REQ_METADATA_FORMAT_TYPE_4
+	__le16	mru;
+	u8	unused_1[4];
+};
+
+/* hwrm_vnic_update_output (size:128b/16B) */
+struct hwrm_vnic_update_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
 	u8	valid;
 };
 
@@ -5193,6 +10368,7 @@ struct hwrm_vnic_cfg_input {
 	#define VNIC_CFG_REQ_FLAGS_ROCE_ONLY_VNIC_MODE                  0x10UL
 	#define VNIC_CFG_REQ_FLAGS_RSS_DFLT_CR_MODE                     0x20UL
 	#define VNIC_CFG_REQ_FLAGS_ROCE_MIRRORING_CAPABLE_VNIC_MODE     0x40UL
+	#define VNIC_CFG_REQ_FLAGS_PORTCOS_MAPPING_MODE                 0x80UL
 	__le32	enables;
 	#define VNIC_CFG_REQ_ENABLES_DFLT_RING_GRP            0x1UL
 	#define VNIC_CFG_REQ_ENABLES_RSS_RULE                 0x2UL
@@ -5203,6 +10379,7 @@ struct hwrm_vnic_cfg_input {
 	#define VNIC_CFG_REQ_ENABLES_DEFAULT_CMPL_RING_ID     0x40UL
 	#define VNIC_CFG_REQ_ENABLES_QUEUE_ID                 0x80UL
 	#define VNIC_CFG_REQ_ENABLES_RX_CSUM_V2_MODE          0x100UL
+	#define VNIC_CFG_REQ_ENABLES_L2_CQE_MODE              0x200UL
 	__le16	vnic_id;
 	__le16	dflt_ring_grp;
 	__le16	rss_rule;
@@ -5217,7 +10394,12 @@ struct hwrm_vnic_cfg_input {
 	#define VNIC_CFG_REQ_RX_CSUM_V2_MODE_ALL_OK  0x1UL
 	#define VNIC_CFG_REQ_RX_CSUM_V2_MODE_MAX     0x2UL
 	#define VNIC_CFG_REQ_RX_CSUM_V2_MODE_LAST   VNIC_CFG_REQ_RX_CSUM_V2_MODE_MAX
-	u8	unused0[5];
+	u8	l2_cqe_mode;
+	#define VNIC_CFG_REQ_L2_CQE_MODE_DEFAULT    0x0UL
+	#define VNIC_CFG_REQ_L2_CQE_MODE_COMPRESSED 0x1UL
+	#define VNIC_CFG_REQ_L2_CQE_MODE_MIXED      0x2UL
+	#define VNIC_CFG_REQ_L2_CQE_MODE_LAST      VNIC_CFG_REQ_L2_CQE_MODE_MIXED
+	u8	unused0[4];
 };
 
 /* hwrm_vnic_cfg_output (size:128b/16B) */
@@ -5227,6 +10409,68 @@ struct hwrm_vnic_cfg_output {
 	__le16	seq_id;
 	__le16	resp_len;
 	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_vnic_qcfg_input (size:256b/32B) */
+struct hwrm_vnic_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define VNIC_QCFG_REQ_ENABLES_VF_ID_VALID     0x1UL
+	__le32	vnic_id;
+	__le16	vf_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_vnic_qcfg_output (size:256b/32B) */
+struct hwrm_vnic_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	dflt_ring_grp;
+	__le16	rss_rule;
+	__le16	cos_rule;
+	__le16	lb_rule;
+	__le16	mru;
+	u8	unused_0[2];
+	__le32	flags;
+	#define VNIC_QCFG_RESP_FLAGS_DEFAULT                              0x1UL
+	#define VNIC_QCFG_RESP_FLAGS_VLAN_STRIP_MODE                      0x2UL
+	#define VNIC_QCFG_RESP_FLAGS_BD_STALL_MODE                        0x4UL
+	#define VNIC_QCFG_RESP_FLAGS_ROCE_DUAL_VNIC_MODE                  0x8UL
+	#define VNIC_QCFG_RESP_FLAGS_ROCE_ONLY_VNIC_MODE                  0x10UL
+	#define VNIC_QCFG_RESP_FLAGS_RSS_DFLT_CR_MODE                     0x20UL
+	#define VNIC_QCFG_RESP_FLAGS_ROCE_MIRRORING_CAPABLE_VNIC_MODE     0x40UL
+	#define VNIC_QCFG_RESP_FLAGS_OPERATION_STATE                      0x80UL
+	#define VNIC_QCFG_RESP_FLAGS_PORTCOS_MAPPING_MODE                 0x100UL
+	__le16	queue_id;
+	u8	rx_csum_v2_mode;
+	#define VNIC_QCFG_RESP_RX_CSUM_V2_MODE_DEFAULT 0x0UL
+	#define VNIC_QCFG_RESP_RX_CSUM_V2_MODE_ALL_OK  0x1UL
+	#define VNIC_QCFG_RESP_RX_CSUM_V2_MODE_MAX     0x2UL
+	#define VNIC_QCFG_RESP_RX_CSUM_V2_MODE_LAST   VNIC_QCFG_RESP_RX_CSUM_V2_MODE_MAX
+	u8	l2_cqe_mode;
+	#define VNIC_QCFG_RESP_L2_CQE_MODE_DEFAULT    0x0UL
+	#define VNIC_QCFG_RESP_L2_CQE_MODE_COMPRESSED 0x1UL
+	#define VNIC_QCFG_RESP_L2_CQE_MODE_MIXED      0x2UL
+	#define VNIC_QCFG_RESP_L2_CQE_MODE_LAST      VNIC_QCFG_RESP_L2_CQE_MODE_MIXED
+	u8	metadata_format_type;
+	#define VNIC_QCFG_RESP_METADATA_FORMAT_TYPE_0 0x0UL
+	#define VNIC_QCFG_RESP_METADATA_FORMAT_TYPE_1 0x1UL
+	#define VNIC_QCFG_RESP_METADATA_FORMAT_TYPE_2 0x2UL
+	#define VNIC_QCFG_RESP_METADATA_FORMAT_TYPE_3 0x3UL
+	#define VNIC_QCFG_RESP_METADATA_FORMAT_TYPE_4 0x4UL
+	#define VNIC_QCFG_RESP_METADATA_FORMAT_TYPE_LAST VNIC_QCFG_RESP_METADATA_FORMAT_TYPE_4
+	u8	vnic_state;
+	#define VNIC_QCFG_RESP_VNIC_STATE_NORMAL 0x0UL
+	#define VNIC_QCFG_RESP_VNIC_STATE_DROP   0x1UL
+	#define VNIC_QCFG_RESP_VNIC_STATE_LAST  VNIC_QCFG_RESP_VNIC_STATE_DROP
+	u8	unused_1;
 	u8	valid;
 };
 
@@ -5250,22 +10494,42 @@ struct hwrm_vnic_qcaps_output {
 	__le16	mru;
 	u8	unused_0[2];
 	__le32	flags;
-	#define VNIC_QCAPS_RESP_FLAGS_UNUSED                              0x1UL
-	#define VNIC_QCAPS_RESP_FLAGS_VLAN_STRIP_CAP                      0x2UL
-	#define VNIC_QCAPS_RESP_FLAGS_BD_STALL_CAP                        0x4UL
-	#define VNIC_QCAPS_RESP_FLAGS_ROCE_DUAL_VNIC_CAP                  0x8UL
-	#define VNIC_QCAPS_RESP_FLAGS_ROCE_ONLY_VNIC_CAP                  0x10UL
-	#define VNIC_QCAPS_RESP_FLAGS_RSS_DFLT_CR_CAP                     0x20UL
-	#define VNIC_QCAPS_RESP_FLAGS_ROCE_MIRRORING_CAPABLE_VNIC_CAP     0x40UL
-	#define VNIC_QCAPS_RESP_FLAGS_OUTERMOST_RSS_CAP                   0x80UL
-	#define VNIC_QCAPS_RESP_FLAGS_COS_ASSIGNMENT_CAP                  0x100UL
-	#define VNIC_QCAPS_RESP_FLAGS_RX_CMPL_V2_CAP                      0x200UL
+	#define VNIC_QCAPS_RESP_FLAGS_UNUSED                                  0x1UL
+	#define VNIC_QCAPS_RESP_FLAGS_VLAN_STRIP_CAP                          0x2UL
+	#define VNIC_QCAPS_RESP_FLAGS_BD_STALL_CAP                            0x4UL
+	#define VNIC_QCAPS_RESP_FLAGS_ROCE_DUAL_VNIC_CAP                      0x8UL
+	#define VNIC_QCAPS_RESP_FLAGS_ROCE_ONLY_VNIC_CAP                      0x10UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_DFLT_CR_CAP                         0x20UL
+	#define VNIC_QCAPS_RESP_FLAGS_ROCE_MIRRORING_CAPABLE_VNIC_CAP         0x40UL
+	#define VNIC_QCAPS_RESP_FLAGS_OUTERMOST_RSS_CAP                       0x80UL
+	#define VNIC_QCAPS_RESP_FLAGS_COS_ASSIGNMENT_CAP                      0x100UL
+	#define VNIC_QCAPS_RESP_FLAGS_RX_CMPL_V2_CAP                          0x200UL
+	#define VNIC_QCAPS_RESP_FLAGS_VNIC_STATE_CAP                          0x400UL
+	#define VNIC_QCAPS_RESP_FLAGS_VIRTIO_NET_VNIC_ALLOC_CAP               0x800UL
+	#define VNIC_QCAPS_RESP_FLAGS_METADATA_FORMAT_CAP                     0x1000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_STRICT_HASH_TYPE_CAP                0x2000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_HASH_TYPE_DELTA_CAP                 0x4000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RING_SELECT_MODE_TOEPLITZ_CAP           0x8000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RING_SELECT_MODE_XOR_CAP                0x10000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RING_SELECT_MODE_TOEPLITZ_CHKSM_CAP     0x20000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_IPV6_FLOW_LABEL_CAP                 0x40000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RX_CMPL_V3_CAP                          0x80000UL
+	#define VNIC_QCAPS_RESP_FLAGS_L2_CQE_MODE_CAP                         0x100000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_IPSEC_AH_SPI_IPV4_CAP               0x200000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_IPSEC_ESP_SPI_IPV4_CAP              0x400000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_IPSEC_AH_SPI_IPV6_CAP               0x800000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_IPSEC_ESP_SPI_IPV6_CAP              0x1000000UL
+	#define VNIC_QCAPS_RESP_FLAGS_OUTERMOST_RSS_TRUSTED_VF_CAP            0x2000000UL
+	#define VNIC_QCAPS_RESP_FLAGS_PORTCOS_MAPPING_MODE                    0x4000000UL
+	#define VNIC_QCAPS_RESP_FLAGS_RSS_PROF_TCAM_MODE_ENABLED              0x8000000UL
+	#define VNIC_QCAPS_RESP_FLAGS_VNIC_RSS_HASH_MODE_CAP                  0x10000000UL
+	#define VNIC_QCAPS_RESP_FLAGS_HW_TUNNEL_TPA_CAP                       0x20000000UL
 	__le16	max_aggs_supported;
 	u8	unused_1[5];
 	u8	valid;
 };
 
-/* hwrm_vnic_tpa_cfg_input (size:320b/40B) */
+/* hwrm_vnic_tpa_cfg_input (size:384b/48B) */
 struct hwrm_vnic_tpa_cfg_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -5287,6 +10551,7 @@ struct hwrm_vnic_tpa_cfg_input {
 	#define VNIC_TPA_CFG_REQ_ENABLES_MAX_AGGS          0x2UL
 	#define VNIC_TPA_CFG_REQ_ENABLES_MAX_AGG_TIMER     0x4UL
 	#define VNIC_TPA_CFG_REQ_ENABLES_MIN_AGG_LEN       0x8UL
+	#define VNIC_TPA_CFG_REQ_ENABLES_TNL_TPA_EN        0x10UL
 	__le16	vnic_id;
 	__le16	max_agg_segs;
 	#define VNIC_TPA_CFG_REQ_MAX_AGG_SEGS_1   0x0UL
@@ -5306,6 +10571,25 @@ struct hwrm_vnic_tpa_cfg_input {
 	u8	unused_0[2];
 	__le32	max_agg_timer;
 	__le32	min_agg_len;
+	__le32	tnl_tpa_en_bitmap;
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_VXLAN           0x1UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_GENEVE          0x2UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_NVGRE           0x4UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_GRE             0x8UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_IPV4            0x10UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_IPV6            0x20UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_VXLAN_GPE       0x40UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_VXLAN_CUST1     0x80UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_GRE_CUST1       0x100UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR1           0x200UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR2           0x400UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR3           0x800UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR4           0x1000UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR5           0x2000UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR6           0x4000UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR7           0x8000UL
+	#define VNIC_TPA_CFG_REQ_TNL_TPA_EN_BITMAP_UPAR8           0x10000UL
+	u8	unused_1[4];
 };
 
 /* hwrm_vnic_tpa_cfg_output (size:128b/16B) */
@@ -5361,7 +10645,25 @@ struct hwrm_vnic_tpa_qcfg_output {
 	#define VNIC_TPA_QCFG_RESP_MAX_AGGS_LAST VNIC_TPA_QCFG_RESP_MAX_AGGS_MAX
 	__le32	max_agg_timer;
 	__le32	min_agg_len;
-	u8	unused_0[7];
+	__le32	tnl_tpa_en_bitmap;
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_VXLAN           0x1UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_GENEVE          0x2UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_NVGRE           0x4UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_GRE             0x8UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_IPV4            0x10UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_IPV6            0x20UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_VXLAN_GPE       0x40UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_VXLAN_CUST1     0x80UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_GRE_CUST1       0x100UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR1           0x200UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR2           0x400UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR3           0x800UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR4           0x1000UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR5           0x2000UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR6           0x4000UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR7           0x8000UL
+	#define VNIC_TPA_QCFG_RESP_TNL_TPA_EN_BITMAP_UPAR8           0x10000UL
+	u8	unused_0[3];
 	u8	valid;
 };
 
@@ -5373,12 +10675,17 @@ struct hwrm_vnic_rss_cfg_input {
 	__le16	target_id;
 	__le64	resp_addr;
 	__le32	hash_type;
-	#define VNIC_RSS_CFG_REQ_HASH_TYPE_IPV4         0x1UL
-	#define VNIC_RSS_CFG_REQ_HASH_TYPE_TCP_IPV4     0x2UL
-	#define VNIC_RSS_CFG_REQ_HASH_TYPE_UDP_IPV4     0x4UL
-	#define VNIC_RSS_CFG_REQ_HASH_TYPE_IPV6         0x8UL
-	#define VNIC_RSS_CFG_REQ_HASH_TYPE_TCP_IPV6     0x10UL
-	#define VNIC_RSS_CFG_REQ_HASH_TYPE_UDP_IPV6     0x20UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_IPV4                0x1UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_TCP_IPV4            0x2UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_UDP_IPV4            0x4UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_IPV6                0x8UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_TCP_IPV6            0x10UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_UDP_IPV6            0x20UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_IPV6_FLOW_LABEL     0x40UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_AH_SPI_IPV4         0x80UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_ESP_SPI_IPV4        0x100UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_AH_SPI_IPV6         0x200UL
+	#define VNIC_RSS_CFG_REQ_HASH_TYPE_ESP_SPI_IPV6        0x400UL
 	__le16	vnic_id;
 	u8	ring_table_pair_index;
 	u8	hash_mode_flags;
@@ -5390,7 +10697,16 @@ struct hwrm_vnic_rss_cfg_input {
 	__le64	ring_grp_tbl_addr;
 	__le64	hash_key_tbl_addr;
 	__le16	rss_ctx_idx;
-	u8	unused_1[6];
+	u8	flags;
+	#define VNIC_RSS_CFG_REQ_FLAGS_HASH_TYPE_INCLUDE               0x1UL
+	#define VNIC_RSS_CFG_REQ_FLAGS_HASH_TYPE_EXCLUDE               0x2UL
+	#define VNIC_RSS_CFG_REQ_FLAGS_IPSEC_HASH_TYPE_CFG_SUPPORT     0x4UL
+	u8	ring_select_mode;
+	#define VNIC_RSS_CFG_REQ_RING_SELECT_MODE_TOEPLITZ          0x0UL
+	#define VNIC_RSS_CFG_REQ_RING_SELECT_MODE_XOR               0x1UL
+	#define VNIC_RSS_CFG_REQ_RING_SELECT_MODE_TOEPLITZ_CHECKSUM 0x2UL
+	#define VNIC_RSS_CFG_REQ_RING_SELECT_MODE_LAST             VNIC_RSS_CFG_REQ_RING_SELECT_MODE_TOEPLITZ_CHECKSUM
+	u8	unused_1[4];
 };
 
 /* hwrm_vnic_rss_cfg_output (size:128b/16B) */
@@ -5410,6 +10726,53 @@ struct hwrm_vnic_rss_cfg_cmd_err {
 	#define VNIC_RSS_CFG_CMD_ERR_CODE_INTERFACE_NOT_READY 0x1UL
 	#define VNIC_RSS_CFG_CMD_ERR_CODE_LAST               VNIC_RSS_CFG_CMD_ERR_CODE_INTERFACE_NOT_READY
 	u8	unused_0[7];
+};
+
+/* hwrm_vnic_rss_qcfg_input (size:192b/24B) */
+struct hwrm_vnic_rss_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	rss_ctx_idx;
+	__le16	vnic_id;
+	u8	unused_0[4];
+};
+
+/* hwrm_vnic_rss_qcfg_output (size:512b/64B) */
+struct hwrm_vnic_rss_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	hash_type;
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_IPV4                0x1UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_TCP_IPV4            0x2UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_UDP_IPV4            0x4UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_IPV6                0x8UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_TCP_IPV6            0x10UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_UDP_IPV6            0x20UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_IPV6_FLOW_LABEL     0x40UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_AH_SPI_IPV4         0x80UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_ESP_SPI_IPV4        0x100UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_AH_SPI_IPV6         0x200UL
+	#define VNIC_RSS_QCFG_RESP_HASH_TYPE_ESP_SPI_IPV6        0x400UL
+	u8	unused_0[4];
+	__le32	hash_key[10];
+	u8	hash_mode_flags;
+	#define VNIC_RSS_QCFG_RESP_HASH_MODE_FLAGS_DEFAULT         0x1UL
+	#define VNIC_RSS_QCFG_RESP_HASH_MODE_FLAGS_INNERMOST_4     0x2UL
+	#define VNIC_RSS_QCFG_RESP_HASH_MODE_FLAGS_INNERMOST_2     0x4UL
+	#define VNIC_RSS_QCFG_RESP_HASH_MODE_FLAGS_OUTERMOST_4     0x8UL
+	#define VNIC_RSS_QCFG_RESP_HASH_MODE_FLAGS_OUTERMOST_2     0x10UL
+	u8	ring_select_mode;
+	#define VNIC_RSS_QCFG_RESP_RING_SELECT_MODE_TOEPLITZ          0x0UL
+	#define VNIC_RSS_QCFG_RESP_RING_SELECT_MODE_XOR               0x1UL
+	#define VNIC_RSS_QCFG_RESP_RING_SELECT_MODE_TOEPLITZ_CHECKSUM 0x2UL
+	#define VNIC_RSS_QCFG_RESP_RING_SELECT_MODE_LAST             VNIC_RSS_QCFG_RESP_RING_SELECT_MODE_TOEPLITZ_CHECKSUM
+	u8	unused_1[5];
+	u8	valid;
 };
 
 /* hwrm_vnic_plcmodes_cfg_input (size:320b/40B) */
@@ -5447,6 +10810,40 @@ struct hwrm_vnic_plcmodes_cfg_output {
 	__le16	seq_id;
 	__le16	resp_len;
 	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_vnic_plcmodes_qcfg_input (size:192b/24B) */
+struct hwrm_vnic_plcmodes_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	vnic_id;
+	u8	unused_0[4];
+};
+
+/* hwrm_vnic_plcmodes_qcfg_output (size:192b/24B) */
+struct hwrm_vnic_plcmodes_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	flags;
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_REGULAR_PLACEMENT     0x1UL
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_JUMBO_PLACEMENT       0x2UL
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_HDS_IPV4              0x4UL
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_HDS_IPV6              0x8UL
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_HDS_FCOE              0x10UL
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_HDS_ROCE              0x20UL
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_DFLT_VNIC             0x40UL
+	#define VNIC_PLCMODES_QCFG_RESP_FLAGS_VIRTIO_PLACEMENT      0x80UL
+	__le16	jumbo_thresh;
+	__le16	hds_offset;
+	__le16	hds_threshold;
+	__le16	max_bds;
+	u8	unused_0[3];
 	u8	valid;
 };
 
@@ -5499,14 +10896,15 @@ struct hwrm_ring_alloc_input {
 	__le16	target_id;
 	__le64	resp_addr;
 	__le32	enables;
-	#define RING_ALLOC_REQ_ENABLES_RING_ARB_CFG          0x2UL
-	#define RING_ALLOC_REQ_ENABLES_STAT_CTX_ID_VALID     0x8UL
-	#define RING_ALLOC_REQ_ENABLES_MAX_BW_VALID          0x20UL
-	#define RING_ALLOC_REQ_ENABLES_RX_RING_ID_VALID      0x40UL
-	#define RING_ALLOC_REQ_ENABLES_NQ_RING_ID_VALID      0x80UL
-	#define RING_ALLOC_REQ_ENABLES_RX_BUF_SIZE_VALID     0x100UL
-	#define RING_ALLOC_REQ_ENABLES_SCHQ_ID               0x200UL
-	#define RING_ALLOC_REQ_ENABLES_MPC_CHNLS_TYPE        0x400UL
+	#define RING_ALLOC_REQ_ENABLES_RING_ARB_CFG           0x2UL
+	#define RING_ALLOC_REQ_ENABLES_STAT_CTX_ID_VALID      0x8UL
+	#define RING_ALLOC_REQ_ENABLES_MAX_BW_VALID           0x20UL
+	#define RING_ALLOC_REQ_ENABLES_RX_RING_ID_VALID       0x40UL
+	#define RING_ALLOC_REQ_ENABLES_NQ_RING_ID_VALID       0x80UL
+	#define RING_ALLOC_REQ_ENABLES_RX_BUF_SIZE_VALID      0x100UL
+	#define RING_ALLOC_REQ_ENABLES_SCHQ_ID                0x200UL
+	#define RING_ALLOC_REQ_ENABLES_MPC_CHNLS_TYPE         0x400UL
+	#define RING_ALLOC_REQ_ENABLES_STEERING_TAG_VALID     0x800UL
 	u8	ring_type;
 	#define RING_ALLOC_REQ_RING_TYPE_L2_CMPL   0x0UL
 	#define RING_ALLOC_REQ_RING_TYPE_TX        0x1UL
@@ -5515,9 +10913,29 @@ struct hwrm_ring_alloc_input {
 	#define RING_ALLOC_REQ_RING_TYPE_RX_AGG    0x4UL
 	#define RING_ALLOC_REQ_RING_TYPE_NQ        0x5UL
 	#define RING_ALLOC_REQ_RING_TYPE_LAST     RING_ALLOC_REQ_RING_TYPE_NQ
-	u8	unused_0;
+	u8	cmpl_coal_cnt;
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_OFF 0x0UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_4   0x1UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_8   0x2UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_12  0x3UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_16  0x4UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_24  0x5UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_32  0x6UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_48  0x7UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_64  0x8UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_96  0x9UL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_128 0xaUL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_192 0xbUL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_256 0xcUL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_320 0xdUL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_384 0xeUL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_MAX 0xfUL
+	#define RING_ALLOC_REQ_CMPL_COAL_CNT_LAST    RING_ALLOC_REQ_CMPL_COAL_CNT_COAL_MAX
 	__le16	flags;
-	#define RING_ALLOC_REQ_FLAGS_RX_SOP_PAD     0x1UL
+	#define RING_ALLOC_REQ_FLAGS_RX_SOP_PAD                        0x1UL
+	#define RING_ALLOC_REQ_FLAGS_DISABLE_CQ_OVERFLOW_DETECTION     0x2UL
+	#define RING_ALLOC_REQ_FLAGS_NQ_DBR_PACING                     0x4UL
+	#define RING_ALLOC_REQ_FLAGS_TX_PKT_TS_CMPL_ENABLE             0x8UL
 	__le64	page_tbl_addr;
 	__le32	fbo;
 	u8	page_size;
@@ -5540,7 +10958,7 @@ struct hwrm_ring_alloc_input {
 	#define RING_ALLOC_REQ_RING_ARB_CFG_RSVD_SFT             4
 	#define RING_ALLOC_REQ_RING_ARB_CFG_ARB_POLICY_PARAM_MASK 0xff00UL
 	#define RING_ALLOC_REQ_RING_ARB_CFG_ARB_POLICY_PARAM_SFT 8
-	__le16	unused_3;
+	__le16	steering_tag;
 	__le32	reserved3;
 	__le32	stat_ctx_id;
 	__le32	reserved4;
@@ -5585,11 +11003,15 @@ struct hwrm_ring_alloc_output {
 	__le16	resp_len;
 	__le16	ring_id;
 	__le16	logical_ring_id;
-	u8	unused_0[3];
+	u8	push_buffer_index;
+	#define RING_ALLOC_RESP_PUSH_BUFFER_INDEX_PING_BUFFER 0x0UL
+	#define RING_ALLOC_RESP_PUSH_BUFFER_INDEX_PONG_BUFFER 0x1UL
+	#define RING_ALLOC_RESP_PUSH_BUFFER_INDEX_LAST       RING_ALLOC_RESP_PUSH_BUFFER_INDEX_PONG_BUFFER
+	u8	unused_0[2];
 	u8	valid;
 };
 
-/* hwrm_ring_free_input (size:192b/24B) */
+/* hwrm_ring_free_input (size:256b/32B) */
 struct hwrm_ring_free_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -5604,9 +11026,13 @@ struct hwrm_ring_free_input {
 	#define RING_FREE_REQ_RING_TYPE_RX_AGG    0x4UL
 	#define RING_FREE_REQ_RING_TYPE_NQ        0x5UL
 	#define RING_FREE_REQ_RING_TYPE_LAST     RING_FREE_REQ_RING_TYPE_NQ
-	u8	unused_0;
+	u8	flags;
+	#define RING_FREE_REQ_FLAGS_VIRTIO_RING_VALID 0x1UL
+	#define RING_FREE_REQ_FLAGS_LAST             RING_FREE_REQ_FLAGS_VIRTIO_RING_VALID
 	__le16	ring_id;
-	u8	unused_1[4];
+	__le32	prod_idx;
+	__le32	opaque;
+	__le32	unused_1;
 };
 
 /* hwrm_ring_free_output (size:128b/16B) */
@@ -5644,8 +11070,86 @@ struct hwrm_ring_reset_output {
 	__le16	req_type;
 	__le16	seq_id;
 	__le16	resp_len;
-	u8	unused_0[4];
+	u8	push_buffer_index;
+	#define RING_RESET_RESP_PUSH_BUFFER_INDEX_PING_BUFFER 0x0UL
+	#define RING_RESET_RESP_PUSH_BUFFER_INDEX_PONG_BUFFER 0x1UL
+	#define RING_RESET_RESP_PUSH_BUFFER_INDEX_LAST       RING_RESET_RESP_PUSH_BUFFER_INDEX_PONG_BUFFER
+	u8	unused_0[3];
 	u8	consumer_idx[3];
+	u8	valid;
+};
+
+/* hwrm_ring_cfg_input (size:320b/40B) */
+struct hwrm_ring_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	ring_type;
+	#define RING_CFG_REQ_RING_TYPE_TX 0x1UL
+	#define RING_CFG_REQ_RING_TYPE_RX 0x2UL
+	#define RING_CFG_REQ_RING_TYPE_LAST RING_CFG_REQ_RING_TYPE_RX
+	u8	unused_0;
+	__le16	ring_id;
+	__le16	enables;
+	#define RING_CFG_REQ_ENABLES_RX_SOP_PAD_ENABLE              0x1UL
+	#define RING_CFG_REQ_ENABLES_PROXY_MODE_ENABLE              0x2UL
+	#define RING_CFG_REQ_ENABLES_TX_PROXY_SRC_INTF_OVERRIDE     0x4UL
+	#define RING_CFG_REQ_ENABLES_SCHQ_ID                        0x8UL
+	#define RING_CFG_REQ_ENABLES_CMPL_RING_ID_UPDATE            0x10UL
+	#define RING_CFG_REQ_ENABLES_TX_METADATA                    0x20UL
+	__le16	proxy_fid;
+	__le16	schq_id;
+	__le16	cmpl_ring_id;
+	u8	rx_sop_pad_bytes;
+	u8	unused_1[3];
+	__le32	tx_metadata;
+	u8	unused_2[4];
+};
+
+/* hwrm_ring_cfg_output (size:128b/16B) */
+struct hwrm_ring_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_ring_qcfg_input (size:192b/24B) */
+struct hwrm_ring_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	ring_type;
+	#define RING_QCFG_REQ_RING_TYPE_TX 0x1UL
+	#define RING_QCFG_REQ_RING_TYPE_RX 0x2UL
+	#define RING_QCFG_REQ_RING_TYPE_LAST RING_QCFG_REQ_RING_TYPE_RX
+	u8	unused_0[5];
+	__le16	ring_id;
+};
+
+/* hwrm_ring_qcfg_output (size:256b/32B) */
+struct hwrm_ring_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	enables;
+	#define RING_QCFG_RESP_ENABLES_RX_SOP_PAD_ENABLE              0x1UL
+	#define RING_QCFG_RESP_ENABLES_PROXY_MODE_ENABLE              0x2UL
+	#define RING_QCFG_RESP_ENABLES_TX_PROXY_SRC_INTF_OVERRIDE     0x4UL
+	__le16	proxy_fid;
+	__le16	schq_id;
+	__le16	cmpl_ring_id;
+	u8	rx_sop_pad_bytes;
+	u8	unused_0[3];
+	__le32	tx_metadata;
+	u8	unused_1[7];
 	u8	valid;
 };
 
@@ -5814,6 +11318,245 @@ struct hwrm_ring_grp_free_output {
 	u8	valid;
 };
 
+/* hwrm_ring_schq_alloc_input (size:1088b/136B) */
+struct hwrm_ring_schq_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING0     0x1UL
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING1     0x2UL
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING2     0x4UL
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING3     0x8UL
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING4     0x10UL
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING5     0x20UL
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING6     0x40UL
+	#define RING_SCHQ_ALLOC_REQ_ENABLES_TQM_RING7     0x80UL
+	__le32	reserved;
+	u8	tqm_ring0_pg_size_tqm_ring0_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING0_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING0_PG_SIZE_PG_1G
+	u8	tqm_ring1_pg_size_tqm_ring1_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING1_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING1_PG_SIZE_PG_1G
+	u8	tqm_ring2_pg_size_tqm_ring2_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING2_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING2_PG_SIZE_PG_1G
+	u8	tqm_ring3_pg_size_tqm_ring3_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING3_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING3_PG_SIZE_PG_1G
+	u8	tqm_ring4_pg_size_tqm_ring4_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING4_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING4_PG_SIZE_PG_1G
+	u8	tqm_ring5_pg_size_tqm_ring5_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING5_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING5_PG_SIZE_PG_1G
+	u8	tqm_ring6_pg_size_tqm_ring6_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING6_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING6_PG_SIZE_PG_1G
+	u8	tqm_ring7_pg_size_tqm_ring7_lvl;
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_LVL_MASK      0xfUL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_LVL_SFT       0
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_LVL_LVL_0       0x0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_LVL_LVL_1       0x1UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_LVL_LVL_2       0x2UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_LVL_LAST       RING_SCHQ_ALLOC_REQ_TQM_RING7_LVL_LVL_2
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_MASK  0xf0UL
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_SFT   4
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_LAST   RING_SCHQ_ALLOC_REQ_TQM_RING7_PG_SIZE_PG_1G
+	__le64	tqm_ring0_page_dir;
+	__le64	tqm_ring1_page_dir;
+	__le64	tqm_ring2_page_dir;
+	__le64	tqm_ring3_page_dir;
+	__le64	tqm_ring4_page_dir;
+	__le64	tqm_ring5_page_dir;
+	__le64	tqm_ring6_page_dir;
+	__le64	tqm_ring7_page_dir;
+	__le32	tqm_ring0_num_entries;
+	__le32	tqm_ring1_num_entries;
+	__le32	tqm_ring2_num_entries;
+	__le32	tqm_ring3_num_entries;
+	__le32	tqm_ring4_num_entries;
+	__le32	tqm_ring5_num_entries;
+	__le32	tqm_ring6_num_entries;
+	__le32	tqm_ring7_num_entries;
+	__le16	tqm_entry_size;
+	u8	unused_0[6];
+};
+
+/* hwrm_ring_schq_alloc_output (size:128b/16B) */
+struct hwrm_ring_schq_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	schq_id;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_ring_schq_cfg_input (size:768b/96B) */
+struct hwrm_ring_schq_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	schq_id;
+	u8	tc_enabled;
+	u8	unused_0;
+	__le32	flags;
+	#define RING_SCHQ_CFG_REQ_FLAGS_TC_MAX_BW_ENABLED          0x1UL
+	#define RING_SCHQ_CFG_REQ_FLAGS_TC_RESERVATION_ENABLED     0x2UL
+	__le32	max_bw_tc0;
+	__le32	max_bw_tc1;
+	__le32	max_bw_tc2;
+	__le32	max_bw_tc3;
+	__le32	max_bw_tc4;
+	__le32	max_bw_tc5;
+	__le32	max_bw_tc6;
+	__le32	max_bw_tc7;
+	__le32	tc_bw_reservation0;
+	__le32	tc_bw_reservation1;
+	__le32	tc_bw_reservation2;
+	__le32	tc_bw_reservation3;
+	__le32	tc_bw_reservation4;
+	__le32	tc_bw_reservation5;
+	__le32	tc_bw_reservation6;
+	__le32	tc_bw_reservation7;
+	__le32	max_bw;
+	u8	unused_1[4];
+};
+
+/* hwrm_ring_schq_cfg_output (size:128b/16B) */
+struct hwrm_ring_schq_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_ring_schq_free_input (size:192b/24B) */
+struct hwrm_ring_schq_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	schq_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_ring_schq_free_output (size:128b/16B) */
+struct hwrm_ring_schq_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
 #define DEFAULT_FLOW_ID 0xFFFFFFFFUL
 #define ROCEV1_FLOW_ID 0xFFFFFFFEUL
 #define ROCEV2_FLOW_ID 0xFFFFFFFDUL
@@ -5904,6 +11647,7 @@ struct hwrm_cfa_l2_filter_alloc_input {
 	#define CFA_L2_FILTER_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define CFA_L2_FILTER_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define CFA_L2_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_L2_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
 	#define CFA_L2_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
 	#define CFA_L2_FILTER_ALLOC_REQ_TUNNEL_TYPE_LAST        CFA_L2_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL
 	u8	unused_4;
@@ -6044,6 +11788,53 @@ struct hwrm_cfa_l2_set_rx_mask_cmd_err {
 	u8	unused_0[7];
 };
 
+/* hwrm_cfa_vlan_antispoof_cfg_input (size:256b/32B) */
+struct hwrm_cfa_vlan_antispoof_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	unused_0[2];
+	__le32	num_vlan_entries;
+	__le64	vlan_tag_mask_tbl_addr;
+};
+
+/* hwrm_cfa_vlan_antispoof_cfg_output (size:128b/16B) */
+struct hwrm_cfa_vlan_antispoof_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_vlan_antispoof_qcfg_input (size:256b/32B) */
+struct hwrm_cfa_vlan_antispoof_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	unused_0[2];
+	__le32	max_vlan_entries;
+	__le64	vlan_tag_mask_tbl_addr;
+};
+
+/* hwrm_cfa_vlan_antispoof_qcfg_output (size:128b/16B) */
+struct hwrm_cfa_vlan_antispoof_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	num_vlan_entries;
+	u8	unused_0[3];
+	u8	valid;
+};
+
 /* hwrm_cfa_tunnel_filter_alloc_input (size:704b/88B) */
 struct hwrm_cfa_tunnel_filter_alloc_input {
 	__le16	req_type;
@@ -6086,6 +11877,7 @@ struct hwrm_cfa_tunnel_filter_alloc_input {
 	#define CFA_TUNNEL_FILTER_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define CFA_TUNNEL_FILTER_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define CFA_TUNNEL_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_TUNNEL_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
 	#define CFA_TUNNEL_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
 	#define CFA_TUNNEL_FILTER_ALLOC_REQ_TUNNEL_TYPE_LAST        CFA_TUNNEL_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL
 	u8	tunnel_flags;
@@ -6136,6 +11928,123 @@ struct hwrm_cfa_tunnel_filter_free_output {
 	__le16	seq_id;
 	__le16	resp_len;
 	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_redirect_tunnel_type_alloc_input (size:192b/24B) */
+struct hwrm_cfa_redirect_tunnel_type_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	dest_fid;
+	u8	tunnel_type;
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_NONTUNNEL    0x0UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_VXLAN        0x1UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_NVGRE        0x2UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_L2GRE        0x3UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_IPIP         0x4UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_GENEVE       0x5UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_MPLS         0x6UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_STT          0x7UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_IPGRE        0x8UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_VXLAN_V4     0x9UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_LAST        CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL
+	u8	flags;
+	#define CFA_REDIRECT_TUNNEL_TYPE_ALLOC_REQ_FLAGS_MODIFY_DST     0x1UL
+	u8	unused_0[4];
+};
+
+/* hwrm_cfa_redirect_tunnel_type_alloc_output (size:128b/16B) */
+struct hwrm_cfa_redirect_tunnel_type_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_redirect_tunnel_type_free_input (size:192b/24B) */
+struct hwrm_cfa_redirect_tunnel_type_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	dest_fid;
+	u8	tunnel_type;
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_NONTUNNEL    0x0UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_VXLAN        0x1UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_NVGRE        0x2UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_L2GRE        0x3UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_IPIP         0x4UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_GENEVE       0x5UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_MPLS         0x6UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_STT          0x7UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_IPGRE        0x8UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_VXLAN_V4     0x9UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_LAST        CFA_REDIRECT_TUNNEL_TYPE_FREE_REQ_TUNNEL_TYPE_ANYTUNNEL
+	u8	unused_0[5];
+};
+
+/* hwrm_cfa_redirect_tunnel_type_free_output (size:128b/16B) */
+struct hwrm_cfa_redirect_tunnel_type_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_redirect_tunnel_type_info_input (size:192b/24B) */
+struct hwrm_cfa_redirect_tunnel_type_info_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	src_fid;
+	u8	tunnel_type;
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_NONTUNNEL    0x0UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_VXLAN        0x1UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_NVGRE        0x2UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_L2GRE        0x3UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_IPIP         0x4UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_GENEVE       0x5UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_MPLS         0x6UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_STT          0x7UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_IPGRE        0x8UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_VXLAN_V4     0x9UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
+	#define CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_LAST        CFA_REDIRECT_TUNNEL_TYPE_INFO_REQ_TUNNEL_TYPE_ANYTUNNEL
+	u8	unused_0[5];
+};
+
+/* hwrm_cfa_redirect_tunnel_type_info_output (size:128b/16B) */
+struct hwrm_cfa_redirect_tunnel_type_info_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	dest_fid;
+	u8	unused_0[5];
 	u8	valid;
 };
 
@@ -6220,7 +12129,8 @@ struct hwrm_cfa_encap_record_alloc_input {
 	#define CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_IPGRE_V1     0xaUL
 	#define CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_L2_ETYPE     0xbUL
 	#define CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_VXLAN_GPE_V6 0xcUL
-	#define CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_LAST        CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_VXLAN_GPE_V6
+	#define CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_VXLAN_GPE    0x10UL
+	#define CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_LAST        CFA_ENCAP_RECORD_ALLOC_REQ_ENCAP_TYPE_VXLAN_GPE
 	u8	unused_0[3];
 	__le32	encap_data[20];
 };
@@ -6271,6 +12181,7 @@ struct hwrm_cfa_ntuple_filter_alloc_input {
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_FLAGS_DEST_FID              0x8UL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_FLAGS_ARP_REPLY             0x10UL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_FLAGS_DEST_RFS_RING_IDX     0x20UL
+	#define CFA_NTUPLE_FILTER_ALLOC_REQ_FLAGS_NO_L2_CONTEXT         0x40UL
 	__le32	enables;
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_ENABLES_L2_FILTER_ID         0x1UL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_ENABLES_ETHERTYPE            0x2UL
@@ -6304,9 +12215,12 @@ struct hwrm_cfa_ntuple_filter_alloc_input {
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_UNKNOWN 0x0UL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_TCP     0x6UL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_UDP     0x11UL
-	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_LAST   CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_UDP
+	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_ICMP    0x1UL
+	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_ICMPV6  0x3aUL
+	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_RSVD    0xffUL
+	#define CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_LAST   CFA_NTUPLE_FILTER_ALLOC_REQ_IP_PROTOCOL_RSVD
 	__le16	dst_id;
-	__le16	mirror_vnic_id;
+	__le16	rfs_ring_tbl_idx;
 	u8	tunnel_type;
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_NONTUNNEL    0x0UL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN        0x1UL
@@ -6321,6 +12235,7 @@ struct hwrm_cfa_ntuple_filter_alloc_input {
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
 	#define CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_LAST        CFA_NTUPLE_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL
 	u8	pri_hint;
@@ -6406,6 +12321,7 @@ struct hwrm_cfa_ntuple_filter_cfg_input {
 	__le32	flags;
 	#define CFA_NTUPLE_FILTER_CFG_REQ_FLAGS_DEST_FID              0x1UL
 	#define CFA_NTUPLE_FILTER_CFG_REQ_FLAGS_DEST_RFS_RING_IDX     0x2UL
+	#define CFA_NTUPLE_FILTER_CFG_REQ_FLAGS_NO_L2_CONTEXT         0x4UL
 	__le64	ntuple_filter_id;
 	__le32	new_dst_id;
 	__le32	new_mirror_vnic_id;
@@ -6417,6 +12333,514 @@ struct hwrm_cfa_ntuple_filter_cfg_input {
 
 /* hwrm_cfa_ntuple_filter_cfg_output (size:128b/16B) */
 struct hwrm_cfa_ntuple_filter_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_em_flow_alloc_input (size:896b/112B) */
+struct hwrm_cfa_em_flow_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_PATH         0x1UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_PATH_TX        0x0UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_PATH_RX        0x1UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_PATH_LAST     CFA_EM_FLOW_ALLOC_REQ_FLAGS_PATH_RX
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_BYTE_CTR     0x2UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_PKT_CTR      0x4UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_DECAP        0x8UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_ENCAP        0x10UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_DROP         0x20UL
+	#define CFA_EM_FLOW_ALLOC_REQ_FLAGS_METER        0x40UL
+	__le32	enables;
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_L2_FILTER_ID          0x1UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_TUNNEL_TYPE           0x2UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_TUNNEL_ID             0x4UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_SRC_MACADDR           0x8UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_DST_MACADDR           0x10UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_OVLAN_VID             0x20UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_IVLAN_VID             0x40UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_ETHERTYPE             0x80UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_SRC_IPADDR            0x100UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_DST_IPADDR            0x200UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_IPADDR_TYPE           0x400UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_IP_PROTOCOL           0x800UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_SRC_PORT              0x1000UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_DST_PORT              0x2000UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_DST_ID                0x4000UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_MIRROR_VNIC_ID        0x8000UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_ENCAP_RECORD_ID       0x10000UL
+	#define CFA_EM_FLOW_ALLOC_REQ_ENABLES_METER_INSTANCE_ID     0x20000UL
+	__le64	l2_filter_id;
+	u8	tunnel_type;
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_NONTUNNEL    0x0UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_VXLAN        0x1UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_NVGRE        0x2UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_L2GRE        0x3UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_IPIP         0x4UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_GENEVE       0x5UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_MPLS         0x6UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_STT          0x7UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_IPGRE        0x8UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_VXLAN_V4     0x9UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
+	#define CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_LAST        CFA_EM_FLOW_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL
+	u8	unused_0[3];
+	__le32	tunnel_id;
+	u8	src_macaddr[6];
+	__le16	meter_instance_id;
+	#define CFA_EM_FLOW_ALLOC_REQ_METER_INSTANCE_ID_INVALID 0xffffUL
+	#define CFA_EM_FLOW_ALLOC_REQ_METER_INSTANCE_ID_LAST   CFA_EM_FLOW_ALLOC_REQ_METER_INSTANCE_ID_INVALID
+	u8	dst_macaddr[6];
+	__le16	ovlan_vid;
+	__le16	ivlan_vid;
+	__be16	ethertype;
+	u8	ip_addr_type;
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_ADDR_TYPE_UNKNOWN 0x0UL
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_ADDR_TYPE_IPV4    0x4UL
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_ADDR_TYPE_IPV6    0x6UL
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_ADDR_TYPE_LAST   CFA_EM_FLOW_ALLOC_REQ_IP_ADDR_TYPE_IPV6
+	u8	ip_protocol;
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_PROTOCOL_UNKNOWN 0x0UL
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_PROTOCOL_TCP     0x6UL
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_PROTOCOL_UDP     0x11UL
+	#define CFA_EM_FLOW_ALLOC_REQ_IP_PROTOCOL_LAST   CFA_EM_FLOW_ALLOC_REQ_IP_PROTOCOL_UDP
+	u8	unused_1[2];
+	__be32	src_ipaddr[4];
+	__be32	dst_ipaddr[4];
+	__be16	src_port;
+	__be16	dst_port;
+	__le16	dst_id;
+	__le16	mirror_vnic_id;
+	__le32	encap_record_id;
+	u8	unused_2[4];
+};
+
+/* hwrm_cfa_em_flow_alloc_output (size:192b/24B) */
+struct hwrm_cfa_em_flow_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le64	em_filter_id;
+	__le32	flow_id;
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_VALUE_MASK 0x3fffffffUL
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_VALUE_SFT 0
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_TYPE      0x40000000UL
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_TYPE_INT    (0x0UL << 30)
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_TYPE_EXT    (0x1UL << 30)
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_TYPE_LAST  CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_TYPE_EXT
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_DIR       0x80000000UL
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_DIR_RX      (0x0UL << 31)
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_DIR_TX      (0x1UL << 31)
+	#define CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_DIR_LAST   CFA_EM_FLOW_ALLOC_RESP_FLOW_ID_DIR_TX
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_cfa_em_flow_free_input (size:192b/24B) */
+struct hwrm_cfa_em_flow_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	em_filter_id;
+};
+
+/* hwrm_cfa_em_flow_free_output (size:128b/16B) */
+struct hwrm_cfa_em_flow_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_em_flow_cfg_input (size:384b/48B) */
+struct hwrm_cfa_em_flow_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define CFA_EM_FLOW_CFG_REQ_ENABLES_NEW_DST_ID                0x1UL
+	#define CFA_EM_FLOW_CFG_REQ_ENABLES_NEW_MIRROR_VNIC_ID        0x2UL
+	#define CFA_EM_FLOW_CFG_REQ_ENABLES_NEW_METER_INSTANCE_ID     0x4UL
+	u8	unused_0[4];
+	__le64	em_filter_id;
+	__le32	new_dst_id;
+	__le32	new_mirror_vnic_id;
+	__le16	new_meter_instance_id;
+	#define CFA_EM_FLOW_CFG_REQ_NEW_METER_INSTANCE_ID_INVALID 0xffffUL
+	#define CFA_EM_FLOW_CFG_REQ_NEW_METER_INSTANCE_ID_LAST   CFA_EM_FLOW_CFG_REQ_NEW_METER_INSTANCE_ID_INVALID
+	u8	unused_1[6];
+};
+
+/* hwrm_cfa_em_flow_cfg_output (size:128b/16B) */
+struct hwrm_cfa_em_flow_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_meter_qcaps_input (size:128b/16B) */
+struct hwrm_cfa_meter_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_cfa_meter_qcaps_output (size:320b/40B) */
+struct hwrm_cfa_meter_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	flags;
+	#define CFA_METER_QCAPS_RESP_FLAGS_CLOCK_MASK  0xfUL
+	#define CFA_METER_QCAPS_RESP_FLAGS_CLOCK_SFT   0
+	#define CFA_METER_QCAPS_RESP_FLAGS_CLOCK_375MHZ  0x0UL
+	#define CFA_METER_QCAPS_RESP_FLAGS_CLOCK_625MHZ  0x1UL
+	#define CFA_METER_QCAPS_RESP_FLAGS_CLOCK_LAST   CFA_METER_QCAPS_RESP_FLAGS_CLOCK_625MHZ
+	u8	unused_0[4];
+	__le16	min_tx_profile;
+	__le16	max_tx_profile;
+	__le16	min_rx_profile;
+	__le16	max_rx_profile;
+	__le16	min_tx_instance;
+	__le16	max_tx_instance;
+	__le16	min_rx_instance;
+	__le16	max_rx_instance;
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_meter_profile_alloc_input (size:320b/40B) */
+struct hwrm_cfa_meter_profile_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_METER_PROFILE_ALLOC_REQ_FLAGS_PATH     0x1UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_FLAGS_PATH_LAST CFA_METER_PROFILE_ALLOC_REQ_FLAGS_PATH_RX
+	u8	meter_type;
+	#define CFA_METER_PROFILE_ALLOC_REQ_METER_TYPE_RFC2697 0x0UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_METER_TYPE_RFC2698 0x1UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_METER_TYPE_RFC4115 0x2UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_METER_TYPE_LAST   CFA_METER_PROFILE_ALLOC_REQ_METER_TYPE_RFC4115
+	__le16	reserved1;
+	__le32	reserved2;
+	__le32	commit_rate;
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_SCALE_LAST                 CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_SCALE_BYTES
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_RAW           (0x7UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_ALLOC_REQ_COMMIT_RATE_BW_VALUE_UNIT_RAW
+	__le32	commit_burst;
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_SCALE_LAST                 CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_SCALE_BYTES
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_INVALID       (0x7UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_ALLOC_REQ_COMMIT_BURST_BW_VALUE_UNIT_INVALID
+	__le32	excess_peak_rate;
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_SCALE_LAST                 CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_SCALE_BYTES
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_RAW           (0x7UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_RAW
+	__le32	excess_peak_burst;
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_SCALE_LAST                 CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_SCALE_BYTES
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_INVALID       (0x7UL << 29)
+	#define CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_ALLOC_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_INVALID
+};
+
+/* hwrm_cfa_meter_profile_alloc_output (size:128b/16B) */
+struct hwrm_cfa_meter_profile_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	meter_profile_id;
+	#define CFA_METER_PROFILE_ALLOC_RESP_METER_PROFILE_ID_INVALID 0xffffUL
+	#define CFA_METER_PROFILE_ALLOC_RESP_METER_PROFILE_ID_LAST   CFA_METER_PROFILE_ALLOC_RESP_METER_PROFILE_ID_INVALID
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_cfa_meter_profile_free_input (size:192b/24B) */
+struct hwrm_cfa_meter_profile_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_METER_PROFILE_FREE_REQ_FLAGS_PATH     0x1UL
+	#define CFA_METER_PROFILE_FREE_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_METER_PROFILE_FREE_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_METER_PROFILE_FREE_REQ_FLAGS_PATH_LAST CFA_METER_PROFILE_FREE_REQ_FLAGS_PATH_RX
+	u8	unused_0;
+	__le16	meter_profile_id;
+	#define CFA_METER_PROFILE_FREE_REQ_METER_PROFILE_ID_INVALID 0xffffUL
+	#define CFA_METER_PROFILE_FREE_REQ_METER_PROFILE_ID_LAST   CFA_METER_PROFILE_FREE_REQ_METER_PROFILE_ID_INVALID
+	u8	unused_1[4];
+};
+
+/* hwrm_cfa_meter_profile_free_output (size:128b/16B) */
+struct hwrm_cfa_meter_profile_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_meter_profile_cfg_input (size:320b/40B) */
+struct hwrm_cfa_meter_profile_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_METER_PROFILE_CFG_REQ_FLAGS_PATH     0x1UL
+	#define CFA_METER_PROFILE_CFG_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_METER_PROFILE_CFG_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_METER_PROFILE_CFG_REQ_FLAGS_PATH_LAST CFA_METER_PROFILE_CFG_REQ_FLAGS_PATH_RX
+	u8	meter_type;
+	#define CFA_METER_PROFILE_CFG_REQ_METER_TYPE_RFC2697 0x0UL
+	#define CFA_METER_PROFILE_CFG_REQ_METER_TYPE_RFC2698 0x1UL
+	#define CFA_METER_PROFILE_CFG_REQ_METER_TYPE_RFC4115 0x2UL
+	#define CFA_METER_PROFILE_CFG_REQ_METER_TYPE_LAST   CFA_METER_PROFILE_CFG_REQ_METER_TYPE_RFC4115
+	__le16	meter_profile_id;
+	#define CFA_METER_PROFILE_CFG_REQ_METER_PROFILE_ID_INVALID 0xffffUL
+	#define CFA_METER_PROFILE_CFG_REQ_METER_PROFILE_ID_LAST   CFA_METER_PROFILE_CFG_REQ_METER_PROFILE_ID_INVALID
+	__le32	reserved;
+	__le32	commit_rate;
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_SCALE_LAST                 CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_SCALE_BYTES
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_RAW           (0x7UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_CFG_REQ_COMMIT_RATE_BW_VALUE_UNIT_RAW
+	__le32	commit_burst;
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_SCALE_LAST                 CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_SCALE_BYTES
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_INVALID       (0x7UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_CFG_REQ_COMMIT_BURST_BW_VALUE_UNIT_INVALID
+	__le32	excess_peak_rate;
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_SCALE_LAST                 CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_SCALE_BYTES
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_RAW           (0x7UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_RATE_BW_VALUE_UNIT_RAW
+	__le32	excess_peak_burst;
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_MASK             0xfffffffUL
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_SFT              0
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_SCALE                     0x10000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_SCALE_BITS                  (0x0UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_SCALE_BYTES                 (0x1UL << 28)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_SCALE_LAST                 CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_SCALE_BYTES
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_MASK        0xe0000000UL
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_SFT         29
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_MEGA          (0x0UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_KILO          (0x2UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_BASE          (0x4UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_GIGA          (0x6UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_PERCENT1_100  (0x1UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_INVALID       (0x7UL << 29)
+	#define CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_LAST         CFA_METER_PROFILE_CFG_REQ_EXCESS_PEAK_BURST_BW_VALUE_UNIT_INVALID
+};
+
+/* hwrm_cfa_meter_profile_cfg_output (size:128b/16B) */
+struct hwrm_cfa_meter_profile_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_meter_instance_alloc_input (size:192b/24B) */
+struct hwrm_cfa_meter_instance_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_METER_INSTANCE_ALLOC_REQ_FLAGS_PATH     0x1UL
+	#define CFA_METER_INSTANCE_ALLOC_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_METER_INSTANCE_ALLOC_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_METER_INSTANCE_ALLOC_REQ_FLAGS_PATH_LAST CFA_METER_INSTANCE_ALLOC_REQ_FLAGS_PATH_RX
+	u8	unused_0;
+	__le16	meter_profile_id;
+	#define CFA_METER_INSTANCE_ALLOC_REQ_METER_PROFILE_ID_INVALID 0xffffUL
+	#define CFA_METER_INSTANCE_ALLOC_REQ_METER_PROFILE_ID_LAST   CFA_METER_INSTANCE_ALLOC_REQ_METER_PROFILE_ID_INVALID
+	u8	unused_1[4];
+};
+
+/* hwrm_cfa_meter_instance_alloc_output (size:128b/16B) */
+struct hwrm_cfa_meter_instance_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	meter_instance_id;
+	#define CFA_METER_INSTANCE_ALLOC_RESP_METER_INSTANCE_ID_INVALID 0xffffUL
+	#define CFA_METER_INSTANCE_ALLOC_RESP_METER_INSTANCE_ID_LAST   CFA_METER_INSTANCE_ALLOC_RESP_METER_INSTANCE_ID_INVALID
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_cfa_meter_instance_cfg_input (size:192b/24B) */
+struct hwrm_cfa_meter_instance_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_METER_INSTANCE_CFG_REQ_FLAGS_PATH     0x1UL
+	#define CFA_METER_INSTANCE_CFG_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_METER_INSTANCE_CFG_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_METER_INSTANCE_CFG_REQ_FLAGS_PATH_LAST CFA_METER_INSTANCE_CFG_REQ_FLAGS_PATH_RX
+	u8	unused_0;
+	__le16	meter_profile_id;
+	#define CFA_METER_INSTANCE_CFG_REQ_METER_PROFILE_ID_INVALID 0xffffUL
+	#define CFA_METER_INSTANCE_CFG_REQ_METER_PROFILE_ID_LAST   CFA_METER_INSTANCE_CFG_REQ_METER_PROFILE_ID_INVALID
+	__le16	meter_instance_id;
+	u8	unused_1[2];
+};
+
+/* hwrm_cfa_meter_instance_cfg_output (size:128b/16B) */
+struct hwrm_cfa_meter_instance_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_meter_instance_free_input (size:192b/24B) */
+struct hwrm_cfa_meter_instance_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_METER_INSTANCE_FREE_REQ_FLAGS_PATH     0x1UL
+	#define CFA_METER_INSTANCE_FREE_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_METER_INSTANCE_FREE_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_METER_INSTANCE_FREE_REQ_FLAGS_PATH_LAST CFA_METER_INSTANCE_FREE_REQ_FLAGS_PATH_RX
+	u8	unused_0;
+	__le16	meter_instance_id;
+	#define CFA_METER_INSTANCE_FREE_REQ_METER_INSTANCE_ID_INVALID 0xffffUL
+	#define CFA_METER_INSTANCE_FREE_REQ_METER_INSTANCE_ID_LAST   CFA_METER_INSTANCE_FREE_REQ_METER_INSTANCE_ID_INVALID
+	u8	unused_1[4];
+};
+
+/* hwrm_cfa_meter_instance_free_output (size:128b/16B) */
+struct hwrm_cfa_meter_instance_free_output {
 	__le16	error_code;
 	__le16	req_type;
 	__le16	seq_id;
@@ -6467,6 +12891,7 @@ struct hwrm_cfa_decap_filter_alloc_input {
 	#define CFA_DECAP_FILTER_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define CFA_DECAP_FILTER_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define CFA_DECAP_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_DECAP_FILTER_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
 	#define CFA_DECAP_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
 	#define CFA_DECAP_FILTER_ALLOC_REQ_TUNNEL_TYPE_LAST        CFA_DECAP_FILTER_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL
 	u8	unused_0;
@@ -6610,6 +13035,7 @@ struct hwrm_cfa_flow_alloc_input {
 	#define CFA_FLOW_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define CFA_FLOW_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define CFA_FLOW_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_FLOW_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
 	#define CFA_FLOW_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL    0xffUL
 	#define CFA_FLOW_ALLOC_REQ_TUNNEL_TYPE_LAST        CFA_FLOW_ALLOC_REQ_TUNNEL_TYPE_ANYTUNNEL
 };
@@ -6679,6 +13105,122 @@ struct hwrm_cfa_flow_free_output {
 	u8	valid;
 };
 
+/* hwrm_cfa_flow_action_data (size:960b/120B) */
+struct hwrm_cfa_flow_action_data {
+	__le16	action_flags;
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_FWD                    0x1UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_RECYCLE                0x2UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_DROP                   0x4UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_METER                  0x8UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_TUNNEL                 0x10UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_TUNNEL_IP              0x20UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_TTL_DECREMENT          0x40UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_FLOW_AGING_ENABLED     0x80UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_ENCAP                  0x100UL
+	#define CFA_FLOW_ACTION_DATA_ACTION_FLAGS_DECAP                  0x200UL
+	__le16	act_meter_id;
+	__le16	vnic_id;
+	__le16	vport_id;
+	__be16	nat_port;
+	__le16	unused_0[3];
+	__be32	nat_ip_address[4];
+	u8	encap_type;
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_VXLAN        0x1UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_NVGRE        0x2UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_L2GRE        0x3UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_IPIP         0x4UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_GENEVE       0x5UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_MPLS         0x6UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_VLAN         0x7UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_IPGRE        0x8UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_VXLAN_V4     0x9UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_IPGRE_V1     0xaUL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_L2_ETYPE     0xbUL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_VXLAN_GPE    0x10UL
+	#define CFA_FLOW_ACTION_DATA_ENCAP_TYPE_LAST        CFA_FLOW_ACTION_DATA_ENCAP_TYPE_VXLAN_GPE
+	u8	unused[7];
+	__le32	encap_data[20];
+};
+
+/* hwrm_cfa_flow_tunnel_hdr_data (size:64b/8B) */
+struct hwrm_cfa_flow_tunnel_hdr_data {
+	u8	tunnel_type;
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_NONTUNNEL    0x0UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_VXLAN        0x1UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_NVGRE        0x2UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_L2GRE        0x3UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_IPIP         0x4UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_GENEVE       0x5UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_MPLS         0x6UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_STT          0x7UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_IPGRE        0x8UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_VXLAN_V4     0x9UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_IPGRE_V1     0xaUL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_L2_ETYPE     0xbUL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_ANYTUNNEL    0xffUL
+	#define CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_LAST        CFA_FLOW_TUNNEL_HDR_DATA_TUNNEL_TYPE_ANYTUNNEL
+	u8	unused[3];
+	__le32	tunnel_id;
+};
+
+/* hwrm_cfa_flow_l4_key_data (size:64b/8B) */
+struct hwrm_cfa_flow_l4_key_data {
+	__be16	l4_src_port;
+	__be16	l4_dst_port;
+	__le32	unused;
+};
+
+/* hwrm_cfa_flow_l3_key_data (size:512b/64B) */
+struct hwrm_cfa_flow_l3_key_data {
+	u8	ip_protocol;
+	u8	unused_0[7];
+	__be32	ip_dst[4];
+	__be32	ip_src[4];
+	__be32	nat_ip_address[4];
+	__le32	unused[2];
+};
+
+/* hwrm_cfa_flow_l2_key_data (size:448b/56B) */
+struct hwrm_cfa_flow_l2_key_data {
+	__be16	dmac[3];
+	__le16	unused_0;
+	__be16	smac[3];
+	__le16	unused_1;
+	__be16	l2_rewrite_dmac[3];
+	__le16	unused_2;
+	__be16	l2_rewrite_smac[3];
+	__le16	ethertype;
+	__le16	num_vlan_tags;
+	__be16	l2_rewrite_vlan_tpid;
+	__be16	l2_rewrite_vlan_tci;
+	u8	unused_3[2];
+	__be16	ovlan_tpid;
+	__be16	ovlan_tci;
+	__be16	ivlan_tpid;
+	__be16	ivlan_tci;
+	u8	unused[8];
+};
+
+/* hwrm_cfa_flow_key_data (size:4160b/520B) */
+struct hwrm_cfa_flow_key_data {
+	__le32	t_l2_key_data[14];
+	__le32	t_l2_key_mask[14];
+	__le32	t_l3_key_data[16];
+	__le32	t_l3_key_mask[16];
+	__le32	t_l4_key_data[2];
+	__le32	t_l4_key_mask[2];
+	__le32	tunnel_hdr[2];
+	__le32	l2_key_data[14];
+	__le32	l2_key_mask[14];
+	__le32	l3_key_data[16];
+	__le32	l3_key_mask[16];
+	__le32	l4_key_data[2];
+	__le32	l4_key_mask[2];
+};
+
 /* hwrm_cfa_flow_info_input (size:256b/32B) */
 struct hwrm_cfa_flow_info_input {
 	__le16	req_type;
@@ -6687,12 +13229,17 @@ struct hwrm_cfa_flow_info_input {
 	__le16	target_id;
 	__le64	resp_addr;
 	__le16	flow_handle;
-	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_MAX_MASK       0xfffUL
-	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_MAX_SFT        0
-	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_CNP_CNT        0x1000UL
-	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_ROCEV1_CNT     0x2000UL
-	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_ROCEV2_CNT     0x4000UL
-	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_DIR_RX         0x8000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_MAX_MASK      0xfffUL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_CNP_CNT       0x1000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_ROCEV1_CNT    0x2000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_NIC_TX        0x3000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_ROCEV2_CNT    0x4000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_DIR_RX        0x8000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_CNP_CNT_RX    0x9000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_ROCEV1_CNT_RX 0xa000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_NIC_RX        0xb000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_ROCEV2_CNT_RX 0xc000UL
+	#define CFA_FLOW_INFO_REQ_FLOW_HANDLE_LAST         CFA_FLOW_INFO_REQ_FLOW_HANDLE_ROCEV2_CNT_RX
 	u8	unused_0[6];
 	__le64	ext_flow_handle;
 };
@@ -6721,6 +13268,52 @@ struct hwrm_cfa_flow_info_output {
 	__le32	flow_key_data[130];
 	__le32	flow_action_info[30];
 	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_flow_flush_input (size:256b/32B) */
+struct hwrm_cfa_flow_flush_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_TABLE_VALID                     0x1UL
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_RESET_ALL                       0x2UL
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_RESET_PORT                      0x4UL
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_HANDLE_INCL_FC                  0x8000000UL
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_HANDLE_ENTRY_SIZE_MASK          0xc0000000UL
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_HANDLE_ENTRY_SIZE_SFT           30
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_HANDLE_ENTRY_SIZE_FLOW_HND_16BIT  (0x0UL << 30)
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_HANDLE_ENTRY_SIZE_FLOW_HND_64BIT  (0x1UL << 30)
+	#define CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_HANDLE_ENTRY_SIZE_LAST           CFA_FLOW_FLUSH_REQ_FLAGS_FLOW_HANDLE_ENTRY_SIZE_FLOW_HND_64BIT
+	u8	page_size;
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_4K   0x0UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_8K   0x1UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_64K  0x4UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_256K 0x6UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_1M   0x8UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_2M   0x9UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_4M   0xaUL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_1G   0x12UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_SIZE_LAST CFA_FLOW_FLUSH_REQ_PAGE_SIZE_1G
+	u8	page_level;
+	#define CFA_FLOW_FLUSH_REQ_PAGE_LEVEL_LVL_0 0x0UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_LEVEL_LVL_1 0x1UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_LEVEL_LVL_2 0x2UL
+	#define CFA_FLOW_FLUSH_REQ_PAGE_LEVEL_LAST CFA_FLOW_FLUSH_REQ_PAGE_LEVEL_LVL_2
+	__le16	num_flows;
+	__le64	page_dir;
+};
+
+/* hwrm_cfa_flow_flush_output (size:128b/16B) */
+struct hwrm_cfa_flow_flush_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
 	u8	valid;
 };
 
@@ -6781,6 +13374,377 @@ struct hwrm_cfa_flow_stats_output {
 	__le64	byte_7;
 	__le64	byte_8;
 	__le64	byte_9;
+	__le16	flow_hits;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_cfa_flow_aging_timer_reset_input (size:256b/32B) */
+struct hwrm_cfa_flow_aging_timer_reset_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flow_handle;
+	u8	unused_0[2];
+	__le32	flow_timer;
+	__le64	ext_flow_handle;
+};
+
+/* hwrm_cfa_flow_aging_timer_reset_output (size:128b/16B) */
+struct hwrm_cfa_flow_aging_timer_reset_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_flow_aging_cfg_input (size:384b/48B) */
+struct hwrm_cfa_flow_aging_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	enables;
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_TCP_FLOW_TIMER          0x1UL
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_TCP_FIN_TIMER           0x2UL
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_UDP_FLOW_TIMER          0x4UL
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_EEM_DMA_INTERVAL        0x8UL
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_EEM_NOTICE_INTERVAL     0x10UL
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_EEM_CTX_MAX_ENTRIES     0x20UL
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_EEM_CTX_ID              0x40UL
+	#define CFA_FLOW_AGING_CFG_REQ_ENABLES_EEM_CTX_MEM_TYPE        0x80UL
+	u8	flags;
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_PATH       0x1UL
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_PATH_TX      0x0UL
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_PATH_RX      0x1UL
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_PATH_LAST   CFA_FLOW_AGING_CFG_REQ_FLAGS_PATH_RX
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_EEM        0x2UL
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_EEM_DISABLE  (0x0UL << 1)
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_EEM_ENABLE   (0x1UL << 1)
+	#define CFA_FLOW_AGING_CFG_REQ_FLAGS_EEM_LAST    CFA_FLOW_AGING_CFG_REQ_FLAGS_EEM_ENABLE
+	u8	unused_0;
+	__le32	tcp_flow_timer;
+	__le32	tcp_fin_timer;
+	__le32	udp_flow_timer;
+	__le16	eem_dma_interval;
+	__le16	eem_notice_interval;
+	__le32	eem_ctx_max_entries;
+	__le16	eem_ctx_id;
+	__le16	eem_ctx_mem_type;
+	#define CFA_FLOW_AGING_CFG_REQ_EEM_CTX_MEM_TYPE_EJECTION_DATA 0x0UL
+	#define CFA_FLOW_AGING_CFG_REQ_EEM_CTX_MEM_TYPE_LAST         CFA_FLOW_AGING_CFG_REQ_EEM_CTX_MEM_TYPE_EJECTION_DATA
+	u8	unused_1[4];
+};
+
+/* hwrm_cfa_flow_aging_cfg_output (size:128b/16B) */
+struct hwrm_cfa_flow_aging_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_flow_aging_qcfg_input (size:192b/24B) */
+struct hwrm_cfa_flow_aging_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_FLOW_AGING_QCFG_REQ_FLAGS_PATH     0x1UL
+	#define CFA_FLOW_AGING_QCFG_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_FLOW_AGING_QCFG_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_FLOW_AGING_QCFG_REQ_FLAGS_PATH_LAST CFA_FLOW_AGING_QCFG_REQ_FLAGS_PATH_RX
+	u8	unused_0[7];
+};
+
+/* hwrm_cfa_flow_aging_qcfg_output (size:320b/40B) */
+struct hwrm_cfa_flow_aging_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	tcp_flow_timer;
+	__le32	tcp_fin_timer;
+	__le32	udp_flow_timer;
+	__le16	eem_dma_interval;
+	__le16	eem_notice_interval;
+	__le32	eem_ctx_max_entries;
+	__le16	eem_ctx_id;
+	__le16	eem_ctx_mem_type;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_flow_aging_qcaps_input (size:192b/24B) */
+struct hwrm_cfa_flow_aging_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define CFA_FLOW_AGING_QCAPS_REQ_FLAGS_PATH     0x1UL
+	#define CFA_FLOW_AGING_QCAPS_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_FLOW_AGING_QCAPS_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_FLOW_AGING_QCAPS_REQ_FLAGS_PATH_LAST CFA_FLOW_AGING_QCAPS_REQ_FLAGS_PATH_RX
+	u8	unused_0[7];
+};
+
+/* hwrm_cfa_flow_aging_qcaps_output (size:256b/32B) */
+struct hwrm_cfa_flow_aging_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	max_tcp_flow_timer;
+	__le32	max_tcp_fin_timer;
+	__le32	max_udp_flow_timer;
+	__le32	max_aging_flows;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_tcp_flag_process_qcfg_input (size:128b/16B) */
+struct hwrm_cfa_tcp_flag_process_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_cfa_tcp_flag_process_qcfg_output (size:192b/24B) */
+struct hwrm_cfa_tcp_flag_process_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	rx_ar_id_port0;
+	__le16	rx_ar_id_port1;
+	__le16	tx_ar_id_port0;
+	__le16	tx_ar_id_port1;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_vf_pair_alloc_input (size:448b/56B) */
+struct hwrm_cfa_vf_pair_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	vf_a_id;
+	__le16	vf_b_id;
+	u8	unused_0[4];
+	char	pair_name[32];
+};
+
+/* hwrm_cfa_vf_pair_alloc_output (size:128b/16B) */
+struct hwrm_cfa_vf_pair_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_vf_pair_free_input (size:384b/48B) */
+struct hwrm_cfa_vf_pair_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	char	pair_name[32];
+};
+
+/* hwrm_cfa_vf_pair_free_output (size:128b/16B) */
+struct hwrm_cfa_vf_pair_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_vf_pair_info_input (size:448b/56B) */
+struct hwrm_cfa_vf_pair_info_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define CFA_VF_PAIR_INFO_REQ_FLAGS_LOOKUP_TYPE     0x1UL
+	__le16	vf_pair_index;
+	u8	unused_0[2];
+	char	vf_pair_name[32];
+};
+
+/* hwrm_cfa_vf_pair_info_output (size:512b/64B) */
+struct hwrm_cfa_vf_pair_info_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	next_vf_pair_index;
+	__le16	vf_a_fid;
+	__le16	vf_a_index;
+	__le16	vf_b_fid;
+	__le16	vf_b_index;
+	u8	pair_state;
+	#define CFA_VF_PAIR_INFO_RESP_PAIR_STATE_ALLOCATED 0x1UL
+	#define CFA_VF_PAIR_INFO_RESP_PAIR_STATE_ACTIVE    0x2UL
+	#define CFA_VF_PAIR_INFO_RESP_PAIR_STATE_LAST     CFA_VF_PAIR_INFO_RESP_PAIR_STATE_ACTIVE
+	u8	unused_0[5];
+	char	pair_name[32];
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_pair_alloc_input (size:576b/72B) */
+struct hwrm_cfa_pair_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	pair_mode;
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_VF2FN          0x0UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_REP2FN         0x1UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_REP2REP        0x2UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_PROXY          0x3UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_PFPAIR         0x4UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_REP2FN_MOD     0x5UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_REP2FN_MODALL  0x6UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_REP2FN_TRUFLOW 0x7UL
+	#define CFA_PAIR_ALLOC_REQ_PAIR_MODE_LAST          CFA_PAIR_ALLOC_REQ_PAIR_MODE_REP2FN_TRUFLOW
+	__le16	vf_a_id;
+	u8	host_b_id;
+	u8	pf_b_id;
+	__le16	vf_b_id;
+	u8	port_id;
+	u8	pri;
+	__le16	new_pf_fid;
+	__le32	enables;
+	#define CFA_PAIR_ALLOC_REQ_ENABLES_Q_AB_VALID      0x1UL
+	#define CFA_PAIR_ALLOC_REQ_ENABLES_Q_BA_VALID      0x2UL
+	#define CFA_PAIR_ALLOC_REQ_ENABLES_FC_AB_VALID     0x4UL
+	#define CFA_PAIR_ALLOC_REQ_ENABLES_FC_BA_VALID     0x8UL
+	char	pair_name[32];
+	u8	q_ab;
+	u8	q_ba;
+	u8	fc_ab;
+	u8	fc_ba;
+	u8	unused_1[4];
+};
+
+/* hwrm_cfa_pair_alloc_output (size:192b/24B) */
+struct hwrm_cfa_pair_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	rx_cfa_code_a;
+	__le16	tx_cfa_action_a;
+	__le16	rx_cfa_code_b;
+	__le16	tx_cfa_action_b;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_pair_free_input (size:448b/56B) */
+struct hwrm_cfa_pair_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	char	pair_name[32];
+	u8	pf_b_id;
+	u8	unused_0[3];
+	__le16	vf_id;
+	__le16	pair_mode;
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_VF2FN          0x0UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_REP2FN         0x1UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_REP2REP        0x2UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_PROXY          0x3UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_PFPAIR         0x4UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_REP2FN_MOD     0x5UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_REP2FN_MODALL  0x6UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_REP2FN_TRUFLOW 0x7UL
+	#define CFA_PAIR_FREE_REQ_PAIR_MODE_LAST          CFA_PAIR_FREE_REQ_PAIR_MODE_REP2FN_TRUFLOW
+};
+
+/* hwrm_cfa_pair_free_output (size:128b/16B) */
+struct hwrm_cfa_pair_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_pair_info_input (size:448b/56B) */
+struct hwrm_cfa_pair_info_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define CFA_PAIR_INFO_REQ_FLAGS_LOOKUP_TYPE      0x1UL
+	#define CFA_PAIR_INFO_REQ_FLAGS_LOOKUP_REPRE     0x2UL
+	__le16	pair_index;
+	u8	pair_pfid;
+	u8	pair_vfid;
+	char	pair_name[32];
+};
+
+/* hwrm_cfa_pair_info_output (size:576b/72B) */
+struct hwrm_cfa_pair_info_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	next_pair_index;
+	__le16	a_fid;
+	u8	host_a_index;
+	u8	pf_a_index;
+	__le16	vf_a_index;
+	__le16	rx_cfa_code_a;
+	__le16	tx_cfa_action_a;
+	__le16	b_fid;
+	u8	host_b_index;
+	u8	pf_b_index;
+	__le16	vf_b_index;
+	__le16	rx_cfa_code_b;
+	__le16	tx_cfa_action_b;
+	u8	pair_mode;
+	#define CFA_PAIR_INFO_RESP_PAIR_MODE_VF2FN   0x0UL
+	#define CFA_PAIR_INFO_RESP_PAIR_MODE_REP2FN  0x1UL
+	#define CFA_PAIR_INFO_RESP_PAIR_MODE_REP2REP 0x2UL
+	#define CFA_PAIR_INFO_RESP_PAIR_MODE_PROXY   0x3UL
+	#define CFA_PAIR_INFO_RESP_PAIR_MODE_PFPAIR  0x4UL
+	#define CFA_PAIR_INFO_RESP_PAIR_MODE_LAST   CFA_PAIR_INFO_RESP_PAIR_MODE_PFPAIR
+	u8	pair_state;
+	#define CFA_PAIR_INFO_RESP_PAIR_STATE_ALLOCATED 0x1UL
+	#define CFA_PAIR_INFO_RESP_PAIR_STATE_ACTIVE    0x2UL
+	#define CFA_PAIR_INFO_RESP_PAIR_STATE_LAST     CFA_PAIR_INFO_RESP_PAIR_STATE_ACTIVE
+	char	pair_name[32];
 	u8	unused_0[7];
 	u8	valid;
 };
@@ -6825,6 +13789,309 @@ struct hwrm_cfa_vfr_free_input {
 
 /* hwrm_cfa_vfr_free_output (size:128b/16B) */
 struct hwrm_cfa_vfr_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_redirect_query_tunnel_type_input (size:192b/24B) */
+struct hwrm_cfa_redirect_query_tunnel_type_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	src_fid;
+	u8	unused_0[6];
+};
+
+/* hwrm_cfa_redirect_query_tunnel_type_output (size:128b/16B) */
+struct hwrm_cfa_redirect_query_tunnel_type_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	tunnel_mask;
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_NONTUNNEL        0x1UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_VXLAN            0x2UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_NVGRE            0x4UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_L2GRE            0x8UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_IPIP             0x10UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_GENEVE           0x20UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_MPLS             0x40UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_STT              0x80UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_IPGRE            0x100UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_VXLAN_V4         0x200UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_IPGRE_V1         0x400UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_ANYTUNNEL        0x800UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_L2_ETYPE         0x1000UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_VXLAN_GPE_V6     0x2000UL
+	#define CFA_REDIRECT_QUERY_TUNNEL_TYPE_RESP_TUNNEL_MASK_VXLAN_GPE        0x4000UL
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_cfa_ctx_mem_rgtr_input (size:256b/32B) */
+struct hwrm_cfa_ctx_mem_rgtr_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flags;
+	u8	page_level;
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_LEVEL_LVL_0 0x0UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_LEVEL_LVL_1 0x1UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_LEVEL_LVL_2 0x2UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_LEVEL_LAST CFA_CTX_MEM_RGTR_REQ_PAGE_LEVEL_LVL_2
+	u8	page_size;
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_4K   0x0UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_8K   0x1UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_64K  0x4UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_256K 0x6UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_1M   0x8UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_2M   0x9UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_4M   0xaUL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_1G   0x12UL
+	#define CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_LAST CFA_CTX_MEM_RGTR_REQ_PAGE_SIZE_1G
+	__le32	unused_0;
+	__le64	page_dir;
+};
+
+/* hwrm_cfa_ctx_mem_rgtr_output (size:128b/16B) */
+struct hwrm_cfa_ctx_mem_rgtr_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	ctx_id;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_cfa_ctx_mem_unrgtr_input (size:192b/24B) */
+struct hwrm_cfa_ctx_mem_unrgtr_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	ctx_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_cfa_ctx_mem_unrgtr_output (size:128b/16B) */
+struct hwrm_cfa_ctx_mem_unrgtr_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_ctx_mem_qctx_input (size:192b/24B) */
+struct hwrm_cfa_ctx_mem_qctx_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	ctx_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_cfa_ctx_mem_qctx_output (size:256b/32B) */
+struct hwrm_cfa_ctx_mem_qctx_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	flags;
+	u8	page_level;
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_LEVEL_LVL_0 0x0UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_LEVEL_LVL_1 0x1UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_LEVEL_LVL_2 0x2UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_LEVEL_LAST CFA_CTX_MEM_QCTX_RESP_PAGE_LEVEL_LVL_2
+	u8	page_size;
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_4K   0x0UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_8K   0x1UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_64K  0x4UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_256K 0x6UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_1M   0x8UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_2M   0x9UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_4M   0xaUL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_1G   0x12UL
+	#define CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_LAST CFA_CTX_MEM_QCTX_RESP_PAGE_SIZE_1G
+	u8	unused_0[4];
+	__le64	page_dir;
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_ctx_mem_qcaps_input (size:128b/16B) */
+struct hwrm_cfa_ctx_mem_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_cfa_ctx_mem_qcaps_output (size:128b/16B) */
+struct hwrm_cfa_ctx_mem_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	max_entries;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_cfa_counter_qcaps_input (size:128b/16B) */
+struct hwrm_cfa_counter_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_cfa_counter_qcaps_output (size:576b/72B) */
+struct hwrm_cfa_counter_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	flags;
+	#define CFA_COUNTER_QCAPS_RESP_FLAGS_COUNTER_FORMAT       0x1UL
+	#define CFA_COUNTER_QCAPS_RESP_FLAGS_COUNTER_FORMAT_NONE    0x0UL
+	#define CFA_COUNTER_QCAPS_RESP_FLAGS_COUNTER_FORMAT_64_BIT  0x1UL
+	#define CFA_COUNTER_QCAPS_RESP_FLAGS_COUNTER_FORMAT_LAST   CFA_COUNTER_QCAPS_RESP_FLAGS_COUNTER_FORMAT_64_BIT
+	__le32	unused_0;
+	__le32	min_rx_fc;
+	__le32	max_rx_fc;
+	__le32	min_tx_fc;
+	__le32	max_tx_fc;
+	__le32	min_rx_efc;
+	__le32	max_rx_efc;
+	__le32	min_tx_efc;
+	__le32	max_tx_efc;
+	__le32	min_rx_mdc;
+	__le32	max_rx_mdc;
+	__le32	min_tx_mdc;
+	__le32	max_tx_mdc;
+	__le32	max_flow_alloc_fc;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_cfa_counter_cfg_input (size:256b/32B) */
+struct hwrm_cfa_counter_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flags;
+	#define CFA_COUNTER_CFG_REQ_FLAGS_CFG_MODE                     0x1UL
+	#define CFA_COUNTER_CFG_REQ_FLAGS_CFG_MODE_DISABLE               0x0UL
+	#define CFA_COUNTER_CFG_REQ_FLAGS_CFG_MODE_ENABLE                0x1UL
+	#define CFA_COUNTER_CFG_REQ_FLAGS_CFG_MODE_LAST                 CFA_COUNTER_CFG_REQ_FLAGS_CFG_MODE_ENABLE
+	#define CFA_COUNTER_CFG_REQ_FLAGS_PATH                         0x2UL
+	#define CFA_COUNTER_CFG_REQ_FLAGS_PATH_TX                        (0x0UL << 1)
+	#define CFA_COUNTER_CFG_REQ_FLAGS_PATH_RX                        (0x1UL << 1)
+	#define CFA_COUNTER_CFG_REQ_FLAGS_PATH_LAST                     CFA_COUNTER_CFG_REQ_FLAGS_PATH_RX
+	#define CFA_COUNTER_CFG_REQ_FLAGS_DATA_TRANSFER_MODE_MASK      0xcUL
+	#define CFA_COUNTER_CFG_REQ_FLAGS_DATA_TRANSFER_MODE_SFT       2
+	#define CFA_COUNTER_CFG_REQ_FLAGS_DATA_TRANSFER_MODE_PUSH        (0x0UL << 2)
+	#define CFA_COUNTER_CFG_REQ_FLAGS_DATA_TRANSFER_MODE_PULL        (0x1UL << 2)
+	#define CFA_COUNTER_CFG_REQ_FLAGS_DATA_TRANSFER_MODE_PULL_ASYNC  (0x2UL << 2)
+	#define CFA_COUNTER_CFG_REQ_FLAGS_DATA_TRANSFER_MODE_LAST       CFA_COUNTER_CFG_REQ_FLAGS_DATA_TRANSFER_MODE_PULL_ASYNC
+	__le16	counter_type;
+	#define CFA_COUNTER_CFG_REQ_COUNTER_TYPE_FC  0x0UL
+	#define CFA_COUNTER_CFG_REQ_COUNTER_TYPE_EFC 0x1UL
+	#define CFA_COUNTER_CFG_REQ_COUNTER_TYPE_MDC 0x2UL
+	#define CFA_COUNTER_CFG_REQ_COUNTER_TYPE_LAST CFA_COUNTER_CFG_REQ_COUNTER_TYPE_MDC
+	__le16	ctx_id;
+	__le16	update_tmr_ms;
+	__le32	num_entries;
+	__le32	unused_0;
+};
+
+/* hwrm_cfa_counter_cfg_output (size:128b/16B) */
+struct hwrm_cfa_counter_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_counter_qcfg_input (size:192b/24B) */
+struct hwrm_cfa_counter_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flags;
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_PATH                         0x1UL
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_PATH_TX                        0x0UL
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_PATH_RX                        0x1UL
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_PATH_LAST                     CFA_COUNTER_QCFG_REQ_FLAGS_PATH_RX
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_DATA_TRANSFER_MODE_MASK      0x6UL
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_DATA_TRANSFER_MODE_SFT       1
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_DATA_TRANSFER_MODE_PUSH        (0x0UL << 1)
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_DATA_TRANSFER_MODE_PULL        (0x1UL << 1)
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_DATA_TRANSFER_MODE_PULL_ASYNC  (0x2UL << 1)
+	#define CFA_COUNTER_QCFG_REQ_FLAGS_DATA_TRANSFER_MODE_LAST       CFA_COUNTER_QCFG_REQ_FLAGS_DATA_TRANSFER_MODE_PULL_ASYNC
+	__le16	counter_type;
+	__le32	unused_0;
+};
+
+/* hwrm_cfa_counter_qcfg_output (size:192b/24B) */
+struct hwrm_cfa_counter_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	ctx_id;
+	__le16	update_tmr_ms;
+	__le32	num_entries;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_counter_qstats_input (size:320b/40B) */
+struct hwrm_cfa_counter_qstats_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flags;
+	#define CFA_COUNTER_QSTATS_REQ_FLAGS_PATH     0x1UL
+	#define CFA_COUNTER_QSTATS_REQ_FLAGS_PATH_TX    0x0UL
+	#define CFA_COUNTER_QSTATS_REQ_FLAGS_PATH_RX    0x1UL
+	#define CFA_COUNTER_QSTATS_REQ_FLAGS_PATH_LAST CFA_COUNTER_QSTATS_REQ_FLAGS_PATH_RX
+	__le16	counter_type;
+	__le16	input_flow_ctx_id;
+	__le16	num_entries;
+	__le16	delta_time_ms;
+	__le16	meter_instance_id;
+	__le16	mdc_ctx_id;
+	u8	unused_0[2];
+	__le64	expected_count;
+};
+
+/* hwrm_cfa_counter_qstats_output (size:128b/16B) */
+struct hwrm_cfa_counter_qstats_output {
 	__le16	error_code;
 	__le16	req_type;
 	__le16	seq_id;
@@ -6988,22 +14255,1813 @@ struct hwrm_cfa_adv_flow_mgnt_qcaps_output {
 	__le16	seq_id;
 	__le16	resp_len;
 	__le32	flags;
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_HND_16BIT_SUPPORTED                  0x1UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_HND_64BIT_SUPPORTED                  0x2UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_BATCH_DELETE_SUPPORTED               0x4UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_RESET_ALL_SUPPORTED                  0x8UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_DEST_FUNC_SUPPORTED           0x10UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_TX_EEM_FLOW_SUPPORTED                     0x20UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_RX_EEM_FLOW_SUPPORTED                     0x40UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_COUNTER_ALLOC_SUPPORTED              0x80UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_RFS_RING_TBL_IDX_SUPPORTED                0x100UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_UNTAGGED_VLAN_SUPPORTED                   0x200UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_XDP_SUPPORTED                             0x400UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_L2_HEADER_SOURCE_FIELDS_SUPPORTED         0x800UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_RX_ARP_SUPPORTED              0x1000UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_RFS_RING_TBL_IDX_V2_SUPPORTED             0x2000UL
-	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_RX_ETHERTYPE_IP_SUPPORTED     0x4000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_HND_16BIT_SUPPORTED                     0x1UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_HND_64BIT_SUPPORTED                     0x2UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_BATCH_DELETE_SUPPORTED                  0x4UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_RESET_ALL_SUPPORTED                     0x8UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_DEST_FUNC_SUPPORTED              0x10UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_TX_EEM_FLOW_SUPPORTED                        0x20UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_RX_EEM_FLOW_SUPPORTED                        0x40UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_FLOW_COUNTER_ALLOC_SUPPORTED                 0x80UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_RFS_RING_TBL_IDX_SUPPORTED                   0x100UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_UNTAGGED_VLAN_SUPPORTED                      0x200UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_XDP_SUPPORTED                                0x400UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_L2_HEADER_SOURCE_FIELDS_SUPPORTED            0x800UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_RX_ARP_SUPPORTED                 0x1000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_RFS_RING_TBL_IDX_V2_SUPPORTED                0x2000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_RX_ETHERTYPE_IP_SUPPORTED        0x4000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_TRUFLOW_CAPABLE                              0x8000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_L2_FILTER_TRAFFIC_TYPE_L2_ROCE_SUPPORTED     0x10000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_LAG_SUPPORTED                                0x20000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_NO_L2CTX_SUPPORTED               0x40000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NIC_FLOW_STATS_SUPPORTED                     0x80000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_NTUPLE_FLOW_RX_EXT_IP_PROTO_SUPPORTED        0x100000UL
+	#define CFA_ADV_FLOW_MGNT_QCAPS_RESP_FLAGS_RFS_RING_TBL_IDX_V3_SUPPORTED                0x200000UL
 	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_cfa_tflib_input (size:1024b/128B) */
+struct hwrm_cfa_tflib_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	tf_type;
+	__le16	tf_subtype;
+	u8	unused0[4];
+	__le32	tf_req[26];
+};
+
+/* hwrm_cfa_tflib_output (size:5632b/704B) */
+struct hwrm_cfa_tflib_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	tf_type;
+	__le16	tf_subtype;
+	__le32	tf_resp_code;
+	__le32	tf_resp[170];
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_lag_group_member_rgtr_input (size:192b/24B) */
+struct hwrm_cfa_lag_group_member_rgtr_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	mode;
+	#define CFA_LAG_GROUP_MEMBER_RGTR_REQ_MODE_ACTIVE_BACKUP 0x1UL
+	#define CFA_LAG_GROUP_MEMBER_RGTR_REQ_MODE_BALANCE_XOR   0x2UL
+	#define CFA_LAG_GROUP_MEMBER_RGTR_REQ_MODE_BROADCAST     0x3UL
+	#define CFA_LAG_GROUP_MEMBER_RGTR_REQ_MODE_LAST         CFA_LAG_GROUP_MEMBER_RGTR_REQ_MODE_BROADCAST
+	u8	port_bitmap;
+	u8	active_port;
+	u8	unused_0[5];
+};
+
+/* hwrm_cfa_lag_group_member_rgtr_output (size:128b/16B) */
+struct hwrm_cfa_lag_group_member_rgtr_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	lag_id;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_cfa_lag_group_member_unrgtr_input (size:192b/24B) */
+struct hwrm_cfa_lag_group_member_unrgtr_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	lag_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_cfa_lag_group_member_unrgtr_output (size:128b/16B) */
+struct hwrm_cfa_lag_group_member_unrgtr_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_tls_filter_alloc_input (size:704b/88B) */
+struct hwrm_cfa_tls_filter_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	unused_0;
+	__le32	enables;
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_L2_FILTER_ID       0x1UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_ETHERTYPE          0x2UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_IPADDR_TYPE        0x4UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_SRC_IPADDR         0x8UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_DST_IPADDR         0x10UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_IP_PROTOCOL        0x20UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_SRC_PORT           0x40UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_DST_PORT           0x80UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_KID                0x100UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_DST_ID             0x200UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_ENABLES_MIRROR_VNIC_ID     0x400UL
+	__le64	l2_filter_id;
+	u8	unused_1[6];
+	__be16	ethertype;
+	u8	ip_addr_type;
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_ADDR_TYPE_UNKNOWN 0x0UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_ADDR_TYPE_IPV4    0x4UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_ADDR_TYPE_IPV6    0x6UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_ADDR_TYPE_LAST   CFA_TLS_FILTER_ALLOC_REQ_IP_ADDR_TYPE_IPV6
+	u8	ip_protocol;
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_PROTOCOL_UNKNOWN 0x0UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_PROTOCOL_TCP     0x6UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_PROTOCOL_UDP     0x11UL
+	#define CFA_TLS_FILTER_ALLOC_REQ_IP_PROTOCOL_LAST   CFA_TLS_FILTER_ALLOC_REQ_IP_PROTOCOL_UDP
+	__le16	dst_id;
+	__le16	mirror_vnic_id;
+	u8	unused_2[2];
+	__be32	src_ipaddr[4];
+	__be32	dst_ipaddr[4];
+	__be16	src_port;
+	__be16	dst_port;
+	__le32	kid;
+};
+
+/* hwrm_cfa_tls_filter_alloc_output (size:192b/24B) */
+struct hwrm_cfa_tls_filter_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le64	tls_filter_id;
+	__le32	flow_id;
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_VALUE_MASK 0x3fffffffUL
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_VALUE_SFT 0
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_TYPE      0x40000000UL
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_TYPE_INT    (0x0UL << 30)
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_TYPE_EXT    (0x1UL << 30)
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_TYPE_LAST  CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_TYPE_EXT
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_DIR       0x80000000UL
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_DIR_RX      (0x0UL << 31)
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_DIR_TX      (0x1UL << 31)
+	#define CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_DIR_LAST   CFA_TLS_FILTER_ALLOC_RESP_FLOW_ID_DIR_TX
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_cfa_tls_filter_free_input (size:192b/24B) */
+struct hwrm_cfa_tls_filter_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	tls_filter_id;
+};
+
+/* hwrm_cfa_tls_filter_free_output (size:128b/16B) */
+struct hwrm_cfa_tls_filter_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_cfa_release_afm_func_input (size:256b/32B) */
+struct hwrm_cfa_release_afm_func_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	rfid;
+	u8	type;
+	#define CFA_RELEASE_AFM_FUNC_REQ_TYPE_EFID 0x1UL
+	#define CFA_RELEASE_AFM_FUNC_REQ_TYPE_RFID 0x2UL
+	#define CFA_RELEASE_AFM_FUNC_REQ_TYPE_DFID 0x3UL
+	#define CFA_RELEASE_AFM_FUNC_REQ_TYPE_LAST CFA_RELEASE_AFM_FUNC_REQ_TYPE_DFID
+	u8	unused_0[3];
+	__le32	flags;
+	#define CFA_RELEASE_AFM_FUNC_REQ_FLAGS_BC_REM          0x1UL
+	#define CFA_RELEASE_AFM_FUNC_REQ_FLAGS_MC_REM          0x2UL
+	#define CFA_RELEASE_AFM_FUNC_REQ_FLAGS_PROMISC_REM     0x4UL
+	__le32	unused_1;
+};
+
+/* hwrm_cfa_release_afm_func_output (size:128b/16B) */
+struct hwrm_cfa_release_afm_func_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_input (size:1024b/128B) */
+struct hwrm_tf_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	type;
+	__le16	subtype;
+	u8	unused0[4];
+	__le32	req[26];
+};
+
+/* hwrm_tf_output (size:5632b/704B) */
+struct hwrm_tf_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	type;
+	__le16	subtype;
+	__le32	resp_code;
+	__le32	resp[170];
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tf_version_get_input (size:128b/16B) */
+struct hwrm_tf_version_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_tf_version_get_output (size:256b/32B) */
+struct hwrm_tf_version_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	major;
+	u8	minor;
+	u8	update;
+	u8	unused0[5];
+	__le64	dev_caps_cfg;
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tf_session_open_input (size:640b/80B) */
+struct hwrm_tf_session_open_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	session_name[64];
+};
+
+/* hwrm_tf_session_open_output (size:192b/24B) */
+struct hwrm_tf_session_open_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	fw_session_id;
+	__le32	fw_session_client_id;
+	__le32	flags;
+	#define TF_SESSION_OPEN_RESP_FLAGS_SHARED_SESSION            0x1UL
+	#define TF_SESSION_OPEN_RESP_FLAGS_SHARED_SESSION_NOT_CREATOR  0x0UL
+	#define TF_SESSION_OPEN_RESP_FLAGS_SHARED_SESSION_CREATOR      0x1UL
+	#define TF_SESSION_OPEN_RESP_FLAGS_SHARED_SESSION_LAST        TF_SESSION_OPEN_RESP_FLAGS_SHARED_SESSION_CREATOR
+	u8	unused1[3];
+	u8	valid;
+};
+
+/* hwrm_tf_session_register_input (size:704b/88B) */
+struct hwrm_tf_session_register_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	unused0;
+	u8	session_client_name[64];
+};
+
+/* hwrm_tf_session_register_output (size:128b/16B) */
+struct hwrm_tf_session_register_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	fw_session_client_id;
+	u8	unused0[3];
+	u8	valid;
+};
+
+/* hwrm_tf_session_unregister_input (size:192b/24B) */
+struct hwrm_tf_session_unregister_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	fw_session_client_id;
+};
+
+/* hwrm_tf_session_unregister_output (size:128b/16B) */
+struct hwrm_tf_session_unregister_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_session_close_input (size:192b/24B) */
+struct hwrm_tf_session_close_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	u8	unused0[4];
+};
+
+/* hwrm_tf_session_close_output (size:128b/16B) */
+struct hwrm_tf_session_close_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_session_qcfg_input (size:192b/24B) */
+struct hwrm_tf_session_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	u8	unused0[4];
+};
+
+/* hwrm_tf_session_qcfg_output (size:128b/16B) */
+struct hwrm_tf_session_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	rx_act_flags;
+	#define TF_SESSION_QCFG_RESP_RX_ACT_FLAGS_ABCR_GFID_EN              0x1UL
+	#define TF_SESSION_QCFG_RESP_RX_ACT_FLAGS_ABCR_VTAG_DLT_BOTH        0x2UL
+	#define TF_SESSION_QCFG_RESP_RX_ACT_FLAGS_TECT_SMAC_OVR_RUTNSL2     0x4UL
+	u8	tx_act_flags;
+	#define TF_SESSION_QCFG_RESP_TX_ACT_FLAGS_ABCR_VEB_EN          0x1UL
+	#define TF_SESSION_QCFG_RESP_TX_ACT_FLAGS_TECT_GRE_SET_K       0x2UL
+	#define TF_SESSION_QCFG_RESP_TX_ACT_FLAGS_TECT_IPV6_TC_IH      0x4UL
+	#define TF_SESSION_QCFG_RESP_TX_ACT_FLAGS_TECT_IPV4_TOS_IH     0x8UL
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tf_session_resc_qcaps_input (size:256b/32B) */
+struct hwrm_tf_session_resc_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_SESSION_RESC_QCAPS_REQ_FLAGS_DIR     0x1UL
+	#define TF_SESSION_RESC_QCAPS_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_SESSION_RESC_QCAPS_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_SESSION_RESC_QCAPS_REQ_FLAGS_DIR_LAST TF_SESSION_RESC_QCAPS_REQ_FLAGS_DIR_TX
+	__le16	qcaps_size;
+	__le64	qcaps_addr;
+};
+
+/* hwrm_tf_session_resc_qcaps_output (size:192b/24B) */
+struct hwrm_tf_session_resc_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	flags;
+	#define TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_MASK  0x3UL
+	#define TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_SFT   0
+	#define TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_STATIC  0x0UL
+	#define TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_1       0x1UL
+	#define TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_2       0x2UL
+	#define TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_3       0x3UL
+	#define TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_LAST   TF_SESSION_RESC_QCAPS_RESP_FLAGS_SESS_RESV_STRATEGY_3
+	__le16	size;
+	u8	sram_profile;
+	u8	unused0;
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tf_session_resc_alloc_input (size:320b/40B) */
+struct hwrm_tf_session_resc_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_SESSION_RESC_ALLOC_REQ_FLAGS_DIR     0x1UL
+	#define TF_SESSION_RESC_ALLOC_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_SESSION_RESC_ALLOC_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_SESSION_RESC_ALLOC_REQ_FLAGS_DIR_LAST TF_SESSION_RESC_ALLOC_REQ_FLAGS_DIR_TX
+	__le16	req_size;
+	__le64	req_addr;
+	__le64	resc_addr;
+};
+
+/* hwrm_tf_session_resc_alloc_output (size:128b/16B) */
+struct hwrm_tf_session_resc_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	size;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tf_session_resc_flush_input (size:256b/32B) */
+struct hwrm_tf_session_resc_flush_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_SESSION_RESC_FLUSH_REQ_FLAGS_DIR     0x1UL
+	#define TF_SESSION_RESC_FLUSH_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_SESSION_RESC_FLUSH_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_SESSION_RESC_FLUSH_REQ_FLAGS_DIR_LAST TF_SESSION_RESC_FLUSH_REQ_FLAGS_DIR_TX
+	__le16	flush_size;
+	__le64	flush_addr;
+};
+
+/* hwrm_tf_session_resc_flush_output (size:128b/16B) */
+struct hwrm_tf_session_resc_flush_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_session_resc_info_input (size:320b/40B) */
+struct hwrm_tf_session_resc_info_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_SESSION_RESC_INFO_REQ_FLAGS_DIR     0x1UL
+	#define TF_SESSION_RESC_INFO_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_SESSION_RESC_INFO_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_SESSION_RESC_INFO_REQ_FLAGS_DIR_LAST TF_SESSION_RESC_INFO_REQ_FLAGS_DIR_TX
+	__le16	req_size;
+	__le64	req_addr;
+	__le64	resc_addr;
+};
+
+/* hwrm_tf_session_resc_info_output (size:128b/16B) */
+struct hwrm_tf_session_resc_info_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	size;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* tf_rm_resc_req_entry (size:64b/8B) */
+struct tf_rm_resc_req_entry {
+	__le32	type;
+	__le16	min;
+	__le16	max;
+};
+
+/* tf_rm_resc_entry (size:64b/8B) */
+struct tf_rm_resc_entry {
+	__le32	type;
+	__le16	start;
+	__le16	stride;
+};
+
+/* hwrm_tf_tbl_type_get_input (size:256b/32B) */
+struct hwrm_tf_tbl_type_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_TBL_TYPE_GET_REQ_FLAGS_DIR               0x1UL
+	#define TF_TBL_TYPE_GET_REQ_FLAGS_DIR_RX              0x0UL
+	#define TF_TBL_TYPE_GET_REQ_FLAGS_DIR_TX              0x1UL
+	#define TF_TBL_TYPE_GET_REQ_FLAGS_DIR_LAST           TF_TBL_TYPE_GET_REQ_FLAGS_DIR_TX
+	#define TF_TBL_TYPE_GET_REQ_FLAGS_CLEAR_ON_READ     0x2UL
+	u8	unused0[2];
+	__le32	type;
+	__le32	index;
+};
+
+/* hwrm_tf_tbl_type_get_output (size:2240b/280B) */
+struct hwrm_tf_tbl_type_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	resp_code;
+	__le16	size;
+	__le16	unused0;
+	u8	data[256];
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tf_tbl_type_set_input (size:1024b/128B) */
+struct hwrm_tf_tbl_type_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_TBL_TYPE_SET_REQ_FLAGS_DIR     0x1UL
+	#define TF_TBL_TYPE_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_TBL_TYPE_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_TBL_TYPE_SET_REQ_FLAGS_DIR_LAST TF_TBL_TYPE_SET_REQ_FLAGS_DIR_TX
+	#define TF_TBL_TYPE_SET_REQ_FLAGS_DMA     0x2UL
+	u8	unused0[2];
+	__le32	type;
+	__le32	index;
+	__le16	size;
+	u8	unused1[6];
+	u8	data[88];
+};
+
+/* hwrm_tf_tbl_type_set_output (size:128b/16B) */
+struct hwrm_tf_tbl_type_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_em_insert_input (size:832b/104B) */
+struct hwrm_tf_em_insert_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_EM_INSERT_REQ_FLAGS_DIR     0x1UL
+	#define TF_EM_INSERT_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_EM_INSERT_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_EM_INSERT_REQ_FLAGS_DIR_LAST TF_EM_INSERT_REQ_FLAGS_DIR_TX
+	__le16	strength;
+	__le32	action_ptr;
+	__le32	em_record_idx;
+	__le64	em_key[8];
+	__le16	em_key_bitlen;
+	__le16	unused0[3];
+};
+
+/* hwrm_tf_em_insert_output (size:128b/16B) */
+struct hwrm_tf_em_insert_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	rptr_index;
+	u8	rptr_entry;
+	u8	num_of_entries;
+	__le32	unused0;
+};
+
+/* hwrm_tf_em_hash_insert_input (size:1024b/128B) */
+struct hwrm_tf_em_hash_insert_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_EM_HASH_INSERT_REQ_FLAGS_DIR     0x1UL
+	#define TF_EM_HASH_INSERT_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_EM_HASH_INSERT_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_EM_HASH_INSERT_REQ_FLAGS_DIR_LAST TF_EM_HASH_INSERT_REQ_FLAGS_DIR_TX
+	#define TF_EM_HASH_INSERT_REQ_FLAGS_DMA     0x2UL
+	__le16	em_record_size_bits;
+	__le32	key0_hash;
+	__le32	key1_hash;
+	__le32	em_record_idx;
+	__le32	unused0;
+	__le64	em_record[12];
+};
+
+/* hwrm_tf_em_hash_insert_output (size:128b/16B) */
+struct hwrm_tf_em_hash_insert_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	rptr_index;
+	u8	rptr_entry;
+	u8	num_of_entries;
+	__le32	unused0;
+};
+
+/* hwrm_tf_em_delete_input (size:832b/104B) */
+struct hwrm_tf_em_delete_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_EM_DELETE_REQ_FLAGS_DIR     0x1UL
+	#define TF_EM_DELETE_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_EM_DELETE_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_EM_DELETE_REQ_FLAGS_DIR_LAST TF_EM_DELETE_REQ_FLAGS_DIR_TX
+	__le16	unused0;
+	__le64	flow_handle;
+	__le64	em_key[8];
+	__le16	em_key_bitlen;
+	__le16	unused1[3];
+};
+
+/* hwrm_tf_em_delete_output (size:128b/16B) */
+struct hwrm_tf_em_delete_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	em_index;
+	__le16	unused0[3];
+};
+
+/* hwrm_tf_em_move_input (size:320b/40B) */
+struct hwrm_tf_em_move_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_EM_MOVE_REQ_FLAGS_DIR     0x1UL
+	#define TF_EM_MOVE_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_EM_MOVE_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_EM_MOVE_REQ_FLAGS_DIR_LAST TF_EM_MOVE_REQ_FLAGS_DIR_TX
+	__le16	num_blocks;
+	__le32	new_index;
+	__le32	unused0;
+	__le64	flow_handle;
+};
+
+/* hwrm_tf_em_move_output (size:128b/16B) */
+struct hwrm_tf_em_move_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	em_index;
+	__le16	unused0[3];
+};
+
+/* hwrm_tf_tcam_set_input (size:1024b/128B) */
+struct hwrm_tf_tcam_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	flags;
+	#define TF_TCAM_SET_REQ_FLAGS_DIR     0x1UL
+	#define TF_TCAM_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_TCAM_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_TCAM_SET_REQ_FLAGS_DIR_LAST TF_TCAM_SET_REQ_FLAGS_DIR_TX
+	#define TF_TCAM_SET_REQ_FLAGS_DMA     0x2UL
+	__le32	type;
+	__le16	idx;
+	u8	key_size;
+	u8	result_size;
+	u8	mask_offset;
+	u8	result_offset;
+	u8	unused0[6];
+	u8	dev_data[88];
+};
+
+/* hwrm_tf_tcam_set_output (size:128b/16B) */
+struct hwrm_tf_tcam_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_tcam_get_input (size:256b/32B) */
+struct hwrm_tf_tcam_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	flags;
+	#define TF_TCAM_GET_REQ_FLAGS_DIR     0x1UL
+	#define TF_TCAM_GET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_TCAM_GET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_TCAM_GET_REQ_FLAGS_DIR_LAST TF_TCAM_GET_REQ_FLAGS_DIR_TX
+	__le32	type;
+	__le16	idx;
+	__le16	unused0;
+};
+
+/* hwrm_tf_tcam_get_output (size:2368b/296B) */
+struct hwrm_tf_tcam_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	key_size;
+	u8	result_size;
+	u8	mask_offset;
+	u8	result_offset;
+	u8	unused0[4];
+	u8	dev_data[272];
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tf_tcam_move_input (size:1024b/128B) */
+struct hwrm_tf_tcam_move_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	flags;
+	#define TF_TCAM_MOVE_REQ_FLAGS_DIR     0x1UL
+	#define TF_TCAM_MOVE_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_TCAM_MOVE_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_TCAM_MOVE_REQ_FLAGS_DIR_LAST TF_TCAM_MOVE_REQ_FLAGS_DIR_TX
+	__le32	type;
+	__le16	count;
+	__le16	unused0;
+	__le16	idx_pairs[48];
+};
+
+/* hwrm_tf_tcam_move_output (size:128b/16B) */
+struct hwrm_tf_tcam_move_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_tcam_free_input (size:1024b/128B) */
+struct hwrm_tf_tcam_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	flags;
+	#define TF_TCAM_FREE_REQ_FLAGS_DIR     0x1UL
+	#define TF_TCAM_FREE_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_TCAM_FREE_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_TCAM_FREE_REQ_FLAGS_DIR_LAST TF_TCAM_FREE_REQ_FLAGS_DIR_TX
+	__le32	type;
+	__le16	count;
+	__le16	unused0;
+	__le16	idx_list[48];
+};
+
+/* hwrm_tf_tcam_free_output (size:128b/16B) */
+struct hwrm_tf_tcam_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_global_cfg_set_input (size:448b/56B) */
+struct hwrm_tf_global_cfg_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	flags;
+	#define TF_GLOBAL_CFG_SET_REQ_FLAGS_DIR     0x1UL
+	#define TF_GLOBAL_CFG_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_GLOBAL_CFG_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_GLOBAL_CFG_SET_REQ_FLAGS_DIR_LAST TF_GLOBAL_CFG_SET_REQ_FLAGS_DIR_TX
+	__le32	type;
+	__le32	offset;
+	__le16	size;
+	u8	unused0[6];
+	u8	data[8];
+	u8	mask[8];
+};
+
+/* hwrm_tf_global_cfg_set_output (size:128b/16B) */
+struct hwrm_tf_global_cfg_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_global_cfg_get_input (size:320b/40B) */
+struct hwrm_tf_global_cfg_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le32	flags;
+	#define TF_GLOBAL_CFG_GET_REQ_FLAGS_DIR     0x1UL
+	#define TF_GLOBAL_CFG_GET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_GLOBAL_CFG_GET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_GLOBAL_CFG_GET_REQ_FLAGS_DIR_LAST TF_GLOBAL_CFG_GET_REQ_FLAGS_DIR_TX
+	__le32	type;
+	__le32	offset;
+	__le16	size;
+	u8	unused0[6];
+};
+
+/* hwrm_tf_global_cfg_get_output (size:256b/32B) */
+struct hwrm_tf_global_cfg_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	size;
+	u8	unused0[6];
+	u8	data[16];
+};
+
+/* hwrm_tf_if_tbl_get_input (size:256b/32B) */
+struct hwrm_tf_if_tbl_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_IF_TBL_GET_REQ_FLAGS_DIR     0x1UL
+	#define TF_IF_TBL_GET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_IF_TBL_GET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_IF_TBL_GET_REQ_FLAGS_DIR_LAST TF_IF_TBL_GET_REQ_FLAGS_DIR_TX
+	__le16	size;
+	__le32	type;
+	__le32	index;
+};
+
+/* hwrm_tf_if_tbl_get_output (size:1216b/152B) */
+struct hwrm_tf_if_tbl_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	resp_code;
+	__le16	size;
+	__le16	unused0;
+	u8	data[128];
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tf_if_tbl_set_input (size:1024b/128B) */
+struct hwrm_tf_if_tbl_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_IF_TBL_SET_REQ_FLAGS_DIR     0x1UL
+	#define TF_IF_TBL_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_IF_TBL_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_IF_TBL_SET_REQ_FLAGS_DIR_LAST TF_IF_TBL_SET_REQ_FLAGS_DIR_TX
+	u8	unused0[2];
+	__le32	type;
+	__le32	index;
+	__le16	size;
+	u8	unused1[6];
+	u8	data[88];
+};
+
+/* hwrm_tf_if_tbl_set_output (size:128b/16B) */
+struct hwrm_tf_if_tbl_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_tbl_type_bulk_get_input (size:384b/48B) */
+struct hwrm_tf_tbl_type_bulk_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_TBL_TYPE_BULK_GET_REQ_FLAGS_DIR               0x1UL
+	#define TF_TBL_TYPE_BULK_GET_REQ_FLAGS_DIR_RX              0x0UL
+	#define TF_TBL_TYPE_BULK_GET_REQ_FLAGS_DIR_TX              0x1UL
+	#define TF_TBL_TYPE_BULK_GET_REQ_FLAGS_DIR_LAST           TF_TBL_TYPE_BULK_GET_REQ_FLAGS_DIR_TX
+	#define TF_TBL_TYPE_BULK_GET_REQ_FLAGS_CLEAR_ON_READ     0x2UL
+	u8	unused0[2];
+	__le32	type;
+	__le32	start_index;
+	__le32	num_entries;
+	__le32	unused1;
+	__le64	host_addr;
+};
+
+/* hwrm_tf_tbl_type_bulk_get_output (size:128b/16B) */
+struct hwrm_tf_tbl_type_bulk_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	resp_code;
+	__le16	size;
+	u8	unused0;
+	u8	valid;
+};
+
+/* hwrm_tf_session_hotup_state_set_input (size:192b/24B) */
+struct hwrm_tf_session_hotup_state_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	state;
+	__le16	flags;
+	#define TF_SESSION_HOTUP_STATE_SET_REQ_FLAGS_DIR     0x1UL
+	#define TF_SESSION_HOTUP_STATE_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_SESSION_HOTUP_STATE_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_SESSION_HOTUP_STATE_SET_REQ_FLAGS_DIR_LAST TF_SESSION_HOTUP_STATE_SET_REQ_FLAGS_DIR_TX
+};
+
+/* hwrm_tf_session_hotup_state_set_output (size:128b/16B) */
+struct hwrm_tf_session_hotup_state_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tf_session_hotup_state_get_input (size:192b/24B) */
+struct hwrm_tf_session_hotup_state_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	fw_session_id;
+	__le16	flags;
+	#define TF_SESSION_HOTUP_STATE_GET_REQ_FLAGS_DIR     0x1UL
+	#define TF_SESSION_HOTUP_STATE_GET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TF_SESSION_HOTUP_STATE_GET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TF_SESSION_HOTUP_STATE_GET_REQ_FLAGS_DIR_LAST TF_SESSION_HOTUP_STATE_GET_REQ_FLAGS_DIR_TX
+	u8	unused0[2];
+};
+
+/* hwrm_tf_session_hotup_state_get_output (size:128b/16B) */
+struct hwrm_tf_session_hotup_state_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	state;
+	__le16	ref_cnt;
+	u8	unused0[3];
+	u8	valid;
+};
+
+/* hwrm_tfc_tbl_scope_qcaps_input (size:128b/16B) */
+struct hwrm_tfc_tbl_scope_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_tfc_tbl_scope_qcaps_output (size:192b/24B) */
+struct hwrm_tfc_tbl_scope_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	max_lkup_rec_cnt;
+	__le32	max_act_rec_cnt;
+	u8	tbl_scope_capable;
+	u8	max_lkup_static_buckets_exp;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_tbl_scope_id_alloc_input (size:256b/32B) */
+struct hwrm_tfc_tbl_scope_id_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	max_pools;
+	u8	shared;
+	u8	lkup_pool_sz_exp[2];
+	u8	act_pool_sz_exp[2];
+	u8	app_type;
+	u8	unused0[6];
+};
+
+/* hwrm_tfc_tbl_scope_id_alloc_output (size:128b/16B) */
+struct hwrm_tfc_tbl_scope_id_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	tsid;
+	u8	first;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_tbl_scope_config_input (size:704b/88B) */
+struct hwrm_tfc_tbl_scope_config_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	lkup_base_addr[2];
+	__le64	act_base_addr[2];
+	__le32	lkup_rec_cnt[2];
+	__le32	act_rec_cnt[2];
+	__le32	lkup_static_bucket_cnt[2];
+	__le32	pbl_page_sz;
+	u8	lkup_pbl_level[2];
+	u8	act_pbl_level[2];
+	u8	tsid;
+	u8	unused0[7];
+};
+
+/* hwrm_tfc_tbl_scope_config_output (size:128b/16B) */
+struct hwrm_tfc_tbl_scope_config_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_tbl_scope_deconfig_input (size:192b/24B) */
+struct hwrm_tfc_tbl_scope_deconfig_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	tsid;
+	u8	unused0[7];
+};
+
+/* hwrm_tfc_tbl_scope_deconfig_output (size:128b/16B) */
+struct hwrm_tfc_tbl_scope_deconfig_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_tbl_scope_fid_add_input (size:192b/24B) */
+struct hwrm_tfc_tbl_scope_fid_add_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	tsid;
+	u8	unused0[5];
+};
+
+/* hwrm_tfc_tbl_scope_fid_add_output (size:128b/16B) */
+struct hwrm_tfc_tbl_scope_fid_add_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	fid_cnt;
+	u8	unused0[6];
+	u8	valid;
+};
+
+/* hwrm_tfc_tbl_scope_fid_rem_input (size:192b/24B) */
+struct hwrm_tfc_tbl_scope_fid_rem_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	tsid;
+	u8	unused0[5];
+};
+
+/* hwrm_tfc_tbl_scope_fid_rem_output (size:128b/16B) */
+struct hwrm_tfc_tbl_scope_fid_rem_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	fid_cnt;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_session_id_alloc_input (size:192b/24B) */
+struct hwrm_tfc_session_id_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	u8	unused0[6];
+};
+
+/* hwrm_tfc_session_id_alloc_output (size:128b/16B) */
+struct hwrm_tfc_session_id_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	sid;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_session_fid_add_input (size:192b/24B) */
+struct hwrm_tfc_session_fid_add_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	u8	unused0[4];
+};
+
+/* hwrm_tfc_session_fid_add_output (size:128b/16B) */
+struct hwrm_tfc_session_fid_add_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	fid_cnt;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_session_fid_rem_input (size:192b/24B) */
+struct hwrm_tfc_session_fid_rem_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	u8	unused0[4];
+};
+
+/* hwrm_tfc_session_fid_rem_output (size:128b/16B) */
+struct hwrm_tfc_session_fid_rem_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	fid_cnt;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_ident_alloc_input (size:192b/24B) */
+struct hwrm_tfc_ident_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	u8	flags;
+	#define TFC_IDENT_ALLOC_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IDENT_ALLOC_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IDENT_ALLOC_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IDENT_ALLOC_REQ_FLAGS_DIR_LAST TFC_IDENT_ALLOC_REQ_FLAGS_DIR_TX
+	u8	subtype;
+	u8	track_type;
+	#define TFC_IDENT_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_INVALID 0x0UL
+	#define TFC_IDENT_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_SID     0x1UL
+	#define TFC_IDENT_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_FID     0x2UL
+	#define TFC_IDENT_ALLOC_REQ_TRACK_TYPE_LAST              TFC_IDENT_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_FID
+	u8	unused0;
+};
+
+/* hwrm_tfc_ident_alloc_output (size:128b/16B) */
+struct hwrm_tfc_ident_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	ident_id;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_ident_free_input (size:192b/24B) */
+struct hwrm_tfc_ident_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	u8	subtype;
+	u8	flags;
+	#define TFC_IDENT_FREE_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IDENT_FREE_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IDENT_FREE_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IDENT_FREE_REQ_FLAGS_DIR_LAST TFC_IDENT_FREE_REQ_FLAGS_DIR_TX
+	__le16	ident_id;
+};
+
+/* hwrm_tfc_ident_free_output (size:128b/16B) */
+struct hwrm_tfc_ident_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_idx_tbl_alloc_input (size:192b/24B) */
+struct hwrm_tfc_idx_tbl_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	u8	flags;
+	#define TFC_IDX_TBL_ALLOC_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IDX_TBL_ALLOC_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IDX_TBL_ALLOC_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IDX_TBL_ALLOC_REQ_FLAGS_DIR_LAST TFC_IDX_TBL_ALLOC_REQ_FLAGS_DIR_TX
+	u8	subtype;
+	u8	track_type;
+	#define TFC_IDX_TBL_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_INVALID 0x0UL
+	#define TFC_IDX_TBL_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_SID     0x1UL
+	#define TFC_IDX_TBL_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_FID     0x2UL
+	#define TFC_IDX_TBL_ALLOC_REQ_TRACK_TYPE_LAST              TFC_IDX_TBL_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_FID
+	u8	unused0[1];
+};
+
+/* hwrm_tfc_idx_tbl_alloc_output (size:128b/16B) */
+struct hwrm_tfc_idx_tbl_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	idx_tbl_id;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_idx_tbl_alloc_set_input (size:1088b/136B) */
+struct hwrm_tfc_idx_tbl_alloc_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	u8	flags;
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_FLAGS_DIR_LAST TFC_IDX_TBL_ALLOC_SET_REQ_FLAGS_DIR_TX
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_FLAGS_DMA     0x2UL
+	u8	subtype;
+	u8	track_type;
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_INVALID 0x0UL
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_SID     0x1UL
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_FID     0x2UL
+	#define TFC_IDX_TBL_ALLOC_SET_REQ_TRACK_TYPE_LAST              TFC_IDX_TBL_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_FID
+	u8	unused0;
+	__le16	data_size;
+	u8	unused1[6];
+	__le64	dma_addr;
+	u8	dev_data[96];
+};
+
+/* hwrm_tfc_idx_tbl_alloc_set_output (size:128b/16B) */
+struct hwrm_tfc_idx_tbl_alloc_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	idx_tbl_id;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_idx_tbl_set_input (size:1088b/136B) */
+struct hwrm_tfc_idx_tbl_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define TFC_IDX_TBL_SET_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IDX_TBL_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IDX_TBL_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IDX_TBL_SET_REQ_FLAGS_DIR_LAST TFC_IDX_TBL_SET_REQ_FLAGS_DIR_TX
+	#define TFC_IDX_TBL_SET_REQ_FLAGS_DMA     0x2UL
+	u8	subtype;
+	__le16	fid;
+	__le16	sid;
+	__le16	idx_tbl_id;
+	__le16	data_size;
+	u8	unused0[6];
+	__le64	dma_addr;
+	u8	dev_data[96];
+};
+
+/* hwrm_tfc_idx_tbl_set_output (size:128b/16B) */
+struct hwrm_tfc_idx_tbl_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_idx_tbl_get_input (size:320b/40B) */
+struct hwrm_tfc_idx_tbl_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define TFC_IDX_TBL_GET_REQ_FLAGS_DIR               0x1UL
+	#define TFC_IDX_TBL_GET_REQ_FLAGS_DIR_RX              0x0UL
+	#define TFC_IDX_TBL_GET_REQ_FLAGS_DIR_TX              0x1UL
+	#define TFC_IDX_TBL_GET_REQ_FLAGS_DIR_LAST           TFC_IDX_TBL_GET_REQ_FLAGS_DIR_TX
+	#define TFC_IDX_TBL_GET_REQ_FLAGS_CLEAR_ON_READ     0x2UL
+	u8	subtype;
+	__le16	fid;
+	__le16	sid;
+	__le16	idx_tbl_id;
+	__le16	buffer_size;
+	u8	unused0[6];
+	__le64	dma_addr;
+};
+
+/* hwrm_tfc_idx_tbl_get_output (size:128b/16B) */
+struct hwrm_tfc_idx_tbl_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	data_size;
+	u8	unused1[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_idx_tbl_free_input (size:192b/24B) */
+struct hwrm_tfc_idx_tbl_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define TFC_IDX_TBL_FREE_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IDX_TBL_FREE_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IDX_TBL_FREE_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IDX_TBL_FREE_REQ_FLAGS_DIR_LAST TFC_IDX_TBL_FREE_REQ_FLAGS_DIR_TX
+	u8	subtype;
+	__le16	fid;
+	__le16	sid;
+	__le16	idx_tbl_id;
+};
+
+/* hwrm_tfc_idx_tbl_free_output (size:128b/16B) */
+struct hwrm_tfc_idx_tbl_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* tfc_global_id_hwrm_req (size:64b/8B) */
+struct tfc_global_id_hwrm_req {
+	__le16	rtype;
+	__le16	dir;
+	__le16	subtype;
+	__le16	cnt;
+};
+
+/* tfc_global_id_hwrm_rsp (size:64b/8B) */
+struct tfc_global_id_hwrm_rsp {
+	__le16	rtype;
+	__le16	dir;
+	__le16	subtype;
+	__le16	id;
+};
+
+/* hwrm_tfc_global_id_alloc_input (size:320b/40B) */
+struct hwrm_tfc_global_id_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	__le16	global_id;
+	__le16	req_cnt;
+	__le64	req_addr;
+	__le64	resc_addr;
+};
+
+/* hwrm_tfc_global_id_alloc_output (size:128b/16B) */
+struct hwrm_tfc_global_id_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	rsp_cnt;
+	u8	first;
+	u8	unused0[4];
+	u8	valid;
+};
+
+/* hwrm_tfc_tcam_set_input (size:1088b/136B) */
+struct hwrm_tfc_tcam_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	fid;
+	__le16	sid;
+	__le16	tcam_id;
+	__le16	key_size;
+	__le16	result_size;
+	u8	flags;
+	#define TFC_TCAM_SET_REQ_FLAGS_DIR     0x1UL
+	#define TFC_TCAM_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_TCAM_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_TCAM_SET_REQ_FLAGS_DIR_LAST TFC_TCAM_SET_REQ_FLAGS_DIR_TX
+	#define TFC_TCAM_SET_REQ_FLAGS_DMA     0x2UL
+	u8	subtype;
+	u8	unused0[4];
+	__le64	dma_addr;
+	u8	dev_data[96];
+};
+
+/* hwrm_tfc_tcam_set_output (size:128b/16B) */
+struct hwrm_tfc_tcam_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_tcam_get_input (size:192b/24B) */
+struct hwrm_tfc_tcam_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define TFC_TCAM_GET_REQ_FLAGS_DIR     0x1UL
+	#define TFC_TCAM_GET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_TCAM_GET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_TCAM_GET_REQ_FLAGS_DIR_LAST TFC_TCAM_GET_REQ_FLAGS_DIR_TX
+	u8	subtype;
+	__le16	fid;
+	__le16	sid;
+	__le16	tcam_id;
+};
+
+/* hwrm_tfc_tcam_get_output (size:2368b/296B) */
+struct hwrm_tfc_tcam_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	key_size;
+	__le16	result_size;
+	u8	unused0[4];
+	u8	dev_data[272];
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_tcam_alloc_input (size:256b/32B) */
+struct hwrm_tfc_tcam_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define TFC_TCAM_ALLOC_REQ_FLAGS_DIR     0x1UL
+	#define TFC_TCAM_ALLOC_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_TCAM_ALLOC_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_TCAM_ALLOC_REQ_FLAGS_DIR_LAST TFC_TCAM_ALLOC_REQ_FLAGS_DIR_TX
+	u8	subtype;
+	__le16	fid;
+	__le16	sid;
+	__le16	key_size;
+	__le16	priority;
+	u8	track_type;
+	#define TFC_TCAM_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_INVALID 0x0UL
+	#define TFC_TCAM_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_SID     0x1UL
+	#define TFC_TCAM_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_FID     0x2UL
+	#define TFC_TCAM_ALLOC_REQ_TRACK_TYPE_LAST              TFC_TCAM_ALLOC_REQ_TRACK_TYPE_TRACK_TYPE_FID
+	u8	unused0[5];
+};
+
+/* hwrm_tfc_tcam_alloc_output (size:128b/16B) */
+struct hwrm_tfc_tcam_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	idx;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_tcam_alloc_set_input (size:1088b/136B) */
+struct hwrm_tfc_tcam_alloc_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define TFC_TCAM_ALLOC_SET_REQ_FLAGS_DIR     0x1UL
+	#define TFC_TCAM_ALLOC_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_TCAM_ALLOC_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_TCAM_ALLOC_SET_REQ_FLAGS_DIR_LAST TFC_TCAM_ALLOC_SET_REQ_FLAGS_DIR_TX
+	#define TFC_TCAM_ALLOC_SET_REQ_FLAGS_DMA     0x2UL
+	u8	subtype;
+	__le16	fid;
+	__le16	sid;
+	__le16	key_size;
+	__le16	result_size;
+	__le16	priority;
+	u8	track_type;
+	#define TFC_TCAM_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_INVALID 0x0UL
+	#define TFC_TCAM_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_SID     0x1UL
+	#define TFC_TCAM_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_FID     0x2UL
+	#define TFC_TCAM_ALLOC_SET_REQ_TRACK_TYPE_LAST              TFC_TCAM_ALLOC_SET_REQ_TRACK_TYPE_TRACK_TYPE_FID
+	u8	unused[3];
+	__le64	dma_addr;
+	u8	dev_data[96];
+};
+
+/* hwrm_tfc_tcam_alloc_set_output (size:128b/16B) */
+struct hwrm_tfc_tcam_alloc_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	tcam_id;
+	u8	unused0[5];
+	u8	valid;
+};
+
+/* hwrm_tfc_tcam_free_input (size:192b/24B) */
+struct hwrm_tfc_tcam_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define TFC_TCAM_FREE_REQ_FLAGS_DIR     0x1UL
+	#define TFC_TCAM_FREE_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_TCAM_FREE_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_TCAM_FREE_REQ_FLAGS_DIR_LAST TFC_TCAM_FREE_REQ_FLAGS_DIR_TX
+	u8	subtype;
+	__le16	fid;
+	__le16	sid;
+	__le16	tcam_id;
+};
+
+/* hwrm_tfc_tcam_free_output (size:128b/16B) */
+struct hwrm_tfc_tcam_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_if_tbl_set_input (size:960b/120B) */
+struct hwrm_tfc_if_tbl_set_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	sid;
+	__le16	fid;
+	u8	subtype;
+	u8	flags;
+	#define TFC_IF_TBL_SET_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IF_TBL_SET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IF_TBL_SET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IF_TBL_SET_REQ_FLAGS_DIR_LAST TFC_IF_TBL_SET_REQ_FLAGS_DIR_TX
+	__le16	index;
+	u8	data_size;
+	u8	unused0[7];
+	u8	data[88];
+};
+
+/* hwrm_tfc_if_tbl_set_output (size:128b/16B) */
+struct hwrm_tfc_if_tbl_set_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused0[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_if_tbl_get_input (size:256b/32B) */
+struct hwrm_tfc_if_tbl_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	sid;
+	__le16	fid;
+	u8	subtype;
+	u8	flags;
+	#define TFC_IF_TBL_GET_REQ_FLAGS_DIR     0x1UL
+	#define TFC_IF_TBL_GET_REQ_FLAGS_DIR_RX    0x0UL
+	#define TFC_IF_TBL_GET_REQ_FLAGS_DIR_TX    0x1UL
+	#define TFC_IF_TBL_GET_REQ_FLAGS_DIR_LAST TFC_IF_TBL_GET_REQ_FLAGS_DIR_TX
+	__le16	index;
+	u8	data_size;
+	u8	unused0[7];
+};
+
+/* hwrm_tfc_if_tbl_get_output (size:960b/120B) */
+struct hwrm_tfc_if_tbl_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	sid;
+	__le16	fid;
+	u8	subtype;
+	u8	flags;
+	#define TFC_IF_TBL_GET_RESP_FLAGS_DIR     0x1UL
+	#define TFC_IF_TBL_GET_RESP_FLAGS_DIR_RX    0x0UL
+	#define TFC_IF_TBL_GET_RESP_FLAGS_DIR_TX    0x1UL
+	#define TFC_IF_TBL_GET_RESP_FLAGS_DIR_LAST TFC_IF_TBL_GET_RESP_FLAGS_DIR_TX
+	__le16	index;
+	u8	data_size;
+	u8	unused0[7];
+	u8	data[88];
+	u8	unused1[7];
+	u8	valid;
+};
+
+/* hwrm_tfc_tbl_scope_config_get_input (size:192b/24B) */
+struct hwrm_tfc_tbl_scope_config_get_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	tsid;
+	u8	unused0[7];
+};
+
+/* hwrm_tfc_tbl_scope_config_get_output (size:128b/16B) */
+struct hwrm_tfc_tbl_scope_config_get_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	configured;
+	u8	unused0[6];
 	u8	valid;
 };
 
@@ -7021,8 +16079,14 @@ struct hwrm_tunnel_dst_port_query_input {
 	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
-	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_LAST        TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_VXLAN_GPE_V6
-	u8	unused_0[7];
+	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_CUSTOM_GRE   0xdUL
+	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_ECPRI        0xeUL
+	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_SRV6         0xfUL
+	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_GRE          0x11UL
+	#define TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_LAST        TUNNEL_DST_PORT_QUERY_REQ_TUNNEL_TYPE_GRE
+	u8	tunnel_next_proto;
+	u8	unused_0[6];
 };
 
 /* hwrm_tunnel_dst_port_query_output (size:128b/16B) */
@@ -7033,7 +16097,19 @@ struct hwrm_tunnel_dst_port_query_output {
 	__le16	resp_len;
 	__le16	tunnel_dst_port_id;
 	__be16	tunnel_dst_port_val;
-	u8	unused_0[3];
+	u8	upar_in_use;
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR0     0x1UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR1     0x2UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR2     0x4UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR3     0x8UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR4     0x10UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR5     0x20UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR6     0x40UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_UPAR_IN_USE_UPAR7     0x80UL
+	u8	status;
+	#define TUNNEL_DST_PORT_QUERY_RESP_STATUS_CHIP_LEVEL     0x1UL
+	#define TUNNEL_DST_PORT_QUERY_RESP_STATUS_FUNC_LEVEL     0x2UL
+	u8	unused_0;
 	u8	valid;
 };
 
@@ -7051,10 +16127,15 @@ struct hwrm_tunnel_dst_port_alloc_input {
 	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
-	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_LAST        TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE_V6
-	u8	unused_0;
+	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_CUSTOM_GRE   0xdUL
+	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_ECPRI        0xeUL
+	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_SRV6         0xfUL
+	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_GRE          0x11UL
+	#define TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_LAST        TUNNEL_DST_PORT_ALLOC_REQ_TUNNEL_TYPE_GRE
+	u8	tunnel_next_proto;
 	__be16	tunnel_dst_port_val;
-	u8	unused_1[4];
+	u8	unused_0[4];
 };
 
 /* hwrm_tunnel_dst_port_alloc_output (size:128b/16B) */
@@ -7064,7 +16145,22 @@ struct hwrm_tunnel_dst_port_alloc_output {
 	__le16	seq_id;
 	__le16	resp_len;
 	__le16	tunnel_dst_port_id;
-	u8	unused_0[5];
+	u8	error_info;
+	#define TUNNEL_DST_PORT_ALLOC_RESP_ERROR_INFO_SUCCESS         0x0UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_ERROR_INFO_ERR_ALLOCATED   0x1UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_ERROR_INFO_ERR_NO_RESOURCE 0x2UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_ERROR_INFO_ERR_ENABLED     0x3UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_ERROR_INFO_LAST           TUNNEL_DST_PORT_ALLOC_RESP_ERROR_INFO_ERR_ENABLED
+	u8	upar_in_use;
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR0     0x1UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR1     0x2UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR2     0x4UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR3     0x8UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR4     0x10UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR5     0x20UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR6     0x40UL
+	#define TUNNEL_DST_PORT_ALLOC_RESP_UPAR_IN_USE_UPAR7     0x80UL
+	u8	unused_0[3];
 	u8	valid;
 };
 
@@ -7082,10 +16178,15 @@ struct hwrm_tunnel_dst_port_free_input {
 	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_IPGRE_V1     0xaUL
 	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_L2_ETYPE     0xbUL
 	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_VXLAN_GPE_V6 0xcUL
-	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_LAST        TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_VXLAN_GPE_V6
-	u8	unused_0;
+	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_CUSTOM_GRE   0xdUL
+	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_ECPRI        0xeUL
+	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_SRV6         0xfUL
+	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_VXLAN_GPE    0x10UL
+	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_GRE          0x11UL
+	#define TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_LAST        TUNNEL_DST_PORT_FREE_REQ_TUNNEL_TYPE_GRE
+	u8	tunnel_next_proto;
 	__le16	tunnel_dst_port_id;
-	u8	unused_1[4];
+	u8	unused_0[4];
 };
 
 /* hwrm_tunnel_dst_port_free_output (size:128b/16B) */
@@ -7094,7 +16195,12 @@ struct hwrm_tunnel_dst_port_free_output {
 	__le16	req_type;
 	__le16	seq_id;
 	__le16	resp_len;
-	u8	unused_1[7];
+	u8	error_info;
+	#define TUNNEL_DST_PORT_FREE_RESP_ERROR_INFO_SUCCESS           0x0UL
+	#define TUNNEL_DST_PORT_FREE_RESP_ERROR_INFO_ERR_NOT_OWNER     0x1UL
+	#define TUNNEL_DST_PORT_FREE_RESP_ERROR_INFO_ERR_NOT_ALLOCATED 0x2UL
+	#define TUNNEL_DST_PORT_FREE_RESP_ERROR_INFO_LAST             TUNNEL_DST_PORT_FREE_RESP_ERROR_INFO_ERR_NOT_ALLOCATED
+	u8	unused_1[6];
 	u8	valid;
 };
 
@@ -7148,7 +16254,19 @@ struct ctx_hw_stats_ext {
 	__le64	rx_tpa_events;
 };
 
-/* hwrm_stat_ctx_alloc_input (size:256b/32B) */
+/* ctx_eng_stats (size:512b/64B) */
+struct ctx_eng_stats {
+	__le64	eng_bytes_in;
+	__le64	eng_bytes_out;
+	__le64	aux_bytes_in;
+	__le64	aux_bytes_out;
+	__le64	commands;
+	__le64	error_commands;
+	__le64	cce_engine_usage;
+	__le64	cdd_engine_usage;
+};
+
+/* hwrm_stat_ctx_alloc_input (size:320b/40B) */
 struct hwrm_stat_ctx_alloc_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -7161,6 +16279,10 @@ struct hwrm_stat_ctx_alloc_input {
 	#define STAT_CTX_ALLOC_REQ_STAT_CTX_FLAGS_ROCE     0x1UL
 	u8	unused_0;
 	__le16	stats_dma_length;
+	__le16	flags;
+	#define STAT_CTX_ALLOC_REQ_FLAGS_STEERING_TAG_VALID     0x1UL
+	__le16	steering_tag;
+	__le32	unused_1;
 };
 
 /* hwrm_stat_ctx_alloc_output (size:128b/16B) */
@@ -7284,6 +16406,35 @@ struct hwrm_stat_ext_ctx_query_output {
 	u8	valid;
 };
 
+/* hwrm_stat_ctx_eng_query_input (size:192b/24B) */
+struct hwrm_stat_ctx_eng_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	stat_ctx_id;
+	u8	unused_0[4];
+};
+
+/* hwrm_stat_ctx_eng_query_output (size:640b/80B) */
+struct hwrm_stat_ctx_eng_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le64	eng_bytes_in;
+	__le64	eng_bytes_out;
+	__le64	aux_bytes_in;
+	__le64	aux_bytes_out;
+	__le64	commands;
+	__le64	error_commands;
+	__le64	cce_engine_usage;
+	__le64	cdd_engine_usage;
+	u8	unused_0[7];
+	u8	valid;
+};
+
 /* hwrm_stat_ctx_clr_stats_input (size:192b/24B) */
 struct hwrm_stat_ctx_clr_stats_input {
 	__le16	req_type;
@@ -7343,6 +16494,80 @@ struct pcie_ctx_hw_stats {
 	__le64	pcie_recovery_histogram;
 };
 
+/* hwrm_stat_generic_qstats_input (size:256b/32B) */
+struct hwrm_stat_generic_qstats_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	generic_stat_size;
+	u8	flags;
+	#define STAT_GENERIC_QSTATS_REQ_FLAGS_COUNTER_MASK     0x1UL
+	u8	unused_0[5];
+	__le64	generic_stat_host_addr;
+};
+
+/* hwrm_stat_generic_qstats_output (size:128b/16B) */
+struct hwrm_stat_generic_qstats_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	generic_stat_size;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* generic_sw_hw_stats (size:1408b/176B) */
+struct generic_sw_hw_stats {
+	__le64	pcie_statistics_tx_tlp;
+	__le64	pcie_statistics_rx_tlp;
+	__le64	pcie_credit_fc_hdr_posted;
+	__le64	pcie_credit_fc_hdr_nonposted;
+	__le64	pcie_credit_fc_hdr_cmpl;
+	__le64	pcie_credit_fc_data_posted;
+	__le64	pcie_credit_fc_data_nonposted;
+	__le64	pcie_credit_fc_data_cmpl;
+	__le64	pcie_credit_fc_tgt_nonposted;
+	__le64	pcie_credit_fc_tgt_data_posted;
+	__le64	pcie_credit_fc_tgt_hdr_posted;
+	__le64	pcie_credit_fc_cmpl_hdr_posted;
+	__le64	pcie_credit_fc_cmpl_data_posted;
+	__le64	pcie_cmpl_longest;
+	__le64	pcie_cmpl_shortest;
+	__le64	cache_miss_count_cfcq;
+	__le64	cache_miss_count_cfcs;
+	__le64	cache_miss_count_cfcc;
+	__le64	cache_miss_count_cfcm;
+	__le64	hw_db_recov_dbs_dropped;
+	__le64	hw_db_recov_drops_serviced;
+	__le64	hw_db_recov_dbs_recovered;
+};
+
+/* hwrm_stat_db_error_qstats_input (size:128b/16B) */
+struct hwrm_stat_db_error_qstats_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_stat_db_error_qstats_output (size:256b/32B) */
+struct hwrm_stat_db_error_qstats_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	tx_db_drop_invalid_qp_state;
+	__le32	rx_db_drop_invalid_rq_state;
+	__le32	tx_db_drop_format_error;
+	__le32	express_db_drop_format_error;
+	__le32	express_db_dropped_sq_overflow;
+	__le32	express_db_dropped_rq_overflow;
+};
+
 /* hwrm_fw_reset_input (size:192b/24B) */
 struct hwrm_fw_reset_input {
 	__le16	req_type;
@@ -7370,6 +16595,7 @@ struct hwrm_fw_reset_input {
 	u8	host_idx;
 	u8	flags;
 	#define FW_RESET_REQ_FLAGS_RESET_GRACEFUL     0x1UL
+	#define FW_RESET_REQ_FLAGS_FW_ACTIVATION      0x2UL
 	u8	unused_0[4];
 };
 
@@ -7420,7 +16646,13 @@ struct hwrm_fw_qstatus_output {
 	#define FW_QSTATUS_RESP_SELFRST_STATUS_SELFRSTPCIERST 0x2UL
 	#define FW_QSTATUS_RESP_SELFRST_STATUS_SELFRSTPOWER   0x3UL
 	#define FW_QSTATUS_RESP_SELFRST_STATUS_LAST          FW_QSTATUS_RESP_SELFRST_STATUS_SELFRSTPOWER
-	u8	unused_0[6];
+	u8	nvm_option_action_status;
+	#define FW_QSTATUS_RESP_NVM_OPTION_ACTION_STATUS_NVMOPT_ACTION_NONE     0x0UL
+	#define FW_QSTATUS_RESP_NVM_OPTION_ACTION_STATUS_NVMOPT_ACTION_HOTRESET 0x1UL
+	#define FW_QSTATUS_RESP_NVM_OPTION_ACTION_STATUS_NVMOPT_ACTION_WARMBOOT 0x2UL
+	#define FW_QSTATUS_RESP_NVM_OPTION_ACTION_STATUS_NVMOPT_ACTION_COLDBOOT 0x3UL
+	#define FW_QSTATUS_RESP_NVM_OPTION_ACTION_STATUS_LAST                  FW_QSTATUS_RESP_NVM_OPTION_ACTION_STATUS_NVMOPT_ACTION_COLDBOOT
+	u8	unused_0[5];
 	u8	valid;
 };
 
@@ -7458,6 +16690,39 @@ struct hwrm_fw_set_time_output {
 	u8	valid;
 };
 
+/* hwrm_fw_get_time_input (size:128b/16B) */
+struct hwrm_fw_get_time_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_fw_get_time_output (size:192b/24B) */
+struct hwrm_fw_get_time_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	year;
+	#define FW_GET_TIME_RESP_YEAR_UNKNOWN 0x0UL
+	#define FW_GET_TIME_RESP_YEAR_LAST   FW_GET_TIME_RESP_YEAR_UNKNOWN
+	u8	month;
+	u8	day;
+	u8	hour;
+	u8	minute;
+	u8	second;
+	u8	unused_0;
+	__le16	millisecond;
+	__le16	zone;
+	#define FW_GET_TIME_RESP_ZONE_UTC     0
+	#define FW_GET_TIME_RESP_ZONE_UNKNOWN 65535
+	#define FW_GET_TIME_RESP_ZONE_LAST   FW_GET_TIME_RESP_ZONE_UNKNOWN
+	u8	unused_1[3];
+	u8	valid;
+};
+
 /* hwrm_struct_hdr (size:128b/16B) */
 struct hwrm_struct_hdr {
 	__le16	struct_id;
@@ -7472,7 +16737,8 @@ struct hwrm_struct_hdr {
 	#define STRUCT_HDR_STRUCT_ID_AFM_OPAQUE         0x1UL
 	#define STRUCT_HDR_STRUCT_ID_PORT_DESCRIPTION   0xaUL
 	#define STRUCT_HDR_STRUCT_ID_RSS_V2             0x64UL
-	#define STRUCT_HDR_STRUCT_ID_LAST              STRUCT_HDR_STRUCT_ID_RSS_V2
+	#define STRUCT_HDR_STRUCT_ID_MSIX_PER_VF        0xc8UL
+	#define STRUCT_HDR_STRUCT_ID_LAST              STRUCT_HDR_STRUCT_ID_MSIX_PER_VF
 	__le16	len;
 	u8	version;
 	u8	count;
@@ -7480,6 +16746,54 @@ struct hwrm_struct_hdr {
 	__le16	next_offset;
 	#define STRUCT_HDR_NEXT_OFFSET_LAST 0x0UL
 	u8	unused_0[6];
+};
+
+/* hwrm_struct_data_dcbx_ets (size:256b/32B) */
+struct hwrm_struct_data_dcbx_ets {
+	u8	destination;
+	#define STRUCT_DATA_DCBX_ETS_DESTINATION_CONFIGURATION   0x1UL
+	#define STRUCT_DATA_DCBX_ETS_DESTINATION_RECOMMMENDATION 0x2UL
+	#define STRUCT_DATA_DCBX_ETS_DESTINATION_LAST           STRUCT_DATA_DCBX_ETS_DESTINATION_RECOMMMENDATION
+	u8	max_tcs;
+	__le16	unused1;
+	u8	pri0_to_tc_map;
+	u8	pri1_to_tc_map;
+	u8	pri2_to_tc_map;
+	u8	pri3_to_tc_map;
+	u8	pri4_to_tc_map;
+	u8	pri5_to_tc_map;
+	u8	pri6_to_tc_map;
+	u8	pri7_to_tc_map;
+	u8	tc0_to_bw_map;
+	u8	tc1_to_bw_map;
+	u8	tc2_to_bw_map;
+	u8	tc3_to_bw_map;
+	u8	tc4_to_bw_map;
+	u8	tc5_to_bw_map;
+	u8	tc6_to_bw_map;
+	u8	tc7_to_bw_map;
+	u8	tc0_to_tsa_map;
+	#define STRUCT_DATA_DCBX_ETS_TC0_TO_TSA_MAP_TSA_TYPE_SP              0x0UL
+	#define STRUCT_DATA_DCBX_ETS_TC0_TO_TSA_MAP_TSA_TYPE_CBS             0x1UL
+	#define STRUCT_DATA_DCBX_ETS_TC0_TO_TSA_MAP_TSA_TYPE_ETS             0x2UL
+	#define STRUCT_DATA_DCBX_ETS_TC0_TO_TSA_MAP_TSA_TYPE_VENDOR_SPECIFIC 0xffUL
+	#define STRUCT_DATA_DCBX_ETS_TC0_TO_TSA_MAP_LAST                    STRUCT_DATA_DCBX_ETS_TC0_TO_TSA_MAP_TSA_TYPE_VENDOR_SPECIFIC
+	u8	tc1_to_tsa_map;
+	u8	tc2_to_tsa_map;
+	u8	tc3_to_tsa_map;
+	u8	tc4_to_tsa_map;
+	u8	tc5_to_tsa_map;
+	u8	tc6_to_tsa_map;
+	u8	tc7_to_tsa_map;
+	u8	unused_0[4];
+};
+
+/* hwrm_struct_data_dcbx_pfc (size:64b/8B) */
+struct hwrm_struct_data_dcbx_pfc {
+	u8	pfc_priority_bitmap;
+	u8	max_pfc_tcs;
+	u8	mbc;
+	u8	unused_0[5];
 };
 
 /* hwrm_struct_data_dcbx_app (size:64b/8B) */
@@ -7494,6 +16808,151 @@ struct hwrm_struct_data_dcbx_app {
 	u8	priority;
 	u8	valid;
 	u8	unused_0[3];
+};
+
+/* hwrm_struct_data_dcbx_feature_state (size:64b/8B) */
+struct hwrm_struct_data_dcbx_feature_state {
+	u8	dcbx_mode;
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_DCBX_MODE_DCBX_DISABLED 0x0UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_DCBX_MODE_DCBX_IEEE     0x1UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_DCBX_MODE_DCBX_CEE      0x2UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_DCBX_MODE_LAST         STRUCT_DATA_DCBX_FEATURE_STATE_DCBX_MODE_DCBX_CEE
+	u8	ets_state;
+	u8	pfc_state;
+	u8	app_state;
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_APP_STATE_ENABLE_BIT_POS    0x7UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_APP_STATE_WILLING_BIT_POS   0x6UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_APP_STATE_ADVERTISE_BIT_POS 0x5UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_APP_STATE_LAST             STRUCT_DATA_DCBX_FEATURE_STATE_APP_STATE_ADVERTISE_BIT_POS
+	u8	unused[3];
+	u8	resets;
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_RESETS_RESET_ETS   0x1UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_RESETS_RESET_PFC   0x2UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_RESETS_RESET_APP   0x4UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_RESETS_RESET_STATE 0x8UL
+	#define STRUCT_DATA_DCBX_FEATURE_STATE_RESETS_LAST       STRUCT_DATA_DCBX_FEATURE_STATE_RESETS_RESET_STATE
+};
+
+/* hwrm_struct_data_lldp (size:64b/8B) */
+struct hwrm_struct_data_lldp {
+	u8	admin_state;
+	#define STRUCT_DATA_LLDP_ADMIN_STATE_DISABLE 0x0UL
+	#define STRUCT_DATA_LLDP_ADMIN_STATE_TX      0x1UL
+	#define STRUCT_DATA_LLDP_ADMIN_STATE_RX      0x2UL
+	#define STRUCT_DATA_LLDP_ADMIN_STATE_ENABLE  0x3UL
+	#define STRUCT_DATA_LLDP_ADMIN_STATE_LAST   STRUCT_DATA_LLDP_ADMIN_STATE_ENABLE
+	u8	port_description_state;
+	#define STRUCT_DATA_LLDP_PORT_DESCRIPTION_STATE_DISABLE 0x0UL
+	#define STRUCT_DATA_LLDP_PORT_DESCRIPTION_STATE_ENABLE  0x1UL
+	#define STRUCT_DATA_LLDP_PORT_DESCRIPTION_STATE_LAST   STRUCT_DATA_LLDP_PORT_DESCRIPTION_STATE_ENABLE
+	u8	system_name_state;
+	#define STRUCT_DATA_LLDP_SYSTEM_NAME_STATE_DISABLE 0x0UL
+	#define STRUCT_DATA_LLDP_SYSTEM_NAME_STATE_ENABLE  0x1UL
+	#define STRUCT_DATA_LLDP_SYSTEM_NAME_STATE_LAST   STRUCT_DATA_LLDP_SYSTEM_NAME_STATE_ENABLE
+	u8	system_desc_state;
+	#define STRUCT_DATA_LLDP_SYSTEM_DESC_STATE_DISABLE 0x0UL
+	#define STRUCT_DATA_LLDP_SYSTEM_DESC_STATE_ENABLE  0x1UL
+	#define STRUCT_DATA_LLDP_SYSTEM_DESC_STATE_LAST   STRUCT_DATA_LLDP_SYSTEM_DESC_STATE_ENABLE
+	u8	system_cap_state;
+	#define STRUCT_DATA_LLDP_SYSTEM_CAP_STATE_DISABLE 0x0UL
+	#define STRUCT_DATA_LLDP_SYSTEM_CAP_STATE_ENABLE  0x1UL
+	#define STRUCT_DATA_LLDP_SYSTEM_CAP_STATE_LAST   STRUCT_DATA_LLDP_SYSTEM_CAP_STATE_ENABLE
+	u8	mgmt_addr_state;
+	#define STRUCT_DATA_LLDP_MGMT_ADDR_STATE_DISABLE 0x0UL
+	#define STRUCT_DATA_LLDP_MGMT_ADDR_STATE_ENABLE  0x1UL
+	#define STRUCT_DATA_LLDP_MGMT_ADDR_STATE_LAST   STRUCT_DATA_LLDP_MGMT_ADDR_STATE_ENABLE
+	u8	async_event_notification_state;
+	#define STRUCT_DATA_LLDP_ASYNC_EVENT_NOTIFICATION_STATE_DISABLE 0x0UL
+	#define STRUCT_DATA_LLDP_ASYNC_EVENT_NOTIFICATION_STATE_ENABLE  0x1UL
+	#define STRUCT_DATA_LLDP_ASYNC_EVENT_NOTIFICATION_STATE_LAST   STRUCT_DATA_LLDP_ASYNC_EVENT_NOTIFICATION_STATE_ENABLE
+	u8	unused_0;
+};
+
+/* hwrm_struct_data_lldp_generic (size:2112b/264B) */
+struct hwrm_struct_data_lldp_generic {
+	u8	tlv_type;
+	#define STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_CHASSIS            0x1UL
+	#define STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_PORT               0x2UL
+	#define STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_SYSTEM_NAME        0x3UL
+	#define STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_SYSTEM_DESCRIPTION 0x4UL
+	#define STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_PORT_NAME          0x5UL
+	#define STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_PORT_DESCRIPTION   0x6UL
+	#define STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_LAST              STRUCT_DATA_LLDP_GENERIC_TLV_TYPE_PORT_DESCRIPTION
+	u8	subtype;
+	u8	length;
+	u8	unused1[5];
+	__le32	tlv_value[64];
+};
+
+/* hwrm_struct_data_lldp_device (size:1472b/184B) */
+struct hwrm_struct_data_lldp_device {
+	__le16	ttl;
+	u8	mgmt_addr_len;
+	u8	mgmt_addr_type;
+	u8	unused_3[4];
+	__le32	mgmt_addr[8];
+	__le32	system_caps;
+	u8	intf_num_type;
+	u8	mgmt_addr_oid_length;
+	u8	unused_4[2];
+	__le32	intf_num;
+	u8	unused_5[4];
+	__le32	mgmt_addr_oid[32];
+};
+
+/* hwrm_struct_data_port_description (size:64b/8B) */
+struct hwrm_struct_data_port_description {
+	u8	port_id;
+	u8	unused_0[7];
+};
+
+/* hwrm_struct_data_rss_v2 (size:128b/16B) */
+struct hwrm_struct_data_rss_v2 {
+	__le16	flags;
+	#define STRUCT_DATA_RSS_V2_FLAGS_HASH_VALID     0x1UL
+	__le16	rss_ctx_id;
+	__le16	num_ring_groups;
+	__le16	hash_type;
+	#define STRUCT_DATA_RSS_V2_HASH_TYPE_IPV4         0x1UL
+	#define STRUCT_DATA_RSS_V2_HASH_TYPE_TCP_IPV4     0x2UL
+	#define STRUCT_DATA_RSS_V2_HASH_TYPE_UDP_IPV4     0x4UL
+	#define STRUCT_DATA_RSS_V2_HASH_TYPE_IPV6         0x8UL
+	#define STRUCT_DATA_RSS_V2_HASH_TYPE_TCP_IPV6     0x10UL
+	#define STRUCT_DATA_RSS_V2_HASH_TYPE_UDP_IPV6     0x20UL
+	__le64	hash_key_ring_group_ids;
+};
+
+/* hwrm_struct_data_power_information (size:192b/24B) */
+struct hwrm_struct_data_power_information {
+	__le32	bkup_power_info_ver;
+	__le32	platform_bkup_power_count;
+	__le32	load_milli_watt;
+	__le32	bkup_time_milli_seconds;
+	__le32	bkup_power_status;
+	__le32	bkup_power_charge_time;
+};
+
+/* hwrm_struct_data_msix_per_vf (size:320b/40B) */
+struct hwrm_struct_data_msix_per_vf {
+	__le16	pf_id;
+	__le16	count;
+	__le32	unused_0;
+	__le16	start_vf_0;
+	__le16	msix_0;
+	__le16	start_vf_1;
+	__le16	msix_1;
+	__le16	start_vf_2;
+	__le16	msix_2;
+	__le16	start_vf_3;
+	__le16	msix_3;
+	__le16	start_vf_4;
+	__le16	msix_4;
+	__le16	start_vf_5;
+	__le16	msix_5;
+	__le16	start_vf_6;
+	__le16	msix_6;
+	__le16	start_vf_7;
+	__le16	msix_7;
 };
 
 /* hwrm_fw_set_structured_data_input (size:256b/32B) */
@@ -7573,6 +17032,493 @@ struct hwrm_fw_get_structured_data_cmd_err {
 	#define FW_GET_STRUCTURED_DATA_CMD_ERR_CODE_BAD_ID  0x3UL
 	#define FW_GET_STRUCTURED_DATA_CMD_ERR_CODE_LAST   FW_GET_STRUCTURED_DATA_CMD_ERR_CODE_BAD_ID
 	u8	unused_0[7];
+};
+
+/* hwrm_fw_ipc_msg_input (size:320b/40B) */
+struct hwrm_fw_ipc_msg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define FW_IPC_MSG_REQ_ENABLES_COMMAND_ID        0x1UL
+	#define FW_IPC_MSG_REQ_ENABLES_SRC_PROCESSOR     0x2UL
+	#define FW_IPC_MSG_REQ_ENABLES_DATA_OFFSET       0x4UL
+	#define FW_IPC_MSG_REQ_ENABLES_LENGTH            0x8UL
+	__le16	command_id;
+	#define FW_IPC_MSG_REQ_COMMAND_ID_ROCE_LAG          0x1UL
+	#define FW_IPC_MSG_REQ_COMMAND_ID_MHB_HOST          0x2UL
+	#define FW_IPC_MSG_REQ_COMMAND_ID_ROCE_DRVR_VERSION 0x3UL
+	#define FW_IPC_MSG_REQ_COMMAND_ID_LAST             FW_IPC_MSG_REQ_COMMAND_ID_ROCE_DRVR_VERSION
+	u8	src_processor;
+	#define FW_IPC_MSG_REQ_SRC_PROCESSOR_CFW  0x1UL
+	#define FW_IPC_MSG_REQ_SRC_PROCESSOR_BONO 0x2UL
+	#define FW_IPC_MSG_REQ_SRC_PROCESSOR_APE  0x3UL
+	#define FW_IPC_MSG_REQ_SRC_PROCESSOR_KONG 0x4UL
+	#define FW_IPC_MSG_REQ_SRC_PROCESSOR_LAST FW_IPC_MSG_REQ_SRC_PROCESSOR_KONG
+	u8	unused_0;
+	__le32	data_offset;
+	__le16	length;
+	u8	unused_1[2];
+	__le64	opaque;
+};
+
+/* hwrm_fw_ipc_msg_output (size:256b/32B) */
+struct hwrm_fw_ipc_msg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	msg_data_1;
+	__le32	msg_data_2;
+	__le64	reserved64;
+	u8	reserved48[7];
+	u8	valid;
+};
+
+/* hwrm_fw_ipc_mailbox_input (size:256b/32B) */
+struct hwrm_fw_ipc_mailbox_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	u8	unused;
+	u8	event_id;
+	u8	port_id;
+	__le32	event_data1;
+	__le32	event_data2;
+	u8	unused_0[4];
+};
+
+/* hwrm_fw_ipc_mailbox_output (size:128b/16B) */
+struct hwrm_fw_ipc_mailbox_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_fw_ipc_mailbox_cmd_err (size:64b/8B) */
+struct hwrm_fw_ipc_mailbox_cmd_err {
+	u8	code;
+	#define FW_IPC_MAILBOX_CMD_ERR_CODE_UNKNOWN 0x0UL
+	#define FW_IPC_MAILBOX_CMD_ERR_CODE_BAD_ID  0x3UL
+	#define FW_IPC_MAILBOX_CMD_ERR_CODE_LAST   FW_IPC_MAILBOX_CMD_ERR_CODE_BAD_ID
+	u8	unused_0[7];
+};
+
+/* hwrm_fw_ecn_cfg_input (size:192b/24B) */
+struct hwrm_fw_ecn_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flags;
+	#define FW_ECN_CFG_REQ_FLAGS_ENABLE_ECN     0x1UL
+	u8	unused_0[6];
+};
+
+/* hwrm_fw_ecn_cfg_output (size:128b/16B) */
+struct hwrm_fw_ecn_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_fw_ecn_qcfg_input (size:128b/16B) */
+struct hwrm_fw_ecn_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_fw_ecn_qcfg_output (size:128b/16B) */
+struct hwrm_fw_ecn_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	flags;
+	#define FW_ECN_QCFG_RESP_FLAGS_ENABLE_ECN     0x1UL
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_fw_health_check_input (size:128b/16B) */
+struct hwrm_fw_health_check_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_fw_health_check_output (size:128b/16B) */
+struct hwrm_fw_health_check_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	fw_status;
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_SBI_BOOTED           0x1UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_SBI_MISMATCH         0x2UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_SRT_BOOTED           0x4UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_SRT_MISMATCH         0x8UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_CRT_BOOTED           0x10UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_CRT_MISMATCH         0x20UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_SECOND_RT            0x40UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_FASTBOOTED           0x80UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_DIR_HDR_BOOTED       0x100UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_DIR_HDR_MISMATCH     0x200UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_MBR_CORRUPT          0x400UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_CFG_MISMATCH         0x800UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_FRU_MISMATCH         0x1000UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_CRT2_BOOTED          0x2000UL
+	#define FW_HEALTH_CHECK_RESP_FW_STATUS_CRT2_MISMATCH        0x4000UL
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_fw_livepatch_query_input (size:192b/24B) */
+struct hwrm_fw_livepatch_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	fw_target;
+	#define FW_LIVEPATCH_QUERY_REQ_FW_TARGET_COMMON_FW 0x1UL
+	#define FW_LIVEPATCH_QUERY_REQ_FW_TARGET_SECURE_FW 0x2UL
+	#define FW_LIVEPATCH_QUERY_REQ_FW_TARGET_LAST     FW_LIVEPATCH_QUERY_REQ_FW_TARGET_SECURE_FW
+	u8	unused_0[7];
+};
+
+/* hwrm_fw_livepatch_query_output (size:640b/80B) */
+struct hwrm_fw_livepatch_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	char	install_ver[32];
+	char	active_ver[32];
+	__le16	status_flags;
+	#define FW_LIVEPATCH_QUERY_RESP_STATUS_FLAGS_INSTALL     0x1UL
+	#define FW_LIVEPATCH_QUERY_RESP_STATUS_FLAGS_ACTIVE      0x2UL
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_fw_livepatch_input (size:256b/32B) */
+struct hwrm_fw_livepatch_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	opcode;
+	#define FW_LIVEPATCH_REQ_OPCODE_ACTIVATE   0x1UL
+	#define FW_LIVEPATCH_REQ_OPCODE_DEACTIVATE 0x2UL
+	#define FW_LIVEPATCH_REQ_OPCODE_LAST      FW_LIVEPATCH_REQ_OPCODE_DEACTIVATE
+	u8	fw_target;
+	#define FW_LIVEPATCH_REQ_FW_TARGET_COMMON_FW 0x1UL
+	#define FW_LIVEPATCH_REQ_FW_TARGET_SECURE_FW 0x2UL
+	#define FW_LIVEPATCH_REQ_FW_TARGET_LAST     FW_LIVEPATCH_REQ_FW_TARGET_SECURE_FW
+	u8	loadtype;
+	#define FW_LIVEPATCH_REQ_LOADTYPE_NVM_INSTALL   0x1UL
+	#define FW_LIVEPATCH_REQ_LOADTYPE_MEMORY_DIRECT 0x2UL
+	#define FW_LIVEPATCH_REQ_LOADTYPE_LAST         FW_LIVEPATCH_REQ_LOADTYPE_MEMORY_DIRECT
+	u8	flags;
+	__le32	patch_len;
+	__le64	host_addr;
+};
+
+/* hwrm_fw_livepatch_output (size:128b/16B) */
+struct hwrm_fw_livepatch_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_fw_livepatch_cmd_err (size:64b/8B) */
+struct hwrm_fw_livepatch_cmd_err {
+	u8	code;
+	#define FW_LIVEPATCH_CMD_ERR_CODE_UNKNOWN         0x0UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_INVALID_OPCODE  0x1UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_INVALID_TARGET  0x2UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_NOT_SUPPORTED   0x3UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_NOT_INSTALLED   0x4UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_NOT_PATCHED     0x5UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_AUTH_FAIL       0x6UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_INVALID_HEADER  0x7UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_INVALID_SIZE    0x8UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_ALREADY_PATCHED 0x9UL
+	#define FW_LIVEPATCH_CMD_ERR_CODE_LAST           FW_LIVEPATCH_CMD_ERR_CODE_ALREADY_PATCHED
+	u8	unused_0[7];
+};
+
+/* hwrm_fw_sync_input (size:192b/24B) */
+struct hwrm_fw_sync_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	sync_action;
+	#define FW_SYNC_REQ_SYNC_ACTION_SYNC_SBI         0x1UL
+	#define FW_SYNC_REQ_SYNC_ACTION_SYNC_SRT         0x2UL
+	#define FW_SYNC_REQ_SYNC_ACTION_SYNC_CRT         0x4UL
+	#define FW_SYNC_REQ_SYNC_ACTION_SYNC_DIR_HDR     0x8UL
+	#define FW_SYNC_REQ_SYNC_ACTION_WRITE_MBR        0x10UL
+	#define FW_SYNC_REQ_SYNC_ACTION_SYNC_CFG         0x20UL
+	#define FW_SYNC_REQ_SYNC_ACTION_SYNC_FRU         0x40UL
+	#define FW_SYNC_REQ_SYNC_ACTION_SYNC_CRT2        0x80UL
+	#define FW_SYNC_REQ_SYNC_ACTION_ACTION           0x80000000UL
+	u8	unused_0[4];
+};
+
+/* hwrm_fw_sync_output (size:128b/16B) */
+struct hwrm_fw_sync_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	sync_status;
+	#define FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_MASK       0xffUL
+	#define FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_SFT        0
+	#define FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_SUCCESS      0x0UL
+	#define FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_IN_PROGRESS  0x1UL
+	#define FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_TIMEOUT      0x2UL
+	#define FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_GENERAL      0x3UL
+	#define FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_LAST        FW_SYNC_RESP_SYNC_STATUS_ERR_CODE_GENERAL
+	#define FW_SYNC_RESP_SYNC_STATUS_SYNC_ERR            0x40000000UL
+	#define FW_SYNC_RESP_SYNC_STATUS_SYNC_COMPLETE       0x80000000UL
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_fw_state_qcaps_input (size:128b/16B) */
+struct hwrm_fw_state_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_fw_state_qcaps_output (size:256b/32B) */
+struct hwrm_fw_state_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	backup_memory;
+	__le32	quiesce_timeout;
+	__le32	fw_status_blackout;
+	__le32	fw_status_max_wait;
+	u8	unused_0[4];
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_fw_state_quiesce_input (size:192b/24B) */
+struct hwrm_fw_state_quiesce_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	flags;
+	#define FW_STATE_QUIESCE_REQ_FLAGS_ERROR_RECOVERY     0x1UL
+	u8	unused_0[7];
+};
+
+/* hwrm_fw_state_quiesce_output (size:192b/24B) */
+struct hwrm_fw_state_quiesce_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	quiesce_status;
+	#define FW_STATE_QUIESCE_RESP_QUIESCE_STATUS_INITIATED     0x80000000UL
+	u8	unused_0[4];
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_fw_state_unquiesce_input (size:128b/16B) */
+struct hwrm_fw_state_unquiesce_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_fw_state_unquiesce_output (size:192b/24B) */
+struct hwrm_fw_state_unquiesce_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	unquiesce_status;
+	#define FW_STATE_UNQUIESCE_RESP_UNQUIESCE_STATUS_COMPLETE     0x80000000UL
+	u8	unused_0[4];
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_fw_state_backup_input (size:256b/32B) */
+struct hwrm_fw_state_backup_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	backup_pg_size_backup_lvl;
+	#define FW_STATE_BACKUP_REQ_BACKUP_LVL_MASK      0xfUL
+	#define FW_STATE_BACKUP_REQ_BACKUP_LVL_SFT       0
+	#define FW_STATE_BACKUP_REQ_BACKUP_LVL_LVL_0       0x0UL
+	#define FW_STATE_BACKUP_REQ_BACKUP_LVL_LVL_1       0x1UL
+	#define FW_STATE_BACKUP_REQ_BACKUP_LVL_LVL_2       0x2UL
+	#define FW_STATE_BACKUP_REQ_BACKUP_LVL_LAST       FW_STATE_BACKUP_REQ_BACKUP_LVL_LVL_2
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_MASK  0xf0UL
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_SFT   4
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_LAST   FW_STATE_BACKUP_REQ_BACKUP_PG_SIZE_PG_1G
+	u8	unused_0[7];
+	__le64	backup_page_dir;
+};
+
+/* hwrm_fw_state_backup_output (size:192b/24B) */
+struct hwrm_fw_state_backup_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	backup_status;
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_ERR_CODE_MASK         0xffUL
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_ERR_CODE_SFT          0
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_ERR_CODE_SUCCESS        0x0UL
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_ERR_CODE_QUIESCE_ERROR  0x1UL
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_ERR_CODE_GENERAL        0x3UL
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_ERR_CODE_LAST          FW_STATE_BACKUP_RESP_BACKUP_STATUS_ERR_CODE_GENERAL
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_RESET_REQUIRED        0x40000000UL
+	#define FW_STATE_BACKUP_RESP_BACKUP_STATUS_COMPLETE              0x80000000UL
+	u8	unused_0[4];
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_fw_state_restore_input (size:256b/32B) */
+struct hwrm_fw_state_restore_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	restore_pg_size_restore_lvl;
+	#define FW_STATE_RESTORE_REQ_RESTORE_LVL_MASK      0xfUL
+	#define FW_STATE_RESTORE_REQ_RESTORE_LVL_SFT       0
+	#define FW_STATE_RESTORE_REQ_RESTORE_LVL_LVL_0       0x0UL
+	#define FW_STATE_RESTORE_REQ_RESTORE_LVL_LVL_1       0x1UL
+	#define FW_STATE_RESTORE_REQ_RESTORE_LVL_LVL_2       0x2UL
+	#define FW_STATE_RESTORE_REQ_RESTORE_LVL_LAST       FW_STATE_RESTORE_REQ_RESTORE_LVL_LVL_2
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_MASK  0xf0UL
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_SFT   4
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_PG_4K   (0x0UL << 4)
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_PG_8K   (0x1UL << 4)
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_PG_64K  (0x2UL << 4)
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_PG_2M   (0x3UL << 4)
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_PG_8M   (0x4UL << 4)
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_PG_1G   (0x5UL << 4)
+	#define FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_LAST   FW_STATE_RESTORE_REQ_RESTORE_PG_SIZE_PG_1G
+	u8	unused_0[7];
+	__le64	restore_page_dir;
+};
+
+/* hwrm_fw_state_restore_output (size:128b/16B) */
+struct hwrm_fw_state_restore_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	restore_status;
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_MASK                  0xffUL
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_SFT                   0
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_SUCCESS                 0x0UL
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_GENERAL                 0x1UL
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_FORMAT_PARSE            0x2UL
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_INTEGRITY_CHECK         0x3UL
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_LAST                   FW_STATE_RESTORE_RESP_RESTORE_STATUS_ERR_CODE_INTEGRITY_CHECK
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_FAILURE_ROLLBACK_COMPLETED     0x40000000UL
+	#define FW_STATE_RESTORE_RESP_RESTORE_STATUS_COMPLETE                       0x80000000UL
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_fw_secure_cfg_input (size:256b/32B) */
+struct hwrm_fw_secure_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	enable;
+	#define FW_SECURE_CFG_REQ_ENABLE_NVRAM 0x1UL
+	#define FW_SECURE_CFG_REQ_ENABLE_GRC   0x2UL
+	#define FW_SECURE_CFG_REQ_ENABLE_UART  0x3UL
+	#define FW_SECURE_CFG_REQ_ENABLE_LAST FW_SECURE_CFG_REQ_ENABLE_UART
+	u8	config_mode;
+	#define FW_SECURE_CFG_REQ_CONFIG_MODE_PERSISTENT     0x1UL
+	#define FW_SECURE_CFG_REQ_CONFIG_MODE_RUNTIME        0x2UL
+	u8	nvm_lock_mode;
+	#define FW_SECURE_CFG_REQ_NVM_LOCK_MODE_NONE    0x0UL
+	#define FW_SECURE_CFG_REQ_NVM_LOCK_MODE_PARTIAL 0x1UL
+	#define FW_SECURE_CFG_REQ_NVM_LOCK_MODE_FULL    0x2UL
+	#define FW_SECURE_CFG_REQ_NVM_LOCK_MODE_CHIP    0x3UL
+	#define FW_SECURE_CFG_REQ_NVM_LOCK_MODE_LAST   FW_SECURE_CFG_REQ_NVM_LOCK_MODE_CHIP
+	u8	nvm_partial_lock_mask;
+	#define FW_SECURE_CFG_REQ_NVM_PARTIAL_LOCK_MASK_EXE     0x1UL
+	#define FW_SECURE_CFG_REQ_NVM_PARTIAL_LOCK_MASK_CFG     0x2UL
+	u8	grc_ctrl;
+	#define FW_SECURE_CFG_REQ_GRC_CTRL_RO 0x0UL
+	#define FW_SECURE_CFG_REQ_GRC_CTRL_RW 0x1UL
+	#define FW_SECURE_CFG_REQ_GRC_CTRL_LAST FW_SECURE_CFG_REQ_GRC_CTRL_RW
+	u8	uart_ctrl;
+	#define FW_SECURE_CFG_REQ_UART_CTRL_DISABLE 0x0UL
+	#define FW_SECURE_CFG_REQ_UART_CTRL_ENABLE  0x1UL
+	#define FW_SECURE_CFG_REQ_UART_CTRL_LAST   FW_SECURE_CFG_REQ_UART_CTRL_ENABLE
+	u8	unused_0[2];
+	__le32	unused_1[2];
+};
+
+/* hwrm_fw_secure_cfg_output (size:128b/16B) */
+struct hwrm_fw_secure_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
 };
 
 /* hwrm_exec_fwd_resp_input (size:1024b/128B) */
@@ -7676,7 +17622,7 @@ struct hwrm_temp_monitor_query_input {
 	__le64	resp_addr;
 };
 
-/* hwrm_temp_monitor_query_output (size:128b/16B) */
+/* hwrm_temp_monitor_query_output (size:192b/24B) */
 struct hwrm_temp_monitor_query_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -7686,13 +17632,126 @@ struct hwrm_temp_monitor_query_output {
 	u8	phy_temp;
 	u8	om_temp;
 	u8	flags;
-	#define TEMP_MONITOR_QUERY_RESP_FLAGS_TEMP_NOT_AVAILABLE         0x1UL
-	#define TEMP_MONITOR_QUERY_RESP_FLAGS_PHY_TEMP_NOT_AVAILABLE     0x2UL
-	#define TEMP_MONITOR_QUERY_RESP_FLAGS_OM_NOT_PRESENT             0x4UL
-	#define TEMP_MONITOR_QUERY_RESP_FLAGS_OM_TEMP_NOT_AVAILABLE      0x8UL
+	#define TEMP_MONITOR_QUERY_RESP_FLAGS_TEMP_NOT_AVAILABLE             0x1UL
+	#define TEMP_MONITOR_QUERY_RESP_FLAGS_PHY_TEMP_NOT_AVAILABLE         0x2UL
+	#define TEMP_MONITOR_QUERY_RESP_FLAGS_OM_NOT_PRESENT                 0x4UL
+	#define TEMP_MONITOR_QUERY_RESP_FLAGS_OM_TEMP_NOT_AVAILABLE          0x8UL
+	#define TEMP_MONITOR_QUERY_RESP_FLAGS_EXT_TEMP_FIELDS_AVAILABLE      0x10UL
+	#define TEMP_MONITOR_QUERY_RESP_FLAGS_THRESHOLD_VALUES_AVAILABLE     0x20UL
+	u8	temp2;
+	u8	phy_temp2;
+	u8	om_temp2;
+	u8	warn_threshold;
+	u8	critical_threshold;
+	u8	fatal_threshold;
+	u8	shutdown_threshold;
+	u8	unused_0[4];
+	u8	valid;
+};
+
+/* hwrm_reg_power_query_input (size:128b/16B) */
+struct hwrm_reg_power_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_reg_power_query_output (size:192b/24B) */
+struct hwrm_reg_power_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	flags;
+	#define REG_POWER_QUERY_RESP_FLAGS_IN_POWER_AVAILABLE      0x1UL
+	#define REG_POWER_QUERY_RESP_FLAGS_OUT_POWER_AVAILABLE     0x2UL
+	__le32	in_power_mw;
+	__le32	out_power_mw;
 	u8	unused_0[3];
 	u8	valid;
 };
+
+/* hwrm_core_frequency_query_input (size:128b/16B) */
+struct hwrm_core_frequency_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_core_frequency_query_output (size:128b/16B) */
+struct hwrm_core_frequency_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	core_frequency_hz;
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_reg_power_histogram_input (size:192b/24B) */
+struct hwrm_reg_power_histogram_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define REG_POWER_HISTOGRAM_REQ_FLAGS_CLEAR_HISTOGRAM     0x1UL
+	__le32	unused_0;
+};
+
+/* hwrm_reg_power_histogram_output (size:1088b/136B) */
+struct hwrm_reg_power_histogram_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	flags;
+	#define REG_POWER_HISTOGRAM_RESP_FLAGS_POWER_IN_OUT       0x1UL
+	#define REG_POWER_HISTOGRAM_RESP_FLAGS_POWER_IN_OUT_INPUT   0x0UL
+	#define REG_POWER_HISTOGRAM_RESP_FLAGS_POWER_IN_OUT_OUTPUT  0x1UL
+	#define REG_POWER_HISTOGRAM_RESP_FLAGS_POWER_IN_OUT_LAST   REG_POWER_HISTOGRAM_RESP_FLAGS_POWER_IN_OUT_OUTPUT
+	u8	unused_0[2];
+	__le32	sampling_period;
+	__le64	sample_count;
+	__le32	power_hist[26];
+	u8	unused_1[7];
+	u8	valid;
+};
+
+#define BUCKET_NO_DATA_FOR_SAMPLE 0x0UL
+#define BUCKET_RANGE_8W_OR_LESS   0x1UL
+#define BUCKET_RANGE_8W_TO_9W     0x2UL
+#define BUCKET_RANGE_9W_TO_10W    0x3UL
+#define BUCKET_RANGE_10W_TO_11W   0x4UL
+#define BUCKET_RANGE_11W_TO_12W   0x5UL
+#define BUCKET_RANGE_12W_TO_13W   0x6UL
+#define BUCKET_RANGE_13W_TO_14W   0x7UL
+#define BUCKET_RANGE_14W_TO_15W   0x8UL
+#define BUCKET_RANGE_15W_TO_16W   0x9UL
+#define BUCKET_RANGE_16W_TO_18W   0xaUL
+#define BUCKET_RANGE_18W_TO_20W   0xbUL
+#define BUCKET_RANGE_20W_TO_22W   0xcUL
+#define BUCKET_RANGE_22W_TO_24W   0xdUL
+#define BUCKET_RANGE_24W_TO_26W   0xeUL
+#define BUCKET_RANGE_26W_TO_28W   0xfUL
+#define BUCKET_RANGE_28W_TO_30W   0x10UL
+#define BUCKET_RANGE_30W_TO_32W   0x11UL
+#define BUCKET_RANGE_32W_TO_34W   0x12UL
+#define BUCKET_RANGE_34W_TO_36W   0x13UL
+#define BUCKET_RANGE_36W_TO_38W   0x14UL
+#define BUCKET_RANGE_38W_TO_40W   0x15UL
+#define BUCKET_RANGE_40W_TO_42W   0x16UL
+#define BUCKET_RANGE_42W_TO_44W   0x17UL
+#define BUCKET_RANGE_44W_TO_50W   0x18UL
+#define BUCKET_RANGE_OVER_50W     0x19UL
+#define BUCKET_LAST              BUCKET_RANGE_OVER_50W
+
 
 /* hwrm_wol_filter_alloc_input (size:512b/64B) */
 struct hwrm_wol_filter_alloc_input {
@@ -7856,6 +17915,303 @@ struct hwrm_dbg_read_direct_output {
 	u8	valid;
 };
 
+/* hwrm_dbg_write_direct_input (size:448b/56B) */
+struct hwrm_dbg_write_direct_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	write_addr;
+	__le32	write_len32;
+	__le32	write_data[8];
+};
+
+/* hwrm_dbg_write_direct_output (size:128b/16B) */
+struct hwrm_dbg_write_direct_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_read_indirect_input (size:640b/80B) */
+struct hwrm_dbg_read_indirect_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	host_dest_addr;
+	__le32	host_dest_addr_len;
+	u8	indirect_access_type;
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_TE_MGMT_FILTERS_L2         0x0UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_TE_MGMT_FILTERS_L3L4       0x1UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_RE_MGMT_FILTERS_L2         0x2UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_RE_MGMT_FILTERS_L3L4       0x3UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_STAT_CTXS                  0x4UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_L2_TCAM             0x5UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_L2_TCAM             0x6UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_IPV6_SUBNET_TCAM    0x7UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_IPV6_SUBNET_TCAM    0x8UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_SRC_PROPERTIES_TCAM 0x9UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_SRC_PROPERTIES_TCAM 0xaUL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_VEB_LOOKUP_TCAM        0xbUL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_PROFILE_LOOKUP_TCAM 0xcUL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_PROFILE_LOOKUP_TCAM 0xdUL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_LOOKUP_TCAM         0xeUL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_LOOKUP_TCAM         0xfUL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_MHB                        0x10UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_PCIE_GBL                   0x11UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_MULTI_HOST_SOC             0x12UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_PCIE_PRIVATE               0x13UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_HOST_DMA                   0x14UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_SOC_ELOG                   0x15UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CTX                        0x16UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_STATS                      0x17UL
+	#define DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_LAST                      DBG_READ_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_STATS
+	u8	unused_0[3];
+	__le32	start_index;
+	__le32	num_of_entries;
+	__le32	opaque[10];
+};
+
+/* hwrm_dbg_read_indirect_output (size:128b/16B) */
+struct hwrm_dbg_read_indirect_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_write_indirect_input (size:832b/104B) */
+struct hwrm_dbg_write_indirect_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	indirect_access_type;
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_TE_MGMT_FILTERS_L2         0x0UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_TE_MGMT_FILTERS_L3L4       0x1UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_RE_MGMT_FILTERS_L2         0x2UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_RE_MGMT_FILTERS_L3L4       0x3UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_STAT_CTXS                  0x4UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_L2_TCAM             0x5UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_L2_TCAM             0x6UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_IPV6_SUBNET_TCAM    0x7UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_IPV6_SUBNET_TCAM    0x8UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_SRC_PROPERTIES_TCAM 0x9UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_SRC_PROPERTIES_TCAM 0xaUL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_VEB_LOOKUP_TCAM        0xbUL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_PROFILE_LOOKUP_TCAM 0xcUL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_PROFILE_LOOKUP_TCAM 0xdUL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_TX_LOOKUP_TCAM         0xeUL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CFA_RX_LOOKUP_TCAM         0xfUL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_MHB                        0x10UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_PCIE_GBL                   0x11UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_MULTI_HOST_SOC             0x12UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_PCIE_PRIVATE               0x13UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_HOST_DMA                   0x14UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_SOC_ELOG                   0x15UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_CTX                        0x16UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_STATS                      0x17UL
+	#define DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_LAST                      DBG_WRITE_INDIRECT_REQ_INDIRECT_ACCESS_TYPE_STATS
+	u8	unused_0[3];
+	__le32	start_index;
+	__le32	num_of_entries;
+	u8	unused_1[4];
+	__le32	write_data[8];
+	__le32	opaque[10];
+};
+
+/* hwrm_dbg_write_indirect_output (size:128b/16B) */
+struct hwrm_dbg_write_indirect_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_dump_input (size:320b/40B) */
+struct hwrm_dbg_dump_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	handle;
+	u8	unused_0[4];
+	__le64	host_dbg_dump_addr;
+	__le64	host_dbg_dump_addr_len;
+};
+
+/* hwrm_dbg_dump_output (size:192b/24B) */
+struct hwrm_dbg_dump_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nexthandle;
+	__le32	dbg_data_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_erase_nvm_input (size:192b/24B) */
+struct hwrm_dbg_erase_nvm_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flags;
+	#define DBG_ERASE_NVM_REQ_FLAGS_ERASE_ALL     0x1UL
+	u8	unused_0[6];
+};
+
+/* hwrm_dbg_erase_nvm_output (size:128b/16B) */
+struct hwrm_dbg_erase_nvm_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_cfg_input (size:192b/24B) */
+struct hwrm_dbg_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define DBG_CFG_REQ_FLAGS_UART_LOG               0x1UL
+	#define DBG_CFG_REQ_FLAGS_UART_LOG_SECONDARY     0x2UL
+	#define DBG_CFG_REQ_FLAGS_FW_TRACE               0x4UL
+	#define DBG_CFG_REQ_FLAGS_FW_TRACE_SECONDARY     0x8UL
+	#define DBG_CFG_REQ_FLAGS_DEBUG_NOTIFY           0x10UL
+	#define DBG_CFG_REQ_FLAGS_JTAG_DEBUG             0x20UL
+	__le16	async_cmpl_ring;
+	u8	unused_0[2];
+};
+
+/* hwrm_dbg_cfg_output (size:128b/16B) */
+struct hwrm_dbg_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_crashdump_header_input (size:192b/24B) */
+struct hwrm_dbg_crashdump_header_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	unused_0[2];
+};
+
+/* hwrm_dbg_crashdump_header_output (size:512b/64B) */
+struct hwrm_dbg_crashdump_header_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	version_hi;
+	u8	version_low;
+	__le16	header_len;
+	__le32	dump_size;
+	__le32	crash_time;
+	s8	utc_offset;
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_UTC                            0
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMSTERDAM                      4
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_EGYPT                          8
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_EUROPE_MOSCOW                  12
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_IRAN                           14
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_DUBAI                     16
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_KABUL                     18
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ANTARCTICA_MAWSON              20
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_COLOMBO                   22
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_KATHMANDU                 23
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_INDIAN_CHAGOS                  24
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_INDIAN_COCOS                   26
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_BANGKOK                   28
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_HONG_KONG                 32
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_PYONGYANG                 34
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AUSTRALIA_EUCLA                35
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ASIA_TOKYO                     36
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AUSTRALIA_ADELAIDE             38
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AUSTRALIA_BROKEN_HILL          38
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AUSTRALIA_DARWIN               38
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AUSTRALIA_SYDNEY               40
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AUSTRALIA_LORD_HOWE            42
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ANTARCTICA_MACQUARIE           44
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ANTARCTICA_SOUTH_POLE          48
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_PACIFIC_CHATHAM                51
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_PACIFIC_APIA                   52
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_PACIFIC_KIRITIMATIS            56
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ATLANTIC_CAPE_VERDE            -4
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_ATLANTIC_SOUTH_GEORGIA         -8
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMERICA_ARGENTINA_BUENOS_AIRES -12
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMERICA_SAO_PAULO              -12
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMERICA_NEWFOUNDLAND           -14
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMERICA_BARBADOS               -16
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMERICA_CANCUN                 -20
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMERICA_COSTA_RICA             -24
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_AMERICA_PHOENIX                -28
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_US_ARIZONA                     -28
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_US_PACIFIC                     -32
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_US_ALASKA                      -36
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_PACIFIC_MARQUESAS              -38
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_PACIFIC_HAWAII                 -40
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_PACIFIC_MIDWAY                 -44
+	#define DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_LAST                          DBG_CRASHDUMP_HEADER_RESP_UTC_OFFSET_PACIFIC_MIDWAY
+	u8	crash_cntr;
+	__le16	dev_uid_length;
+	u8	dev_uid[32];
+	__le32	power_on_count;
+	u8	unused_2[3];
+	u8	valid;
+};
+
+/* hwrm_dbg_crashdump_erase_input (size:192b/24B) */
+struct hwrm_dbg_crashdump_erase_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	scope;
+	#define DBG_CRASHDUMP_ERASE_REQ_SCOPE_INVALIDATE 0x0UL
+	#define DBG_CRASHDUMP_ERASE_REQ_SCOPE_REINIT     0x1UL
+	#define DBG_CRASHDUMP_ERASE_REQ_SCOPE_LAST      DBG_CRASHDUMP_ERASE_REQ_SCOPE_REINIT
+	u8	unused_0[3];
+	__le32	unused_1;
+};
+
+/* hwrm_dbg_crashdump_erase_output (size:128b/16B) */
+struct hwrm_dbg_crashdump_erase_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_1[7];
+	u8	valid;
+};
+
 /* hwrm_dbg_qcaps_input (size:192b/24B) */
 struct hwrm_dbg_qcaps_input {
 	__le16	req_type;
@@ -7881,6 +18237,7 @@ struct hwrm_dbg_qcaps_output {
 	#define DBG_QCAPS_RESP_FLAGS_CRASHDUMP_NVM          0x1UL
 	#define DBG_QCAPS_RESP_FLAGS_CRASHDUMP_HOST_DDR     0x2UL
 	#define DBG_QCAPS_RESP_FLAGS_CRASHDUMP_SOC_DDR      0x4UL
+	#define DBG_QCAPS_RESP_FLAGS_USEQ                   0x8UL
 	u8	unused_1[3];
 	u8	valid;
 };
@@ -7924,6 +18281,50 @@ struct hwrm_dbg_qcfg_output {
 	u8	unused_2[2];
 	__le32	crashdump_size;
 	u8	unused_3[3];
+	u8	valid;
+};
+
+/* hwrm_dbg_crashdump_medium_cfg_input (size:320b/40B) */
+struct hwrm_dbg_crashdump_medium_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	output_dest_flags;
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_TYPE_DDR     0x1UL
+	__le16	pg_size_lvl;
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_LVL_MASK      0x3UL
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_LVL_SFT       0
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_LVL_LVL_0       0x0UL
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_LVL_LVL_1       0x1UL
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_LVL_LVL_2       0x2UL
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_LVL_LAST       DBG_CRASHDUMP_MEDIUM_CFG_REQ_LVL_LVL_2
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_MASK  0x1cUL
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_SFT   2
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_PG_4K   (0x0UL << 2)
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_PG_8K   (0x1UL << 2)
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_PG_64K  (0x2UL << 2)
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_PG_2M   (0x3UL << 2)
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_PG_8M   (0x4UL << 2)
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_PG_1G   (0x5UL << 2)
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_LAST   DBG_CRASHDUMP_MEDIUM_CFG_REQ_PG_SIZE_PG_1G
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_UNUSED11_MASK 0xffe0UL
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_UNUSED11_SFT  5
+	__le32	size;
+	__le32	coredump_component_disable_flags;
+	#define DBG_CRASHDUMP_MEDIUM_CFG_REQ_NVRAM     0x1UL
+	__le32	unused_0;
+	__le64	pbl;
+};
+
+/* hwrm_dbg_crashdump_medium_cfg_output (size:128b/16B) */
+struct hwrm_dbg_crashdump_medium_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_1[7];
 	u8	valid;
 };
 
@@ -8000,6 +18401,9 @@ struct hwrm_dbg_coredump_initiate_output {
 struct coredump_data_hdr {
 	__le32	address;
 	__le32	flags_length;
+	#define COREDUMP_DATA_HDR_FLAGS_LENGTH_ACTUAL_LEN_MASK     0xffffffUL
+	#define COREDUMP_DATA_HDR_FLAGS_LENGTH_ACTUAL_LEN_SFT      0
+	#define COREDUMP_DATA_HDR_FLAGS_LENGTH_INDIRECT_ACCESS     0x1000000UL
 	__le32	instance;
 	__le32	next_offset;
 };
@@ -8040,6 +18444,64 @@ struct hwrm_dbg_coredump_retrieve_output {
 	u8	valid;
 };
 
+/* hwrm_dbg_i2c_cmd_input (size:320b/40B) */
+struct hwrm_dbg_i2c_cmd_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	host_dest_addr;
+	__le16	read_size;
+	__le16	write_size;
+	u8	chnl_id;
+	u8	options;
+	#define DBG_I2C_CMD_REQ_OPTIONS_10_BIT_ADDRESSING     0x1UL
+	#define DBG_I2C_CMD_REQ_OPTIONS_FAST_MODE             0x2UL
+	__le16	slave_addr;
+	u8	xfer_mode;
+	#define DBG_I2C_CMD_REQ_XFER_MODE_MASTER_READ       0x0UL
+	#define DBG_I2C_CMD_REQ_XFER_MODE_MASTER_WRITE      0x1UL
+	#define DBG_I2C_CMD_REQ_XFER_MODE_MASTER_WRITE_READ 0x2UL
+	#define DBG_I2C_CMD_REQ_XFER_MODE_LAST             DBG_I2C_CMD_REQ_XFER_MODE_MASTER_WRITE_READ
+	u8	unused_1[7];
+};
+
+/* hwrm_dbg_i2c_cmd_output (size:128b/16B) */
+struct hwrm_dbg_i2c_cmd_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_fw_cli_input (size:1024b/128B) */
+struct hwrm_dbg_fw_cli_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	host_dest_addr;
+	__le32	host_buf_len;
+	__le16	cli_cmd_len;
+	u8	unused_0[2];
+	u8	cli_cmd[96];
+};
+
+/* hwrm_dbg_fw_cli_output (size:128b/16B) */
+struct hwrm_dbg_fw_cli_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	cli_data_len;
+	u8	unused_0[3];
+	u8	valid;
+};
+
 /* hwrm_dbg_ring_info_get_input (size:192b/24B) */
 struct hwrm_dbg_ring_info_get_input {
 	__le16	req_type;
@@ -8066,7 +18528,326 @@ struct hwrm_dbg_ring_info_get_output {
 	__le32	producer_index;
 	__le32	consumer_index;
 	__le32	cag_vector_ctrl;
-	u8	unused_0[3];
+	__le16	st_tag;
+	u8	unused_0;
+	u8	valid;
+};
+
+/* hwrm_dbg_drv_trace_input (size:1024b/128B) */
+struct hwrm_dbg_drv_trace_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	severity;
+	#define DBG_DRV_TRACE_REQ_SEVERITY_TRACE_LEVEL_FATAL   0x0UL
+	#define DBG_DRV_TRACE_REQ_SEVERITY_TRACE_LEVEL_ERROR   0x1UL
+	#define DBG_DRV_TRACE_REQ_SEVERITY_TRACE_LEVEL_WARNING 0x2UL
+	#define DBG_DRV_TRACE_REQ_SEVERITY_TRACE_LEVEL_INFO    0x3UL
+	#define DBG_DRV_TRACE_REQ_SEVERITY_TRACE_LEVEL_DEBUG   0x4UL
+	#define DBG_DRV_TRACE_REQ_SEVERITY_LAST               DBG_DRV_TRACE_REQ_SEVERITY_TRACE_LEVEL_DEBUG
+	u8	write_len;
+	u8	unused_0[6];
+	char	trace_data[104];
+};
+
+/* hwrm_dbg_drv_trace_output (size:128b/16B) */
+struct hwrm_dbg_drv_trace_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_dbg_useq_alloc_input (size:192b/24B) */
+struct hwrm_dbg_useq_alloc_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	size;
+	__le16	output_bytes;
+	__le16	unused_0;
+};
+
+/* hwrm_dbg_useq_alloc_output (size:256b/32B) */
+struct hwrm_dbg_useq_alloc_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_ALLOC_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_ALLOC_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_ALLOC_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_ALLOC_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+	__le16	alloc_usid;
+	__le16	unused_0;
+	__le32	valid;
+};
+
+/* hwrm_dbg_useq_free_input (size:192b/24B) */
+struct hwrm_dbg_useq_free_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	usid;
+	u8	unused_0[6];
+};
+
+/* hwrm_dbg_useq_free_output (size:256b/32B) */
+struct hwrm_dbg_useq_free_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_FREE_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_FREE_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_FREE_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_FREE_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+	__le32	unused_0;
+	__le32	valid;
+};
+
+/* hwrm_dbg_useq_flush_input (size:192b/24B) */
+struct hwrm_dbg_useq_flush_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	flags;
+	#define DBG_USEQ_FLUSH_REQ_USEQ_CODE_WORDS 0x1UL
+	#define DBG_USEQ_FLUSH_REQ_BUFFERS         0x2UL
+	#define DBG_USEQ_FLUSH_REQ_LAST           DBG_USEQ_FLUSH_REQ_BUFFERS
+	u8	unused_0[6];
+};
+
+/* hwrm_dbg_useq_flush_output (size:256b/32B) */
+struct hwrm_dbg_useq_flush_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_FLUSH_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_FLUSH_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_FLUSH_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_FLUSH_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+	__le32	unused_0;
+	__le32	valid;
+};
+
+/* hwrm_dbg_useq_cw_cfg_input (size:960b/120B) */
+struct hwrm_dbg_useq_cw_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	usid;
+	__le16	offset;
+	__le16	size;
+	__le16	flags;
+	#define DBG_USEQ_CW_CFG_REQ_FLAGS_USID_CTRL_PRESENT 0x1UL
+	#define DBG_USEQ_CW_CFG_REQ_FLAGS_USE_DMA           0x2UL
+	#define DBG_USEQ_CW_CFG_REQ_FLAGS_END               0x8000UL
+	#define DBG_USEQ_CW_CFG_REQ_FLAGS_LAST             DBG_USEQ_CW_CFG_REQ_FLAGS_END
+	__le32	opaque[24];
+};
+
+/* hwrm_dbg_useq_cw_cfg_output (size:192b/24B) */
+struct hwrm_dbg_useq_cw_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_CW_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_CW_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_CW_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_CW_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+};
+
+/* hwrm_dbg_useq_qcaps_input (size:128b/16B) */
+struct hwrm_dbg_useq_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_dbg_useq_qcaps_output (size:384b/48B) */
+struct hwrm_dbg_useq_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_QCAPS_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_QCAPS_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_QCAPS_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_QCAPS_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+	__le32	max_num_useq;
+	__le32	max_useq_size;
+	__le32	max_useq_32b_output_size;
+	__le32	num_buf;
+	__le32	unused_0;
+	__le32	valid;
+};
+
+/* hwrm_dbg_useq_sched_cfg_input (size:192b/24B) */
+struct hwrm_dbg_useq_sched_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	global_cfg;
+	#define DBG_USEQ_SCHED_CFG_REQ_NO_CHANGE 0x0UL
+	#define DBG_USEQ_SCHED_CFG_REQ_DISABLE   0x1UL
+	#define DBG_USEQ_SCHED_CFG_REQ_ENABLE    0x2UL
+	#define DBG_USEQ_SCHED_CFG_REQ_LAST     DBG_USEQ_SCHED_CFG_REQ_ENABLE
+	__le16	usid;
+	__le32	polling_interval;
+};
+
+/* hwrm_dbg_useq_sched_cfg_output (size:256b/32B) */
+struct hwrm_dbg_useq_sched_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_SCHED_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_SCHED_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_SCHED_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_SCHED_CFG_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+	__le32	unused_0;
+	__le32	valid;
+};
+
+/* hwrm_dbg_useq_run_input (size:320b/40B) */
+struct hwrm_dbg_useq_run_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	usid;
+	u8	run_type;
+	#define DBG_USEQ_RUN_REQ_RUN_TYPE_SINGLE   0x0UL
+	#define DBG_USEQ_RUN_REQ_RUN_TYPE_CNT      0x1UL
+	#define DBG_USEQ_RUN_REQ_RUN_TYPE_FILL_BUF 0x2UL
+	#define DBG_USEQ_RUN_REQ_RUN_TYPE_LAST    DBG_USEQ_RUN_REQ_RUN_TYPE_FILL_BUF
+	u8	run_cnt;
+	__le32	run_interval;
+	__le64	host_dest_addr;
+	__le32	host_dest_len;
+	__le32	unused_0;
+};
+
+/* hwrm_dbg_useq_run_output (size:256b/32B) */
+struct hwrm_dbg_useq_run_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_RUN_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_RUN_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_RUN_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_RUN_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+	__le32	host_dest_filled_len;
+	__le32	valid;
+};
+
+/* hwrm_dbg_useq_delivery_req_input (size:896b/112B) */
+struct hwrm_dbg_useq_delivery_req_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	host_dest_addrs[8];
+	__le32	host_dest_len[8];
+};
+
+/* hwrm_dbg_useq_delivery_req_output (size:512b/64B) */
+struct hwrm_dbg_useq_delivery_req_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	nz_fw_timestamp;
+	__le16	last_usid;
+	__le16	num_useq_allocd;
+	__le32	useq_resp_flags;
+	#define DBG_USEQ_DELIVERY_REQ_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_AVAIL    0x1UL
+	#define DBG_USEQ_DELIVERY_REQ_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW 0x2UL
+	#define DBG_USEQ_DELIVERY_REQ_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_LAST    DBG_USEQ_DELIVERY_REQ_RESP_HWRM_DBG_USEQ_RESP_HDR_USEQ_RESP_FLAGS_OVERFLOW
+	u8	full_cnt;
+	u8	useq_resp_unused_0[3];
+	__le32	host_dest_filled_len[8];
+	__le32	unused_0;
+	__le32	valid;
+};
+
+/* hwrm_nvm_raw_write_blk_input (size:256b/32B) */
+struct hwrm_nvm_raw_write_blk_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	host_src_addr;
+	__le32	dest_addr;
+	__le32	len;
+};
+
+/* hwrm_nvm_raw_write_blk_output (size:128b/16B) */
+struct hwrm_nvm_raw_write_blk_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
 	u8	valid;
 };
 
@@ -8087,6 +18868,28 @@ struct hwrm_nvm_read_input {
 
 /* hwrm_nvm_read_output (size:128b/16B) */
 struct hwrm_nvm_read_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_nvm_raw_dump_input (size:256b/32B) */
+struct hwrm_nvm_raw_dump_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	host_dest_addr;
+	__le32	offset;
+	__le32	len;
+};
+
+/* hwrm_nvm_raw_dump_output (size:128b/16B) */
+struct hwrm_nvm_raw_dump_output {
 	__le16	error_code;
 	__le16	req_type;
 	__le16	seq_id;
@@ -8136,7 +18939,7 @@ struct hwrm_nvm_get_dir_info_output {
 	u8	valid;
 };
 
-/* hwrm_nvm_write_input (size:384b/48B) */
+/* hwrm_nvm_write_input (size:448b/56B) */
 struct hwrm_nvm_write_input {
 	__le16	req_type;
 	__le16	cmpl_ring;
@@ -8152,7 +18955,11 @@ struct hwrm_nvm_write_input {
 	__le16	option;
 	__le16	flags;
 	#define NVM_WRITE_REQ_FLAGS_KEEP_ORIG_ACTIVE_IMG     0x1UL
+	#define NVM_WRITE_REQ_FLAGS_BATCH_MODE               0x2UL
+	#define NVM_WRITE_REQ_FLAGS_BATCH_LAST               0x4UL
 	__le32	dir_item_length;
+	__le32	offset;
+	__le32	len;
 	__le32	unused_0;
 };
 
@@ -8273,7 +19080,7 @@ struct hwrm_nvm_get_dev_info_input {
 	__le64	resp_addr;
 };
 
-/* hwrm_nvm_get_dev_info_output (size:640b/80B) */
+/* hwrm_nvm_get_dev_info_output (size:704b/88B) */
 struct hwrm_nvm_get_dev_info_output {
 	__le16	error_code;
 	__le16	req_type;
@@ -8303,6 +19110,10 @@ struct hwrm_nvm_get_dev_info_output {
 	__le16	roce_fw_minor;
 	__le16	roce_fw_build;
 	__le16	roce_fw_patch;
+	__le16	netctrl_fw_major;
+	__le16	netctrl_fw_minor;
+	__le16	netctrl_fw_build;
+	__le16	netctrl_fw_patch;
 	u8	unused_0[7];
 	u8	valid;
 };
@@ -8383,8 +19194,35 @@ struct hwrm_nvm_install_update_output {
 	__le16	resp_len;
 	__le64	installed_items;
 	u8	result;
-	#define NVM_INSTALL_UPDATE_RESP_RESULT_SUCCESS 0x0UL
-	#define NVM_INSTALL_UPDATE_RESP_RESULT_LAST   NVM_INSTALL_UPDATE_RESP_RESULT_SUCCESS
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_SUCCESS                      0x0UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_FAILURE                      0xffUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_MALLOC_FAILURE               0xfdUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_INDEX_PARAMETER      0xfbUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_TYPE_PARAMETER       0xf3UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_PREREQUISITE         0xf2UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_FILE_HEADER          0xecUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_SIGNATURE            0xebUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_PROP_STREAM          0xeaUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_PROP_LENGTH          0xe9UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_MANIFEST             0xe8UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_TRAILER              0xe7UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_CHECKSUM             0xe6UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_ITEM_CHECKSUM        0xe5UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_DATA_LENGTH          0xe4UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INVALID_DIRECTIVE            0xe1UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_UNSUPPORTED_CHIP_REV         0xceUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_UNSUPPORTED_DEVICE_ID        0xcdUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_UNSUPPORTED_SUBSYS_VENDOR    0xccUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_UNSUPPORTED_SUBSYS_ID        0xcbUL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_UNSUPPORTED_PLATFORM         0xc5UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_DUPLICATE_ITEM               0xc4UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_ZERO_LENGTH_ITEM             0xc3UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INSTALL_CHECKSUM_ERROR       0xb9UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INSTALL_DATA_ERROR           0xb8UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_INSTALL_AUTHENTICATION_ERROR 0xb7UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_ITEM_NOT_FOUND               0xb0UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_ITEM_LOCKED                  0xa7UL
+	#define NVM_INSTALL_UPDATE_RESP_RESULT_LAST                        NVM_INSTALL_UPDATE_RESP_RESULT_ITEM_LOCKED
 	u8	problem_item;
 	#define NVM_INSTALL_UPDATE_RESP_PROBLEM_ITEM_NONE    0x0UL
 	#define NVM_INSTALL_UPDATE_RESP_PROBLEM_ITEM_PACKAGE 0xffUL
@@ -8401,10 +19239,40 @@ struct hwrm_nvm_install_update_output {
 /* hwrm_nvm_install_update_cmd_err (size:64b/8B) */
 struct hwrm_nvm_install_update_cmd_err {
 	u8	code;
-	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_UNKNOWN  0x0UL
-	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_FRAG_ERR 0x1UL
-	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_NO_SPACE 0x2UL
-	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_LAST    NVM_INSTALL_UPDATE_CMD_ERR_CODE_NO_SPACE
+	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_UNKNOWN            0x0UL
+	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_FRAG_ERR           0x1UL
+	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_NO_SPACE           0x2UL
+	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_ANTI_ROLLBACK      0x3UL
+	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_NO_VOLTREG_SUPPORT 0x4UL
+	#define NVM_INSTALL_UPDATE_CMD_ERR_CODE_LAST              NVM_INSTALL_UPDATE_CMD_ERR_CODE_NO_VOLTREG_SUPPORT
+	u8	unused_0[7];
+};
+
+/* hwrm_nvm_flush_input (size:128b/16B) */
+struct hwrm_nvm_flush_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_nvm_flush_output (size:128b/16B) */
+struct hwrm_nvm_flush_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_nvm_flush_cmd_err (size:64b/8B) */
+struct hwrm_nvm_flush_cmd_err {
+	u8	code;
+	#define NVM_FLUSH_CMD_ERR_CODE_UNKNOWN 0x0UL
+	#define NVM_FLUSH_CMD_ERR_CODE_FAIL    0x1UL
+	#define NVM_FLUSH_CMD_ERR_CODE_LAST   NVM_FLUSH_CMD_ERR_CODE_FAIL
 	u8	unused_0[7];
 };
 
@@ -8508,6 +19376,195 @@ struct hwrm_nvm_set_variable_cmd_err {
 	#define NVM_SET_VARIABLE_CMD_ERR_CODE_CORRUPT_VAR   0x2UL
 	#define NVM_SET_VARIABLE_CMD_ERR_CODE_LAST         NVM_SET_VARIABLE_CMD_ERR_CODE_CORRUPT_VAR
 	u8	unused_0[7];
+};
+
+/* hwrm_nvm_validate_option_input (size:320b/40B) */
+struct hwrm_nvm_validate_option_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	src_data_addr;
+	__le16	data_len;
+	__le16	option_num;
+	#define NVM_VALIDATE_OPTION_REQ_OPTION_NUM_RSVD_0    0x0UL
+	#define NVM_VALIDATE_OPTION_REQ_OPTION_NUM_RSVD_FFFF 0xffffUL
+	#define NVM_VALIDATE_OPTION_REQ_OPTION_NUM_LAST     NVM_VALIDATE_OPTION_REQ_OPTION_NUM_RSVD_FFFF
+	__le16	dimensions;
+	__le16	index_0;
+	__le16	index_1;
+	__le16	index_2;
+	__le16	index_3;
+	u8	unused_0[2];
+};
+
+/* hwrm_nvm_validate_option_output (size:128b/16B) */
+struct hwrm_nvm_validate_option_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	result;
+	#define NVM_VALIDATE_OPTION_RESP_RESULT_NOT_MATCH 0x0UL
+	#define NVM_VALIDATE_OPTION_RESP_RESULT_MATCH     0x1UL
+	#define NVM_VALIDATE_OPTION_RESP_RESULT_LAST     NVM_VALIDATE_OPTION_RESP_RESULT_MATCH
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_nvm_validate_option_cmd_err (size:64b/8B) */
+struct hwrm_nvm_validate_option_cmd_err {
+	u8	code;
+	#define NVM_VALIDATE_OPTION_CMD_ERR_CODE_UNKNOWN 0x0UL
+	#define NVM_VALIDATE_OPTION_CMD_ERR_CODE_LAST   NVM_VALIDATE_OPTION_CMD_ERR_CODE_UNKNOWN
+	u8	unused_0[7];
+};
+
+/* hwrm_nvm_factory_defaults_input (size:192b/24B) */
+struct hwrm_nvm_factory_defaults_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	mode;
+	#define NVM_FACTORY_DEFAULTS_REQ_MODE_RESTORE 0x0UL
+	#define NVM_FACTORY_DEFAULTS_REQ_MODE_CREATE  0x1UL
+	#define NVM_FACTORY_DEFAULTS_REQ_MODE_LAST   NVM_FACTORY_DEFAULTS_REQ_MODE_CREATE
+	u8	unused_0[1];
+	__le16	selection;
+	#define NVM_FACTORY_DEFAULTS_REQ_SELECTION_CFG_OPTION     0x1UL
+	#define NVM_FACTORY_DEFAULTS_REQ_SELECTION_CRASHDUMP      0x2UL
+	u8	unused_1[4];
+};
+
+/* hwrm_nvm_factory_defaults_output (size:128b/16B) */
+struct hwrm_nvm_factory_defaults_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	result;
+	#define NVM_FACTORY_DEFAULTS_RESP_RESULT_CREATE_OK      0x0UL
+	#define NVM_FACTORY_DEFAULTS_RESP_RESULT_RESTORE_OK     0x1UL
+	#define NVM_FACTORY_DEFAULTS_RESP_RESULT_CREATE_ALREADY 0x2UL
+	#define NVM_FACTORY_DEFAULTS_RESP_RESULT_LAST          NVM_FACTORY_DEFAULTS_RESP_RESULT_CREATE_ALREADY
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_nvm_factory_defaults_cmd_err (size:64b/8B) */
+struct hwrm_nvm_factory_defaults_cmd_err {
+	u8	code;
+	#define NVM_FACTORY_DEFAULTS_CMD_ERR_CODE_UNKNOWN      0x0UL
+	#define NVM_FACTORY_DEFAULTS_CMD_ERR_CODE_NO_VALID_CFG 0x1UL
+	#define NVM_FACTORY_DEFAULTS_CMD_ERR_CODE_NO_SAVED_CFG 0x2UL
+	#define NVM_FACTORY_DEFAULTS_CMD_ERR_CODE_LAST        NVM_FACTORY_DEFAULTS_CMD_ERR_CODE_NO_SAVED_CFG
+	u8	unused_0[7];
+};
+
+/* hwrm_nvm_req_arbitration_input (size:192b/24B) */
+struct hwrm_nvm_req_arbitration_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	type;
+	#define NVM_REQ_ARBITRATION_REQ_TYPE_STATUS  0x0UL
+	#define NVM_REQ_ARBITRATION_REQ_TYPE_ACQUIRE 0x1UL
+	#define NVM_REQ_ARBITRATION_REQ_TYPE_RELEASE 0x2UL
+	#define NVM_REQ_ARBITRATION_REQ_TYPE_LAST   NVM_REQ_ARBITRATION_REQ_TYPE_RELEASE
+	u8	unused_0[7];
+};
+
+/* hwrm_nvm_req_arbitration_output (size:128b/16B) */
+struct hwrm_nvm_req_arbitration_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	acquired;
+	u8	unused_0[6];
+	u8	valid;
+};
+
+/* hwrm_nvm_defrag_input (size:192b/24B) */
+struct hwrm_nvm_defrag_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	flags;
+	#define NVM_DEFRAG_REQ_FLAGS_DEFRAG     0x1UL
+	u8	unused_0[4];
+};
+
+/* hwrm_nvm_defrag_output (size:128b/16B) */
+struct hwrm_nvm_defrag_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_nvm_defrag_cmd_err (size:64b/8B) */
+struct hwrm_nvm_defrag_cmd_err {
+	u8	code;
+	#define NVM_DEFRAG_CMD_ERR_CODE_UNKNOWN 0x0UL
+	#define NVM_DEFRAG_CMD_ERR_CODE_FAIL    0x1UL
+	#define NVM_DEFRAG_CMD_ERR_CODE_LAST   NVM_DEFRAG_CMD_ERR_CODE_FAIL
+	u8	unused_0[7];
+};
+
+/* hwrm_nvm_get_vpd_field_info_input (size:192b/24B) */
+struct hwrm_nvm_get_vpd_field_info_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	tag_id[2];
+	u8	unused_0[6];
+};
+
+/* hwrm_nvm_get_vpd_field_info_output (size:2176b/272B) */
+struct hwrm_nvm_get_vpd_field_info_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	data[256];
+	__le16	data_len;
+	u8	unused_0[5];
+	u8	valid;
+};
+
+/* hwrm_nvm_set_vpd_field_info_input (size:256b/32B) */
+struct hwrm_nvm_set_vpd_field_info_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	host_src_addr;
+	u8	tag_id[2];
+	__le16	data_len;
+	u8	unused_0[4];
+};
+
+/* hwrm_nvm_set_vpd_field_info_output (size:128b/16B) */
+struct hwrm_nvm_set_vpd_field_info_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
 };
 
 /* hwrm_selftest_qlist_input (size:128b/16B) */
@@ -8622,6 +19679,476 @@ struct hwrm_selftest_irq_output {
 	u8	valid;
 };
 
+/* hwrm_selftest_retrieve_serdes_data_input (size:320b/40B) */
+struct hwrm_selftest_retrieve_serdes_data_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le64	resp_data_addr;
+	__le32	resp_data_offset;
+	__le16	data_len;
+	u8	flags;
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_FLAGS_UNUSED_TEST_MASK         0x7UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_FLAGS_UNUSED_TEST_SFT          0
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_FLAGS_EYE_PROJECTION           0x8UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_FLAGS_PCIE_SERDES_TEST         0x10UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_FLAGS_ETHERNET_SERDES_TEST     0x20UL
+	u8	options;
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_PCIE_LANE_NO_MASK     0xfUL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_PCIE_LANE_NO_SFT      0
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_DIRECTION             0x10UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_DIRECTION_HORIZONTAL    (0x0UL << 4)
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_DIRECTION_VERTICAL      (0x1UL << 4)
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_DIRECTION_LAST         SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_DIRECTION_VERTICAL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_PROJ_TYPE             0x20UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_PROJ_TYPE_LEFT_TOP      (0x0UL << 5)
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_PROJ_TYPE_RIGHT_BOTTOM  (0x1UL << 5)
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_PROJ_TYPE_LAST         SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_PROJ_TYPE_RIGHT_BOTTOM
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_RSVD_MASK             0xc0UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_OPTIONS_RSVD_SFT              6
+	u8	targetBER;
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_TARGETBER_BER_1E8  0x0UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_TARGETBER_BER_1E9  0x1UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_TARGETBER_BER_1E10 0x2UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_TARGETBER_BER_1E11 0x3UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_TARGETBER_BER_1E12 0x4UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_TARGETBER_LAST    SELFTEST_RETRIEVE_SERDES_DATA_REQ_TARGETBER_BER_1E12
+	u8	action;
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_ACTION_SYNCHRONOUS 0x0UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_ACTION_START       0x1UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_ACTION_PROGRESS    0x2UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_ACTION_STOP        0x3UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_REQ_ACTION_LAST       SELFTEST_RETRIEVE_SERDES_DATA_REQ_ACTION_STOP
+	u8	unused[6];
+};
+
+/* hwrm_selftest_retrieve_serdes_data_output (size:192b/24B) */
+struct hwrm_selftest_retrieve_serdes_data_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	total_data_len;
+	__le16	copied_data_len;
+	__le16	progress_percent;
+	__le16	timeout;
+	u8	flags;
+	#define SELFTEST_RETRIEVE_SERDES_DATA_RESP_FLAGS_BIT_COUNT_TYPE                0x1UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_RESP_FLAGS_BIT_COUNT_TYPE_BIT_COUNT_TOTAL  0x0UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_RESP_FLAGS_BIT_COUNT_TYPE_BIT_COUNT_POW2   0x1UL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_RESP_FLAGS_BIT_COUNT_TYPE_LAST            SELFTEST_RETRIEVE_SERDES_DATA_RESP_FLAGS_BIT_COUNT_TYPE_BIT_COUNT_POW2
+	#define SELFTEST_RETRIEVE_SERDES_DATA_RESP_FLAGS_RSVD_MASK                     0xfeUL
+	#define SELFTEST_RETRIEVE_SERDES_DATA_RESP_FLAGS_RSVD_SFT                      1
+	u8	unused_0;
+	__le16	hdr_size;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_oem_cmd_input (size:1024b/128B) */
+struct hwrm_oem_cmd_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	oem_id;
+	u8	naming_authority;
+	#define OEM_CMD_REQ_NAMING_AUTHORITY_INVALID 0x0UL
+	#define OEM_CMD_REQ_NAMING_AUTHORITY_PCI_SIG 0x1UL
+	#define OEM_CMD_REQ_NAMING_AUTHORITY_LAST   OEM_CMD_REQ_NAMING_AUTHORITY_PCI_SIG
+	u8	message_family;
+	#define OEM_CMD_REQ_MESSAGE_FAMILY_INVALID 0x0UL
+	#define OEM_CMD_REQ_MESSAGE_FAMILY_TRUFLOW 0x1UL
+	#define OEM_CMD_REQ_MESSAGE_FAMILY_ROCE    0x2UL
+	#define OEM_CMD_REQ_MESSAGE_FAMILY_LAST   OEM_CMD_REQ_MESSAGE_FAMILY_ROCE
+	__le16	unused;
+	__le32	oem_data[26];
+};
+
+/* hwrm_oem_cmd_output (size:768b/96B) */
+struct hwrm_oem_cmd_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	oem_id;
+	u8	naming_authority;
+	u8	message_family;
+	__le16	unused;
+	__le32	oem_data[18];
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_sv_input (size:1152b/144B) */
+struct hwrm_sv_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	opaque[32];
+};
+
+/* hwrm_sv_output (size:1088b/136B) */
+struct hwrm_sv_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	opaque[32];
+};
+
+/* hwrm_udcc_qcaps_input (size:128b/16B) */
+struct hwrm_udcc_qcaps_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_udcc_qcaps_output (size:192b/24B) */
+struct hwrm_udcc_qcaps_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le16	min_sessions;
+	__le16	max_sessions;
+	u8	session_type;
+	#define UDCC_QCAPS_RESP_SESSION_TYPE_PER_DESTINATION 0x0UL
+	#define UDCC_QCAPS_RESP_SESSION_TYPE_PER_QP          0x1UL
+	#define UDCC_QCAPS_RESP_SESSION_TYPE_LAST           UDCC_QCAPS_RESP_SESSION_TYPE_PER_QP
+	u8	unused_0[3];
+	__le16	max_comp_cfg_xfer;
+	__le16	max_comp_data_xfer;
+	u8	unused_1[3];
+	u8	valid;
+};
+
+/* hwrm_udcc_cfg_input (size:192b/24B) */
+struct hwrm_udcc_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define UDCC_CFG_REQ_ENABLES_UDCC_MODE     0x1UL
+	u8	udcc_mode;
+	#define UDCC_CFG_REQ_UDCC_MODE_DISABLED 0x0UL
+	#define UDCC_CFG_REQ_UDCC_MODE_ENABLED  0x1UL
+	#define UDCC_CFG_REQ_UDCC_MODE_LAST    UDCC_CFG_REQ_UDCC_MODE_ENABLED
+	u8	unused_1[3];
+};
+
+/* hwrm_udcc_cfg_output (size:128b/16B) */
+struct hwrm_udcc_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_udcc_qcfg_input (size:128b/16B) */
+struct hwrm_udcc_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+};
+
+/* hwrm_udcc_qcfg_output (size:128b/16B) */
+struct hwrm_udcc_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	udcc_mode;
+	u8	unused_1[6];
+	u8	valid;
+};
+
+/* hwrm_udcc_session_cfg_input (size:384b/48B) */
+struct hwrm_udcc_session_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le32	enables;
+	#define UDCC_SESSION_CFG_REQ_ENABLES_SESSION_STATE       0x1UL
+	#define UDCC_SESSION_CFG_REQ_ENABLES_DEST_MAC            0x2UL
+	#define UDCC_SESSION_CFG_REQ_ENABLES_SRC_MAC             0x4UL
+	#define UDCC_SESSION_CFG_REQ_ENABLES_TX_STATS_RECORD     0x8UL
+	#define UDCC_SESSION_CFG_REQ_ENABLES_RX_STATS_RECORD     0x10UL
+	u8	session_state;
+	#define UDCC_SESSION_CFG_REQ_SESSION_STATE_ENABLED     0x1UL
+	u8	unused_1;
+	__le16	session_id;
+	u8	dest_mac[6];
+	__le16	unused_2;
+	u8	src_mac[6];
+	__le16	unused_3;
+	__le32	tx_stats_record;
+	__le32	rx_stats_record;
+};
+
+/* hwrm_udcc_session_cfg_output (size:128b/16B) */
+struct hwrm_udcc_session_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_udcc_session_qcfg_input (size:192b/24B) */
+struct hwrm_udcc_session_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	session_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_udcc_session_qcfg_output (size:512b/64B) */
+struct hwrm_udcc_session_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	session_state;
+	#define UDCC_SESSION_QCFG_RESP_SESSION_STATE_ENABLED     0x1UL
+	u8	unused_0;
+	u8	dest_mac[6];
+	__be32	dest_ip[4];
+	u8	unused_1[2];
+	u8	src_mac[6];
+	__le32	src_qp_num;
+	__le32	dest_qp_num;
+	__le32	tx_stats_record;
+	__le32	rx_stats_record;
+	u8	unused_2[7];
+	u8	valid;
+};
+
+/* hwrm_udcc_session_query_input (size:192b/24B) */
+struct hwrm_udcc_session_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	__le16	session_id;
+	u8	unused_0[6];
+};
+
+/* hwrm_udcc_session_query_output (size:576b/72B) */
+struct hwrm_udcc_session_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	min_rtt_ns;
+	__le32	max_rtt_ns;
+	__le32	cur_rate_mbps;
+	__le32	tx_event_count;
+	__le32	cnp_rx_event_count;
+	__le32	rtt_req_count;
+	__le32	rtt_resp_count;
+	__le32	tx_bytes_count;
+	__le32	init_probes_sent;
+	__le32	term_probes_recv;
+	__le32	cnp_probes_recv;
+	__le32	rto_event_recv;
+	__le32	seq_err_nak_recv;
+	__le32	qp_count;
+	u8	unused_1[7];
+	u8	valid;
+};
+
+/* hwrm_udcc_comp_cfg_input (size:576b/72B) */
+struct hwrm_udcc_comp_cfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	arg_buf[40];
+	__le32	arg_len;
+	__le32	cfg_len;
+	__le32	cfg_host_addr[2];
+};
+
+/* hwrm_udcc_comp_cfg_output (size:128b/16B) */
+struct hwrm_udcc_comp_cfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	u8	unused_0[7];
+	u8	valid;
+};
+
+/* hwrm_udcc_comp_qcfg_input (size:576b/72B) */
+struct hwrm_udcc_comp_qcfg_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	arg_buf[40];
+	__le32	arg_len;
+	__le32	cfg_host_buf_size;
+	__le32	cfg_host_addr[2];
+};
+
+/* hwrm_udcc_comp_qcfg_output (size:128b/16B) */
+struct hwrm_udcc_comp_qcfg_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	cfg_len;
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* hwrm_udcc_comp_query_input (size:576b/72B) */
+struct hwrm_udcc_comp_query_input {
+	__le16	req_type;
+	__le16	cmpl_ring;
+	__le16	seq_id;
+	__le16	target_id;
+	__le64	resp_addr;
+	u8	arg_buf[40];
+	__le32	arg_len;
+	__le32	data_host_buf_size;
+	__le32	data_host_addr[2];
+};
+
+/* hwrm_udcc_comp_query_output (size:128b/16B) */
+struct hwrm_udcc_comp_query_output {
+	__le16	error_code;
+	__le16	req_type;
+	__le16	seq_id;
+	__le16	resp_len;
+	__le32	data_len;
+	u8	unused_0[3];
+	u8	valid;
+};
+
+/* dbc_dbc (size:64b/8B) */
+struct dbc_dbc {
+	u32	index;
+	#define DBC_DBC_INDEX_MASK 0xffffffUL
+	#define DBC_DBC_INDEX_SFT  0
+	#define DBC_DBC_EPOCH      0x1000000UL
+	#define DBC_DBC_TOGGLE_MASK 0x6000000UL
+	#define DBC_DBC_TOGGLE_SFT 25
+	u32	type_path_xid;
+	#define DBC_DBC_XID_MASK          0xfffffUL
+	#define DBC_DBC_XID_SFT           0
+	#define DBC_DBC_PATH_MASK         0x3000000UL
+	#define DBC_DBC_PATH_SFT          24
+	#define DBC_DBC_PATH_ROCE           (0x0UL << 24)
+	#define DBC_DBC_PATH_L2             (0x1UL << 24)
+	#define DBC_DBC_PATH_ENGINE         (0x2UL << 24)
+	#define DBC_DBC_PATH_LAST          DBC_DBC_PATH_ENGINE
+	#define DBC_DBC_VALID             0x4000000UL
+	#define DBC_DBC_DEBUG_TRACE       0x8000000UL
+	#define DBC_DBC_TYPE_MASK         0xf0000000UL
+	#define DBC_DBC_TYPE_SFT          28
+	#define DBC_DBC_TYPE_SQ             (0x0UL << 28)
+	#define DBC_DBC_TYPE_RQ             (0x1UL << 28)
+	#define DBC_DBC_TYPE_SRQ            (0x2UL << 28)
+	#define DBC_DBC_TYPE_SRQ_ARM        (0x3UL << 28)
+	#define DBC_DBC_TYPE_CQ             (0x4UL << 28)
+	#define DBC_DBC_TYPE_CQ_ARMSE       (0x5UL << 28)
+	#define DBC_DBC_TYPE_CQ_ARMALL      (0x6UL << 28)
+	#define DBC_DBC_TYPE_CQ_ARMENA      (0x7UL << 28)
+	#define DBC_DBC_TYPE_SRQ_ARMENA     (0x8UL << 28)
+	#define DBC_DBC_TYPE_CQ_CUTOFF_ACK  (0x9UL << 28)
+	#define DBC_DBC_TYPE_NQ             (0xaUL << 28)
+	#define DBC_DBC_TYPE_NQ_ARM         (0xbUL << 28)
+	#define DBC_DBC_TYPE_NQ_MASK        (0xeUL << 28)
+	#define DBC_DBC_TYPE_NULL           (0xfUL << 28)
+	#define DBC_DBC_TYPE_LAST          DBC_DBC_TYPE_NULL
+};
+
+/* dbc_dbc32 (size:32b/4B) */
+struct dbc_dbc32 {
+	u32	type_abs_incr_xid;
+	#define DBC_DBC32_XID_MASK 0xfffffUL
+	#define DBC_DBC32_XID_SFT  0
+	#define DBC_DBC32_PATH_MASK 0xc00000UL
+	#define DBC_DBC32_PATH_SFT 22
+	#define DBC_DBC32_PATH_ROCE  (0x0UL << 22)
+	#define DBC_DBC32_PATH_L2    (0x1UL << 22)
+	#define DBC_DBC32_PATH_LAST DBC_DBC32_PATH_L2
+	#define DBC_DBC32_INCR_MASK 0xf000000UL
+	#define DBC_DBC32_INCR_SFT 24
+	#define DBC_DBC32_ABS      0x10000000UL
+	#define DBC_DBC32_TYPE_MASK 0xe0000000UL
+	#define DBC_DBC32_TYPE_SFT 29
+	#define DBC_DBC32_TYPE_SQ    (0x0UL << 29)
+	#define DBC_DBC32_TYPE_LAST DBC_DBC32_TYPE_SQ
+};
+
+/* db_push_start (size:64b/8B) */
+struct db_push_start {
+	u64	db;
+	#define DB_PUSH_START_DB_INDEX_MASK     0xffffffUL
+	#define DB_PUSH_START_DB_INDEX_SFT      0
+	#define DB_PUSH_START_DB_PI_LO_MASK     0xff000000UL
+	#define DB_PUSH_START_DB_PI_LO_SFT      24
+	#define DB_PUSH_START_DB_XID_MASK       0xfffff00000000ULL
+	#define DB_PUSH_START_DB_XID_SFT        32
+	#define DB_PUSH_START_DB_PI_HI_MASK     0xf0000000000000ULL
+	#define DB_PUSH_START_DB_PI_HI_SFT      52
+	#define DB_PUSH_START_DB_TYPE_MASK      0xf000000000000000ULL
+	#define DB_PUSH_START_DB_TYPE_SFT       60
+	#define DB_PUSH_START_DB_TYPE_PUSH_START  (0xcULL << 60)
+	#define DB_PUSH_START_DB_TYPE_PUSH_END    (0xdULL << 60)
+	#define DB_PUSH_START_DB_TYPE_LAST       DB_PUSH_START_DB_TYPE_PUSH_END
+};
+
+/* db_push_end (size:64b/8B) */
+struct db_push_end {
+	u64	db;
+	#define DB_PUSH_END_DB_INDEX_MASK      0xffffffUL
+	#define DB_PUSH_END_DB_INDEX_SFT       0
+	#define DB_PUSH_END_DB_PI_LO_MASK      0xff000000UL
+	#define DB_PUSH_END_DB_PI_LO_SFT       24
+	#define DB_PUSH_END_DB_XID_MASK        0xfffff00000000ULL
+	#define DB_PUSH_END_DB_XID_SFT         32
+	#define DB_PUSH_END_DB_PI_HI_MASK      0xf0000000000000ULL
+	#define DB_PUSH_END_DB_PI_HI_SFT       52
+	#define DB_PUSH_END_DB_PATH_MASK       0x300000000000000ULL
+	#define DB_PUSH_END_DB_PATH_SFT        56
+	#define DB_PUSH_END_DB_PATH_ROCE         (0x0ULL << 56)
+	#define DB_PUSH_END_DB_PATH_L2           (0x1ULL << 56)
+	#define DB_PUSH_END_DB_PATH_ENGINE       (0x2ULL << 56)
+	#define DB_PUSH_END_DB_PATH_LAST        DB_PUSH_END_DB_PATH_ENGINE
+	#define DB_PUSH_END_DB_DEBUG_TRACE     0x800000000000000ULL
+	#define DB_PUSH_END_DB_TYPE_MASK       0xf000000000000000ULL
+	#define DB_PUSH_END_DB_TYPE_SFT        60
+	#define DB_PUSH_END_DB_TYPE_PUSH_START   (0xcULL << 60)
+	#define DB_PUSH_END_DB_TYPE_PUSH_END     (0xdULL << 60)
+	#define DB_PUSH_END_DB_TYPE_LAST        DB_PUSH_END_DB_TYPE_PUSH_END
+};
+
 /* db_push_info (size:64b/8B) */
 struct db_push_info {
 	u32	push_size_push_index;
@@ -8630,6 +20157,134 @@ struct db_push_info {
 	#define DB_PUSH_INFO_PUSH_SIZE_MASK 0x1f000000UL
 	#define DB_PUSH_INFO_PUSH_SIZE_SFT  24
 	u32	reserved32;
+};
+
+/* dbc_absolute_db_32 (size:32b/4B) */
+struct dbc_absolute_db_32 {
+	u32	index;
+	#define DBC_ABSOLUTE_DB_32_INDEX_MASK     0xffffUL
+	#define DBC_ABSOLUTE_DB_32_INDEX_SFT      0
+	#define DBC_ABSOLUTE_DB_32_EPOCH          0x10000UL
+	#define DBC_ABSOLUTE_DB_32_TOGGLE_MASK    0x60000UL
+	#define DBC_ABSOLUTE_DB_32_TOGGLE_SFT     17
+	#define DBC_ABSOLUTE_DB_32_MXID_MASK      0x1f80000UL
+	#define DBC_ABSOLUTE_DB_32_MXID_SFT       19
+	#define DBC_ABSOLUTE_DB_32_PATH_MASK      0x6000000UL
+	#define DBC_ABSOLUTE_DB_32_PATH_SFT       25
+	#define DBC_ABSOLUTE_DB_32_PATH_ROCE        (0x0UL << 25)
+	#define DBC_ABSOLUTE_DB_32_PATH_L2          (0x1UL << 25)
+	#define DBC_ABSOLUTE_DB_32_PATH_LAST       DBC_ABSOLUTE_DB_32_PATH_L2
+	#define DBC_ABSOLUTE_DB_32_VALID          0x8000000UL
+	#define DBC_ABSOLUTE_DB_32_TYPE_MASK      0xf0000000UL
+	#define DBC_ABSOLUTE_DB_32_TYPE_SFT       28
+	#define DBC_ABSOLUTE_DB_32_TYPE_SQ          (0x0UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_RQ          (0x1UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_SRQ         (0x2UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_SRQ_ARM     (0x3UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_CQ          (0x4UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_CQ_ARMSE    (0x5UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_CQ_ARMALL   (0x6UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_CQ_ARMENA   (0x7UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_SRQ_ARMENA  (0x8UL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_NQ          (0xaUL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_NQ_ARM      (0xbUL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_NQ_MASK     (0xeUL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_NULL        (0xfUL << 28)
+	#define DBC_ABSOLUTE_DB_32_TYPE_LAST       DBC_ABSOLUTE_DB_32_TYPE_NULL
+};
+
+/* dbc_relative_db_32 (size:32b/4B) */
+struct dbc_relative_db_32 {
+	u32	xid;
+	#define DBC_RELATIVE_DB_32_XID_MASK      0xfffffUL
+	#define DBC_RELATIVE_DB_32_XID_SFT       0
+	#define DBC_RELATIVE_DB_32_PATH_MASK     0xc00000UL
+	#define DBC_RELATIVE_DB_32_PATH_SFT      22
+	#define DBC_RELATIVE_DB_32_PATH_ROCE       (0x0UL << 22)
+	#define DBC_RELATIVE_DB_32_PATH_L2         (0x1UL << 22)
+	#define DBC_RELATIVE_DB_32_PATH_LAST      DBC_RELATIVE_DB_32_PATH_L2
+	#define DBC_RELATIVE_DB_32_INCR_MASK     0x1f000000UL
+	#define DBC_RELATIVE_DB_32_INCR_SFT      24
+	#define DBC_RELATIVE_DB_32_TYPE_MASK     0xe0000000UL
+	#define DBC_RELATIVE_DB_32_TYPE_SFT      29
+	#define DBC_RELATIVE_DB_32_TYPE_SQ         (0x0UL << 29)
+	#define DBC_RELATIVE_DB_32_TYPE_SRQ        (0x1UL << 29)
+	#define DBC_RELATIVE_DB_32_TYPE_CQ         (0x2UL << 29)
+	#define DBC_RELATIVE_DB_32_TYPE_CQ_ARMALL  (0x3UL << 29)
+	#define DBC_RELATIVE_DB_32_TYPE_NQ         (0x4UL << 29)
+	#define DBC_RELATIVE_DB_32_TYPE_NQ_ARM     (0x5UL << 29)
+	#define DBC_RELATIVE_DB_32_TYPE_NQ_MASK    (0x6UL << 29)
+	#define DBC_RELATIVE_DB_32_TYPE_LAST      DBC_RELATIVE_DB_32_TYPE_NQ_MASK
+};
+
+/* dbc_drk (size:128b/16B) */
+struct dbc_drk {
+	u32	db_format_linked_last_valid;
+	#define DBC_DRK_VALID         0x1UL
+	#define DBC_DRK_LAST          0x2UL
+	#define DBC_DRK_LINKED        0x4UL
+	#define DBC_DRK_DB_FORMAT     0x8UL
+	#define DBC_DRK_DB_FORMAT_B64   (0x0UL << 3)
+	#define DBC_DRK_DB_FORMAT_B32A  (0x1UL << 3)
+	#define DBC_DRK_DB_FORMAT_LAST DBC_DRK_DB_FORMAT_B32A
+	u32	pi;
+	#define DBC_DRK_PI_MASK 0xffffUL
+	#define DBC_DRK_PI_SFT 0
+	u64	memptr;
+};
+
+/* dbc_dbc_v3 (size:64b/8B) */
+struct dbc_dbc_v3 {
+	u32	index;
+	#define DBC_DBC_V3_INDEX_MASK 0xffffffUL
+	#define DBC_DBC_V3_INDEX_SFT  0
+	#define DBC_DBC_V3_EPOCH      0x1000000UL
+	#define DBC_DBC_V3_TOGGLE_MASK 0x6000000UL
+	#define DBC_DBC_V3_TOGGLE_SFT 25
+	u32	type_path_xid;
+	#define DBC_DBC_V3_XID_MASK          0xfffUL
+	#define DBC_DBC_V3_XID_SFT           0
+	#define DBC_DBC_V3_PATH_MASK         0x3000000UL
+	#define DBC_DBC_V3_PATH_SFT          24
+	#define DBC_DBC_V3_PATH_ROCE           (0x0UL << 24)
+	#define DBC_DBC_V3_PATH_L2             (0x1UL << 24)
+	#define DBC_DBC_V3_PATH_LAST          DBC_DBC_V3_PATH_L2
+	#define DBC_DBC_V3_VALID             0x4000000UL
+	#define DBC_DBC_V3_DEBUG_TRACE       0x8000000UL
+	#define DBC_DBC_V3_TYPE_MASK         0xf0000000UL
+	#define DBC_DBC_V3_TYPE_SFT          28
+	#define DBC_DBC_V3_TYPE_SQ             (0x0UL << 28)
+	#define DBC_DBC_V3_TYPE_RQ             (0x1UL << 28)
+	#define DBC_DBC_V3_TYPE_SRQ            (0x2UL << 28)
+	#define DBC_DBC_V3_TYPE_SRQ_ARM        (0x3UL << 28)
+	#define DBC_DBC_V3_TYPE_CQ             (0x4UL << 28)
+	#define DBC_DBC_V3_TYPE_CQ_ARMSE       (0x5UL << 28)
+	#define DBC_DBC_V3_TYPE_CQ_ARMALL      (0x6UL << 28)
+	#define DBC_DBC_V3_TYPE_CQ_ARMENA      (0x7UL << 28)
+	#define DBC_DBC_V3_TYPE_SRQ_ARMENA     (0x8UL << 28)
+	#define DBC_DBC_V3_TYPE_CQ_CUTOFF_ACK  (0x9UL << 28)
+	#define DBC_DBC_V3_TYPE_NQ             (0xaUL << 28)
+	#define DBC_DBC_V3_TYPE_NQ_ARM         (0xbUL << 28)
+	#define DBC_DBC_V3_TYPE_CQ_REASSIGN    (0xcUL << 28)
+	#define DBC_DBC_V3_TYPE_NQ_MASK        (0xeUL << 28)
+	#define DBC_DBC_V3_TYPE_NULL           (0xfUL << 28)
+	#define DBC_DBC_V3_TYPE_LAST          DBC_DBC_V3_TYPE_NULL
+};
+
+/* dbc_xp (size:512b/64B) */
+struct dbc_xp {
+	u32	reserved;
+	u32	type_xid;
+	#define DBC_XP_XID_MASK        0xfffUL
+	#define DBC_XP_XID_SFT         0
+	#define DBC_XP_DEBUG_TRACE     0x1000000UL
+	#define DBC_XP_TYPE_MASK       0xf0000000UL
+	#define DBC_XP_TYPE_SFT        28
+	#define DBC_XP_TYPE_SQ           (0x0UL << 28)
+	#define DBC_XP_TYPE_RQ           (0x1UL << 28)
+	#define DBC_XP_TYPE_SRQ          (0x2UL << 28)
+	#define DBC_XP_TYPE_LAST        DBC_XP_TYPE_SRQ
+	u32	wqe[14];
 };
 
 /* fw_status_reg (size:32b/4B) */
@@ -8645,6 +20300,8 @@ struct fw_status_reg {
 	#define FW_STATUS_REG_CRASHDUMP_COMPLETE     0x80000UL
 	#define FW_STATUS_REG_SHUTDOWN               0x100000UL
 	#define FW_STATUS_REG_CRASHED_NO_MASTER      0x200000UL
+	#define FW_STATUS_REG_RECOVERING             0x400000UL
+	#define FW_STATUS_REG_MANU_DEBUG_STATUS      0x800000UL
 };
 
 /* hcomm_status (size:64b/8B) */
@@ -8669,7 +20326,6 @@ struct hcomm_status {
 	#define HCOMM_STATUS_TRUE_OFFSET_MASK        0xfffffffcUL
 	#define HCOMM_STATUS_TRUE_OFFSET_SFT         2
 };
-
 #define HCOMM_STATUS_STRUCT_LOC 0x31001F0UL
 
 #endif /* _BNXT_HSI_H_ */
