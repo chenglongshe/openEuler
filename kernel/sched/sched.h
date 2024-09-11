@@ -3284,7 +3284,6 @@ static inline void cpufreq_update_util(struct rq *rq, unsigned int flags) {}
 #endif
 
 #ifdef CONFIG_SMP
-bool update_other_load_avgs(struct rq *rq);
 
 static inline unsigned long capacity_orig_of(int cpu)
 {
