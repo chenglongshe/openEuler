@@ -270,5 +270,7 @@ struct prctl_mm_map {
 #define PR_SET_MEMORY_MERGE		67
 #define PR_GET_MEMORY_MERGE		68
 
+# define PR_SET_VMA             0x53564d41
+# define PR_SET_VMA_ANON_NAME          0
 #define PR_UPDATE_PBHA_BIT0		0x82312f0
 #endif /* _LINUX_PRCTL_H */
