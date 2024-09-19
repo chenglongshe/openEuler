@@ -290,12 +290,20 @@ static struct attribute_group armv8_pmuv3_events_attr_group = {
 	.is_visible = armv8pmu_event_attr_is_visible,
 };
 
-PMU_FORMAT_ATTR(event, "config:0-15");
-PMU_FORMAT_ATTR(long, "config1:0");
+/* User ABI */
+#define ATTR_CFG_FLD_event_CFG         config
+#define ATTR_CFG_FLD_event_LO          0
+#define ATTR_CFG_FLD_event_HI          15
+#define ATTR_CFG_FLD_long_CFG          config1
+#define ATTR_CFG_FLD_long_LO           0
+#define ATTR_CFG_FLD_long_HI           0
+
+GEN_PMU_FORMAT_ATTR(event);
+GEN_PMU_FORMAT_ATTR(long);
 
 static inline bool armv8pmu_event_is_64bit(struct perf_event *event)
 {
-	return event->attr.config1 & 0x1;
+	return ATTR_CFG_GET_FLD(&event->attr, long);
 }
 
 static struct attribute *armv8_pmuv3_format_attrs[] = {
