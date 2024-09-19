@@ -153,9 +153,6 @@ static void hardware_disable_dvmbm(void *data)
 
 bool hisi_dvmbm_supported(void)
 {
-	if (cpu_type != HI_IP09)
-		return false;
-
 	/* Determine whether DVMBM is supported by the hardware */
 	if (!(read_sysreg(aidr_el1) & AIDR_EL1_DVMBM_MASK))
 		return false;
