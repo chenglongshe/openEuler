@@ -79,7 +79,7 @@ void folio_migrate_flags(struct folio *newfolio, struct folio *folio);
 void folio_migrate_copy(struct folio *newfolio, struct folio *folio);
 int folio_migrate_mapping(struct address_space *mapping,
 		struct folio *newfolio, struct folio *folio, int extra_count);
-
+int folio_expected_refs(struct address_space *mapping, struct folio *folio);
 #else
 
 static inline void putback_movable_pages(struct list_head *l) {}
@@ -98,7 +98,10 @@ static inline int migrate_huge_page_move_mapping(struct address_space *mapping,
 {
 	return -ENOSYS;
 }
-
+static inline int folio_expected_refs(struct address_space *mapping, struct folio *folio)
+{
+	return 0;
+}
 #endif /* CONFIG_MIGRATION */
 
 #ifdef CONFIG_COMPACTION
