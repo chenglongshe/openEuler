@@ -79,6 +79,8 @@ void folio_migrate_flags(struct folio *newfolio, struct folio *folio);
 void folio_migrate_copy(struct folio *newfolio, struct folio *folio);
 int folio_migrate_mapping(struct address_space *mapping,
 		struct folio *newfolio, struct folio *folio, int extra_count);
+int folio_migrate_mc_copy(struct address_space *mapping, struct folio *dst,
+			  struct folio *src, enum migrate_mode mode);
 
 #else
 
@@ -95,6 +97,12 @@ static inline bool isolate_movable_page(struct page *page, isolate_mode_t mode)
 
 static inline int migrate_huge_page_move_mapping(struct address_space *mapping,
 				  struct folio *dst, struct folio *src)
+{
+	return -ENOSYS;
+}
+static inline int folio_migrate_mc_copy(struct address_space *mapping,
+					struct folio *dst, struct folio *src,
+					enum migrate_mode mode)
 {
 	return -ENOSYS;
 }

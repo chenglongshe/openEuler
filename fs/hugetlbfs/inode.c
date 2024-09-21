@@ -1146,6 +1146,10 @@ static int hugetlbfs_migrate_folio(struct address_space *mapping,
 {
 	int rc;
 
+	rc = folio_migrate_mc_copy(mapping, dst, src, mode);
+	if (rc != MIGRATEPAGE_SUCCESS)
+		return rc;
+
 	rc = migrate_huge_page_move_mapping(mapping, dst, src);
 	if (rc != MIGRATEPAGE_SUCCESS)
 		return rc;

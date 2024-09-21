@@ -552,16 +552,10 @@ int migrate_huge_page_move_mapping(struct address_space *mapping,
 				   struct folio *dst, struct folio *src)
 {
 	XA_STATE(xas, &mapping->i_pages, folio_index(src));
-	int rc, expected_count = folio_expected_refs(mapping, src);
-
-	if (folio_ref_count(src) != expected_count)
-		return -EAGAIN;
-
-	rc = folio_mc_copy(dst, src);
-	if (unlikely(rc))
-		return rc;
+	int expected_count;
 
 	xas_lock_irq(&xas);
+	expected_count = folio_expected_refs(mapping, src);
 	if (!folio_ref_freeze(src, expected_count)) {
 		xas_unlock_irq(&xas);
 		return -EAGAIN;
@@ -681,6 +675,33 @@ void folio_migrate_copy(struct folio *newfolio, struct folio *folio)
 }
 EXPORT_SYMBOL(folio_migrate_copy);
 
+
+static int __folio_migrate_mc_copy(struct folio *dst, struct folio *src,
+				   enum migrate_mode mode, int expected_count)
+{
+	int rc;
+
+	/* Check whether src does not have extra refs before we do more work */
+	if (folio_ref_count(src) != expected_count)
+		return -EAGAIN;
+
+	if (mode != MIGRATE_SYNC_NO_COPY) {
+		rc = folio_mc_copy(dst, src);
+		if (unlikely(rc))
+			return rc;
+	}
+
+	return MIGRATEPAGE_SUCCESS;
+}
+
+int folio_migrate_mc_copy(struct address_space *mapping, struct folio *dst,
+			  struct folio *src, enum migrate_mode mode)
+{
+	int expected_count = folio_expected_refs(mapping, src);
+
+	return __folio_migrate_mc_copy(dst, src, mode, expected_count);
+}
+
 /************************************************************
  *                    Migration functions
  ***********************************************************/
@@ -691,12 +712,8 @@ static int __migrate_folio(struct address_space *mapping, struct folio *dst,
 {
 	int rc, expected_count = folio_expected_refs(mapping, src);
 
-	/* Check whether src does not have extra refs before we do more work */
-	if (folio_ref_count(src) != expected_count)
-		return -EAGAIN;
-
-	rc = folio_mc_copy(dst, src);
-	if (unlikely(rc))
+	rc = __folio_migrate_mc_copy(dst, src, mode, expected_count);
+	if (rc != MIGRATEPAGE_SUCCESS)
 		return rc;
 
 	rc = __folio_migrate_mapping(mapping, dst, src, expected_count);
