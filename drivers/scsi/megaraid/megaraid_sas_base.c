@@ -4187,6 +4187,30 @@ dcmd_timeout_ocr_possible(struct megasas_instance *instance) {
 		return INITIATE_OCR;
 }
 
+/*
+ * megasas_dcmd_timeout -	Classification processing dcmd timeout.
+ * @instance:				Adapter soft state
+ */
+void megasas_dcmd_timeout(struct megasas_instance *instance, struct megasas_cmd *cmd)
+{
+	switch (dcmd_timeout_ocr_possible(instance)) {
+	case INITIATE_OCR:
+		cmd->flags |= DRV_DCMD_SKIP_REFIRE;
+		mutex_unlock(&instance->reset_mutex);
+		megasas_reset_fusion(instance->host,
+					MFI_IO_TIMEOUT_OCR);
+		mutex_lock(&instance->reset_mutex);
+		break;
+	case KILL_ADAPTER:
+		megaraid_sas_kill_hba(instance);
+		break;
+	case IGNORE_TIMEOUT:
+		dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d\n",
+			__func__, __LINE__);
+		break;
+	}
+}
+
 static void
 megasas_get_pd_info(struct megasas_instance *instance, struct scsi_device *sdev)
 {
@@ -4238,22 +4262,7 @@ megasas_get_pd_info(struct megasas_instance *instance, struct scsi_device *sdev)
 		break;
 
 	case DCMD_TIMEOUT:
-
-		switch (dcmd_timeout_ocr_possible(instance)) {
-		case INITIATE_OCR:
-			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
-			megasas_reset_fusion(instance->host,
-				MFI_IO_TIMEOUT_OCR);
-			break;
-		case KILL_ADAPTER:
-			megaraid_sas_kill_hba(instance);
-			break;
-		case IGNORE_TIMEOUT:
-			dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d\n",
-				__func__, __LINE__);
-			break;
-		}
-
+		megasas_dcmd_timeout(instance, cmd);
 		break;
 	}
 
@@ -4334,29 +4343,7 @@ megasas_get_pd_list(struct megasas_instance *instance)
 			instance->pd_list_not_supported = 1;
 		break;
 	case DCMD_TIMEOUT:
-
-		switch (dcmd_timeout_ocr_possible(instance)) {
-		case INITIATE_OCR:
-			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
-			/*
-			 * DCMD failed from AEN path.
-			 * AEN path already hold reset_mutex to avoid PCI access
-			 * while OCR is in progress.
-			 */
-			mutex_unlock(&instance->reset_mutex);
-			megasas_reset_fusion(instance->host,
-						MFI_IO_TIMEOUT_OCR);
-			mutex_lock(&instance->reset_mutex);
-			break;
-		case KILL_ADAPTER:
-			megaraid_sas_kill_hba(instance);
-			break;
-		case IGNORE_TIMEOUT:
-			dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d \n",
-				__func__, __LINE__);
-			break;
-		}
-
+		megasas_dcmd_timeout(instance, cmd);
 		break;
 
 	case DCMD_SUCCESS:
@@ -4453,29 +4440,7 @@ megasas_get_ld_list(struct megasas_instance *instance)
 		megaraid_sas_kill_hba(instance);
 		break;
 	case DCMD_TIMEOUT:
-
-		switch (dcmd_timeout_ocr_possible(instance)) {
-		case INITIATE_OCR:
-			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
-			/*
-			 * DCMD failed from AEN path.
-			 * AEN path already hold reset_mutex to avoid PCI access
-			 * while OCR is in progress.
-			 */
-			mutex_unlock(&instance->reset_mutex);
-			megasas_reset_fusion(instance->host,
-						MFI_IO_TIMEOUT_OCR);
-			mutex_lock(&instance->reset_mutex);
-			break;
-		case KILL_ADAPTER:
-			megaraid_sas_kill_hba(instance);
-			break;
-		case IGNORE_TIMEOUT:
-			dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d\n",
-				__func__, __LINE__);
-			break;
-		}
-
+		megasas_dcmd_timeout(instance, cmd);
 		break;
 
 	case DCMD_SUCCESS:
@@ -4565,28 +4530,7 @@ megasas_ld_list_query(struct megasas_instance *instance, u8 query_type)
 		ret = megasas_get_ld_list(instance);
 		break;
 	case DCMD_TIMEOUT:
-		switch (dcmd_timeout_ocr_possible(instance)) {
-		case INITIATE_OCR:
-			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
-			/*
-			 * DCMD failed from AEN path.
-			 * AEN path already hold reset_mutex to avoid PCI access
-			 * while OCR is in progress.
-			 */
-			mutex_unlock(&instance->reset_mutex);
-			megasas_reset_fusion(instance->host,
-						MFI_IO_TIMEOUT_OCR);
-			mutex_lock(&instance->reset_mutex);
-			break;
-		case KILL_ADAPTER:
-			megaraid_sas_kill_hba(instance);
-			break;
-		case IGNORE_TIMEOUT:
-			dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d\n",
-				__func__, __LINE__);
-			break;
-		}
-
+		megasas_dcmd_timeout(instance, cmd);
 		break;
 	case DCMD_SUCCESS:
 		tgtid_count = le32_to_cpu(ci->count);
@@ -4771,20 +4715,7 @@ megasas_get_ctrl_info(struct megasas_instance *instance)
 		break;
 
 	case DCMD_TIMEOUT:
-		switch (dcmd_timeout_ocr_possible(instance)) {
-		case INITIATE_OCR:
-			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
-			megasas_reset_fusion(instance->host,
-				MFI_IO_TIMEOUT_OCR);
-			break;
-		case KILL_ADAPTER:
-			megaraid_sas_kill_hba(instance);
-			break;
-		case IGNORE_TIMEOUT:
-			dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d\n",
-				__func__, __LINE__);
-			break;
-		}
+		megasas_dcmd_timeout(instance, cmd);
 		break;
 	case DCMD_FAILED:
 		megaraid_sas_kill_hba(instance);
@@ -4851,20 +4782,7 @@ int megasas_set_crash_dump_params(struct megasas_instance *instance,
 		ret = megasas_issue_polled(instance, cmd);
 
 	if (ret == DCMD_TIMEOUT) {
-		switch (dcmd_timeout_ocr_possible(instance)) {
-		case INITIATE_OCR:
-			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
-			megasas_reset_fusion(instance->host,
-					MFI_IO_TIMEOUT_OCR);
-			break;
-		case KILL_ADAPTER:
-			megaraid_sas_kill_hba(instance);
-			break;
-		case IGNORE_TIMEOUT:
-			dev_info(&instance->pdev->dev, "Ignore DCMD timeout: %s %d\n",
-				__func__, __LINE__);
-			break;
-		}
+		megasas_dcmd_timeout(instance, cmd);
 	} else
 		megasas_return_cmd(instance, cmd);
 
@@ -5936,21 +5854,7 @@ megasas_get_target_prop(struct megasas_instance *instance,
 
 	switch (ret) {
 	case DCMD_TIMEOUT:
-		switch (dcmd_timeout_ocr_possible(instance)) {
-		case INITIATE_OCR:
-			cmd->flags |= DRV_DCMD_SKIP_REFIRE;
-			megasas_reset_fusion(instance->host,
-					     MFI_IO_TIMEOUT_OCR);
-			break;
-		case KILL_ADAPTER:
-			megaraid_sas_kill_hba(instance);
-			break;
-		case IGNORE_TIMEOUT:
-			dev_info(&instance->pdev->dev,
-				 "Ignore DCMD timeout: %s %d\n",
-				 __func__, __LINE__);
-			break;
-		}
+		megasas_dcmd_timeout(instance, cmd);
 		break;
 
 	default:

@@ -2567,4 +2567,6 @@ void megasas_free_fusion_context(struct megasas_instance *instance);
 void megasas_set_dma_settings(struct megasas_instance *instance,
 			      struct megasas_dcmd_frame *dcmd,
 			      dma_addr_t dma_addr, u32 dma_len);
+void megasas_dcmd_timeout(struct megasas_instance *instance,
+			  struct megasas_cmd *cmd);
 #endif				/*LSI_MEGARAID_SAS_H */
