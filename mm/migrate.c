@@ -376,7 +376,7 @@ unlock:
 }
 #endif
 
-static int folio_expected_refs(struct address_space *mapping,
+int folio_expected_refs(struct address_space *mapping,
 		struct folio *folio)
 {
 	int refs = 1;
@@ -552,16 +552,10 @@ int migrate_huge_page_move_mapping(struct address_space *mapping,
 				   struct folio *dst, struct folio *src)
 {
 	XA_STATE(xas, &mapping->i_pages, folio_index(src));
-	int rc, expected_count = folio_expected_refs(mapping, src);
-
-	if (folio_ref_count(src) != expected_count)
-		return -EAGAIN;
-
-	rc = folio_mc_copy(dst, src);
-	if (unlikely(rc))
-		return rc;
+	int expected_count;
 
 	xas_lock_irq(&xas);
+	expected_count = folio_expected_refs(mapping, src);
 	if (!folio_ref_freeze(src, expected_count)) {
 		xas_unlock_irq(&xas);
 		return -EAGAIN;
@@ -695,9 +689,11 @@ static int __migrate_folio(struct address_space *mapping, struct folio *dst,
 	if (folio_ref_count(src) != expected_count)
 		return -EAGAIN;
 
-	rc = folio_mc_copy(dst, src);
-	if (unlikely(rc))
-		return rc;
+	if (mode != MIGRATE_SYNC_NO_COPY) {
+		rc = folio_mc_copy(dst, src);
+		if (unlikely(rc))
+			return rc;
+	}
 
 	rc = __folio_migrate_mapping(mapping, dst, src, expected_count);
 	if (rc != MIGRATEPAGE_SUCCESS)
