@@ -316,6 +316,36 @@ static ssize_t hpage_pmd_size_show(struct kobject *kobj,
 static struct kobj_attribute hpage_pmd_size_attr =
 	__ATTR_RO(hpage_pmd_size);
 
+#ifdef CONFIG_THP_NUMA_CONTROL
+unsigned long thp_numa_control;
+
+static ssize_t numa_control_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%lu\n", thp_numa_control);
+}
+
+static ssize_t numa_control_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long value;
+	int ret;
+
+	ret = kstrtoul(buf, 10, &value);
+	if (ret < 0)
+		return ret;
+	if (value > THP_DISABLE_AUTONUMA)
+		return -EINVAL;
+
+	thp_numa_control = value;
+
+	return count;
+}
+
+static struct kobj_attribute numa_control_attr =
+	__ATTR(numa_control, 0644, numa_control_show, numa_control_store);
+#endif
+
 static struct attribute *hugepage_attr[] = {
 	&enabled_attr.attr,
 	&defrag_attr.attr,
@@ -323,6 +353,9 @@ static struct attribute *hugepage_attr[] = {
 	&hpage_pmd_size_attr.attr,
 #ifdef CONFIG_SHMEM
 	&shmem_enabled_attr.attr,
+#endif
+#ifdef CONFIG_THP_NUMA_CONTROL
+	&numa_control_attr.attr,
 #endif
 	NULL,
 };
@@ -1741,6 +1774,9 @@ int change_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 	bool uffd_wp_resolve = cp_flags & MM_CP_UFFD_WP_RESOLVE;
 
 	if (prot_numa && !thp_migration_supported())
+		return 1;
+
+	if (prot_numa && thp_autonuma_disabled())
 		return 1;
 
 	ptl = __pmd_trans_huge_lock(pmd, vma);

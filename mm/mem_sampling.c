@@ -145,6 +145,9 @@ static inline void do_thp_numa_access(struct mm_struct *mm,
 	pmd_t *pmd, pmde;
 	spinlock_t *ptl;
 
+	if (thp_autonuma_disabled())
+		return;
+
 	pgd = pgd_offset(mm, vaddr);
 	if (!pgd_present(*pgd))
 		return;
