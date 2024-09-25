@@ -90,6 +90,9 @@ enum transparent_hugepage_flag {
 #ifdef CONFIG_DEBUG_VM
 	TRANSPARENT_HUGEPAGE_DEBUG_COW_FLAG,
 #endif
+#ifdef CONFIG_NUMA_MIGRATE_THP_CONTROL
+	TRANSPARENT_HUGEPAGE_NUMA_MIGRATE_ENABLE_FLAG,
+#endif
 };
 
 struct kobject;
@@ -180,6 +183,14 @@ bool transparent_hugepage_active(struct vm_area_struct *vma);
 #define transparent_hugepage_use_zero_page()				\
 	(transparent_hugepage_flags &					\
 	 (1<<TRANSPARENT_HUGEPAGE_USE_ZERO_PAGE_FLAG))
+
+#ifdef CONFIG_NUMA_MIGRATE_THP_CONTROL
+#define thp_can_numa_migrate()				\
+	(transparent_hugepage_flags &					\
+	 (1<<TRANSPARENT_HUGEPAGE_NUMA_MIGRATE_ENABLE_FLAG))
+#else
+#define thp_can_numa_migrate() 1
+#endif
 
 unsigned long thp_get_unmapped_area(struct file *filp, unsigned long addr,
 		unsigned long len, unsigned long pgoff, unsigned long flags);
@@ -485,6 +496,9 @@ static inline bool thp_migration_supported(void)
 {
 	return false;
 }
+
+#define thp_can_numa_migrate() 0
+
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 
 /**

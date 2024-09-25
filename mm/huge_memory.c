@@ -56,6 +56,9 @@ unsigned long transparent_hugepage_flags __read_mostly =
 #endif
 	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_REQ_MADV_FLAG)|
 	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_KHUGEPAGED_FLAG)|
+#ifdef CONFIG_NUMA_MIGRATE_THP_CONTROL
+	(1<<TRANSPARENT_HUGEPAGE_NUMA_MIGRATE_ENABLE_FLAG)|
+#endif
 	(1<<TRANSPARENT_HUGEPAGE_USE_ZERO_PAGE_FLAG);
 
 static struct shrinker deferred_split_shrinker;
@@ -316,6 +319,23 @@ static ssize_t hpage_pmd_size_show(struct kobject *kobj,
 static struct kobj_attribute hpage_pmd_size_attr =
 	__ATTR_RO(hpage_pmd_size);
 
+#ifdef CONFIG_NUMA_MIGRATE_THP_CONTROL
+static ssize_t numa_migrate_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return single_hugepage_flag_show(kobj, attr, buf,
+			TRANSPARENT_HUGEPAGE_NUMA_MIGRATE_ENABLE_FLAG);
+}
+static ssize_t numa_migrate_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	return single_hugepage_flag_store(kobj, attr, buf, count,
+				 TRANSPARENT_HUGEPAGE_NUMA_MIGRATE_ENABLE_FLAG);
+}
+static struct kobj_attribute numa_migrate_attr =
+	__ATTR(numa_migrate, 0644, numa_migrate_show, numa_migrate_store);
+#endif
+
 static struct attribute *hugepage_attr[] = {
 	&enabled_attr.attr,
 	&defrag_attr.attr,
@@ -323,6 +343,9 @@ static struct attribute *hugepage_attr[] = {
 	&hpage_pmd_size_attr.attr,
 #ifdef CONFIG_SHMEM
 	&shmem_enabled_attr.attr,
+#endif
+#ifdef CONFIG_NUMA_MIGRATE_THP_CONTROL
+	&numa_migrate_attr.attr,
 #endif
 	NULL,
 };

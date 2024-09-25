@@ -160,6 +160,11 @@ library) may want to know the size (in bytes) of a transparent hugepage::
 
 	cat /sys/kernel/mm/transparent_hugepage/hpage_pmd_size
 
+THP migration can be disabled when do numa balance if
+CONFIG_NUMA_MIGRATE_THP_CONTROL is on by::
+
+        echo 0 > /sys/kernel/mm/transparent_hugepage/numa_migrate
+
 khugepaged will be automatically started when
 transparent_hugepage/enabled is set to "always" or "madvise, and it'll
 be automatically shutdown if it's set to "never".
