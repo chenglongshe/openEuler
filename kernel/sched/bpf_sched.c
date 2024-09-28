@@ -44,12 +44,50 @@ int bpf_sched_verify_prog(struct bpf_verifier_log *vlog,
 	return 0;
 }
 
+BPF_CALL_3(bpf_sched_cpu_stats_of, int *, cpuid,
+		struct bpf_sched_cpu_stats *, ctx,
+		int, len)
+{
+	struct rq *rq;
+	int cpu = *cpuid;
+
+	if ((unsigned int)cpu >= nr_cpu_ids) {
+		memset(ctx, 0, len);
+		return -EINVAL;
+	}
+
+	rq = cpu_rq(cpu);
+	memset(ctx, 0, len);
+
+	SCHED_WARN_ON(!rcu_read_lock_held());
+	/* nr_running */
+	ctx->nr_running = rq->nr_running;
+	ctx->cfs_nr_running = rq->cfs.nr_running;
+	ctx->cfs_h_nr_running = rq->cfs.h_nr_running;
+	ctx->cfs_idle_h_nr_running = rq->cfs.idle_h_nr_running;
+	ctx->rt_nr_running = rq->rt.rt_nr_running;
+	ctx->rr_nr_running = rq->rt.rr_nr_running;
+
+	return 0;
+}
+
+static const struct bpf_func_proto bpf_sched_cpu_stats_of_proto = {
+	.func		= bpf_sched_cpu_stats_of,
+	.gpl_only	= false,
+	.ret_type	= RET_INTEGER,
+	.arg1_type	= ARG_PTR_TO_INT,
+	.arg2_type	= ARG_PTR_TO_UNINIT_MEM,
+	.arg3_type	= ARG_CONST_SIZE,
+};
+
 static const struct bpf_func_proto *
 bpf_sched_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 {
 	switch (func_id) {
 	case BPF_FUNC_trace_printk:
 		return bpf_get_trace_printk_proto();
+	case BPF_FUNC_sched_cpu_stats_of:
+		return &bpf_sched_cpu_stats_of_proto;
 	default:
 		return bpf_base_func_proto(func_id);
 	}

@@ -2530,6 +2530,15 @@ static inline void rseq_syscall(struct pt_regs *regs)
 #ifdef CONFIG_BPF_SCHED
 extern void sched_settag(struct task_struct *tsk, s64 tag);
 
+struct bpf_sched_cpu_stats {
+	unsigned int nr_running;
+	unsigned int cfs_nr_running;
+	unsigned int cfs_h_nr_running;
+	unsigned int cfs_idle_h_nr_running;
+	unsigned int rt_nr_running;
+	unsigned int rr_nr_running;
+};
+
 struct sched_migrate_ctx {
 	struct task_struct *task;
 	struct cpumask *select_idle_mask;
