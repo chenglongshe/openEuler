@@ -502,7 +502,7 @@ struct task_group {
 #else
 	KABI_RESERVE(3)
 #endif
-#if defined(CONFIG_QOS_SCHED_SMART_GRID) && !defined(__GENKSYMS__)
+#if defined(CONFIG_QOS_SCHED_SMART_GRID)
 	KABI_USE(4, struct auto_affinity *auto_affinity)
 #else
 	KABI_RESERVE(4)
