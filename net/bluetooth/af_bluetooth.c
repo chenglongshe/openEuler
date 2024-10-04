@@ -787,6 +787,8 @@ cleanup_led:
 
 static void __exit bt_exit(void)
 {
+	iso_exit();
+
 	mgmt_exit();
 
 	sco_exit();
