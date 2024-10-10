@@ -13,6 +13,10 @@
 #include "blk.h"
 #include "blk-rq-qos.h"
 
+#ifndef __GENKSYMS__
+#include "blk-throttle.h"
+#endif
+
 /*
  * rq_straddles_atomic_write_boundary - check for boundary violation
  * @rq: request to check
