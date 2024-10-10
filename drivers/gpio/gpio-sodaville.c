@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  *  GPIO interface for Intel Sodaville SoCs.
  *
@@ -213,6 +214,8 @@ static int sdv_gpio_probe(struct pci_dev *pdev,
 		goto release_reg;
 	}
 	sd->gpio_pub_base = ioremap(addr, pci_resource_len(pdev, GPIO_BAR));
+	if (!sd->gpio_pub_base)
+		return -ENOMEM;
 
 	prop = of_get_property(pdev->dev.of_node, "intel,muxctl", &len);
 	if (prop && len == 4) {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Driver for Aeroflex Gaisler GRGPIO General Purpose I/O cores.
  *
@@ -104,7 +105,7 @@ static void grgpio_set_imask(struct grgpio_priv *priv, unsigned int offset,
 	gc->write_reg(priv->regs + GRGPIO_IMASK, priv->imask);
 }
 
-static int grgpio_to_irq(struct gpio_chip *gc, unsigned offset)
+static int grgpio_to_irq(struct gpio_chip *gc, unsigned int offset)
 {
 	struct grgpio_priv *priv = gpiochip_get_data(gc);
 

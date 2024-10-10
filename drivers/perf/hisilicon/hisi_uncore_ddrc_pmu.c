@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * HiSilicon SoC DDRC uncore Hardware event counters support
  *
@@ -306,7 +307,7 @@ static const struct attribute_group hisi_ddrc_pmu_events_group = {
 	.attrs = hisi_ddrc_pmu_events_attr,
 };
 
-static DEVICE_ATTR(cpumask, 0444, hisi_cpumask_sysfs_show, NULL);
+static DEVICE_ATTR(cpumask, DEVICE_ATTR_RO, cpumask_show, NULL);
 
 static struct attribute *hisi_ddrc_pmu_cpumask_attrs[] = {
 	&dev_attr_cpumask.attr,
@@ -385,6 +386,8 @@ static int hisi_ddrc_pmu_probe(struct platform_device *pdev)
 
 	name = devm_kasprintf(&pdev->dev, GFP_KERNEL, "hisi_sccl%u_ddrc%u",
 			      ddrc_pmu->sccl_id, ddrc_pmu->index_id);
+	if (!name)
+		return -ENOMEM;
 	HISI_INIT_PMU(&ddrc_pmu->pmu, name, hisi_ddrc_pmu_attr_groups);
 	ret = perf_pmu_register(&ddrc_pmu->pmu, name, -1);
 	if (ret) {

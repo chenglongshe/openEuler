@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Linux ARCnet driver - COM20020 PCI support
  * Contemporary Controls PCI20 and SOHARD SH-ARC PCI
@@ -214,7 +215,8 @@ static int com20020pci_probe(struct pci_dev *pdev,
 			dev_id_mask = 0x3;
 		dev->dev_id = (inb(priv->misc + ci->rotary) >> 4) & dev_id_mask;
 
-		snprintf(dev->name, sizeof(dev->name), "arc%d-%d", dev->dev_id, i);
+		snprintf(dev->name, sizeof(dev->name),
+				"arc%d-%d", dev->dev_id, i);
 
 		if (arcnet_inb(ioaddr, COM20020_REG_R_STATUS) == 0xFF) {
 			pr_err("IO address %Xh is empty!\n", ioaddr);
@@ -239,6 +241,8 @@ static int com20020pci_probe(struct pci_dev *pdev,
 		card->tx_led.default_trigger = devm_kasprintf(&pdev->dev,
 						GFP_KERNEL, "arc%d-%d-tx",
 						dev->dev_id, i);
+		if (!card->tx_led.default_trigger)
+			return -ENOMEM;
 		card->tx_led.name = devm_kasprintf(&pdev->dev, GFP_KERNEL,
 						"pci:green:tx:%d-%d",
 						dev->dev_id, i);

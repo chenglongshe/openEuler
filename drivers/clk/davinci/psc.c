@@ -278,6 +278,8 @@ davinci_lpsc_clk_register(struct device *dev, const char *name,
 
 	lpsc->pm_domain.name = devm_kasprintf(dev, GFP_KERNEL, "%s: %s",
 					      best_dev_name(dev), name);
+	if (!lpsc->pm_domain.name)
+		return -ENOMEM;
 	lpsc->pm_domain.attach_dev = davinci_psc_genpd_attach_dev;
 	lpsc->pm_domain.detach_dev = davinci_psc_genpd_detach_dev;
 	lpsc->pm_domain.flags = GENPD_FLAG_PM_CLK;
@@ -345,9 +347,10 @@ static const struct reset_control_ops davinci_psc_reset_ops = {
 };
 
 static int davinci_psc_reset_of_xlate(struct reset_controller_dev *rcdev,
-				      const struct of_phandle_args *reset_spec)
+		const struct of_phandle_args *reset_spec)
 {
-	struct of_phandle_args clkspec = *reset_spec; /* discard const qualifier */
+	/* discard const qualifier */
+	struct of_phandle_args clkspec = *reset_spec;
 	struct clk *clk;
 	struct clk_hw *hw;
 	struct davinci_lpsc_clk *lpsc;
@@ -454,7 +457,8 @@ __davinci_psc_register_clocks(struct device *dev,
 
 	ret = devm_reset_controller_register(dev, &psc->rcdev);
 	if (ret < 0)
-		dev_warn(dev, "Failed to register reset controller (%d)\n", ret);
+		dev_warn(dev, "Failed to register reset controller (%d)\n",
+				ret);
 
 	return psc;
 
@@ -520,26 +524,51 @@ static const struct of_device_id davinci_psc_of_match[] = {
 	{ }
 };
 
-static const struct platform_device_id davinci_psc_id_table[] = {
+static const struct platform_device_id
+davinci_psc_id_table[] = {
 #ifdef CONFIG_ARCH_DAVINCI_DA830
-	{ .name = "da830-psc0", .driver_data = (kernel_ulong_t)&da830_psc0_init_data },
-	{ .name = "da830-psc1", .driver_data = (kernel_ulong_t)&da830_psc1_init_data },
+	{
+		.name = "da830-psc0",
+		.driver_data = (kernel_ulong_t)&da830_psc0_init_data
+	},
+	{
+		.name = "da830-psc1",
+		.driver_data = (kernel_ulong_t)&da830_psc1_init_data
+	},
 #endif
 #ifdef CONFIG_ARCH_DAVINCI_DA850
-	{ .name = "da850-psc0", .driver_data = (kernel_ulong_t)&da850_psc0_init_data },
-	{ .name = "da850-psc1", .driver_data = (kernel_ulong_t)&da850_psc1_init_data },
+	{
+		.name = "da850-psc0",
+		.driver_data = (kernel_ulong_t)&da850_psc0_init_data
+	},
+	{
+		.name = "da850-psc1",
+		.driver_data = (kernel_ulong_t)&da850_psc1_init_data
+	},
 #endif
 #ifdef CONFIG_ARCH_DAVINCI_DM355
-	{ .name = "dm355-psc",  .driver_data = (kernel_ulong_t)&dm355_psc_init_data  },
+	{
+		.name = "dm355-psc",
+		.driver_data = (kernel_ulong_t)&dm355_psc_init_data
+	},
 #endif
 #ifdef CONFIG_ARCH_DAVINCI_DM365
-	{ .name = "dm365-psc",  .driver_data = (kernel_ulong_t)&dm365_psc_init_data  },
+	{
+		.name = "dm365-psc",
+		.driver_data = (kernel_ulong_t)&dm365_psc_init_data
+	},
 #endif
 #ifdef CONFIG_ARCH_DAVINCI_DM644x
-	{ .name = "dm644x-psc", .driver_data = (kernel_ulong_t)&dm644x_psc_init_data },
+	{
+		.name = "dm644x-psc",
+		.driver_data = (kernel_ulong_t)&dm644x_psc_init_data
+	},
 #endif
 #ifdef CONFIG_ARCH_DAVINCI_DM646x
-	{ .name = "dm646x-psc", .driver_data = (kernel_ulong_t)&dm646x_psc_init_data },
+	{
+		.name = "dm646x-psc",
+		.driver_data = (kernel_ulong_t)&dm646x_psc_init_data
+	},
 #endif
 	{ }
 };

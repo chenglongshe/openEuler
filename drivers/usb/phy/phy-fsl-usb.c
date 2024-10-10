@@ -267,7 +267,7 @@ void b_srp_end(unsigned long foo)
  */
 void a_wait_enum(unsigned long foo)
 {
-	VDBG("a_wait_enum timeout\n");
+	VDBG("%s timeout\n", __func__);
 	if (!fsl_otg_dev->phy.otg->host->b_hnp_enable)
 		fsl_otg_add_timer(&fsl_otg_dev->fsm, a_wait_enum_tmr);
 	else
@@ -400,9 +400,9 @@ void fsl_otg_add_timer(struct otg_fsm *fsm, void *gtimer)
 	 * if so update timer count
 	 */
 	list_for_each_entry(tmp_timer, &active_timers, list)
-	    if (tmp_timer == timer) {
-		timer->count = timer->expires;
-		return;
+		if (tmp_timer == timer) {
+			timer->count = timer->expires;
+			return;
 	}
 	timer->count = timer->expires;
 	list_add_tail(&timer->list, &active_timers);
@@ -575,7 +575,6 @@ static int fsl_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 		 */
 		otg_dev->host_working = 1;
 		schedule_delayed_work(&otg_dev->otg_event, 100);
-		return 0;
 	} else {
 		/* host driver going away */
 		if (!(fsl_readl(&otg_dev->dr_mem_map->otgsc) &
@@ -587,7 +586,8 @@ static int fsl_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 			fsm->protocol = PROTO_UNDEF;
 		}
 	}
-
+	if (host)
+		return 0;
 	otg_dev->host_working = 0;
 
 	otg_statemachine(&otg_dev->fsm);
@@ -851,10 +851,12 @@ int usb_otg_start(struct platform_device *pdev)
 	if (!res)
 		return -ENXIO;
 
-	/* We don't request_mem_region here to enable resource sharing
-	 * with host/device */
+	// We don't request_mem_region here to
+	// enable resource sharing with host/device
 
 	usb_dr_regs = ioremap(res->start, sizeof(struct usb_dr_mmap));
+	if (!usb_dr_regs)
+		return -ENOMEM;
 	p_otg->dr_mem_map = (struct usb_dr_mmap *)usb_dr_regs;
 	pdata->regs = (void *)usb_dr_regs;
 
@@ -965,14 +967,14 @@ static ssize_t show_fsl_usb2_otg_state(struct device *dev,
 {
 	struct otg_fsm *fsm = &fsl_otg_dev->fsm;
 	char *next = buf;
-	unsigned size = PAGE_SIZE;
+	unsigned int size = PAGE_SIZE;
 	int t;
 
 	mutex_lock(&fsm->lock);
 
 	/* basic driver infomation */
 	t = scnprintf(next, size,
-			DRIVER_DESC "\n" "fsl_usb2_otg version: %s\n\n",
+			DRIVER_DESC "\nfsl_usb2_otg version: %s\n\n",
 			DRIVER_VERSION);
 	size -= t;
 	next += t;
@@ -1041,7 +1043,8 @@ static ssize_t show_fsl_usb2_otg_state(struct device *dev,
 	return PAGE_SIZE - size;
 }
 
-static DEVICE_ATTR(fsl_usb2_otg_state, S_IRUGO, show_fsl_usb2_otg_state, NULL);
+static DEVICE_ATTR(fsl_usb2_otg_state, EVICE_ATTR_RO,
+		fsl_usb2_otg_state_show, NULL);
 
 
 /* Char driver interface to control some OTG input */
