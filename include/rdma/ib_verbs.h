@@ -2950,6 +2950,19 @@ int rdma_user_mmap_entry_insert_range(struct ib_ucontext *ucontext,
 				      size_t length, u32 min_pgoff,
 				      u32 max_pgoff);
 
+#if IS_ENABLED(CONFIG_MMU)
+void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile);
+void rdma_user_mmap_disassociate(struct ib_ucontext *ucontext);
+#else
+static inline void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
+{
+}
+
+static inline void rdma_user_mmap_disassociate(struct ib_ucontext *ucontext)
+{
+}
+#endif
+
 static inline int
 rdma_user_mmap_entry_insert_exact(struct ib_ucontext *ucontext,
 				  struct rdma_user_mmap_entry *entry,

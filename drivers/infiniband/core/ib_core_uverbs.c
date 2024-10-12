@@ -5,6 +5,7 @@
  * Copyright 2019 Marvell. All rights reserved.
  */
 #include <linux/xarray.h>
+#include <linux/sched/mm.h>
 #include "uverbs.h"
 #include "core_priv.h"
 
@@ -365,3 +366,86 @@ int rdma_user_mmap_entry_insert(struct ib_ucontext *ucontext,
 						 U32_MAX);
 }
 EXPORT_SYMBOL(rdma_user_mmap_entry_insert);
+
+#if IS_ENABLED(CONFIG_MMU)
+void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
+{
+	struct rdma_umap_priv *priv, *next_priv;
+
+	mutex_lock(&ufile->disassociation_lock);
+
+	while (1) {
+		struct mm_struct *mm = NULL;
+
+		/* Get an arbitrary mm pointer that hasn't been cleaned yet */
+		mutex_lock(&ufile->umap_lock);
+		while (!list_empty(&ufile->umaps)) {
+			int ret;
+
+			priv = list_first_entry(&ufile->umaps,
+						struct rdma_umap_priv, list);
+			mm = priv->vma->vm_mm;
+			ret = mmget_not_zero(mm);
+			if (!ret) {
+				list_del_init(&priv->list);
+				if (priv->entry) {
+					rdma_user_mmap_entry_put(priv->entry);
+					priv->entry = NULL;
+				}
+				mm = NULL;
+				continue;
+			}
+			break;
+		}
+		mutex_unlock(&ufile->umap_lock);
+		if (!mm) {
+			mutex_unlock(&ufile->disassociation_lock);
+			return;
+		}
+
+		/*
+		 * The umap_lock is nested under mmap_lock since it used within
+		 * the vma_ops callbacks, so we have to clean the list one mm
+		 * at a time to get the lock ordering right. Typically there
+		 * will only be one mm, so no big deal.
+		 */
+		mmap_read_lock(mm);
+		mutex_lock(&ufile->umap_lock);
+		list_for_each_entry_safe(priv, next_priv, &ufile->umaps, list) {
+			struct vm_area_struct *vma = priv->vma;
+
+			if (vma->vm_mm != mm)
+				continue;
+			list_del_init(&priv->list);
+
+			zap_vma_ptes(vma, vma->vm_start,
+				     vma->vm_end - vma->vm_start);
+
+			if (priv->entry) {
+				rdma_user_mmap_entry_put(priv->entry);
+				priv->entry = NULL;
+			}
+		}
+		mutex_unlock(&ufile->umap_lock);
+		mmap_read_unlock(mm);
+		mmput(mm);
+	}
+
+	mutex_unlock(&ufile->disassociation_lock);
+}
+EXPORT_SYMBOL(uverbs_user_mmap_disassociate);
+
+/**
+ * rdma_user_mmap_disassociate() - Revoke mmaps for a device
+ * @device: device to revoke
+ *
+ * This function should be called by drivers that need to disable mmaps for the
+ * device, for instance because it is going to be reset.
+ */
+void rdma_user_mmap_disassociate(struct ib_ucontext *ucontext)
+{
+	if (ucontext->ufile)
+		uverbs_user_mmap_disassociate(ucontext->ufile);
+}
+EXPORT_SYMBOL(rdma_user_mmap_disassociate);
+#endif

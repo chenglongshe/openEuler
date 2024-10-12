@@ -45,7 +45,6 @@
 #include <linux/cdev.h>
 #include <linux/anon_inodes.h>
 #include <linux/slab.h>
-#include <linux/sched/mm.h>
 
 #include <linux/uaccess.h>
 
@@ -217,6 +216,7 @@ void ib_uverbs_release_file(struct kref *ref)
 
 	if (file->disassociate_page)
 		__free_pages(file->disassociate_page, 0);
+	mutex_destroy(&file->disassociation_lock);
 	mutex_destroy(&file->umap_lock);
 	mutex_destroy(&file->ucontext_lock);
 	kfree(file);
@@ -700,8 +700,13 @@ static int ib_uverbs_mmap(struct file *filp, struct vm_area_struct *vma)
 		ret = PTR_ERR(ucontext);
 		goto out;
 	}
+
+	mutex_lock(&file->disassociation_lock);
+
 	vma->vm_ops = &rdma_umap_ops;
 	ret = ucontext->device->ops.mmap(ucontext, vma);
+
+	mutex_unlock(&file->disassociation_lock);
 out:
 	srcu_read_unlock(&file->device->disassociate_srcu, srcu_key);
 	return ret;
@@ -723,6 +728,8 @@ static void rdma_umap_open(struct vm_area_struct *vma)
 	/* We are racing with disassociation */
 	if (!down_read_trylock(&ufile->hw_destroy_rwsem))
 		goto out_zap;
+	mutex_lock(&ufile->disassociation_lock);
+
 	/*
 	 * Disassociation already completed, the VMA should already be zapped.
 	 */
@@ -734,10 +741,12 @@ static void rdma_umap_open(struct vm_area_struct *vma)
 		goto out_unlock;
 	rdma_umap_priv_init(priv, vma, opriv->entry);
 
+	mutex_unlock(&ufile->disassociation_lock);
 	up_read(&ufile->hw_destroy_rwsem);
 	return;
 
 out_unlock:
+	mutex_unlock(&ufile->disassociation_lock);
 	up_read(&ufile->hw_destroy_rwsem);
 out_zap:
 	/*
@@ -816,69 +825,6 @@ static const struct vm_operations_struct rdma_umap_ops = {
 	.close = rdma_umap_close,
 	.fault = rdma_umap_fault,
 };
-
-void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
-{
-	struct rdma_umap_priv *priv, *next_priv;
-
-	lockdep_assert_held(&ufile->hw_destroy_rwsem);
-
-	while (1) {
-		struct mm_struct *mm = NULL;
-
-		/* Get an arbitrary mm pointer that hasn't been cleaned yet */
-		mutex_lock(&ufile->umap_lock);
-		while (!list_empty(&ufile->umaps)) {
-			int ret;
-
-			priv = list_first_entry(&ufile->umaps,
-						struct rdma_umap_priv, list);
-			mm = priv->vma->vm_mm;
-			ret = mmget_not_zero(mm);
-			if (!ret) {
-				list_del_init(&priv->list);
-				if (priv->entry) {
-					rdma_user_mmap_entry_put(priv->entry);
-					priv->entry = NULL;
-				}
-				mm = NULL;
-				continue;
-			}
-			break;
-		}
-		mutex_unlock(&ufile->umap_lock);
-		if (!mm)
-			return;
-
-		/*
-		 * The umap_lock is nested under mmap_lock since it used within
-		 * the vma_ops callbacks, so we have to clean the list one mm
-		 * at a time to get the lock ordering right. Typically there
-		 * will only be one mm, so no big deal.
-		 */
-		mmap_read_lock(mm);
-		mutex_lock(&ufile->umap_lock);
-		list_for_each_entry_safe(priv, next_priv, &ufile->umaps,
-					  list) {
-			struct vm_area_struct *vma = priv->vma;
-
-			if (vma->vm_mm != mm)
-				continue;
-			list_del_init(&priv->list);
-
-			zap_vma_ptes(vma, vma->vm_start,
-				     vma->vm_end - vma->vm_start);
-
-			if (priv->entry) {
-				rdma_user_mmap_entry_put(priv->entry);
-				priv->entry = NULL;
-			}
-		}
-		mutex_unlock(&ufile->umap_lock);
-		mmap_read_unlock(mm);
-		mmput(mm);
-	}
-}
 
 /*
  * ib_uverbs_open() does not need the BKL:
@@ -1034,7 +980,7 @@ static int ib_uverbs_get_nl_info(struct ib_device *ibdev, void *client_data,
 	return 0;
 }
 
-static struct ib_client uverbs_client = {
+struct ib_client uverbs_client = {
 	.name   = "uverbs",
 	.no_kverbs_req = true,
 	.add    = ib_uverbs_add_one,

@@ -149,7 +149,6 @@ void uverbs_disassociate_api(struct uverbs_api *uapi);
 void uverbs_destroy_api(struct uverbs_api *uapi);
 void uapi_compute_bundle_size(struct uverbs_api_ioctl_method *method_elm,
 			      unsigned int num_attrs);
-void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile);
 
 extern const struct uapi_definition uverbs_def_obj_async_fd[];
 extern const struct uapi_definition uverbs_def_obj_counters[];
@@ -163,6 +162,8 @@ extern const struct uapi_definition uverbs_def_obj_qp[];
 extern const struct uapi_definition uverbs_def_obj_srq[];
 extern const struct uapi_definition uverbs_def_obj_wq[];
 extern const struct uapi_definition uverbs_def_write_intf[];
+
+extern struct ib_client uverbs_client;
 
 static inline const struct uverbs_api_write_method *
 uapi_get_method(const struct uverbs_api *uapi, u32 command)
