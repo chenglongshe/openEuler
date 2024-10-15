@@ -45,7 +45,6 @@ static void hinic3_get_drvinfo(struct net_device *netdev,
 	int err;
 
 	strlcpy(info->driver, HINIC3_NIC_DRV_NAME, sizeof(info->driver));
-	strlcpy(info->version, HINIC3_NIC_DRV_VERSION, sizeof(info->version));
 	strlcpy(info->bus_info, pci_name(pdev), sizeof(info->bus_info));
 
 	err = hinic3_get_mgmt_version(nic_dev->hwdev, mgmt_ver,
