@@ -256,22 +256,24 @@ struct iommu_domain {
 			 * protected by iommu_sva_lock.
 			 */
 			struct list_head next;
+			KABI_RESERVE(1)
+			KABI_RESERVE(2)
 		};
 	};
 	struct mutex switch_log_lock;
 
 #ifdef CONFIG_HISI_VIRTCCA_HOST
-	KABI_USE(1, bool secure)
+	KABI_USE(3, bool secure)
 #else
-	KABI_RESERVE(1)
-#endif
-	KABI_RESERVE(2)
 	KABI_RESERVE(3)
+#endif
 	KABI_RESERVE(4)
 	KABI_RESERVE(5)
 	KABI_RESERVE(6)
 	KABI_RESERVE(7)
 	KABI_RESERVE(8)
+	KABI_RESERVE(9)
+	KABI_RESERVE(10)
 };
 
 static inline bool iommu_is_dma_domain(struct iommu_domain *domain)
@@ -745,6 +747,8 @@ struct iommu_domain_ops {
 	KABI_RESERVE(6)
 	KABI_RESERVE(7)
 	KABI_RESERVE(8)
+	KABI_RESERVE(9)
+	KABI_RESERVE(10)
 };
 
 /**
