@@ -48,6 +48,14 @@ static inline bool cpu_map__is_dummy(const struct perf_cpu_map *cpus)
 	return id >> 24;
 }
 
+/**
+ * cpu_map__is_dummy - Events associated with a pid, rather than a CPU, use a single dummy map with an entry of -1.
+ */
+static inline bool cpu_map__is_dummy(const struct perf_cpu_map *cpus)
+{
+       return perf_cpu_map__nr(cpus) == 1 && perf_cpu_map__cpu(cpus, 0).cpu == -1;
+}
+
 static inline int cpu_map__id_to_die(int id)
 {
 	return (id >> 16) & 0xff;
