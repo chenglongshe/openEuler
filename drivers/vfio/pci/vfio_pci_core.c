@@ -973,6 +973,11 @@ static int vfio_pci_ioctl_get_info(struct vfio_pci_core_device *vdev,
 	if (vdev->reset_works)
 		info.flags |= VFIO_DEVICE_FLAGS_RESET;
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (is_cc_dev(pci_dev_id(vdev->pdev)))
+		info.flags |= VFIO_DEVICE_FLAGS_SECURE;
+#endif
+
 	info.num_regions = VFIO_PCI_NUM_REGIONS + vdev->num_regions;
 	info.num_irqs = VFIO_PCI_NUM_IRQS;
 
