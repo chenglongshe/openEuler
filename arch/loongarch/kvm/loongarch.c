@@ -929,6 +929,7 @@ static int _kvm_set_one_reg(struct kvm_vcpu *vcpu,
 		s64 v)
 {
 	struct loongarch_csrs *csr = vcpu->arch.csr;
+	struct gfn_to_pfn_cache *cache;
 	int ret = 0;
 	unsigned long flags;
 	u64 val;
@@ -955,14 +956,18 @@ static int _kvm_set_one_reg(struct kvm_vcpu *vcpu,
 		local_irq_restore(flags);
 		break;
 	case KVM_REG_LOONGARCH_VCPU_RESET:
+		cache = &vcpu->arch.st.cache;
 		kvm_reset_timer(vcpu);
 		if (vcpu->vcpu_id == 0)
 			kvm_setup_ls3a_extirq(vcpu->kvm);
 		memset(&vcpu->arch.irq_pending, 0, sizeof(vcpu->arch.irq_pending));
 		memset(&vcpu->arch.irq_clear, 0, sizeof(vcpu->arch.irq_clear));
 
-		/* disable pv timer when cpu resetting */
-		vcpu->arch.st.guest_addr = 0;
+		if (vcpu->arch.st.guest_addr) {
+			kvm_release_pfn(cache->pfn, cache->dirty, cache);
+			/* disable pv timer when cpu resetting */
+			vcpu->arch.st.guest_addr = 0;
+		}
 		break;
 	default:
 		if ((reg->id & KVM_REG_LOONGARCH_MASK) != KVM_REG_LOONGARCH_CSR)
