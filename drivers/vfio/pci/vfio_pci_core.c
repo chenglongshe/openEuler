@@ -32,6 +32,10 @@
 #include <asm/eeh.h>
 #endif
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_tmi.h>
+#endif
+
 #include "vfio_pci_priv.h"
 
 #define DRIVER_AUTHOR   "Alex Williamson <alex.williamson@redhat.com>"
@@ -972,6 +976,11 @@ static int vfio_pci_ioctl_get_info(struct vfio_pci_core_device *vdev,
 
 	if (vdev->reset_works)
 		info.flags |= VFIO_DEVICE_FLAGS_RESET;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (virtcca_is_available() && is_cc_dev(pci_dev_id(vdev->pdev)))
+		info.flags |= VFIO_DEVICE_FLAGS_SECURE;
+#endif
 
 	info.num_regions = VFIO_PCI_NUM_REGIONS + vdev->num_regions;
 	info.num_irqs = VFIO_PCI_NUM_IRQS;
@@ -2664,7 +2673,12 @@ void vfio_pci_core_set_params(bool is_nointxmask, bool is_disable_vga,
 {
 	nointxmask = is_nointxmask;
 	disable_vga = is_disable_vga;
-	disable_idle_d3 = is_disable_idle_d3;
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (virtcca_is_available())
+		disable_idle_d3 = true;
+	else
+#endif
+		disable_idle_d3 = is_disable_idle_d3;
 }
 EXPORT_SYMBOL_GPL(vfio_pci_core_set_params);
 

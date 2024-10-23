@@ -3,6 +3,11 @@
 #include <linux/pci.h>
 #include <linux/msi.h>
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_tmm.h>
+#include <asm/kvm_tmi.h>
+#endif
+
 #define msix_table_size(flags)	((flags & PCI_MSIX_FLAGS_QSIZE) + 1)
 
 int pci_msi_setup_msi_irqs(struct pci_dev *dev, int nvec, int type);
@@ -35,17 +40,37 @@ static inline void __iomem *pci_msix_desc_addr(struct msi_desc *desc)
 static inline void pci_msix_write_vector_ctrl(struct msi_desc *desc, u32 ctrl)
 {
 	void __iomem *desc_addr = pci_msix_desc_addr(desc);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	struct pci_dev *pdev = (desc->dev != NULL &&
+		dev_is_pci(desc->dev)) ? to_pci_dev(desc->dev) : NULL;
+#endif
 
 	if (desc->pci.msi_attrib.can_mask)
-		writel(ctrl, desc_addr + PCI_MSIX_ENTRY_VECTOR_CTRL);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		if (virtcca_is_available() && pdev != NULL && is_cc_dev(pci_dev_id(pdev)))
+			tmi_mmio_write(iova_to_pa(desc_addr + PCI_MSIX_ENTRY_VECTOR_CTRL),
+				ctrl, 32, pci_dev_id(pdev));
+		else
+#endif
+			writel(ctrl, desc_addr + PCI_MSIX_ENTRY_VECTOR_CTRL);
 }
 
 static inline void pci_msix_mask(struct msi_desc *desc)
 {
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	struct pci_dev *pdev = (desc->dev != NULL &&
+		dev_is_pci(desc->dev)) ? to_pci_dev(desc->dev) : NULL;
+#endif
 	desc->pci.msix_ctrl |= PCI_MSIX_ENTRY_CTRL_MASKBIT;
 	pci_msix_write_vector_ctrl(desc, desc->pci.msix_ctrl);
 	/* Flush write to device */
-	readl(desc->pci.mask_base);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (virtcca_is_available() && pdev != NULL && is_cc_dev(pci_dev_id(pdev)))
+		tmi_mmio_read(iova_to_pa(desc->pci.mask_base), 32, pci_dev_id(pdev));
+	else
+#endif
+		readl(desc->pci.mask_base);
 }
 
 static inline void pci_msix_unmask(struct msi_desc *desc)

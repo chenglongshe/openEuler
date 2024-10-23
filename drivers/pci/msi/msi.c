@@ -159,9 +159,23 @@ void __pci_read_msi_msg(struct msi_desc *entry, struct msi_msg *msg)
 		if (WARN_ON_ONCE(entry->pci.msi_attrib.is_virtual))
 			return;
 
-		msg->address_lo = readl(base + PCI_MSIX_ENTRY_LOWER_ADDR);
-		msg->address_hi = readl(base + PCI_MSIX_ENTRY_UPPER_ADDR);
-		msg->data = readl(base + PCI_MSIX_ENTRY_DATA);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		u64 pbase = iova_to_pa(base);
+
+		if (virtcca_is_available() && dev != NULL && is_cc_dev(pci_dev_id(dev))) {
+			msg->address_lo = tmi_mmio_read(pbase + PCI_MSIX_ENTRY_LOWER_ADDR,
+				32, pci_dev_id(dev));
+			msg->address_hi = tmi_mmio_read(pbase + PCI_MSIX_ENTRY_UPPER_ADDR,
+				32, pci_dev_id(dev));
+			msg->data = tmi_mmio_read(pbase + PCI_MSIX_ENTRY_DATA, 32, pci_dev_id(dev));
+		} else {
+#endif
+			msg->address_lo = readl(base + PCI_MSIX_ENTRY_LOWER_ADDR);
+			msg->address_hi = readl(base + PCI_MSIX_ENTRY_UPPER_ADDR);
+			msg->data = readl(base + PCI_MSIX_ENTRY_DATA);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		}
+#endif
 	} else {
 		int pos = dev->msi_cap;
 		u16 data;
@@ -221,15 +235,41 @@ static inline void pci_write_msg_msix(struct msi_desc *desc, struct msi_msg *msg
 	if (unmasked)
 		pci_msix_write_vector_ctrl(desc, ctrl | PCI_MSIX_ENTRY_CTRL_MASKBIT);
 
-	writel(msg->address_lo, base + PCI_MSIX_ENTRY_LOWER_ADDR);
-	writel(msg->address_hi, base + PCI_MSIX_ENTRY_UPPER_ADDR);
-	writel(msg->data, base + PCI_MSIX_ENTRY_DATA);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	u64 pbase = iova_to_pa(base);
+
+	struct pci_dev *pdev = (desc->dev != NULL &&
+		dev_is_pci(desc->dev)) ? to_pci_dev(desc->dev) : NULL;
+
+	if (virtcca_is_available() && pdev != NULL && is_cc_dev(pci_dev_id(pdev))) {
+		u64 addr = (u64)msg->address_lo | ((u64)msg->address_hi << 32);
+
+		addr += CVM_MSI_IOVA_OFFSET;
+		tmi_mmio_write(pbase + PCI_MSIX_ENTRY_LOWER_ADDR,
+			lower_32_bits(addr), 32, pci_dev_id(pdev));
+		tmi_mmio_write(pbase + PCI_MSIX_ENTRY_UPPER_ADDR,
+			upper_32_bits(addr), 32, pci_dev_id(pdev));
+		tmi_mmio_write(pbase + PCI_MSIX_ENTRY_DATA,
+			msg->data, 32, pci_dev_id(pdev));
+	} else {
+#endif
+		writel(msg->address_lo, base + PCI_MSIX_ENTRY_LOWER_ADDR);
+		writel(msg->address_hi, base + PCI_MSIX_ENTRY_UPPER_ADDR);
+		writel(msg->data, base + PCI_MSIX_ENTRY_DATA);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	}
+#endif
 
 	if (unmasked)
 		pci_msix_write_vector_ctrl(desc, ctrl);
 
 	/* Ensure that the writes are visible in the device */
-	readl(base + PCI_MSIX_ENTRY_DATA);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (virtcca_is_available() && pdev != NULL && is_cc_dev(pci_dev_id(pdev)))
+		tmi_mmio_read(iova_to_pa(pbase + PCI_MSIX_ENTRY_DATA), 32, pci_dev_id(pdev));
+	else
+#endif
+		readl(base + PCI_MSIX_ENTRY_DATA);
 }
 
 void __pci_write_msi_msg(struct msi_desc *entry, struct msi_msg *msg)
@@ -638,7 +678,12 @@ void msix_prepare_msi_desc(struct pci_dev *dev, struct msi_desc *desc)
 
 	if (desc->pci.msi_attrib.can_mask) {
 		void __iomem *addr = pci_msix_desc_addr(desc);
-
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (virtcca_is_available() && is_cc_dev(pci_dev_id(dev)))
+		desc->pci.msix_ctrl = tmi_mmio_read(iova_to_pa(addr + PCI_MSIX_ENTRY_VECTOR_CTRL),
+			32, pci_dev_id(dev));
+	else
+#endif
 		desc->pci.msix_ctrl = readl(addr + PCI_MSIX_ENTRY_VECTOR_CTRL);
 	}
 }
@@ -689,6 +734,23 @@ static void msix_mask_all(void __iomem *base, int tsize)
 	for (i = 0; i < tsize; i++, base += PCI_MSIX_ENTRY_SIZE)
 		writel(ctrl, base + PCI_MSIX_ENTRY_VECTOR_CTRL);
 }
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+static void msix_mask_all_cc(void __iomem *base, int tsize, u64 dev_num)
+{
+	u32 ctrl = PCI_MSIX_ENTRY_CTRL_MASKBIT;
+	int i;
+	u64 pbase = iova_to_pa(base);
+
+	if (pci_msi_ignore_mask)
+		return;
+
+	for (i = 0; i < tsize; i++, base += PCI_MSIX_ENTRY_SIZE) {
+		tmi_mmio_write(pbase + PCI_MSIX_ENTRY_VECTOR_CTRL,
+			ctrl, 32, dev_num);
+	}
+}
+#endif
 
 static int msix_setup_interrupts(struct pci_dev *dev, struct msix_entry *entries,
 				 int nvec, struct irq_affinity *affd)
@@ -776,7 +838,12 @@ static int msix_capability_init(struct pci_dev *dev, struct msix_entry *entries,
 	 * which takes the MSI-X mask bits into account even
 	 * when MSI-X is disabled, which prevents MSI delivery.
 	 */
-	msix_mask_all(dev->msix_base, tsize);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (virtcca_is_available() && is_cc_dev(pci_dev_id(dev)))
+		msix_mask_all_cc(dev->msix_base, tsize, pci_dev_id(dev));
+	else
+#endif
+		msix_mask_all(dev->msix_base, tsize);
 	pci_msix_clear_and_set_ctrl(dev, PCI_MSIX_FLAGS_MASKALL, 0);
 
 	pcibios_free_irq(dev);

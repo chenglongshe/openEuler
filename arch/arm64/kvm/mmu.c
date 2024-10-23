@@ -1395,6 +1395,23 @@ static bool kvm_vma_mte_allowed(struct vm_area_struct *vma)
 	return vma->vm_flags & VM_MTE_ALLOWED;
 }
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+static int kvm_cvm_map_ipa(struct kvm *kvm, phys_addr_t ipa, kvm_pfn_t pfn,
+	unsigned long map_size, enum kvm_pgtable_prot prot)
+{
+	struct page *dst_page = pfn_to_page(pfn);
+	phys_addr_t dst_phys = page_to_phys(dst_page);
+
+	if (WARN_ON(!(prot & KVM_PGTABLE_PROT_W)))
+		return -EFAULT;
+
+	if (prot & KVM_PGTABLE_PROT_DEVICE)
+		return kvm_cvm_map_ipa_mmio(kvm, ipa, dst_phys, map_size);
+
+	return 0;
+}
+#endif
+
 static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 			  struct kvm_memory_slot *memslot, unsigned long hva,
 			  unsigned long fault_status)
@@ -1605,6 +1622,12 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 					     memcache,
 					     KVM_PGTABLE_WALK_HANDLE_FAULT |
 					     KVM_PGTABLE_WALK_SHARED);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (kvm_is_virtcca_cvm(kvm)) {
+		ret = kvm_cvm_map_ipa(kvm, fault_ipa, pfn, vma_pagesize, prot);
+		WARN_ON(ret);
+	}
+#endif
 
 	/* Mark the page dirty only if the fault is handled successfully */
 	if (writable && !ret) {

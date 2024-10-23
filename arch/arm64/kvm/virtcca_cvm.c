@@ -4,6 +4,7 @@
  */
 #include <linux/kvm_host.h>
 #include <linux/kvm.h>
+#include <linux/vfio.h>
 #include <asm/kvm_tmi.h>
 #include <asm/kvm_pgtable.h>
 #include <asm/kvm_emulate.h>
@@ -12,6 +13,7 @@
 #include <linux/arm-smccc.h>
 #include <kvm/arm_hypercalls.h>
 #include <kvm/arm_psci.h>
+#include "../virt/kvm/vfio.h"
 
 /* Protects access to cvm_vmid_bitmap */
 static DEFINE_SPINLOCK(cvm_vmid_lock);
@@ -41,6 +43,29 @@ static int cvm_vmid_init(void)
 }
 
 static unsigned long tmm_feat_reg0;
+
+bool check_virtcca_cvm_ram_range(struct kvm *kvm, uint64_t iova)
+{
+	struct virtcca_cvm *virtcca_cvm = kvm->arch.virtcca_cvm;
+
+	if (iova >= virtcca_cvm->loader_start &&
+		iova < virtcca_cvm->loader_start + virtcca_cvm->ram_size)
+		return true;
+
+	return false;
+}
+EXPORT_SYMBOL_GPL(check_virtcca_cvm_ram_range);
+
+bool check_virtcca_cvm_vfio_map_dma(struct kvm *kvm, uint64_t iova)
+{
+	struct virtcca_cvm *virtcca_cvm = kvm->arch.virtcca_cvm;
+
+	if (!virtcca_cvm->is_mapped)
+		return true;
+
+	return !check_virtcca_cvm_ram_range(kvm, iova);
+}
+EXPORT_SYMBOL_GPL(check_virtcca_cvm_vfio_map_dma);
 
 static bool tmm_supports(unsigned long feature)
 {
@@ -120,6 +145,27 @@ static u64 kvm_get_first_binded_numa_set(struct kvm *kvm)
 	return NO_NUMA;
 }
 
+int cvm_arm_smmu_domain_set_kvm(void *group)
+{
+	struct arm_smmu_domain *arm_smmu_domain = NULL;
+	struct iommu_domain *domain;
+	struct kvm *kvm;
+
+	domain = iommu_group_get_domain((struct iommu_group *)group);
+	if (!domain)
+		return -ENXIO;
+
+	arm_smmu_domain = to_smmu_domain(domain);
+	if (arm_smmu_domain->kvm)
+		return 0;
+
+	kvm = arm_smmu_get_kvm(arm_smmu_domain);
+	if (kvm && kvm_is_virtcca_cvm(kvm))
+		arm_smmu_domain->kvm = kvm;
+
+	return 0;
+}
+
 int kvm_arm_create_cvm(struct kvm *kvm)
 {
 	int ret;
@@ -175,9 +221,17 @@ void kvm_destroy_cvm(struct kvm *kvm)
 {
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
 	uint32_t cvm_vmid;
+	struct arm_smmu_domain *arm_smmu_domain;
+	struct list_head smmu_domain_group_list;
 
 	if (!cvm)
 		return;
+
+	kvm_get_arm_smmu_domain(kvm, &smmu_domain_group_list);
+	list_for_each_entry(arm_smmu_domain, &smmu_domain_group_list, node) {
+		if (arm_smmu_domain->kvm && arm_smmu_domain->kvm == kvm)
+			arm_smmu_domain->kvm = NULL;
+	}
 
 	cvm_vmid = cvm->cvm_vmid;
 	kfree(cvm->params);
@@ -193,6 +247,7 @@ void kvm_destroy_cvm(struct kvm *kvm)
 	if (!tmi_cvm_destroy(cvm->rd))
 		kvm_info("KVM has destroyed cVM: %d\n", cvm->cvm_vmid);
 
+	cvm->is_mapped = false;
 	kfree(cvm);
 	kvm->arch.virtcca_cvm = NULL;
 }
@@ -225,6 +280,163 @@ static int kvm_cvm_create_ttt_levels(struct kvm *kvm, struct virtcca_cvm *cvm,
 	}
 
 	return 0;
+}
+
+static int kvm_cvm_dev_ttt_create(struct virtcca_cvm *cvm,
+			unsigned long addr,
+			int level,
+			u64 numa_set)
+{
+	addr = ALIGN_DOWN(addr, cvm_ttt_level_mapsize(level - 1));
+	return tmi_dev_ttt_create(numa_set, cvm->rd, addr, level);
+}
+
+int kvm_cvm_create_dev_ttt_levels(struct kvm *kvm, struct virtcca_cvm *cvm,
+			unsigned long ipa,
+			int level,
+			int max_level,
+			struct kvm_mmu_memory_cache *mc)
+{
+	int ret = 0;
+	if (WARN_ON(level == max_level))
+		return 0;
+
+	while (level++ < max_level) {
+		u64 numa_set = kvm_get_first_binded_numa_set(kvm);
+
+		ret = kvm_cvm_dev_ttt_create(cvm, ipa, level, numa_set);
+		if (ret)
+			return -ENXIO;
+	}
+
+	return 0;
+}
+
+static int kvm_cvm_map_unmap_ipa_internal(struct kvm *kvm, phys_addr_t ipa_base,
+	phys_addr_t pa, unsigned long map_size, uint32_t is_map)
+{
+	struct virtcca_cvm *virtcca_cvm = (struct virtcca_cvm *)kvm->arch.virtcca_cvm;
+	phys_addr_t rd = virtcca_cvm->rd;
+	unsigned long ipa = ipa_base;
+	unsigned long phys = pa;
+	unsigned long size;
+	int map_level = 3;
+	int ret = 0;
+
+	for (size = 0; size < map_size; size += PAGE_SIZE) {
+		if (is_map)
+			ret = tmi_mmio_map(rd, ipa, CVM_TTT_MAX_LEVEL, phys);
+		else
+			ret = tmi_mmio_unmap(rd, ipa, CVM_TTT_MAX_LEVEL);
+
+		if (TMI_RETURN_STATUS(ret) == TMI_ERROR_TTT_WALK) {
+			/* Create missing TTTs and retry */
+			int level_fault = TMI_RETURN_INDEX(ret);
+
+			if (is_map) {
+				ret = kvm_cvm_create_dev_ttt_levels(kvm, virtcca_cvm, ipa, level_fault,
+						CVM_TTT_MAX_LEVEL, NULL);
+				if (ret)
+					goto err;
+				ret = tmi_mmio_map(rd, ipa, CVM_TTT_MAX_LEVEL, phys);
+			} else {
+				ret = tmi_mmio_unmap(rd, ipa, level_fault);
+			}
+		}
+
+		WARN_ON(ret);
+		if (ret)
+			goto err;
+
+		if (size + PAGE_SIZE >= map_size)
+			break;
+		ipa += PAGE_SIZE;
+		phys += PAGE_SIZE;
+	}
+
+	if (WARN_ON(ret))
+		goto err;
+	return 0;
+
+err:
+	while (size > 0) {
+		phys -= PAGE_SIZE;
+		size -= PAGE_SIZE;
+		ipa -= PAGE_SIZE;
+
+		WARN_ON(tmi_data_destroy(rd, ipa, map_level));
+	}
+	return -ENXIO;
+}
+
+int kvm_cvm_map_unmap_ipa_range(struct kvm *kvm, phys_addr_t ipa_base,
+	phys_addr_t pa, unsigned long map_size, uint32_t is_map)
+{
+	return kvm_cvm_map_unmap_ipa_internal(kvm, ipa_base, pa, map_size, is_map);
+}
+
+int kvm_cvm_map_ipa_mmio(struct kvm *kvm, phys_addr_t ipa_base,
+	phys_addr_t pa, unsigned long map_size)
+{
+	struct virtcca_cvm *virtcca_cvm = (struct virtcca_cvm *)kvm->arch.virtcca_cvm;
+	phys_addr_t rd = virtcca_cvm->rd;
+	unsigned long ipa = ipa_base;
+	unsigned long phys = pa;
+	unsigned long size;
+	int map_level = 3;
+	int ret = 0;
+	gfn_t gfn;
+	kvm_pfn_t pfn;
+
+	if (WARN_ON(!IS_ALIGNED(ipa, map_size)))
+		return -EINVAL;
+
+	for (size = 0; size < map_size; size += PAGE_SIZE) {
+		ret = tmi_mmio_map(rd, ipa, CVM_TTT_MAX_LEVEL, phys);
+		if (ret == TMI_ERROR_TTT_CREATED) {
+			ret = 0;
+			goto label;
+		}
+		if (TMI_RETURN_STATUS(ret) == TMI_ERROR_TTT_WALK) {
+			/* Create missing TTTs and retry */
+			int level_fault = TMI_RETURN_INDEX(ret);
+
+			ret = kvm_cvm_create_dev_ttt_levels(kvm, virtcca_cvm, ipa, level_fault,
+					CVM_TTT_MAX_LEVEL, NULL);
+
+			if (ret)
+				goto err;
+			ret = tmi_mmio_map(rd, ipa, CVM_TTT_MAX_LEVEL, phys);
+		}
+
+		WARN_ON(ret);
+		if (ret)
+			goto err;
+label:
+		if (size + PAGE_SIZE >= map_size)
+			break;
+
+		ipa += PAGE_SIZE;
+		gfn = gpa_to_gfn(ipa);
+		pfn = gfn_to_pfn(kvm, gfn);
+		kvm_set_pfn_accessed(pfn);
+		kvm_release_pfn_clean(pfn);
+		phys = (uint64_t)__pfn_to_phys(pfn);
+
+	}
+	if (WARN_ON(ret))
+		goto err;
+
+	return 0;
+
+err:
+	while (size > 0) {
+		phys -= PAGE_SIZE;
+		size -= PAGE_SIZE;
+		ipa -= PAGE_SIZE;
+		WARN_ON(tmi_data_destroy(rd, ipa, map_level));
+	}
+	return -ENXIO;
 }
 
 static int kvm_cvm_create_protected_data_page(struct kvm *kvm, struct virtcca_cvm *cvm,
@@ -515,18 +727,35 @@ int kvm_cvm_map_range(struct kvm *kvm)
 		}
 	}
 
+	cvm->is_mapped = true;
 	return ret;
 }
 
 static int kvm_activate_cvm(struct kvm *kvm)
 {
+	int ret;
+	struct arm_smmu_domain *arm_smmu_domain;
+	struct list_head smmu_domain_group_list;
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
 
 	if (virtcca_cvm_state(kvm) != CVM_STATE_NEW)
 		return -EINVAL;
 
-	if (kvm_cvm_map_range(kvm))
+	if (!cvm->is_mapped && kvm_cvm_map_range(kvm))
 		return -EFAULT;
+
+	if (kvm_get_arm_smmu_domain(kvm, &smmu_domain_group_list)) {
+		kvm_err("tmi activate cvm: get arm smmu domain failed!\n");
+		return -EFAULT;
+	}
+
+	list_for_each_entry(arm_smmu_domain, &smmu_domain_group_list, node) {
+		if (arm_smmu_domain && arm_smmu_domain->secure) {
+			ret = arm_smmu_tmi_dev_attach(arm_smmu_domain, kvm);
+			if (ret)
+				return ret;
+		}
+	}
 
 	if (tmi_cvm_activate(cvm->rd)) {
 		kvm_err("tmi_cvm_activate failed!\n");

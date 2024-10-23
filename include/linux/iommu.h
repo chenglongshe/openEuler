@@ -1152,6 +1152,11 @@ static inline void *dev_iommu_priv_get(struct device *dev)
 void dev_iommu_priv_set(struct device *dev, void *priv);
 
 extern struct mutex iommu_probe_device_lock;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+struct iommu_domain *iommu_group_get_domain(struct iommu_group *iommu_group);
+#endif
+
 int iommu_probe_device(struct device *dev);
 
 int iommu_dev_enable_feature(struct device *dev, enum iommu_dev_features f);

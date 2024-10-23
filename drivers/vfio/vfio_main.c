@@ -318,6 +318,24 @@ err_out:
 	return ret;
 }
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+bool vfio_iommu_group(struct vfio_group *vfio_group, struct iommu_group *iommu_group)
+{
+	if (vfio_group->iommu_group == iommu_group)
+		return true;
+	return false;
+}
+EXPORT_SYMBOL_GPL(vfio_iommu_group);
+
+struct iommu_group *vfio_get_iommu_group(struct vfio_group *vfio_group)
+{
+	if (vfio_group)
+		return vfio_group->iommu_group;
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(vfio_get_iommu_group);
+#endif
+
 int vfio_register_group_dev(struct vfio_device *device)
 {
 	return __vfio_register_dev(device, VFIO_IOMMU);

@@ -38,6 +38,9 @@
 #include <linux/workqueue.h>
 #include <linux/notifier.h>
 #include "vfio.h"
+#include <asm/kvm_emulate.h>
+#include <asm/kvm_tmi.h>
+#include "../virt/kvm/vfio.h"
 
 #define DRIVER_VERSION  "0.2"
 #define DRIVER_AUTHOR   "Alex Williamson <alex.williamson@redhat.com>"
@@ -77,6 +80,9 @@ struct vfio_iommu {
 	bool			dirty_page_tracking;
 	struct list_head	emulated_iommu_groups;
 	bool			dirty_log_get_no_clear;
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	bool            secure;
+#endif
 };
 
 struct vfio_domain {
@@ -183,6 +189,42 @@ static struct vfio_dma *vfio_find_dma(struct vfio_iommu *iommu,
 
 	return NULL;
 }
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+static bool iommu_domain_get_kvm(struct iommu_domain *domain, struct kvm **kvm)
+{
+	struct arm_smmu_domain *arm_smmu_domain;
+
+	arm_smmu_domain = to_smmu_domain(domain);
+	*kvm = arm_smmu_get_kvm(arm_smmu_domain);
+	if (*kvm && virtcca_is_available())
+		return (*kvm)->arch.is_virtcca_cvm;
+
+	return false;
+}
+
+bool vfio_check_kvm_is_virtcca_cvm(struct vfio_iommu *iommu, struct kvm **kvm)
+{
+	struct vfio_domain *domain;
+	bool is_virtcca_cvm = false;
+
+	if (!virtcca_is_available())
+		return false;
+
+	if (!iommu || !kvm) {
+		WARN_ON(1);
+		return false;
+	}
+	list_for_each_entry(domain, &iommu->domain_list, next) {
+		if (domain && domain->domain && iommu_domain_get_kvm(domain->domain, kvm)) {
+			is_virtcca_cvm = true;
+			break;
+		}
+	}
+
+	return is_virtcca_cvm;
+}
+#endif
 
 static struct rb_node *vfio_find_dma_first_node(struct vfio_iommu *iommu,
 						dma_addr_t start, u64 size)
@@ -1123,8 +1165,18 @@ static long vfio_unmap_unpin(struct vfio_iommu *iommu, struct vfio_dma *dma,
 
 static void vfio_remove_dma(struct vfio_iommu *iommu, struct vfio_dma *dma)
 {
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	struct kvm *kvm;
+
+	if (virtcca_is_available())
+		if (iommu->secure && !vfio_check_kvm_is_virtcca_cvm(iommu, &kvm))
+			goto out;
+#endif
 	WARN_ON(!RB_EMPTY_ROOT(&dma->pfn_list));
 	vfio_unmap_unpin(iommu, dma, true);
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+out:
+#endif
 	vfio_unlink_dma(iommu, dma);
 	put_task_struct(dma->task);
 	mmdrop(dma->mm);
@@ -1629,10 +1681,19 @@ static int vfio_pin_map_dma(struct vfio_iommu *iommu, struct vfio_dma *dma,
 	long npage;
 	unsigned long pfn, limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
 	int ret = 0;
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	struct kvm *kvm;
+	bool is_virtcca_cvm = vfio_check_kvm_is_virtcca_cvm(iommu, &kvm);
+#endif
 
 	vfio_batch_init(&batch);
 
 	while (size) {
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		if (is_virtcca_cvm && !check_virtcca_cvm_vfio_map_dma(kvm, dma->iova)) {
+			break;
+		}
+#endif
 		/* Pin a contiguous chunk of memory */
 		npage = vfio_pin_pages_remote(dma, vaddr + dma->size,
 					      size >> PAGE_SHIFT, &pfn, limit,
@@ -1653,6 +1714,13 @@ static int vfio_pin_map_dma(struct vfio_iommu *iommu, struct vfio_dma *dma,
 			break;
 		}
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		if (is_virtcca_cvm && check_virtcca_cvm_ram_range(kvm, iova)) {
+			vfio_unpin_pages_remote(dma, iova + dma->size, pfn,
+				npage, true);
+			vfio_batch_unpin(&batch, dma);
+		}
+#endif
 		size -= npage << PAGE_SHIFT;
 		dma->size += npage << PAGE_SHIFT;
 	}
@@ -2454,6 +2522,11 @@ static int vfio_iommu_type1_attach_group(void *iommu_data,
 			goto out_domain;
 	}
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (iommu->secure)
+		domain->domain->owner->iommu_enable_secure(domain->domain);
+#endif
+
 	ret = iommu_attach_group(domain->domain, group->iommu_group);
 	if (ret)
 		goto out_domain;
@@ -2807,6 +2880,12 @@ static void *vfio_iommu_type1_open(unsigned long arg)
 	case VFIO_TYPE1v2_IOMMU:
 		iommu->v2 = true;
 		break;
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	case VFIO_TYPE1v2_S_IOMMU:
+		iommu->v2 = true;
+		iommu->secure = true;
+		break;
+#endif
 	default:
 		kfree(iommu);
 		return ERR_PTR(-EINVAL);
@@ -2898,6 +2977,9 @@ static int vfio_iommu_type1_check_extension(struct vfio_iommu *iommu,
 	switch (arg) {
 	case VFIO_TYPE1_IOMMU:
 	case VFIO_TYPE1v2_IOMMU:
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	case VFIO_TYPE1v2_S_IOMMU:
+#endif
 	case VFIO_TYPE1_NESTING_IOMMU:
 	case VFIO_UNMAP_ALL:
 		return 1;

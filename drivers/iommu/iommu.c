@@ -592,6 +592,17 @@ err_put_group:
 	return ret;
 }
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+struct iommu_domain *iommu_group_get_domain(struct iommu_group *iommu_group)
+{
+	if (iommu_group)
+		return iommu_group->domain;
+
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(iommu_group_get_domain);
+#endif
+
 int iommu_probe_device(struct device *dev)
 {
 	const struct iommu_ops *ops;

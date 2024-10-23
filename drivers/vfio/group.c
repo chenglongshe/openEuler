@@ -835,7 +835,7 @@ struct iommu_group *vfio_file_iommu_group(struct file *file)
 	struct vfio_group *group = vfio_group_from_file(file);
 	struct iommu_group *iommu_group = NULL;
 
-	if (!IS_ENABLED(CONFIG_SPAPR_TCE_IOMMU))
+	if (!IS_ENABLED(CONFIG_SPAPR_TCE_IOMMU) && !IS_ENABLED(CONFIG_HISI_VIRTCCA_HOST))
 		return NULL;
 
 	if (!group)
