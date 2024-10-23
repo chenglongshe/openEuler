@@ -426,6 +426,19 @@ config VIRTIO_IOMMU
 
 	  Say Y here if you intend to run this kernel as a guest.
 
+# LOONGARCH IOMMU support
+config LOONGARCH_IOMMU
+	bool "LOONGARCH IOMMU support"
+	select IOMMU_API
+	select IOMMU_DEFAULT_PASSTHROUGH
+	depends on LOONGARCH
+	help
+	  With this option you can enable support for LOONGARCH IOMMU hardware in
+	  your system. An IOMMU is a hardware component which provides
+	  remapping of DMA memory accesses from devices. With an LOONGARCH IOMMU you
+	  can isolate the DMA memory of different devices and protect the
+	  system from misbehaving device drivers or hardware.
+
 config SMMU_BYPASS_DEV
 	bool "SMMU bypass streams for some specific devices"
 	depends on ARM_SMMU_V3=y
