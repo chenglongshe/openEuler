@@ -17,6 +17,10 @@
 #include <linux/vfio.h>
 #include "vfio.h"
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_emulate.h>
+#endif
+
 #ifdef CONFIG_SPAPR_TCE_IOMMU
 #include <asm/kvm_ppc.h>
 #endif
@@ -80,7 +84,7 @@ static bool kvm_vfio_file_is_valid(struct file *file)
 	return ret;
 }
 
-#ifdef CONFIG_SPAPR_TCE_IOMMU
+#if defined CONFIG_SPAPR_TCE_IOMMU || defined CONFIG_HISI_VIRTCCA_HOST
 static struct iommu_group *kvm_vfio_file_iommu_group(struct file *file)
 {
 	struct iommu_group *(*fn)(struct file *file);
@@ -96,7 +100,9 @@ static struct iommu_group *kvm_vfio_file_iommu_group(struct file *file)
 
 	return ret;
 }
+#endif
 
+#ifdef ONFIG_SPAPR_TCE_IOMMU
 static void kvm_spapr_tce_release_vfio_group(struct kvm *kvm,
 					     struct kvm_vfio_file *kvf)
 {
@@ -142,6 +148,9 @@ static void kvm_vfio_update_coherency(struct kvm_device *dev)
 
 static int kvm_vfio_file_add(struct kvm_device *dev, unsigned int fd)
 {
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	struct iommu_group *iommu_group;
+#endif
 	struct kvm_vfio *kv = dev->private;
 	struct kvm_vfio_file *kvf;
 	struct file *filp;
@@ -178,6 +187,18 @@ static int kvm_vfio_file_add(struct kvm_device *dev, unsigned int fd)
 	kvm_arch_start_assignment(dev->kvm);
 	kvm_vfio_file_set_kvm(kvf->file, dev->kvm);
 	kvm_vfio_update_coherency(dev);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	iommu_group = kvm_vfio_file_iommu_group(filp);
+	if (!iommu_group) {
+		ret = -ENXIO;
+		goto out_unlock;
+	}
+	if (cvm_arm_smmu_domain_set_kvm(iommu_group)) {
+		ret = -ENXIO;
+		goto out_unlock;
+	}
+#endif
 
 out_unlock:
 	mutex_unlock(&kv->lock);
@@ -392,3 +413,101 @@ void kvm_vfio_ops_exit(void)
 {
 	kvm_unregister_device_ops(KVM_DEV_TYPE_VFIO);
 }
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+struct kvm *arm_smmu_get_kvm(struct arm_smmu_domain *domain)
+{
+	int ret = -1;
+	struct kvm *kvm;
+	struct kvm_device *dev;
+	struct kvm_vfio *kv;
+	struct kvm_vfio_file *kvf;
+	struct iommu_group *iommu_group;
+
+	unsigned long flags;
+	struct arm_smmu_master *master;
+
+	spin_lock_irqsave(&domain->devices_lock, flags);
+	list_for_each_entry(master, &domain->devices, domain_head) {
+		if (master && master->num_streams >= 0) {
+			ret = 0;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&domain->devices_lock, flags);
+	if (ret)
+		return NULL;
+
+	ret = -1;
+	iommu_group = master->dev->iommu_group;
+	mutex_lock(&kvm_lock);
+	list_for_each_entry(kvm, &vm_list, vm_list) {
+		mutex_lock(&kvm->lock);
+		list_for_each_entry(dev, &kvm->devices, vm_node) {
+			if (dev->ops && strcmp(dev->ops->name, "kvm-vfio") == 0) {
+				kv = (struct kvm_vfio *)dev->private;
+				mutex_lock(&kv->lock);
+				list_for_each_entry(kvf, &kv->file_list, node) {
+					if (kvm_vfio_file_iommu_group(kvf->file) == iommu_group) {
+						ret = 0;
+						break;
+					}
+				}
+				mutex_unlock(&kv->lock);
+				if (!ret)
+					break;
+			}
+		}
+		mutex_unlock(&kvm->lock);
+		if (!ret)
+			break;
+	}
+	mutex_unlock(&kvm_lock);
+
+	if (ret)
+		return NULL;
+	return kvm;
+}
+
+void find_arm_smmu_domain(struct kvm_vfio_file *kvf, struct list_head *smmu_domain_group_list)
+{
+	struct iommu_group *iommu_group;
+	int ret = 0;
+	struct arm_smmu_domain *arm_smmu_domain = NULL;
+	struct arm_smmu_domain *arm_smmu_domain_node = NULL;
+
+	iommu_group = kvm_vfio_file_iommu_group(kvf->file);
+	arm_smmu_domain = to_smmu_domain(iommu_group_get_domain(iommu_group));
+	list_for_each_entry(arm_smmu_domain_node,
+		smmu_domain_group_list, node) {
+		if (arm_smmu_domain_node == arm_smmu_domain) {
+			ret = -1;
+			break;
+		}
+	}
+	if (!ret)
+		list_add_tail(&arm_smmu_domain->node, smmu_domain_group_list);
+}
+
+int kvm_get_arm_smmu_domain(struct kvm *kvm, struct list_head *smmu_domain_group_list)
+{
+	struct kvm_device *dev;
+	struct kvm_vfio *kv;
+	struct kvm_vfio_file *kvf;
+
+	INIT_LIST_HEAD(smmu_domain_group_list);
+
+	list_for_each_entry(dev, &kvm->devices, vm_node) {
+		if (dev->ops && strcmp(dev->ops->name, "kvm-vfio") == 0) {
+			kv = (struct kvm_vfio *)dev->private;
+			mutex_lock(&kv->lock);
+			list_for_each_entry(kvf, &kv->file_list, node) {
+				find_arm_smmu_domain(kvf, smmu_domain_group_list);
+			}
+			mutex_unlock(&kv->lock);
+		}
+	}
+
+	return 0;
+}
+#endif
