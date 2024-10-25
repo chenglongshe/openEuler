@@ -476,6 +476,21 @@ static int config_cvm_pmu(struct kvm *kvm, struct kvm_cap_arm_tmm_config_item *c
 	return 0;
 }
 
+static int config_cvm_kae(struct kvm *kvm, struct kvm_cap_arm_tmm_config_item *cfg)
+{
+	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+	struct tmi_cvm_params *params;
+
+	params = cvm->params;
+
+	params->kae_vf_num = cfg->kae_vf_num;
+	memcpy(params->sec_addr, cfg->sec_addr, cfg->kae_vf_num * sizeof(u64));
+	memcpy(params->hpre_addr, cfg->sec_addr, cfg->kae_vf_num * sizeof(u64));
+	params->flags |= TMI_CVM_PARAM_FLAG_KAE;
+
+	return 0;
+}
+
 static int kvm_tmm_config_cvm(struct kvm *kvm, struct kvm_enable_cap *cap)
 {
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
@@ -498,6 +513,10 @@ static int kvm_tmm_config_cvm(struct kvm *kvm, struct kvm_enable_cap *cap)
 	case KVM_CAP_ARM_TMM_CFG_HASH_ALGO:
 		r = config_cvm_hash_algo(cvm->params, &cfg);
 		break;
+	case KVM_CAP_ARM_TMM_CFG_KAE:
+		r = config_cvm_kae(kvm, &cfg);
+		break;
+
 	default:
 		r = -EINVAL;
 	}

@@ -49,6 +49,7 @@
 #define TMI_CVM_PARAM_FLAG_LPA2	BIT(0)
 #define TMI_CVM_PARAM_FLAG_SVE		BIT(1)
 #define TMI_CVM_PARAM_FLAG_PMU		BIT(2)
+#define TMI_CVM_PARAM_FLAG_KAE		BIT(3)
 
 #define TMI_NOT_RUNNABLE	0
 #define TMI_RUNNABLE		1
@@ -304,6 +305,9 @@ struct tmi_tec_run {
 #define KVM_CAP_ARM_TMM_CFG_SVE					2
 #define KVM_CAP_ARM_TMM_CFG_DBG					3
 #define KVM_CAP_ARM_TMM_CFG_PMU					4
+#define KVM_CAP_ARM_TMM_CFG_KAE					5
+
+#define KVM_MAX_KAE_VF_NUM		11
 
 DECLARE_STATIC_KEY_FALSE(virtcca_cvm_is_available);
 
@@ -334,6 +338,13 @@ struct kvm_cap_arm_tmm_config_item {
 		/* cfg == KVM_CAP_ARM_TMM_CFG_PMU */
 		struct {
 			__u32	num_pmu_cntrs;
+		};
+
+		/* cfg == KVM_CAP_ARM_TMM_CFG_KAE */
+		struct {
+			__u32	kae_vf_num;
+			__u64	sec_addr[KVM_MAX_KAE_VF_NUM];
+			__u64	hpre_addr[KVM_MAX_KAE_VF_NUM];
 		};
 		/* Fix the size of the union */
 		__u8	reserved[256];
