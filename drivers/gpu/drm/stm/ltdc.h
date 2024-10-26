@@ -21,6 +21,7 @@ struct ltdc_caps {
 	bool non_alpha_only_l1; /* non-native no-alpha formats on layer 1 */
 	int pad_max_freq_hz;	/* max frequency supported by pad */
 	int nb_irq;		/* number of hardware interrupts */
+	bool crc;		/* cyclic redundancy check supported */
 };
 
 #define LTDC_MAX_LAYER	4
@@ -39,6 +40,8 @@ struct ltdc_device {
 	u32 irq_status;
 	struct fps_info plane_fpsi[LTDC_MAX_LAYER];
 	struct drm_atomic_state *suspend_state;
+	int crc_skip_count;
+	bool crc_active;
 };
 
 int ltdc_load(struct drm_device *ddev);
