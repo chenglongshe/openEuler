@@ -314,7 +314,11 @@ struct bpf_func_state {
 	 */
 	u32 async_entry_cnt;
 	bool in_callback_fn;
-	struct bpf_retval_range callback_ret_range;
+	union {
+		struct bpf_retval_range callback_ret_range;
+		/* Reserved, for kabi alignment */
+		u64 reserved[2];
+	};
 	bool in_async_callback_fn;
 	/* For callback calling functions that limit number of possible
 	 * callback executions (e.g. bpf_loop) keeps track of current
