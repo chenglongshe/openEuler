@@ -157,6 +157,15 @@ static inline bool vgic_direct_sgi_or_ppi(struct vgic_irq *irq)
 #endif
 }
 
+enum GIC_VERSION {
+	GICV2,
+	GICV3,
+	GICV4,
+	GICV4_1,
+	UNKNOWN_GIC_VERSION
+};
+extern enum GIC_VERSION global_gic_version;
+
 /*
  * This struct provides an intermediate representation of the fields contained
  * in the GICH_VMCR and ICH_VMCR registers, such that code exporting the GIC
