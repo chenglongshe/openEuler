@@ -68,6 +68,13 @@
  */
 #define SMC_TSI_DEVICE_CERT                 SMC_TSI_FID(0x19A)
 
+/*
+ * arg0: Paddr of rd
+ * arg1: Paddr of memory to unmap
+ * arg2: Size of memory to unmap
+ */
+ #define SMC_TSI_SEC_MEM_UNMAP                 SMC_TSI_FID(0x19C)
+
 static inline unsigned long tsi_get_version(void)
 {
 	struct arm_smccc_res res;
@@ -162,6 +169,13 @@ static inline unsigned long tsi_get_device_cert(unsigned char *device_cert,
 	*device_cert_size = res.a1;
 
 	return res.a0;
+}
+
+static inline void swiotlb_unmap_notify(u64 paddr, u64 size)
+{
+        struct arm_smccc_res res;
+
+        arm_smccc_1_1_smc(SMC_TSI_SEC_MEM_UNMAP, paddr, size, &res);
 }
 
 #endif /* CONFIG_HISI_VIRTCCA_GUEST */
