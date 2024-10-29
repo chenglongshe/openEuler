@@ -18,6 +18,11 @@ static inline bool rvc_enabled(void)
 	return IS_ENABLED(CONFIG_RISCV_ISA_C);
 }
 
+static inline bool rvzacas_enabled(void)
+{
+	return IS_ENABLED(CONFIG_RISCV_ISA_ZACAS) && riscv_has_extension_likely(RISCV_ISA_EXT_ZACAS);
+}
+
 enum {
 	RV_REG_ZERO =	0,	/* The constant value 0 */
 	RV_REG_RA =	1,	/* Return address */
@@ -870,6 +875,17 @@ static inline u16 rvc_sdsp(u32 imm9, u8 rs2)
 
 	imm = (imm9 & 0x38) | ((imm9 & 0x1c0) >> 6);
 	return rv_css_insn(0x7, imm, rs2, 0x2);
+}
+
+/* RVZACAS instructions. */
+static inline u32 rvzacas_amocas_w(u8 rd, u8 rs2, u8 rs1, u8 aq, u8 rl)
+{
+	return rv_amo_insn(0x5, aq, rl, rs2, rs1, 2, rd, 0x2f);
+}
+
+static inline u32 rvzacas_amocas_d(u8 rd, u8 rs2, u8 rs1, u8 aq, u8 rl)
+{
+	return rv_amo_insn(0x5, aq, rl, rs2, rs1, 3, rd, 0x2f);
 }
 
 #endif /* __riscv_xlen == 64 */
