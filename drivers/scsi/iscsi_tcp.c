@@ -29,6 +29,7 @@
 #include <linux/scatterlist.h>
 #include <linux/module.h>
 #include <linux/backing-dev.h>
+#include <linux/skmsg.h>
 #include <net/tcp.h>
 #include <scsi/scsi_cmnd.h>
 #include <scsi/scsi_device.h>
@@ -686,6 +687,10 @@ iscsi_sw_tcp_conn_bind(struct iscsi_cls_session *cls_session,
 				  "sockfd_lookup failed %d\n", err);
 		return -EEXIST;
 	}
+
+	err = -EINVAL;
+	if (!sk_is_tcp(sock->sk))
+		goto free_socket;
 
 	err = iscsi_conn_bind(cls_session, cls_conn, is_leading);
 	if (err)
