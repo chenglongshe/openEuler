@@ -988,3 +988,8 @@ struct iommu_group *virtcca_vfio_file_iommu_group(struct file *file)
 }
 EXPORT_SYMBOL_GPL(virtcca_vfio_file_iommu_group);
 #endif
+
+struct vfio_iommu *vfio_iommu_get_from_device(struct device *dev)
+{
+}
+EXPORT_SYMBOL(vfio_iommu_get_from_device);
