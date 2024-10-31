@@ -127,7 +127,6 @@ gm_ret_t gmem_map(struct gm_fault_t *gmf)
 	struct mm_struct *mm = gmf->mm;
 	struct svm_proc *proc = search_svm_proc_by_mm(mm);
 	struct gm_pager_msg_rq req = {
-		.peer_pid = proc->peer_pid,
 		.va = gmf->va,
 		.size = gmf->size,
 		.behavior = gmf->behavior
@@ -138,6 +137,7 @@ gm_ret_t gmem_map(struct gm_fault_t *gmf)
 		return -EBUSY;
 	}
 
+	req.peer_pid = proc->peer_pid;
 	ws = get_wait_station();
 	req.my_ws = ws->id;
 
@@ -174,7 +174,6 @@ gm_ret_t gmem_unmap(struct gm_fault_t *gmf)
 	struct mm_struct *mm = gmf->mm;
 	struct svm_proc *proc = search_svm_proc_by_mm(mm);
 	struct gm_pager_msg_rq req = {
-		.peer_pid = proc->peer_pid,
 		.va = gmf->va,
 		.size = gmf->size,
 	};
@@ -184,6 +183,7 @@ gm_ret_t gmem_unmap(struct gm_fault_t *gmf)
 		return -EBUSY;
 	}
 
+	req.peer_pid = proc->peer_pid;
 	if (gmf->copy) {
 		req.flags |= GMEM_COPY_PAGE;
 		req.dma_addr = gmf->dma_addr;
@@ -215,7 +215,6 @@ gm_ret_t gmem_alloc(struct mm_struct *mm, unsigned long va, unsigned long size,
 	struct comm_msg_rsp *rsp;
 	struct svm_proc *proc = search_svm_proc_by_mm(mm);
 	struct gm_pager_msg_rq req = {
-		.peer_pid = proc->peer_pid,
 		.va = va,
 		.size = size,
 		.prot = prot,
@@ -226,6 +225,7 @@ gm_ret_t gmem_alloc(struct mm_struct *mm, unsigned long va, unsigned long size,
 		return -EBUSY;
 	}
 
+	req.peer_pid = proc->peer_pid;
 	ws = get_wait_station();
 	req.my_ws = ws->id;
 	ret = msg_send_nid(GMEM_ALLOC_VMA_REQUEST, proc->nid, proc->peer_nid,
@@ -250,7 +250,6 @@ gm_ret_t gmem_free(struct mm_struct *mm, unsigned long va, unsigned long size)
 	struct comm_msg_rsp *rsp;
 	struct svm_proc *proc = search_svm_proc_by_mm(mm);
 	struct gm_pager_msg_rq req = {
-		.peer_pid = proc->peer_pid,
 		.va = va,
 		.size = size,
 	};
@@ -260,6 +259,7 @@ gm_ret_t gmem_free(struct mm_struct *mm, unsigned long va, unsigned long size)
 		return -EBUSY;
 	}
 
+	req.peer_pid = proc->peer_pid;
 	ws = get_wait_station();
 	req.my_ws = ws->id;
 	ret = msg_send_nid(GMEM_FREE_VMA_REQUEST, proc->nid, proc->peer_nid,
