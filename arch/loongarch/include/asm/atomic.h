@@ -160,8 +160,10 @@ static inline int arch_atomic_sub_if_positive(int i, atomic_t *v)
 		"	bltz	%0, 2f					\n"
 		"	sc.w	%1, %2					\n"
 		"	beqz	%1, 1b					\n"
+		"	b	3f					\n"
 		"2:							\n"
 		__WEAK_LLSC_MB
+		"3:							\n"
 		: "=&r" (result), "=&r" (temp), "+ZC" (v->counter)
 		: "I" (-i));
 	} else {
@@ -172,8 +174,10 @@ static inline int arch_atomic_sub_if_positive(int i, atomic_t *v)
 		"	bltz	%0, 2f					\n"
 		"	sc.w	%1, %2					\n"
 		"	beqz	%1, 1b					\n"
+		"	b	3f					\n"
 		"2:							\n"
 		__WEAK_LLSC_MB
+		"3:							\n"
 		: "=&r" (result), "=&r" (temp), "+ZC" (v->counter)
 		: "r" (i));
 	}
@@ -321,8 +325,10 @@ static inline long arch_atomic64_sub_if_positive(long i, atomic64_t *v)
 		"	bltz	%0, 2f					\n"
 		"	sc.d	%1, %2					\n"
 		"	beqz	%1, 1b					\n"
+		"	b	3f					\n"
 		"2:							\n"
 		__WEAK_LLSC_MB
+		"3:							\n"
 		: "=&r" (result), "=&r" (temp), "+ZC" (v->counter)
 		: "I" (-i));
 	} else {
@@ -333,8 +339,10 @@ static inline long arch_atomic64_sub_if_positive(long i, atomic64_t *v)
 		"	bltz	%0, 2f					\n"
 		"	sc.d	%1, %2					\n"
 		"	beqz	%1, 1b					\n"
+		"	b	3f					\n"
 		"2:							\n"
 		__WEAK_LLSC_MB
+		"3:							\n"
 		: "=&r" (result), "=&r" (temp), "+ZC" (v->counter)
 		: "r" (i));
 	}

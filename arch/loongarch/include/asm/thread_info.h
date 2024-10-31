@@ -101,6 +101,7 @@ register unsigned long current_stack_pointer __asm__("$sp");
 #define _TIF_SINGLESTEP		(1<<TIF_SINGLESTEP)
 #define _TIF_LSX_CTX_LIVE	(1<<TIF_LSX_CTX_LIVE)
 #define _TIF_LASX_CTX_LIVE	(1<<TIF_LASX_CTX_LIVE)
+#define _TIF_SECCOMP		(1<<TIF_SECCOMP)
 
 #endif /* __KERNEL__ */
 #endif /* _ASM_THREAD_INFO_H */

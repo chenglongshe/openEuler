@@ -410,7 +410,6 @@ config SMP
 config HOTPLUG_CPU
 	bool "Support for hot-pluggable CPUs"
 	depends on SMP
-	select GENERIC_IRQ_MIGRATION
 	help
 	  Say Y here to allow turning CPUs off and on. CPUs can be
 	  controlled through /sys/devices/system/cpu.
@@ -441,6 +440,13 @@ config NODES_SHIFT
 	int
 	default "6"
 	depends on NUMA
+
+config VA_BITS_40
+	bool "40-bits"
+	default y
+	depends on 64BIT
+	help
+	  Support a maximum at least 40 bits of application virtual memory.
 
 config ARCH_FORCE_MAX_ORDER
 	int "Maximum zone order"

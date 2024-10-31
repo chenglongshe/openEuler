@@ -102,8 +102,10 @@ __arch_xchg(volatile void *ptr, unsigned long x, int size)
 	"	move	$t0, %z4			\n"		\
 	"	" st "	$t0, %1				\n"		\
 	"	beqz	$t0, 1b				\n"		\
+	"	b	3f				\n"		\
 	"2:						\n"		\
 	__WEAK_LLSC_MB							\
+	"3:						\n"		\
 	: "=&r" (__ret), "=ZB"(*m)					\
 	: "ZB"(*m), "Jr" (old), "Jr" (new)				\
 	: "t0", "memory");						\
