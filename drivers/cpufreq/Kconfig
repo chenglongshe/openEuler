@@ -203,15 +203,6 @@ config CPU_FREQ_GOV_SCHEDUTIL
 
 	  If in doubt, say N.
 
-config CPU_FREQ_GOV_BPF
-	bool "BPF based cpufreq policy governor"
-	depends on CPU_FREQ && BPF_SYSCALL && BPF_JIT && DEBUG_INFO_BTF
-	select CPU_FREQ_GOV_COMMON
-	help
-	  This governor is BPF based cpufreq governor.
-
-	  If in doubt, say N.
-
 comment "CPU frequency scaling drivers"
 
 config CPUFREQ_DT
