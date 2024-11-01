@@ -42,6 +42,7 @@
 #include <linux/string.h>
 #include <linux/swiotlb.h>
 #include <linux/types.h>
+#include <asm/virtcca_cvm_smc.h>
 #ifdef CONFIG_DMA_RESTRICTED_POOL
 #include <linux/of.h>
 #include <linux/of_fdt.h>
@@ -1747,6 +1748,7 @@ void __init swiotlb_cvm_update_mem_attributes(void)
 	bytes = PAGE_ALIGN(io_tlb_default_mem.defpool.nslabs << IO_TLB_SHIFT);
 	set_cvm_memory_decrypted((unsigned long)vaddr, bytes >> PAGE_SHIFT);
 	memset(vaddr, 0, bytes);
+	swiotlb_unmap_notify(io_tlb_default_mem.defpool.start, bytes);
 	io_tlb_default_mem.for_alloc = true;
 }
 #endif
