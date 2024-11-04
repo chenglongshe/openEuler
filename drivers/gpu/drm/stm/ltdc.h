@@ -14,12 +14,14 @@
 struct ltdc_caps {
 	u32 hw_version;		/* hardware version */
 	u32 nb_layers;		/* number of supported layers */
-	u32 reg_ofs;		/* register offset for applicable regs */
+	u32 layer_ofs;		/* layer offset for applicable regs */
+	const u32 *layer_regs;	/* layer register offset */
 	u32 bus_width;		/* bus width (32 or 64 bits) */
 	const u32 *pix_fmt_hw;	/* supported pixel formats */
 	bool non_alpha_only_l1; /* non-native no-alpha formats on layer 1 */
 	int pad_max_freq_hz;	/* max frequency supported by pad */
 	int nb_irq;		/* number of hardware interrupts */
+	bool crc;		/* cyclic redundancy check supported */
 };
 
 #define LTDC_MAX_LAYER	4
@@ -38,6 +40,8 @@ struct ltdc_device {
 	u32 irq_status;
 	struct fps_info plane_fpsi[LTDC_MAX_LAYER];
 	struct drm_atomic_state *suspend_state;
+	int crc_skip_count;
+	bool crc_active;
 };
 
 int ltdc_load(struct drm_device *ddev);
