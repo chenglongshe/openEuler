@@ -921,6 +921,7 @@ struct bpf_insn_access_aux {
 		};
 	};
 	struct bpf_verifier_log *log; /* for verbose logs */
+	KABI_EXTEND(bool is_ldsx)
 };
 
 static inline void
