@@ -582,6 +582,7 @@ static int __copy_gigantic_page(struct page *dst, struct page *src,
 static int __copy_huge_page(struct page *dst, struct page *src, bool mc)
 {
 	int nr_pages;
+	int ret;
 
 	if (PageHuge(src)) {
 		/* hugetlbfs page */
