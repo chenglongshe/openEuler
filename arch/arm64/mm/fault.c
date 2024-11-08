@@ -729,6 +729,9 @@ static int do_bad(unsigned long addr, unsigned int esr, struct pt_regs *regs)
 static bool arm64_do_kernel_sea(void __user *addr, unsigned int esr,
 				struct pt_regs *regs, int sig, int code)
 {
+	u64 orig_pc = regs->pc;
+	int err;
+
 	if (!IS_ENABLED(CONFIG_ARCH_HAS_COPY_MC))
 		return false;
 
@@ -738,13 +741,20 @@ static bool arm64_do_kernel_sea(void __user *addr, unsigned int esr,
 	if (user_mode(regs))
 		return false;
 
-	if (apei_claim_sea(regs) < 0)
-		return false;
-
 	if (!fixup_exception_mc(regs))
 		return false;
 
-	if (current->flags & PF_KTHREAD)
+	err = apei_claim_sea(regs);
+	regs->pc = orig_pc;
+
+	if (err) {
+		pr_emerg("apei claim sea failed. addr: %#lx, esr: %#x\n",
+			 (unsigned long)addr, esr);
+		if (!current->mm)
+			return false;
+	}
+
+	if (!current->mm)
 		return true;
 
 	set_thread_esr(0, esr);
