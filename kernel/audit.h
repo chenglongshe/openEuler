@@ -198,7 +198,9 @@ struct audit_context {
 		struct open_how openat2;
 		struct {
 			int			argc;
+#ifndef __GENKSYMS__
 			bool                    is_check;
+#endif
 		} execve;
 		struct {
 			char			*name;
