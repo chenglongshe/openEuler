@@ -38,16 +38,20 @@ struct linux_binprm {
 		 * AT_SECURE auxv for glibc.
 		 */
 		secureexec:1,
+#ifdef __GENKSYMS__
 		/*
 		 * Set when errors can no longer be returned to the
 		 * original userspace.
 		 */
+		point_of_no_return:1;
+#else
 		point_of_no_return:1,
 		/*
 		 * Set by user space to check executability according to the
 		 * caller's environment.
 		 */
 		is_check:1;
+#endif
 	struct file *executable; /* Executable to pass to the interpreter */
 	struct file *interpreter;
 	struct file *file;
