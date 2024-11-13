@@ -1871,6 +1871,8 @@ build_sched_domains(const struct cpumask *cpu_map, struct sched_domain_attr *att
 		}
 	}
 
+	zx_set_sd_asym_packing_flag(cpu_map, d.sd);
+
 	/* Calculate CPU capacity for physical packages and nodes */
 	for (i = nr_cpumask_bits-1; i >= 0; i--) {
 		if (!cpumask_test_cpu(i, cpu_map))
@@ -1881,6 +1883,8 @@ build_sched_domains(const struct cpumask *cpu_map, struct sched_domain_attr *att
 			init_sched_groups_capacity(i, sd);
 		}
 	}
+
+	zx_clear_sd_prefer_sibling_flag(cpu_map, d.sd);
 
 	/*
 	 * Allocate shared sd data at last level cache.  Must be done after
