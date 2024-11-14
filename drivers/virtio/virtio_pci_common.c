@@ -14,6 +14,7 @@
  *  Michael S. Tsirkin <mst@redhat.com>
  */
 
+#include <linux/virtcca_cvm_domain.h>
 #include "virtio_pci_common.h"
 
 static bool force_legacy = false;
@@ -524,6 +525,8 @@ static int virtio_pci_probe(struct pci_dev *pci_dev,
 {
 	struct virtio_pci_device *vp_dev, *reg_dev = NULL;
 	int rc;
+
+	enable_swiotlb_for_cvm_dev(&pci_dev->dev, true);
 
 	/* allocate our structure and fill it out */
 	vp_dev = kzalloc(sizeof(struct virtio_pci_device), GFP_KERNEL);
