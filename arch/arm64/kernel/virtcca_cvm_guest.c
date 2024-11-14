@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/vmalloc.h>
+#include <linux/swiotlb.h>
 
 #include <asm/cacheflush.h>
 #include <asm/set_memory.h>
@@ -118,6 +119,23 @@ int set_cvm_memory_encrypted(unsigned long addr, int numpages)
 int set_cvm_memory_decrypted(unsigned long addr, int numpages)
 {
 	return __set_memory_encrypted(addr, numpages, false);
+}
+
+static struct io_tlb_mem empty_swiotlb_mem = {
+	.for_alloc = false,
+	.force_bounce = false,
+};
+
+void enable_swiotlb_for_cvm_dev(struct device *dev, bool enable)
+{
+	if (!is_virtcca_cvm_world())
+		return;
+
+	if (enable) {
+		swiotlb_dev_init(dev);
+	} else {
+		dev->dma_io_tlb_mem = &empty_swiotlb_mem;
+	}
 }
 
 void swiotlb_unmap_notify(unsigned long paddr, unsigned long size)

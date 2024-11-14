@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* 
- *  Copyright (C) 2024. Huawei Technologies Co., Ltd. All rights reserved.
+/*
+ * Copyright (C) 2024. Huawei Technologies Co., Ltd. All rights reserved.
  */
 
 #ifndef __VIRTCCA_CVM_DOMAIN_H
@@ -14,12 +14,17 @@ static inline bool virtcca_cvm_domain(void)
 	return is_virtcca_cvm_world();
 }
 
+void enable_swiotlb_for_cvm_dev(struct device *dev, bool enable);
+
 #else
 
 static inline bool virtcca_cvm_domain(void)
 {
-        return false;
+	return false;
 }
+
+void enable_swiotlb_for_cvm_dev(struct device *dev, bool enable) {}
+
 #endif
 
 #endif /* __VIRTCCA_CVM_DOMAIN_H */

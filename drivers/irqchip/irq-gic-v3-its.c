@@ -6191,6 +6191,7 @@ int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
 #ifdef CONFIG_HISI_VIRTCCA_GUEST
 	if (is_virtcca_cvm_world()) {
 		device_initialize(&cvm_alloc_device);
+		enable_swiotlb_for_cvm_dev(&cvm_alloc_device, true);
 		raw_spin_lock_init(&cvm_its_lock);
 	}
 #endif
