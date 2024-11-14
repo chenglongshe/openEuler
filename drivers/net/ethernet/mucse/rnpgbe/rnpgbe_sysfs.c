@@ -367,6 +367,12 @@ static ssize_t rx_desc_info_show(struct device *dev,
 	int ret = 0;
 	union rnpgbe_rx_desc *desc;
 
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
+
 	desc = RNP_RX_DESC(ring, rx_desc_num);
 	ret += sprintf(buf + ret, "rx ring %d desc %d:\n", rx_ring_num,
 		       rx_desc_num);
@@ -648,6 +654,12 @@ static ssize_t tx_desc_info_show(struct device *dev,
 	int ret = 0;
 	struct rnpgbe_tx_desc *desc;
 
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
+
 	desc = RNP_TX_DESC(ring, tx_desc_num);
 	ret += sprintf(buf + ret, "tx ring %d desc %d:\n", tx_ring_num,
 		       tx_desc_num);
@@ -689,6 +701,12 @@ static ssize_t rx_ring_info_show(struct device *dev,
 	struct rnpgbe_ring *ring = adapter->rx_ring[rx_ring_num];
 	int ret = 0;
 	union rnpgbe_rx_desc *rx_desc;
+
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
 
 	ret += sprintf(buf + ret, "queue %d info:\n", rx_ring_num);
 
@@ -830,6 +848,12 @@ static ssize_t tx_ring_info_show(struct device *dev,
 	int ret = 0;
 	struct rnpgbe_tx_buffer *tx_buffer;
 	struct rnpgbe_tx_desc *eop_desc;
+
+	if (test_bit(__RNP_DOWN, &adapter->state)) {
+		ret += sprintf(buf + ret, "port not up\n");
+
+		return ret;
+	}
 
 	ret += sprintf(buf + ret, "queue %d info:\n", tx_ring_num);
 	ret += sprintf(buf + ret, "next_to_use %d\n", ring->next_to_use);
