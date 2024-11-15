@@ -115,6 +115,10 @@ void arch_setup_new_exec(void);
 				 _TIF_SYSCALL_TRACEPOINT | _TIF_SECCOMP | \
 				 _TIF_SYSCALL_EMU)
 
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+#define _TIF_XCALL_WORK		_TIF_SYSCALL_AUDIT
+#endif
+
 #ifdef CONFIG_SHADOW_CALL_STACK
 #define INIT_SCS							\
 	.scs_base	= init_shadow_call_stack,			\

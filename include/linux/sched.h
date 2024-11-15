@@ -1606,7 +1606,11 @@ struct task_struct {
 	 */
 	randomized_struct_fields_end
 
+#if defined(CONFIG_ARCH_SUPPORTS_XCALL)
+	KABI_USE(1, unsigned long *xcall_enable)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
