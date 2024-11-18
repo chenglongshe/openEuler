@@ -16,6 +16,7 @@
 #	AArch64, PARISC ports by Kyle McMartin
 #	sparc port by Martin Habets <errandir_news@mph.eclipse.co.uk>
 #	ppc64le port by Breno Leitao <leitao@debian.org>
+#	loongarch port by Youling Tang <tangyouling@kylinos.cn>
 #
 #	Usage:
 #	objdump -d vmlinux | scripts/checkstack.pl [arch]
@@ -108,6 +109,9 @@ my (@stack, $re, $dre, $sub, $x, $xs, $funcre, $min_stack);
 	} elsif ($arch eq 'sparc' || $arch eq 'sparc64') {
 		# f0019d10:       9d e3 bf 90     save  %sp, -112, %sp
 		$re = qr/.*save.*%sp, -(([0-9]{2}|[3-9])[0-9]{2}), %sp/o;
+	} elsif ($arch =~ /^loongarch(32|64)?$/) {
+		#9000000000224708:      02ff4063                addi.d  $sp, $sp, -48(0xfd0)
+		$re = qr/.*addi\..*sp, .*sp, -([0-9]{1,8}).*/o;
 	} else {
 		print("wrong or unknown architecture \"$arch\"\n");
 		exit
