@@ -228,11 +228,31 @@ int vgic_uaccess_write_cenable(struct kvm_vcpu *vcpu,
 	return 0;
 }
 
+#define HIP10_MIDR	0x480fd030
+#define VIRTUAL_SGI_PENDING_OFFSET	0x3F0
+static bool hip10_erratum_162200806_workaround(struct kvm_vcpu *vcpu,
+					       struct vgic_irq *irq)
+{
+	struct its_vpe *vpe;
+	void *va;
+	u8 *ptr;
+	int mask;
+
+	vpe = &vcpu->arch.vgic_cpu.vgic_v3.its_vpe;
+	WARN_ON(vpe->resident);
+	mask = BIT(irq->intid % BITS_PER_BYTE);
+	va = page_address(vpe->vpt_page);
+	ptr = va + VIRTUAL_SGI_PENDING_OFFSET +
+	      irq->intid / BITS_PER_BYTE;
+	return *ptr & mask;
+}
+
 static unsigned long __read_pending(struct kvm_vcpu *vcpu,
 				    gpa_t addr, unsigned int len,
 				    bool is_user)
 {
 	u32 intid = VGIC_ADDR_TO_INTID(addr, 1);
+	u32 midr = read_cpuid_id();
 	u32 value = 0;
 	int i;
 
@@ -252,14 +272,20 @@ static unsigned long __read_pending(struct kvm_vcpu *vcpu,
 		 * for handling of ISPENDR and ICPENDR.
 		 */
 		raw_spin_lock_irqsave(&irq->irq_lock, flags);
+		/* direct ppi has not been commercial used */
 		if (vgic_direct_sgi_or_ppi(irq)) {
-			int err;
+			if (midr == HIP10_MIDR) {
+				val = hip10_erratum_162200806_workaround(vcpu,
+									 irq);
+			} else {
+				int err;
 
-			val = false;
-			err = irq_get_irqchip_state(irq->host_irq,
+				val = false;
+				err = irq_get_irqchip_state(irq->host_irq,
 						    IRQCHIP_STATE_PENDING,
 						    &val);
-			WARN_RATELIMIT(err, "IRQ %d", irq->host_irq);
+				WARN_RATELIMIT(err, "IRQ %d", irq->host_irq);
+			}
 		} else if (!is_user && vgic_irq_is_mapped_level(irq)) {
 			val = vgic_get_phys_line_level(irq);
 		} else {
