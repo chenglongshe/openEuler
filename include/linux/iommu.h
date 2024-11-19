@@ -697,8 +697,9 @@ struct iommu_ops {
 			      struct iommu_page_response *msg);
 
 	int (*def_domain_type)(struct device *dev);
-	void (*remove_dev_pasid)(struct device *dev, ioasid_t pasid,
-				 struct iommu_domain *domain);
+	KABI_REPLACE(void (*remove_dev_pasid)(struct device *dev, ioasid_t pasid),
+		     void (*remove_dev_pasid)(struct device *dev, ioasid_t pasid,
+					      struct iommu_domain *domain))
 
 	struct iommufd_viommu *(*viommu_alloc)(
 		struct device *dev, struct iommu_domain *parent_domain,
