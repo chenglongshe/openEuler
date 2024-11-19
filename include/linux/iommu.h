@@ -674,8 +674,6 @@ struct iommu_ops {
 		struct device *dev, u32 flags, struct iommu_domain *parent,
 		const struct iommu_user_data *user_data);
 	struct iommu_domain *(*domain_alloc_paging)(struct device *dev);
-	struct iommu_domain *(*domain_alloc_sva)(struct device *dev,
-						 struct mm_struct *mm);
 
 	struct iommu_device *(*probe_device)(struct device *dev);
 	void (*release_device)(struct device *dev);
@@ -713,7 +711,8 @@ struct iommu_ops {
 	struct iommu_domain *default_domain;
 	u8 user_pasid_table:1;
 
-	KABI_RESERVE(1)
+	KABI_USE(1, struct iommu_domain *(*domain_alloc_sva)(struct device *dev,
+				struct mm_struct *mm))
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
