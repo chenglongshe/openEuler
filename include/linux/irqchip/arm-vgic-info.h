@@ -38,7 +38,6 @@ struct gic_kvm_info {
 	/* vtimer irqbypass support */
 	bool            has_vtimer;
 #endif
-	u64		flags;
 	/* Deactivation impared, subpar stuff */
 	bool		no_hw_deactivation;
 };
