@@ -38,6 +38,11 @@
 #define SW64_DMA_LIMIT (0xe0000000 - 1)
 #define SW64_BAR_ADDRESS (IO_BASE | PCI_BASE)
 
+#define SW64_IOMMU_LEVEL1_OFFSET	0x1ff
+#define SW64_IOMMU_LEVEL2_OFFSET	0x3ff
+
+#define SW64_IOMMU_GRN_8K		((0UL) << 4)	/* page size as 8KB */
+#define SW64_IOMMU_GRN_8M		((0x2UL) << 4)	/* page size as 8MB */
 #define SW64_IOMMU_PGSIZES (((1ULL) << PAGE_SHIFT) | ((1ULL) << PAGE_8M_SHIFT))
 
 #define IDENTMAP_ALL    ((1U) << 0)
@@ -1678,6 +1683,9 @@ const struct iommu_ops sunway_iommu_ops = {
 /*****************************************************************************
  *
  * Boot param handle
+ * Each bit of iommu_enable bitmap represents an rc enable, and every 8 bits
+ * represents one cpu node. For example, iommu_enable=0x0100 means enabling
+ * rc0 for cpu node 1.
  *
  *****************************************************************************/
 static int __init iommu_enable_setup(char *str)
