@@ -205,7 +205,7 @@ static void alloc_init_cont_pte(pmd_t *pmdp, unsigned long addr,
 
 	BUG_ON(pmd_sect(pmd));
 	if (pmd_none(pmd)) {
-		pmdval_t pmdval = PMD_TYPE_TABLE | PMD_TABLE_UXN;
+		pmdval_t pmdval = PMD_TYPE_TABLE | PMD_TABLE_UXN | PMD_TABLE_AF;
 		phys_addr_t pte_phys;
 
 		if (flags & NO_EXEC_MAPPINGS)
@@ -283,7 +283,7 @@ static void alloc_init_cont_pmd(pud_t *pudp, unsigned long addr,
 	 */
 	BUG_ON(pud_sect(pud));
 	if (pud_none(pud)) {
-		pudval_t pudval = PUD_TYPE_TABLE | PUD_TABLE_UXN;
+		pudval_t pudval = PUD_TYPE_TABLE | PUD_TABLE_UXN | PUD_TABLE_AF;
 		phys_addr_t pmd_phys;
 
 		if (flags & NO_EXEC_MAPPINGS)
@@ -322,7 +322,7 @@ static void alloc_init_pud(pgd_t *pgdp, unsigned long addr, unsigned long end,
 	p4d_t p4d = READ_ONCE(*p4dp);
 
 	if (p4d_none(p4d)) {
-		p4dval_t p4dval = P4D_TYPE_TABLE | P4D_TABLE_UXN;
+		p4dval_t p4dval = P4D_TYPE_TABLE | P4D_TABLE_UXN | P4D_TABLE_AF;
 		phys_addr_t pud_phys;
 
 		if (flags & NO_EXEC_MAPPINGS)
@@ -1082,7 +1082,7 @@ static void free_empty_pud_table(p4d_t *p4dp, unsigned long addr,
 	if (CONFIG_PGTABLE_LEVELS <= 3)
 		return;
 
-	if (!pgtable_range_aligned(start, end, floor, ceiling, PGDIR_MASK))
+	if (!pgtable_range_aligned(start, end, floor, ceiling, P4D_MASK))
 		return;
 
 	/*
@@ -1105,8 +1105,8 @@ static void free_empty_p4d_table(pgd_t *pgdp, unsigned long addr,
 				 unsigned long end, unsigned long floor,
 				 unsigned long ceiling)
 {
-	unsigned long next;
 	p4d_t *p4dp, p4d;
+	unsigned long i, next, start = addr;
 
 	do {
 		next = p4d_addr_end(addr, end);
@@ -1118,6 +1118,27 @@ static void free_empty_p4d_table(pgd_t *pgdp, unsigned long addr,
 		WARN_ON(!p4d_present(p4d));
 		free_empty_pud_table(p4dp, addr, next, floor, ceiling);
 	} while (addr = next, addr < end);
+
+	if (!pgtable_l5_enabled())
+		return;
+
+	if (!pgtable_range_aligned(start, end, floor, ceiling, PGDIR_MASK))
+		return;
+
+	/*
+	 * Check whether we can free the p4d page if the rest of the
+	 * entries are empty. Overlap with other regions have been
+	 * handled by the floor/ceiling check.
+	 */
+	p4dp = p4d_offset(pgdp, 0UL);
+	for (i = 0; i < PTRS_PER_P4D; i++) {
+		if (!p4d_none(READ_ONCE(p4dp[i])))
+			return;
+	}
+
+	pgd_clear(pgdp);
+	__flush_tlb_kernel_pgtable(start);
+	free_hotplug_pgtable_page(virt_to_page(p4dp));
 }
 
 static void free_empty_tables(unsigned long addr, unsigned long end,
@@ -1229,6 +1250,12 @@ int pmd_set_huge(pmd_t *pmdp, phys_addr_t phys, pgprot_t prot)
 	set_pmd(pmdp, new_pmd);
 	return 1;
 }
+
+#ifndef __PAGETABLE_P4D_FOLDED
+void p4d_clear_huge(p4d_t *p4dp)
+{
+}
+#endif
 
 int pud_clear_huge(pud_t *pudp)
 {

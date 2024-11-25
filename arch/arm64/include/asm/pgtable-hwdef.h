@@ -26,10 +26,10 @@
 #define ARM64_HW_PGTABLE_LEVELS(va_bits) (((va_bits) - 4) / (PAGE_SHIFT - 3))
 
 /*
- * Size mapped by an entry at level n ( 0 <= n <= 3)
+ * Size mapped by an entry at level n ( -1 <= n <= 3)
  * We map (PAGE_SHIFT - 3) at all translation levels and PAGE_SHIFT bits
  * in the final page. The maximum number of translation levels supported by
- * the architecture is 4. Hence, starting at level n, we have further
+ * the architecture is 5. Hence, starting at level n, we have further
  * ((4 - n) - 1) levels of translation excluding the offset within the page.
  * So, the total number of bits mapped by an entry at level n is :
  *
@@ -62,9 +62,16 @@
 #define PTRS_PER_PUD		(1 << (PAGE_SHIFT - 3))
 #endif
 
+#if CONFIG_PGTABLE_LEVELS > 4
+#define P4D_SHIFT		ARM64_HW_PGTABLE_LEVEL_SHIFT(0)
+#define P4D_SIZE		(_AC(1, UL) << P4D_SHIFT)
+#define P4D_MASK		(~(P4D_SIZE-1))
+#define PTRS_PER_P4D		(1 << (PAGE_SHIFT - 3))
+#endif
+
 /*
  * PGDIR_SHIFT determines the size a top-level page table entry can map
- * (depending on the configuration, this level can be 0, 1 or 2).
+ * (depending on the configuration, this level can be -1, 0, 1 or 2).
  */
 #define PGDIR_SHIFT		ARM64_HW_PGTABLE_LEVEL_SHIFT(4 - CONFIG_PGTABLE_LEVELS)
 #define PGDIR_SIZE		(_AC(1, UL) << PGDIR_SHIFT)
@@ -87,6 +94,16 @@
 /*
  * Hardware page table definitions.
  *
+ * Level -1 descriptor (PGD).
+ */
+#define PGD_TYPE_TABLE		(_AT(pgdval_t, 3) << 0)
+#define PGD_TABLE_BIT		(_AT(pgdval_t, 1) << 1)
+#define PGD_TYPE_MASK		(_AT(pgdval_t, 3) << 0)
+#define PGD_TABLE_AF		(_AT(pgdval_t, 1) << 10)	/* Ignored if no FEAT_HAFT */
+#define PGD_TABLE_PXN		(_AT(pgdval_t, 1) << 59)
+#define PGD_TABLE_UXN		(_AT(pgdval_t, 1) << 60)
+
+/*
  * Level 0 descriptor (P4D).
  */
 #define P4D_TYPE_TABLE		(_AT(p4dval_t, 3) << 0)
@@ -94,6 +111,7 @@
 #define P4D_TYPE_MASK		(_AT(p4dval_t, 3) << 0)
 #define P4D_TYPE_SECT		(_AT(p4dval_t, 1) << 0)
 #define P4D_SECT_RDONLY		(_AT(p4dval_t, 1) << 7)		/* AP[2] */
+#define P4D_TABLE_AF		(_AT(p4dval_t, 1) << 10)	/* Ignored if no FEAT_HAFT */
 #define P4D_TABLE_PXN		(_AT(p4dval_t, 1) << 59)
 #define P4D_TABLE_UXN		(_AT(p4dval_t, 1) << 60)
 
@@ -105,6 +123,7 @@
 #define PUD_TYPE_MASK		(_AT(pudval_t, 3) << 0)
 #define PUD_TYPE_SECT		(_AT(pudval_t, 1) << 0)
 #define PUD_SECT_RDONLY		(_AT(pudval_t, 1) << 7)		/* AP[2] */
+#define PUD_TABLE_AF		(_AT(pudval_t, 1) << 10)	/* Ignored if no FEAT_HAFT */
 #define PUD_TABLE_PXN		(_AT(pudval_t, 1) << 59)
 #define PUD_TABLE_UXN		(_AT(pudval_t, 1) << 60)
 
@@ -115,6 +134,7 @@
 #define PMD_TYPE_TABLE		(_AT(pmdval_t, 3) << 0)
 #define PMD_TYPE_SECT		(_AT(pmdval_t, 1) << 0)
 #define PMD_TABLE_BIT		(_AT(pmdval_t, 1) << 1)
+#define PMD_TABLE_AF		(_AT(pmdval_t, 1) << 10)	/* Ignored if no FEAT_HAFT */
 
 /*
  * Section
