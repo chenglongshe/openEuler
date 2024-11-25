@@ -130,6 +130,281 @@ struct sched_ext_entity {
 	struct list_head	tasks_node;
 };
 
+enum scx_exit_kind {
+	SCX_EXIT_NONE,
+	SCX_EXIT_DONE,
+
+	SCX_EXIT_UNREG = 64,	/* user-space initiated unregistration */
+	SCX_EXIT_UNREG_BPF,	/* BPF-initiated unregistration */
+	SCX_EXIT_UNREG_KERN,	/* kernel-initiated unregistration */
+
+	SCX_EXIT_ERROR = 1024,	/* runtime error, error msg contains details */
+	SCX_EXIT_ERROR_BPF,	/* ERROR but triggered through scx_bpf_error() */
+};
+
+/* argument container for ops.init_task() */
+struct scx_init_task_args {
+	/*
+	 * Set if ops.init_task() is being invoked on the fork path, as opposed
+	 * to the scheduler transition path.
+	 */
+	bool			fork;
+};
+
+/* argument container for ops.exit_task() */
+struct scx_exit_task_args {
+	/* Whether the task exited before running on sched_ext. */
+	bool cancelled;
+};
+
+/*
+ * scx_exit_info is passed to ops.exit() to describe why the BPF scheduler is
+ * being disabled.
+ */
+struct scx_exit_info {
+	/* %SCX_EXIT_* - broad category of the exit reason */
+	enum scx_exit_kind	kind;
+
+	/* exit code if gracefully exiting */
+	s64			exit_code;
+
+	/* textual representation of the above */
+	const char		*reason;
+
+	/* backtrace if exiting due to an error */
+	unsigned long		*bt;
+	u32			bt_len;
+
+	/* informational message */
+	char			*msg;
+};
+
+/**
+ * struct sched_ext_ops - Operation table for BPF scheduler implementation
+ *
+ * Userland can implement an arbitrary scheduling policy by implementing and
+ * loading operations in this table.
+ */
+struct sched_ext_ops {
+	/**
+	 * select_cpu - Pick the target CPU for a task which is being woken up
+	 * @p: task being woken up
+	 * @prev_cpu: the cpu @p was on before sleeping
+	 * @wake_flags: SCX_WAKE_*
+	 *
+	 * Decision made here isn't final. @p may be moved to any CPU while it
+	 * is getting dispatched for execution later. However, as @p is not on
+	 * the rq at this point, getting the eventual execution CPU right here
+	 * saves a small bit of overhead down the line.
+	 *
+	 * If an idle CPU is returned, the CPU is kicked and will try to
+	 * dispatch. While an explicit custom mechanism can be added,
+	 * select_cpu() serves as the default way to wake up idle CPUs.
+	 *
+	 * @p may be dispatched directly by calling scx_bpf_dispatch(). If @p
+	 * is dispatched, the ops.enqueue() callback will be skipped. Finally,
+	 * if @p is dispatched to SCX_DSQ_LOCAL, it will be dispatched to the
+	 * local DSQ of whatever CPU is returned by this callback.
+	 */
+	s32 (*select_cpu)(struct task_struct *p, s32 prev_cpu, u64 wake_flags);
+
+	/**
+	 * enqueue - Enqueue a task on the BPF scheduler
+	 * @p: task being enqueued
+	 * @enq_flags: %SCX_ENQ_*
+	 *
+	 * @p is ready to run. Dispatch directly by calling scx_bpf_dispatch()
+	 * or enqueue on the BPF scheduler. If not directly dispatched, the bpf
+	 * scheduler owns @p and if it fails to dispatch @p, the task will
+	 * stall.
+	 *
+	 * If @p was dispatched from ops.select_cpu(), this callback is
+	 * skipped.
+	 */
+	void (*enqueue)(struct task_struct *p, u64 enq_flags);
+
+	/**
+	 * dequeue - Remove a task from the BPF scheduler
+	 * @p: task being dequeued
+	 * @deq_flags: %SCX_DEQ_*
+	 *
+	 * Remove @p from the BPF scheduler. This is usually called to isolate
+	 * the task while updating its scheduling properties (e.g. priority).
+	 *
+	 * The ext core keeps track of whether the BPF side owns a given task or
+	 * not and can gracefully ignore spurious dispatches from BPF side,
+	 * which makes it safe to not implement this method. However, depending
+	 * on the scheduling logic, this can lead to confusing behaviors - e.g.
+	 * scheduling position not being updated across a priority change.
+	 */
+	void (*dequeue)(struct task_struct *p, u64 deq_flags);
+
+	/**
+	 * dispatch - Dispatch tasks from the BPF scheduler and/or consume DSQs
+	 * @cpu: CPU to dispatch tasks for
+	 * @prev: previous task being switched out
+	 *
+	 * Called when a CPU's local dsq is empty. The operation should dispatch
+	 * one or more tasks from the BPF scheduler into the DSQs using
+	 * scx_bpf_dispatch() and/or consume user DSQs into the local DSQ using
+	 * scx_bpf_consume().
+	 *
+	 * The maximum number of times scx_bpf_dispatch() can be called without
+	 * an intervening scx_bpf_consume() is specified by
+	 * ops.dispatch_max_batch. See the comments on top of the two functions
+	 * for more details.
+	 *
+	 * When not %NULL, @prev is an SCX task with its slice depleted. If
+	 * @prev is still runnable as indicated by set %SCX_TASK_QUEUED in
+	 * @prev->scx.flags, it is not enqueued yet and will be enqueued after
+	 * ops.dispatch() returns. To keep executing @prev, return without
+	 * dispatching or consuming any tasks. Also see %SCX_OPS_ENQ_LAST.
+	 */
+	void (*dispatch)(s32 cpu, struct task_struct *prev);
+
+	/**
+	 * tick - Periodic tick
+	 * @p: task running currently
+	 *
+	 * This operation is called every 1/HZ seconds on CPUs which are
+	 * executing an SCX task. Setting @p->scx.slice to 0 will trigger an
+	 * immediate dispatch cycle on the CPU.
+	 */
+	void (*tick)(struct task_struct *p);
+
+	/**
+	 * yield - Yield CPU
+	 * @from: yielding task
+	 * @to: optional yield target task
+	 *
+	 * If @to is NULL, @from is yielding the CPU to other runnable tasks.
+	 * The BPF scheduler should ensure that other available tasks are
+	 * dispatched before the yielding task. Return value is ignored in this
+	 * case.
+	 *
+	 * If @to is not-NULL, @from wants to yield the CPU to @to. If the bpf
+	 * scheduler can implement the request, return %true; otherwise, %false.
+	 */
+	bool (*yield)(struct task_struct *from, struct task_struct *to);
+
+	/**
+	 * set_weight - Set task weight
+	 * @p: task to set weight for
+	 * @weight: new eight [1..10000]
+	 *
+	 * Update @p's weight to @weight.
+	 */
+	void (*set_weight)(struct task_struct *p, u32 weight);
+
+	/**
+	 * set_cpumask - Set CPU affinity
+	 * @p: task to set CPU affinity for
+	 * @cpumask: cpumask of cpus that @p can run on
+	 *
+	 * Update @p's CPU affinity to @cpumask.
+	 */
+	void (*set_cpumask)(struct task_struct *p,
+			    const struct cpumask *cpumask);
+
+	/**
+	 * update_idle - Update the idle state of a CPU
+	 * @cpu: CPU to udpate the idle state for
+	 * @idle: whether entering or exiting the idle state
+	 *
+	 * This operation is called when @rq's CPU goes or leaves the idle
+	 * state. By default, implementing this operation disables the built-in
+	 * idle CPU tracking and the following helpers become unavailable:
+	 *
+	 * - scx_bpf_select_cpu_dfl()
+	 * - scx_bpf_test_and_clear_cpu_idle()
+	 * - scx_bpf_pick_idle_cpu()
+	 *
+	 * The user also must implement ops.select_cpu() as the default
+	 * implementation relies on scx_bpf_select_cpu_dfl().
+	 *
+	 * Specify the %SCX_OPS_KEEP_BUILTIN_IDLE flag to keep the built-in idle
+	 * tracking.
+	 */
+	void (*update_idle)(s32 cpu, bool idle);
+
+	/**
+	 * init_task - Initialize a task to run in a BPF scheduler
+	 * @p: task to initialize for BPF scheduling
+	 * @args: init arguments, see the struct definition
+	 *
+	 * Either we're loading a BPF scheduler or a new task is being forked.
+	 * Initialize @p for BPF scheduling. This operation may block and can
+	 * be used for allocations, and is called exactly once for a task.
+	 *
+	 * Return 0 for success, -errno for failure. An error return while
+	 * loading will abort loading of the BPF scheduler. During a fork, it
+	 * will abort that specific fork.
+	 */
+	s32 (*init_task)(struct task_struct *p, struct scx_init_task_args *args);
+
+	/**
+	 * exit_task - Exit a previously-running task from the system
+	 * @p: task to exit
+	 *
+	 * @p is exiting or the BPF scheduler is being unloaded. Perform any
+	 * necessary cleanup for @p.
+	 */
+	void (*exit_task)(struct task_struct *p, struct scx_exit_task_args *args);
+
+	/**
+	 * enable - Enable BPF scheduling for a task
+	 * @p: task to enable BPF scheduling for
+	 *
+	 * Enable @p for BPF scheduling. enable() is called on @p any time it
+	 * enters SCX, and is always paired with a matching disable().
+	 */
+	void (*enable)(struct task_struct *p);
+
+	/**
+	 * disable - Disable BPF scheduling for a task
+	 * @p: task to disable BPF scheduling for
+	 *
+	 * @p is exiting, leaving SCX or the BPF scheduler is being unloaded.
+	 * Disable BPF scheduling for @p. A disable() call is always matched
+	 * with a prior enable() call.
+	 */
+	void (*disable)(struct task_struct *p);
+
+	/*
+	 * All online ops must come before ops.init().
+	 */
+
+	/**
+	 * init - Initialize the BPF scheduler
+	 */
+	s32 (*init)(void);
+
+	/**
+	 * exit - Clean up after the BPF scheduler
+	 * @info: Exit info
+	 */
+	void (*exit)(struct scx_exit_info *info);
+
+	/**
+	 * dispatch_max_batch - Max nr of tasks that dispatch() can dispatch
+	 */
+	u32 dispatch_max_batch;
+
+	/**
+	 * flags - %SCX_OPS_* flags
+	 */
+	u64 flags;
+
+	/**
+	 * name - BPF scheduler's name
+	 *
+	 * Must be a non-zero valid BPF object name including only isalnum(),
+	 * '_' and '.' chars. Shows up in kernel.sched_ext_ops sysctl while the
+	 * BPF scheduler is enabled.
+	 */
+	char name[SCX_OPS_NAME_LEN];
+};
+
 void sched_ext_free(struct task_struct *p);
 
 #else	/* !CONFIG_SCHED_CLASS_EXT */
