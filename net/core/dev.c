@@ -5327,6 +5327,11 @@ EXPORT_SYMBOL_GPL(netdev_rx_handler_unregister);
  */
 static bool skb_pfmemalloc_protocol(struct sk_buff *skb)
 {
+#ifdef CONFIG_ETH_CAQM
+	if (static_branch_unlikely(&sysctl_caqm_enable))
+		if (skb->protocol == htons(CONFIG_ETH_P_CAQM))
+			return true;
+#endif
 	switch (skb->protocol) {
 	case htons(ETH_P_ARP):
 	case htons(ETH_P_IP):
