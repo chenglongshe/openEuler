@@ -48,6 +48,7 @@
 #include <asm/sections.h>
 #include <asm/setup.h>
 #include <asm/time.h>
+#include <asm/unwind.h>
 #include "legacy_boot.h"
 
 #define SMBIOS_BIOSSIZE_OFFSET		0x09
@@ -56,6 +57,7 @@
 #define SMBIOS_FREQHIGH_OFFSET		0x17
 #define SMBIOS_FREQLOW_MASK		0xFF
 #define SMBIOS_CORE_PACKAGE_OFFSET	0x23
+#define SMBIOS_THREAD_PACKAGE_OFFSET	0x25
 #define LOONGSON_EFI_ENABLE		(1 << 3)
 
 #ifdef CONFIG_EFI
@@ -130,7 +132,7 @@ static void __init parse_cpu_table(const struct dmi_header *dm)
 	cpu_clock_freq = freq_temp * 1000000;
 
 	loongson_sysconf.cpuname = (void *)dmi_string_parse(dm, dmi_data[16]);
-	loongson_sysconf.cores_per_package = *(dmi_data + SMBIOS_CORE_PACKAGE_OFFSET);
+	loongson_sysconf.cores_per_package = *(dmi_data + SMBIOS_THREAD_PACKAGE_OFFSET);
 
 	pr_info("CpuClock = %llu\n", cpu_clock_freq);
 }
@@ -184,14 +186,12 @@ bool wc_enabled = false;
 
 EXPORT_SYMBOL(wc_enabled);
 
-static int wc_arg = -1;
-
 static int __init setup_writecombine(char *p)
 {
 	if (!strcmp(p, "on"))
-		wc_arg = true;
+		wc_enabled = true;
 	else if (!strcmp(p, "off"))
-		wc_arg = false;
+		wc_enabled = false;
 	else
 		pr_warn("Unknown writecombine setting \"%s\".\n", p);
 
@@ -373,26 +373,6 @@ out:
 	*cmdline_p = boot_command_line;
 }
 
-static void __init writecombine_detect(void)
-{
-	u64 cpuname;
-
-	if (wc_arg >= 0) {
-		wc_enabled = wc_arg;
-		return;
-	}
-
-	cpuname = iocsr_read64(LOONGARCH_IOCSR_CPUNAME);
-
-	switch (cpuname) {
-	case 0x0000303030364333:
-		wc_enabled = true;
-		break;
-	default:
-		break;
-	}
-}
-
 void __init platform_init(void)
 {
 	arch_reserve_vmcore();
@@ -416,8 +396,6 @@ void __init platform_init(void)
 	smbios_parse();
 	pr_info("The BIOS Version: %s\n", b_info.bios_version);
 
-	writecombine_detect();
-	pr_info("WriteCombine: %s\n", wc_enabled ? "on":"off");
 	efi_runtime_init();
 }
 
@@ -646,6 +624,7 @@ static void __init prefill_possible_map(void)
 void __init setup_arch(char **cmdline_p)
 {
 	cpu_probe();
+	unwind_init();
 
 	init_environ();
 	efi_init();

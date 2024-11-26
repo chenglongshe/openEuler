@@ -93,10 +93,16 @@ bool hns_roce_bond_is_active(struct hns_roce_dev *hr_dev)
 static inline bool is_active_slave(struct net_device *net_dev,
 				   struct hns_roce_bond_group *bond_grp)
 {
+	struct net_device *slave_dev;
+
 	if (!bond_grp || !bond_grp->bond || !bond_grp->bond->curr_active_slave)
 		return false;
 
-	return net_dev == bond_grp->bond->curr_active_slave->dev;
+	rcu_read_lock();
+	slave_dev = bond_option_active_slave_get_rcu(bond_grp->bond);
+	rcu_read_unlock();
+
+	return net_dev == slave_dev;
 }
 
 struct net_device *hns_roce_get_bond_netdev(struct hns_roce_dev *hr_dev)
@@ -537,6 +543,7 @@ static void hns_roce_do_bond(struct hns_roce_bond_group *bond_grp)
 
 bool is_bond_slave_in_reset(struct hns_roce_bond_group *bond_grp)
 {
+	const struct hnae3_ae_ops *ops;
 	struct hnae3_handle *handle;
 	struct net_device *net_dev;
 	int i;
@@ -544,9 +551,11 @@ bool is_bond_slave_in_reset(struct hns_roce_bond_group *bond_grp)
 	for (i = 0; i < ROCE_BOND_FUNC_MAX; i++) {
 		net_dev = bond_grp->bond_func_info[i].net_dev;
 		handle = bond_grp->bond_func_info[i].handle;
-		if (net_dev && handle &&
-		    handle->rinfo.reset_state != HNS_ROCE_STATE_NON_RST &&
-		    handle->rinfo.reset_state != HNS_ROCE_STATE_RST_INITED)
+		if (!net_dev || !handle)
+			continue;
+		ops = handle->ae_algo->ops;
+		if (ops->ae_dev_resetting(handle) ||
+		    ops->get_hw_reset_stat(handle))
 			return true;
 	}
 

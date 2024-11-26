@@ -17,7 +17,7 @@
 #include "hinic3_dcb.h"
 
 #define HINIC3_NIC_DRV_NAME	"hinic3"
-#define HINIC3_NIC_DRV_VERSION	"15.17.1.1"
+#define HINIC3_NIC_DRV_VERSION	HINIC3_DRV_VERSION
 
 #define HINIC3_FUNC_IS_VF(hwdev)	(hinic3_func_type(hwdev) == TYPE_VF)
 
@@ -247,6 +247,7 @@ struct hinic3_nic_dev {
 	struct hinic3_txq	*txqs;
 	struct hinic3_rxq	*rxqs;
 	struct hinic3_dyna_txrxq_params q_params;
+	u8 cqe_mode; /* rx_cqe */
 
 	u16			num_qp_irq;
 	struct irq_info		*qps_irq_info;
@@ -283,6 +284,8 @@ struct hinic3_nic_dev {
 	u32			rsvd9;
 	u32			rxq_get_err_times;
 	struct delayed_work	rxq_check_work;
+
+	struct hinic3_tx_rx_ops	tx_rx_ops;
 };
 
 #define hinic_msg(level, nic_dev, msglvl, format, arg...)	\

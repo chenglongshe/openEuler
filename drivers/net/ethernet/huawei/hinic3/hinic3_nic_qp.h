@@ -137,6 +137,50 @@
 #define HINIC3_GET_ESP_NEXT_HEAD(decry_info) \
 	RQ_CQE_DECRY_INFO_GET(decry_info, ESP_NEXT_HEAD)
 
+/* compact cqe field */
+/* cqe dw0 */
+#define RQ_COMPACT_CQE_STATUS_RXDONE_SHIFT	31
+#define RQ_COMPACT_CQE_STATUS_CQE_TYPE_SHIFT	30
+#define RQ_COMPACT_CQE_STATUS_TS_FLAG_SHIFT	29
+#define RQ_COMPACT_CQE_STATUS_VLAN_EN_SHIFT	28
+#define RQ_COMPACT_CQE_STATUS_PKT_FORMAT_SHIFT	25
+#define RQ_COMPACT_CQE_STATUS_IP_TYPE_SHIFT	24
+#define RQ_COMPACT_CQE_STATUS_CQE_LEN_SHIFT	23
+#define RQ_COMPACT_CQE_STATUS_PKT_MC_SHIFT	21
+#define RQ_COMPACT_CQE_STATUS_CSUM_ERR_SHIFT	19
+#define RQ_COMPACT_CQE_STATUS_PKT_TYPE_SHIFT	16
+#define RQ_COMPACT_CQE_STATUS_PKT_LEN_SHIFT	0
+
+#define RQ_COMPACT_CQE_STATUS_RXDONE_MASK	0x1U
+#define RQ_COMPACT_CQE_STATUS_CQE_TYPE_MASK	0x1U
+#define RQ_COMPACT_CQE_STATUS_TS_FLAG_MASK	0x1U
+#define RQ_COMPACT_CQE_STATUS_VLAN_EN_MASK	0x1U
+#define RQ_COMPACT_CQE_STATUS_PKT_FORMAT_MASK	0x7U
+#define RQ_COMPACT_CQE_STATUS_IP_TYPE_MASK	0x1U
+#define RQ_COMPACT_CQE_STATUS_PKT_MC_MASK	0x3U
+#define RQ_COMPACT_CQE_STATUS_CQE_LEN_MASK	0x1U
+#define RQ_COMPACT_CQE_STATUS_CSUM_ERR_MASK	0x3U
+#define RQ_COMPACT_CQE_STATUS_PKT_TYPE_MASK	0x7U
+#define RQ_COMPACT_CQE_STATUS_PKT_LEN_MASK	0xFFFFU
+
+#define RQ_COMPACT_CQE_STATUS_GET(val, member) \
+	((((val) >> RQ_COMPACT_CQE_STATUS_##member##_SHIFT) & \
+	 RQ_COMPACT_CQE_STATUS_##member##_MASK))
+
+/* cqe dw2 */
+#define RQ_COMPACT_CQE_OFFLOAD_NUM_LRO_SHIFT	24
+#define RQ_COMPACT_CQE_OFFLOAD_VLAN_SHIFT	8
+
+#define RQ_COMPACT_CQE_OFFLOAD_NUM_LRO_MASK	0xFFU
+#define RQ_COMPACT_CQE_OFFLOAD_VLAN_MASK	0xFFFFU
+
+#define RQ_COMPACT_CQE_OFFLOAD_GET(val, member) \
+	(((val) >> RQ_COMPACT_CQE_OFFLOAD_##member##_SHIFT) & \
+	 RQ_COMPACT_CQE_OFFLOAD_##member##_MASK)
+
+#define RQ_COMPACT_CQE_16BYTE	0
+#define RQ_COMPACT_CQE_8BYTE	1
+
 struct hinic3_rq_cqe {
 	u32 status;
 	u32 vlan_len;
@@ -147,6 +191,29 @@ struct hinic3_rq_cqe {
 	u32 decrypt_info;
 	u32 rsvd6;
 	u32 pkt_info;
+};
+
+struct hinic3_cqe_info {
+	u8 pkt_offset;
+	u8 rsvd[3];
+
+	u8 lro_num;
+	u8 vlan_offload;
+	u8 pkt_fmt;
+	u8 ip_type;
+
+	u8 pkt_type;
+	u8 cqe_len;
+	u8 cqe_type;
+	u8 ts_flag;
+
+	u16 csum_err;
+	u16 vlan_tag;
+
+	u16 pkt_len;
+	u16 rss_type;
+
+	u32 rss_hash_value;
 };
 
 struct hinic3_sge_sect {
@@ -166,8 +233,14 @@ struct hinic3_rq_normal_wqe {
 	u32 cqe_lo_addr;
 };
 
+struct hinic3_rq_compact_wqe {
+	u32 buf_hi_addr;
+	u32 buf_lo_addr;
+};
+
 struct hinic3_rq_wqe {
 	union {
+		struct hinic3_rq_compact_wqe compact_wqe;
 		struct hinic3_rq_normal_wqe normal_wqe;
 		struct hinic3_rq_extend_wqe extend_wqe;
 	};
@@ -220,9 +293,13 @@ struct hinic3_sq_wqe_combo {
 	struct hinic3_sq_task *task;
 	struct hinic3_sq_bufdesc *bds_head;
 	struct hinic3_sq_bufdesc *bds_sec2;
+
 	u16 first_bds_num;
-	u32 wqe_type;
-	u32 task_type;
+	u8 wqe_type;
+	u8 task_type;
+
+	u16 wqebb_cnt;
+	u8 rsvd[2];
 };
 
 /* ************* SQ_CTRL ************** */
@@ -236,8 +313,35 @@ enum sq_wqe_ec_type {
 };
 
 enum sq_wqe_tasksect_len_type {
-	SQ_WQE_TASKSECT_46BITS = 0,
+	SQ_WQE_TASKSECT_4BYTES = 0,
 	SQ_WQE_TASKSECT_16BYTES = 1,
+};
+
+struct hinic3_offload_info {
+	u8 encapsulation;
+	u8 esp_next_proto;
+	u8 inner_l4_en;
+	u8 inner_l3_en;
+	u8 out_l4_en;
+	u8 out_l3_en;
+	u8 ipsec_offload;
+	u8 pkt_1588;
+	u8 vlan_sel;
+	u8 vlan_valid;
+	u16 vlan1_tag;
+	u32 ip_identify;
+};
+
+struct hinic3_queue_info {
+	u8 pri;
+	u8 uc;
+	u8 sctp;
+	u8 udp_dp_en;
+	u8 tso;
+	u8 ufo;
+	u8 payload_offset;
+	u8 pkt_type;
+	u16 mss;
 };
 
 #define SQ_CTRL_BD0_LEN_SHIFT 0
@@ -271,7 +375,7 @@ enum sq_wqe_tasksect_len_type {
 #define SQ_CTRL_QUEUE_INFO_PLDOFF_SHIFT 2
 #define SQ_CTRL_QUEUE_INFO_UFO_SHIFT 10
 #define SQ_CTRL_QUEUE_INFO_TSO_SHIFT 11
-#define SQ_CTRL_QUEUE_INFO_TCPUDP_CS_SHIFT 12
+#define SQ_CTRL_QUEUE_INFO_UDP_DP_EN_SHIFT 12
 #define SQ_CTRL_QUEUE_INFO_MSS_SHIFT 13
 #define SQ_CTRL_QUEUE_INFO_SCTP_SHIFT 27
 #define SQ_CTRL_QUEUE_INFO_UC_SHIFT 28
@@ -281,7 +385,7 @@ enum sq_wqe_tasksect_len_type {
 #define SQ_CTRL_QUEUE_INFO_PLDOFF_MASK 0xFFU
 #define SQ_CTRL_QUEUE_INFO_UFO_MASK 0x1U
 #define SQ_CTRL_QUEUE_INFO_TSO_MASK 0x1U
-#define SQ_CTRL_QUEUE_INFO_TCPUDP_CS_MASK 0x1U
+#define SQ_CTRL_QUEUE_INFO_UDP_DP_EN_MASK 0x1U
 #define SQ_CTRL_QUEUE_INFO_MSS_MASK 0x3FFFU
 #define SQ_CTRL_QUEUE_INFO_SCTP_MASK 0x1U
 #define SQ_CTRL_QUEUE_INFO_UC_MASK 0x1U
@@ -298,6 +402,61 @@ enum sq_wqe_tasksect_len_type {
 #define SQ_CTRL_QUEUE_INFO_CLEAR(val, member) \
 	((val) & (~(SQ_CTRL_QUEUE_INFO_##member##_MASK << \
 		    SQ_CTRL_QUEUE_INFO_##member##_SHIFT)))
+
+#define SQ_CTRL_15BIT_QUEUE_INFO_PKT_TYPE_SHIFT 14
+#define SQ_CTRL_15BIT_QUEUE_INFO_PLDOFF_SHIFT 16
+#define SQ_CTRL_15BIT_QUEUE_INFO_UFO_SHIFT 24
+#define SQ_CTRL_15BIT_QUEUE_INFO_TSO_SHIFT 25
+#define SQ_CTRL_15BIT_QUEUE_INFO_UDP_DP_EN_SHIFT 26
+#define SQ_CTRL_15BIT_QUEUE_INFO_SCTP_SHIFT 27
+
+#define SQ_CTRL_15BIT_QUEUE_INFO_PKT_TYPE_MASK 0x3U
+#define SQ_CTRL_15BIT_QUEUE_INFO_PLDOFF_MASK 0xFFU
+#define SQ_CTRL_15BIT_QUEUE_INFO_UFO_MASK 0x1U
+#define SQ_CTRL_15BIT_QUEUE_INFO_TSO_MASK 0x1U
+#define SQ_CTRL_15BIT_QUEUE_INFO_UDP_DP_EN_MASK 0x1U
+#define SQ_CTRL_15BIT_QUEUE_INFO_SCTP_MASK 0x1U
+
+#define SQ_CTRL_15BIT_QUEUE_INFO_SET(val, member) \
+	(((u32)(val) & SQ_CTRL_15BIT_QUEUE_INFO_##member##_MASK) << \
+	 SQ_CTRL_15BIT_QUEUE_INFO_##member##_SHIFT)
+
+#define SQ_CTRL_15BIT_QUEUE_INFO_GET(val, member) \
+	(((val) >> SQ_CTRL_15BIT_QUEUE_INFO_##member##_SHIFT) & \
+	 SQ_CTRL_15BIT_QUEUE_INFO_##member##_MASK)
+
+#define SQ_CTRL_15BIT_QUEUE_INFO_CLEAR(val, member) \
+	((val) & (~(SQ_CTRL_15BIT_QUEUE_INFO_##member##_MASK << \
+		    SQ_CTRL_15BIT_QUEUE_INFO_##member##_SHIFT)))
+
+#define	SQ_TASK_INFO_PKT_1588_SHIFT         31
+#define	SQ_TASK_INFO_IPSEC_PROTO_SHIFT		30
+#define	SQ_TASK_INFO_OUT_L3_EN_SHIFT        28
+#define	SQ_TASK_INFO_OUT_L4_EN_SHIFT        27
+#define	SQ_TASK_INFO_INNER_L3_EN_SHIFT		25
+#define	SQ_TASK_INFO_INNER_L4_EN_SHIFT		24
+#define	SQ_TASK_INFO_ESP_NEXT_PROTO_SHIFT	22
+#define	SQ_TASK_INFO_VLAN_VALID_SHIFT		19
+#define	SQ_TASK_INFO_VLAN_SEL_SHIFT         16
+#define	SQ_TASK_INFO_VLAN_TAG_SHIFT         0
+
+#define	SQ_TASK_INFO_PKT_1588_MASK          0x1U
+#define	SQ_TASK_INFO_IPSEC_PROTO_MASK		0x1U
+#define	SQ_TASK_INFO_OUT_L3_EN_MASK         0x1U
+#define	SQ_TASK_INFO_OUT_L4_EN_MASK         0x1U
+#define	SQ_TASK_INFO_INNER_L3_EN_MASK		0x1U
+#define	SQ_TASK_INFO_INNER_L4_EN_MASK		0x1U
+#define	SQ_TASK_INFO_ESP_NEXT_PROTO_MASK	0x3U
+#define	SQ_TASK_INFO_VLAN_VALID_MASK		0x1U
+#define	SQ_TASK_INFO_VLAN_SEL_MASK          0x7U
+#define	SQ_TASK_INFO_VLAN_TAG_MASK          0xFFFFU
+
+#define SQ_TASK_INFO_SET(val, member)			\
+		(((u32)(val) & SQ_TASK_INFO_##member##_MASK) <<	\
+		SQ_TASK_INFO_##member##_SHIFT)
+#define SQ_TASK_INFO_GET(val, member)			\
+		(((val) >> SQ_TASK_INFO_##member##_SHIFT) & \
+		SQ_TASK_INFO_##member##_MASK)
 
 #define SQ_TASK_INFO0_TUNNEL_FLAG_SHIFT 19
 #define SQ_TASK_INFO0_ESP_NEXT_PROTO_SHIFT 22
@@ -354,31 +513,5 @@ enum sq_wqe_tasksect_len_type {
 #undef static
 #define LLT_STATIC_DEF_SAVED
 #endif
-
-static inline u32 hinic3_get_pkt_len_for_super_cqe(const struct hinic3_rq_cqe *cqe,
-						   bool last)
-{
-	u32 pkt_len = hinic3_hw_cpu32(cqe->pkt_info);
-
-	if (!last)
-		return RQ_CQE_PKT_LEN_GET(pkt_len, FIRST_LEN);
-	else
-		return RQ_CQE_PKT_LEN_GET(pkt_len, LAST_LEN);
-}
-
-/* *
- * hinic3_set_vlan_tx_offload - set vlan offload info
- * @task: wqe task section
- * @vlan_tag: vlan tag
- * @vlan_type: 0--select TPID0 in IPSU, 1--select TPID0 in IPSU
- * 2--select TPID2 in IPSU, 3--select TPID3 in IPSU, 4--select TPID4 in IPSU
- */
-static inline void hinic3_set_vlan_tx_offload(struct hinic3_sq_task *task,
-					      u16 vlan_tag, u8 vlan_type)
-{
-	task->vlan_offload = SQ_TASK_INFO3_SET(vlan_tag, VLAN_TAG) |
-			     SQ_TASK_INFO3_SET(vlan_type, VLAN_TYPE) |
-			     SQ_TASK_INFO3_SET(1U, VLAN_TAG_VALID);
-}
 
 #endif

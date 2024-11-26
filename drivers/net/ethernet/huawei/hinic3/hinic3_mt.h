@@ -4,7 +4,7 @@
 #ifndef HINIC3_MT_H
 #define HINIC3_MT_H
 
-#define HINIC3_DRV_NAME "hisdk3"
+#define HINIC3_DRV_NAME "hinic3"
 #define HINIC3_CHIP_NAME "hinic"
 /* Interrupt at most records, interrupt will be recorded in the FFM */
 
@@ -286,7 +286,6 @@ enum hinic3_fault_type {
 };
 
 struct fault_event_stats {
-	/* TODO :HINIC_NODE_ID_MAX: temp use the value of 1822(22) */
 	atomic_t chip_fault_stats[22][FAULT_LEVEL_MAX];
 	atomic_t fault_type_stat[FAULT_TYPE_MAX];
 	atomic_t pcie_fault_stats;

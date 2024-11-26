@@ -105,6 +105,10 @@
 
 #define CQ_BANKID_SHIFT 2
 #define CQ_BANKID_MASK GENMASK(1, 0)
+#define VALID_CQ_BANK_MASK_DEFAULT 0xF
+#define VALID_CQ_BANK_MASK_LIMIT 0x9
+
+#define VALID_EXT_SGE_QP_BANK_MASK_LIMIT 0x41
 
 #define HNS_ROCE_MAX_CQ_COUNT 0xFFFF
 #define HNS_ROCE_MAX_CQ_PERIOD 0xFFFF
@@ -168,6 +172,7 @@ enum {
 	HNS_ROCE_CAP_FLAG_CQE_INLINE		= BIT(19),
 	HNS_ROCE_CAP_FLAG_BOND			= BIT(21),
 	HNS_ROCE_CAP_FLAG_SRQ_RECORD_DB         = BIT(22),
+	HNS_ROCE_CAP_FLAG_LIMIT_BANK            = BIT(23),
 };
 
 #define HNS_ROCE_DB_TYPE_COUNT			2
@@ -265,6 +270,7 @@ struct hns_roce_ucontext {
 	struct list_head list; /* link all uctx to uctx_list on hr_dev */
 	pid_t pid; /* process id to which the uctx belongs */
 	struct hns_dca_ctx_debugfs dca_dbgfs;
+	u8 cq_bank_id;
 };
 
 struct hns_roce_pd {
@@ -570,12 +576,6 @@ struct hns_roce_bank {
 	u32 next; /* Next ID to allocate. */
 };
 
-struct hns_roce_idx_table {
-	u32 *spare_idx;
-	u32 head;
-	u32 tail;
-};
-
 struct hns_roce_qp_table {
 	struct hns_roce_hem_table	qp_table;
 	struct hns_roce_hem_table	irrl_table;
@@ -584,7 +584,7 @@ struct hns_roce_qp_table {
 	struct mutex			scc_mutex;
 	struct hns_roce_bank bank[HNS_ROCE_QP_BANK_NUM];
 	struct mutex bank_mutex;
-	struct hns_roce_idx_table	idx_table;
+	struct xarray			dip_xa;
 };
 
 struct hns_roce_cq_table {
@@ -592,6 +592,8 @@ struct hns_roce_cq_table {
 	struct hns_roce_hem_table	table;
 	struct hns_roce_bank bank[HNS_ROCE_CQ_BANK_NUM];
 	struct mutex			bank_mutex;
+	u32 ctx_num[HNS_ROCE_CQ_BANK_NUM];
+	u8 valid_cq_bank_mask;
 };
 
 struct hns_roce_srq_table {
@@ -742,6 +744,7 @@ struct hns_roce_qp {
 	bool			delayed_destroy_flag;
 	struct hns_roce_mtr_node *mtr_node;
 	spinlock_t flush_lock;
+	struct hns_roce_dip *dip;
 };
 
 struct hns_roce_ib_iboe {
@@ -1076,11 +1079,13 @@ struct hns_roce_hw {
 #define HNS_ROCE_SCC_PARAM_SIZE 4
 struct hns_roce_scc_param {
 	__le32 param[HNS_ROCE_SCC_PARAM_SIZE];
-	u32 lifespan;
+	__le32 lifespan;
 	unsigned long timestamp;
 	enum hns_roce_scc_algo algo_type;
 	struct delayed_work scc_cfg_dwork;
 	struct hns_roce_dev *hr_dev;
+	__le32 latest_param[HNS_ROCE_SCC_PARAM_SIZE];
+	struct mutex scc_mutex; /* protect @param and @lastest_param */
 };
 
 struct hns_roce_dev {
@@ -1102,8 +1107,6 @@ struct hns_roce_dev {
 	enum hns_roce_device_state state;
 	struct list_head	qp_list; /* list of all qps on this dev */
 	spinlock_t		qp_list_lock; /* protect qp_list */
-	struct list_head	dip_list; /* list of all dest ips on this dev */
-	spinlock_t		dip_list_lock; /* protect dip_list */
 
 	struct list_head        pgdir_list;
 	struct mutex            pgdir_mutex;
@@ -1161,6 +1164,9 @@ struct hns_roce_dev {
 	struct mutex mtr_unfree_list_mutex; /* protect mtr_unfree_list */
 	struct list_head umem_unfree_list; /* list of unfree umem on this dev */
 	struct mutex umem_unfree_list_mutex; /* protect umem_unfree_list */
+
+	void *dca_safe_buf;
+	dma_addr_t dca_safe_page;
 };
 
 static inline struct hns_roce_dev *to_hr_dev(struct ib_device *ib_dev)
@@ -1445,6 +1451,7 @@ void hns_roce_cq_completion(struct hns_roce_dev *hr_dev, u32 cqn);
 void hns_roce_cq_event(struct hns_roce_dev *hr_dev, u32 cqn, int event_type);
 void flush_cqe(struct hns_roce_dev *dev, struct hns_roce_qp *qp);
 void hns_roce_qp_event(struct hns_roce_dev *hr_dev, u32 qpn, int event_type);
+void hns_roce_flush_cqe(struct hns_roce_dev *hr_dev, u32 qpn);
 void hns_roce_srq_event(struct hns_roce_dev *hr_dev, u32 srqn, int event_type);
 void hns_roce_handle_device_err(struct hns_roce_dev *hr_dev);
 int hns_roce_init(struct hns_roce_dev *hr_dev);
@@ -1470,4 +1477,6 @@ void hns_roce_add_unfree_mtr(struct hns_roce_mtr_node *pos,
 void hns_roce_free_unfree_mtr(struct hns_roce_dev *hr_dev);
 int hns_roce_alloc_scc_param(struct hns_roce_dev *hr_dev);
 void hns_roce_dealloc_scc_param(struct hns_roce_dev *hr_dev);
+void hns_roce_put_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
+void hns_roce_get_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
 #endif /* _HNS_ROCE_DEVICE_H */

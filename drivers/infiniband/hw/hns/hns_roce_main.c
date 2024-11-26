@@ -262,6 +262,11 @@ static int hns_roce_query_device(struct ib_device *ib_dev,
 		props->max_srq_sge = hr_dev->caps.max_srq_sges;
 	}
 
+	if (hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_LIMIT_BANK) {
+		props->max_cq >>= 1;
+		props->max_qp >>= 1;
+	}
+
 	if (hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_FRMR &&
 	    hr_dev->pci_dev->revision >= PCI_REVISION_ID_HIP09) {
 		props->device_cap_flags |= IB_DEVICE_MEM_MGT_EXTENSIONS;
@@ -598,6 +603,7 @@ static int hns_roce_alloc_ucontext(struct ib_ucontext *uctx,
 	mutex_unlock(&hr_dev->uctx_list_mutex);
 
 	hns_roce_register_uctx_debugfs(hr_dev, context);
+	hns_roce_get_cq_bankid_for_uctx(context);
 
 	return 0;
 
@@ -634,6 +640,7 @@ static void hns_roce_dealloc_ucontext(struct ib_ucontext *ibcontext)
 	    hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_QP_RECORD_DB)
 		mutex_destroy(&context->page_mutex);
 
+	hns_roce_put_cq_bankid_for_uctx(context);
 	hns_roce_unregister_uctx_debugfs(context);
 
 	hns_roce_unregister_udca(hr_dev, context);
@@ -642,36 +649,6 @@ static void hns_roce_dealloc_ucontext(struct ib_ucontext *ibcontext)
 	hns_roce_dealloc_reset_entry(context);
 
 	ida_free(&hr_dev->uar_ida.ida, (int)context->uar.logic_idx);
-}
-
-static int mmap_dca(struct ib_ucontext *context, struct vm_area_struct *vma)
-{
-	struct hns_roce_ucontext *uctx = to_hr_ucontext(context);
-	struct hns_roce_dca_ctx *ctx = &uctx->dca_ctx;
-	struct page **pages;
-	unsigned long num;
-	int ret;
-
-	if ((vma->vm_end - vma->vm_start != (ctx->status_npage * PAGE_SIZE) ||
-	     !(vma->vm_flags & VM_SHARED)))
-		return -EINVAL;
-
-	if (!(vma->vm_flags & VM_WRITE) || (vma->vm_flags & VM_EXEC))
-		return -EPERM;
-
-	if (!ctx->buf_status)
-		return -EOPNOTSUPP;
-
-	pages = kcalloc(ctx->status_npage, sizeof(struct page *), GFP_KERNEL);
-	if (!pages)
-		return -ENOMEM;
-
-	for (num = 0; num < ctx->status_npage; num++)
-		pages[num] = virt_to_page(ctx->buf_status + num * PAGE_SIZE);
-
-	ret = vm_insert_pages(vma, vma->vm_start, pages, &num);
-	kfree(pages);
-	return ret;
 }
 
 static int hns_roce_mmap(struct ib_ucontext *uctx, struct vm_area_struct *vma)
@@ -703,8 +680,13 @@ static int hns_roce_mmap(struct ib_ucontext *uctx, struct vm_area_struct *vma)
 		prot = pgprot_device(vma->vm_page_prot);
 		break;
 	case HNS_ROCE_MMAP_TYPE_DCA:
-		ret = mmap_dca(uctx, vma);
-		goto out;
+		if (!(vma->vm_flags & VM_WRITE) || (vma->vm_flags & VM_EXEC)) {
+			ret = -EPERM;
+			goto out;
+		}
+		vm_flags_set(vma, VM_DONTEXPAND);
+		prot = vma->vm_page_prot;
+		break;
 	case HNS_ROCE_MMAP_TYPE_RESET:
 		if (vma->vm_flags & (VM_WRITE | VM_EXEC)) {
 			ret = -EINVAL;
@@ -1275,8 +1257,6 @@ static int hns_roce_setup_hca(struct hns_roce_dev *hr_dev)
 
 	INIT_LIST_HEAD(&hr_dev->qp_list);
 	spin_lock_init(&hr_dev->qp_list_lock);
-	INIT_LIST_HEAD(&hr_dev->dip_list);
-	spin_lock_init(&hr_dev->dip_list_lock);
 
 	INIT_LIST_HEAD(&hr_dev->uctx_list);
 	mutex_init(&hr_dev->uctx_list_mutex);
@@ -1395,6 +1375,17 @@ static void hns_roce_dealloc_dfx_cnt(struct hns_roce_dev *hr_dev)
 	kvfree(hr_dev->dfx_cnt);
 }
 
+static void hns_roce_free_dca_safe_buf(struct hns_roce_dev *hr_dev)
+{
+	if (!hr_dev->dca_safe_buf)
+		return;
+
+	dma_free_coherent(hr_dev->dev, PAGE_SIZE, hr_dev->dca_safe_buf,
+			  hr_dev->dca_safe_page);
+	hr_dev->dca_safe_page = 0;
+	hr_dev->dca_safe_buf = NULL;
+}
+
 int hns_roce_init(struct hns_roce_dev *hr_dev)
 {
 	struct device *dev = hr_dev->dev;
@@ -1507,6 +1498,8 @@ void hns_roce_exit(struct hns_roce_dev *hr_dev, bool bond_cleanup)
 	hns_roce_unregister_device(hr_dev, bond_cleanup);
 	hns_roce_dealloc_scc_param(hr_dev);
 	hns_roce_unregister_debugfs(hr_dev);
+
+	hns_roce_free_dca_safe_buf(hr_dev);
 
 	if (hr_dev->hw->hw_exit)
 		hr_dev->hw->hw_exit(hr_dev);

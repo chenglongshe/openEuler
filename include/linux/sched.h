@@ -887,6 +887,8 @@ struct task_struct {
 	u8				rcu_tasks_idx;
 	int				rcu_tasks_idle_cpu;
 	struct list_head		rcu_tasks_holdout_list;
+	int				rcu_tasks_exit_cpu;
+	struct list_head		rcu_tasks_exit_list;
 #endif /* #ifdef CONFIG_TASKS_RCU */
 
 #ifdef CONFIG_TASKS_TRACE_RCU
@@ -1356,12 +1358,11 @@ struct task_struct {
 	int				mm_cid_active;	/* Whether cid bitmap is active */
 	struct callback_head		cid_work;
 #else
-	KABI_REPLACE(int mm_cid, int mm_cid)
-	KABI_REPLACE(int last_mm_cid, int last_mm_cid)
-	KABI_REPLACE(int migrate_from_cpu, int migrate_from_cpu)
-	KABI_REPLACE(int mm_cid_active, int mm_cid_active)
-	KABI_REPLACE(struct callback_head cid_work,
-			struct callback_head cid_work)
+	KABI_DEPRECATE(int, mm_cid)
+	KABI_DEPRECATE(int, last_mm_cid)
+	KABI_DEPRECATE(int, migrate_from_cpu)
+	KABI_DEPRECATE(int, mm_cid_active)
+	KABI_DEPRECATE(struct callback_head, cid_work)
 #endif
 
 	struct tlbflush_unmap_batch	tlb_ubc;

@@ -391,6 +391,22 @@ static void hinic3_free_txrxqs(struct hinic3_nic_dev *nic_dev)
 	hinic3_free_txqs(nic_dev->netdev);
 }
 
+static void hinic3_tx_rx_ops_init(struct hinic3_nic_dev *nic_dev)
+{
+	if (HINIC3_SUPPORT_TX_COMPACT_WQE_OL(nic_dev->hwdev)) {
+		nic_dev->tx_rx_ops.tx_set_wqebb_cnt = hinic3_tx_set_compact_offload_wqebb_cnt;
+		nic_dev->tx_rx_ops.tx_set_wqe_task = hinic3_tx_set_compact_offload_wqe_task;
+	} else {
+		nic_dev->tx_rx_ops.tx_set_wqebb_cnt = hinic3_tx_set_wqebb_cnt;
+		nic_dev->tx_rx_ops.tx_set_wqe_task = hinic3_tx_set_wqe_task;
+	}
+
+	if (HINIC3_SUPPORT_RX_COMPACT_CQE(nic_dev->hwdev))
+		nic_dev->tx_rx_ops.rx_get_cqe_info = hinic3_rx_get_compact_cqe_info;
+	else
+		nic_dev->tx_rx_ops.rx_get_cqe_info = hinic3_rx_get_cqe_info;
+}
+
 static void hinic3_sw_deinit(struct hinic3_nic_dev *nic_dev)
 {
 	hinic3_free_txrxqs(nic_dev);
@@ -481,6 +497,8 @@ static int hinic3_sw_init(struct hinic3_nic_dev *nic_dev)
 		nic_err(&nic_dev->pdev->dev, "Failed to alloc qps\n");
 		goto alloc_qps_err;
 	}
+
+	hinic3_tx_rx_ops_init(nic_dev);
 
 	return 0;
 

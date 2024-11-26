@@ -5,6 +5,7 @@
 
 #include <linux/debugfs.h>
 #include <linux/device.h>
+#include <linux/pci.h>
 
 #include "hns_roce_device.h"
 #include "hns_roce_common.h"
@@ -186,8 +187,8 @@ static void dca_setup_pool_name(pid_t pid, bool is_kdca, char *name, int size)
 
 static u64 calc_loading_percent(size_t total, size_t free, u32 *out_rem)
 {
-	u32 all_pages, used_pages, free_pages, scale;
-	u64 percent = 0;
+	u64 used_pages, scale, all_pages, free_pages;
+	u64 percent = U64_MAX;
 	u32 rem = 0;
 
 	all_pages = total >> HNS_HW_PAGE_SHIFT;
@@ -213,6 +214,9 @@ static void dca_print_pool_stats(struct hns_roce_dca_ctx *ctx, pid_t pid,
 	u32 rem = 0;
 
 	percent = calc_loading_percent(ctx->total_size, ctx->free_size, &rem);
+	if (percent == U64_MAX)
+		return;
+
 	dca_setup_pool_name(pid, is_kdca, name, sizeof(name));
 	seq_printf(file, "%-10s %-16ld %-16ld %-16u %llu.%0*u\n", name,
 		   ctx->total_size / KB, ctx->free_size / KB, ctx->free_mems,
@@ -365,6 +369,9 @@ static void dca_stats_ctx_mem_in_seqfile(struct hns_roce_dca_ctx *ctx,
 
 	dca_ctx_stats_mem(ctx, &stats);
 	percent = calc_loading_percent(stats.total_size, stats.free_size, &rem);
+	if (percent == U64_MAX)
+		return;
+
 	seq_printf(file, DCA_STAT_NAME_FMT "%llu.%0*u\n", "Loading:", percent,
 		   LOADING_PERCENT_SHIFT, rem);
 	dca_ctx_print_mem_kb(file, "Total:", stats.total_size);
@@ -489,7 +496,7 @@ void hns_roce_register_debugfs(struct hns_roce_dev *hr_dev)
 {
 	struct hns_roce_dev_debugfs *dbgfs = &hr_dev->dbgfs;
 
-	dbgfs->root = debugfs_create_dir(dev_name(&hr_dev->ib_dev.dev),
+	dbgfs->root = debugfs_create_dir(pci_name(hr_dev->pci_dev),
 					 hns_roce_dbgfs_root);
 
 	if (hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_DCA_MODE)
