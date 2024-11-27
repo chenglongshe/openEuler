@@ -286,6 +286,11 @@
 #define TCR_TCMA1		(UL(1) << 58)
 
 /*
+ * TCR2 Flags
+ */
+#define TCR2_HAFT		(UL(1) << 11)
+
+/*
  * TTBR.
  */
 #ifdef CONFIG_ARM64_PA_BITS_52

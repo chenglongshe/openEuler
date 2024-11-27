@@ -1943,6 +1943,33 @@ static bool has_hw_dbm(const struct arm64_cpu_capabilities *cap,
 
 #endif
 
+#if CONFIG_ARM64_HAFT
+
+static void cpu_enable_haft(struct arm64_cpu_capabilities const *cap)
+{
+	u64 reg = read_sysreg_s(SYS_TCR2_EL1);
+
+	reg |= TCR2_HAFT;
+	write_sysreg_s(reg, SYS_TCR2_EL1);
+	isb();
+	local_flush_tlb_all();
+}
+
+/* Callback can be omitted by use has_cpuid_feature() directly */
+static bool has_haft(const struct arm64_cpu_capabilities *cap, int scope)
+{
+	/* FEAT_HAFT relies on FEAT_TCR2 */
+	if (!this_cpu_has_cap(ARM64_HAS_TCR2))
+		return false;
+
+	if (!has_cpuid_feature(cap, scope))
+		return false;
+
+	return true;
+}
+
+#endif
+
 #ifdef CONFIG_ARM64_AMU_EXTN
 
 /*
@@ -2597,6 +2624,21 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
 		.matches = has_hw_dbm,
 		.cpu_enable = cpu_enable_hw_dbm,
 		ARM64_CPUID_FIELDS(ID_AA64MMFR1_EL1, HAFDBS, DBM)
+	},
+#endif
+#ifdef CONFIG_ARM64_HAFT
+	{
+		.desc = "Hardware managed Access Flag for Table Descriptor",
+		/*
+		 * Per Spec, software management of Access Flag for Table
+		 * descriptor is not supported, so make this feature system
+		 * wide.
+		 */
+		.type = ARM64_CPUCAP_BOOT_CPU_FEATURE,
+		.capability = ARM64_HAFT,
+		.matches = has_haft,
+		.cpu_enable = cpu_enable_haft,
+		ARM64_CPUID_FIELDS(ID_AA64MMFR1_EL1, HAFDBS, HAFT)
 	},
 #endif
 	{
