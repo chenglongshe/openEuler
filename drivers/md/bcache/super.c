@@ -1741,8 +1741,10 @@ static void cache_set_flush(struct closure *cl)
 	if (!IS_ERR_OR_NULL(c->gc_thread))
 		kthread_stop(c->gc_thread);
 
-	if (!IS_ERR(c->root))
-		list_add(&c->root->list, &c->btree_cache);
+	if (!IS_ERR_OR_NULL(c->root)) {
+		if (!list_empty(&c->root->list))
+			list_add(&c->root->list, &c->btree_cache);
+	}
 
 	/*
 	 * Avoid flushing cached nodes if cache set is retiring
