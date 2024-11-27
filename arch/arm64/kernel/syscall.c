@@ -14,6 +14,7 @@
 #include <asm/syscall.h>
 #include <asm/thread_info.h>
 #include <asm/unistd.h>
+#include <linux/audit.h>
 
 long a32_arm_syscall(struct pt_regs *regs, int scno);
 long sys_ni_syscall(void);
@@ -159,6 +160,38 @@ static inline void delouse_pt_regs(struct pt_regs *regs)
 	regs->regs[5] &= UINT_MAX;
 	regs->regs[6] &= UINT_MAX;
 	regs->regs[7] &= UINT_MAX;
+}
+#endif
+
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+static inline bool has_xcall_work(unsigned long flags)
+{
+	return unlikely(flags & _TIF_XCALL_WORK);
+}
+
+void do_el0_xcall(struct pt_regs *regs, int scno, int sc_nr)
+{
+	unsigned long flags = read_thread_flags();
+	const syscall_fn_t *syscall_table = sys_call_table;
+
+	regs->orig_x0 = regs->regs[0];
+	regs->syscallno = scno;
+
+	if (has_xcall_work(flags))
+		audit_syscall_entry(regs->syscallno, regs->orig_x0,
+			regs->regs[1], regs->regs[2], regs->regs[3]);
+
+	if (likely(scno < sc_nr)) {
+		syscall_fn_t syscall_fn;
+		int xcall_nr = array_index_nospec(scno, sc_nr);
+
+		syscall_fn = syscall_table[xcall_nr];
+		regs->regs[0] = __invoke_syscall(regs, syscall_fn);
+	} else
+		regs->regs[0] = do_ni_syscall(regs, scno);
+
+	if (has_xcall_work(flags))
+		audit_syscall_exit(regs);
 }
 #endif
 

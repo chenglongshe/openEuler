@@ -696,6 +696,31 @@ static void noinstr el0_dbg(struct pt_regs *regs, unsigned long esr)
 	exit_to_user_mode(regs);
 }
 
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+asmlinkage void noinstr el0t_64_xcall_handler(struct pt_regs *regs)
+{
+	unsigned long flags;
+	unsigned long esr = read_sysreg(esr_el1);
+
+	switch (ESR_ELx_EC(esr)) {
+	/* Only support SVC64 for now. */
+	case ESR_ELx_EC_SVC64:
+		fp_user_discard();
+		local_daif_restore(DAIF_PROCCTX);
+		do_el0_xcall(regs, regs->regs[8], __NR_syscalls);
+
+		local_daif_mask();
+
+		flags = read_thread_flags();
+		if (unlikely(flags & _TIF_WORK_MASK))
+			do_notify_resume(regs, flags);
+		break;
+	default:
+		el0_inv(regs, esr);
+	}
+}
+#endif
+
 static void noinstr el0_svc(struct pt_regs *regs)
 {
 	enter_from_user_mode(regs);

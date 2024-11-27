@@ -28,6 +28,9 @@
 
 int main(void)
 {
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+	DEFINE(TSK_XCALL,		offsetof(struct task_struct, xcall_enable));
+#endif
   DEFINE(TSK_ACTIVE_MM,		offsetof(struct task_struct, active_mm));
   BLANK();
   DEFINE(TSK_TI_CPU,		offsetof(struct task_struct, thread_info.cpu));

@@ -569,9 +569,22 @@ SYM_CODE_START_LOCAL(__bad_stack)
 SYM_CODE_END(__bad_stack)
 #endif /* CONFIG_VMAP_STACK */
 
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+#include "xcall_entry.S"
+#endif
 
 	.macro entry_handler el:req, ht:req, regsize:req, label:req
 SYM_CODE_START_LOCAL(el\el\ht\()_\regsize\()_\label)
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+	.if \el == 0 && \regsize == 64 && \label == sync
+	/* Only support el0 aarch64 sync exception */
+	alternative_if_not ARM64_HAS_XCALL
+		b .Lxcall_bypass\@
+	alternative_else_nop_endif
+		check_xcall_pre_kernel_entry
+	.Lxcall_bypass\@:
+	.endif
+#endif
 	kernel_entry \el, \regsize
 	mov	x0, sp
 	bl	el\el\ht\()_\regsize\()_\label\()_handler
