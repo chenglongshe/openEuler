@@ -906,13 +906,13 @@ leapioraid_debug_dump_mf(void *mpi_request, int sz)
 	int i;
 	__le32 *mfp = (__le32 *) mpi_request;
 
-	printk(KERN_INFO "mf:\n\t");
+	pr_info("mf:\n\t");
 	for (i = 0; i < sz; i++) {
 		if (i && ((i % 8) == 0))
-			printk(KERN_INFO "\n\t");
-		printk(KERN_INFO "%08x ", le32_to_cpu(mfp[i]));
+			pr_info("\n\t");
+		pr_info("%08x ", le32_to_cpu(mfp[i]));
 	}
-	printk(KERN_INFO "\n");
+	pr_info("\n");
 }
 
 static inline void
@@ -921,13 +921,13 @@ leapioraid_debug_dump_reply(void *mpi_request, int sz)
 	int i;
 	__le32 *mfp = (__le32 *) mpi_request;
 
-	printk(KERN_INFO "reply:\n\t");
+	pr_info("reply:\n\t");
 	for (i = 0; i < sz; i++) {
 		if (i && ((i % 8) == 0))
-			printk(KERN_INFO "\n\t");
-		printk(KERN_INFO "%08x ", le32_to_cpu(mfp[i]));
+			pr_info("\n\t");
+		pr_info("%08x ", le32_to_cpu(mfp[i]));
 	}
-	printk(KERN_INFO "\n");
+	pr_info("\n");
 }
 
 static inline void
@@ -936,13 +936,13 @@ leapioraid_debug_dump_config(void *mpi_request, int sz)
 	int i;
 	__le32 *mfp = (__le32 *) mpi_request;
 
-	printk(KERN_INFO "config:\n\t");
+	pr_info("config:\n\t");
 	for (i = 0; i < sz; i++) {
 		if (i && ((i % 8) == 0))
-			printk(KERN_INFO "\n\t");
-		printk(KERN_INFO "%08x ", le32_to_cpu(mfp[i]));
+			pr_info("\n\t");
+		pr_info("%08x ", le32_to_cpu(mfp[i]));
 	}
-	printk(KERN_INFO "\n");
+	pr_info("\n");
 }
 
 #define LEAPIORAID_DRV_INTERNAL_BITMAP_BLK_MQ	(0x00000001)
