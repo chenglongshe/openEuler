@@ -174,8 +174,8 @@ static int
 leapioraid_transport_set_identify(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 			struct sas_identify *identify)
 {
-	LeapioraidSasDevP0_t sas_device_pg0;
-	LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidSasDevP0_t sas_device_pg0;
+	struct LeapioraidCfgRep_t mpi_reply;
 	u32 device_info;
 	u32 ioc_status;
 
@@ -240,7 +240,7 @@ u8
 leapioraid_transport_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 			  u8 msix_index, u32 reply)
 {
-	LeapioraidDefaultRep_t *mpi_reply;
+	struct LeapioraidDefaultRep_t *mpi_reply;
 
 	mpi_reply = leapioraid_base_get_reply_virt_addr(ioc, reply);
 	if (ioc->transport_cmds.status == LEAPIORAID_CMD_NOT_USED)
@@ -291,8 +291,8 @@ leapioraid_transport_expander_report_manufacture(struct LEAPIORAID_ADAPTER *ioc,
 				       struct sas_expander_device *edev,
 				       u8 port_id)
 {
-	LeapioraidSmpPassthroughReq_t *mpi_request;
-	LeapioraidSmpPassthroughRep_t *mpi_reply;
+	struct LeapioraidSmpPassthroughReq_t *mpi_request;
+	struct LeapioraidSmpPassthroughRep_t *mpi_reply;
 	struct leapioraid_rep_manu_reply *manufacture_reply;
 	struct leapioraid_rep_manu_request *manufacture_request;
 	int rc;
@@ -348,7 +348,7 @@ leapioraid_transport_expander_report_manufacture(struct LEAPIORAID_ADAPTER *ioc,
 	manufacture_request->function = 1;
 	manufacture_request->reserved = 0;
 	manufacture_request->request_length = 0;
-	memset(mpi_request, 0, sizeof(LeapioraidSmpPassthroughReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidSmpPassthroughReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_SMP_PASSTHROUGH;
 	mpi_request->PhysicalPort = port_id;
 	mpi_request->SASAddress = cpu_to_le64(sas_address);
@@ -367,7 +367,7 @@ leapioraid_transport_expander_report_manufacture(struct LEAPIORAID_ADAPTER *ioc,
 		pr_err("%s %s: timeout\n",
 		       ioc->name, __func__);
 		leapioraid_debug_dump_mf(mpi_request,
-			       sizeof(LeapioraidSmpPassthroughReq_t) / 4);
+			       sizeof(struct LeapioraidSmpPassthroughReq_t) / 4);
 		if (!(ioc->transport_cmds.status & LEAPIORAID_CMD_RESET))
 			issue_reset = 1;
 		goto issue_host_reset;
@@ -871,7 +871,7 @@ out:
 int
 leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy
 				      *leapioraid_phy,
-				      LeapioraidSasPhyP0_t phy_pg0,
+				      struct LeapioraidSasPhyP0_t phy_pg0,
 				      struct device *parent_dev)
 {
 	struct sas_phy *phy;
@@ -939,7 +939,7 @@ leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapior
 int
 leapioraid_transport_add_expander_phy(
 		struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy *leapioraid_phy,
-		LeapioraidExpanderP1_t expander_pg1,
+		struct LeapioraidExpanderP1_t expander_pg1,
 		struct device *parent_dev)
 {
 	struct sas_phy *phy;
@@ -1101,8 +1101,8 @@ static int
 leapioraid_transport_get_expander_phy_error_log(struct LEAPIORAID_ADAPTER *ioc,
 				      struct sas_phy *phy)
 {
-	LeapioraidSmpPassthroughReq_t *mpi_request;
-	LeapioraidSmpPassthroughRep_t *mpi_reply;
+	struct LeapioraidSmpPassthroughReq_t *mpi_request;
+	struct LeapioraidSmpPassthroughRep_t *mpi_reply;
 	struct leapioraid_phy_error_log_request *phy_error_log_request;
 	struct leapioraid_phy_error_log_reply *phy_error_log_reply;
 	int rc;
@@ -1157,7 +1157,7 @@ leapioraid_transport_get_expander_phy_error_log(struct LEAPIORAID_ADAPTER *ioc,
 	phy_error_log_request->request_length = 2;
 	phy_error_log_request->allocated_response_length = 0;
 	phy_error_log_request->phy_identifier = phy->number;
-	memset(mpi_request, 0, sizeof(LeapioraidSmpPassthroughReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidSmpPassthroughReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_SMP_PASSTHROUGH;
 	mpi_request->PhysicalPort = leapioraid_transport_get_port_id_by_sas_phy(phy);
 	mpi_request->VF_ID = 0;
@@ -1182,7 +1182,7 @@ leapioraid_transport_get_expander_phy_error_log(struct LEAPIORAID_ADAPTER *ioc,
 		pr_err("%s %s: timeout\n",
 		       ioc->name, __func__);
 		leapioraid_debug_dump_mf(mpi_request,
-			       sizeof(LeapioraidSmpPassthroughReq_t) / 4);
+			       sizeof(struct LeapioraidSmpPassthroughReq_t) / 4);
 		if (!(ioc->transport_cmds.status & LEAPIORAID_CMD_RESET))
 			issue_reset = 1;
 		goto issue_host_reset;
@@ -1231,8 +1231,8 @@ static int
 leapioraid_transport_get_linkerrors(struct sas_phy *phy)
 {
 	struct LEAPIORAID_ADAPTER *ioc = phy_to_ioc(phy);
-	LeapioraidCfgRep_t mpi_reply;
-	LeapioraidSasPhyP1_t phy_pg1;
+	struct LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidSasPhyP1_t phy_pg1;
 	int rc = 0;
 
 	rc = leapioraid_transport_find_parent_node(ioc, phy);
@@ -1336,8 +1336,8 @@ static int
 leapioraid_transport_expander_phy_control(struct LEAPIORAID_ADAPTER *ioc,
 				struct sas_phy *phy, u8 phy_operation)
 {
-	LeapioraidSmpPassthroughReq_t *mpi_request;
-	LeapioraidSmpPassthroughRep_t *mpi_reply;
+	struct LeapioraidSmpPassthroughReq_t *mpi_request;
+	struct LeapioraidSmpPassthroughRep_t *mpi_reply;
 	struct leapioraid_phy_control_request *phy_control_request;
 	struct leapioraid_phy_control_reply *phy_control_reply;
 	int rc;
@@ -1397,7 +1397,7 @@ leapioraid_transport_expander_phy_control(struct LEAPIORAID_ADAPTER *ioc,
 	    phy->minimum_linkrate << 4;
 	phy_control_request->programmed_max_physical_link_rate =
 	    phy->maximum_linkrate << 4;
-	memset(mpi_request, 0, sizeof(LeapioraidSmpPassthroughReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidSmpPassthroughReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_SMP_PASSTHROUGH;
 	mpi_request->PhysicalPort = leapioraid_transport_get_port_id_by_sas_phy(phy);
 	mpi_request->VF_ID = 0;
@@ -1422,7 +1422,7 @@ leapioraid_transport_expander_phy_control(struct LEAPIORAID_ADAPTER *ioc,
 		pr_err("%s %s: timeout\n",
 		       ioc->name, __func__);
 		leapioraid_debug_dump_mf(mpi_request,
-			       sizeof(LeapioraidSmpPassthroughReq_t) / 4);
+			       sizeof(struct LeapioraidSmpPassthroughReq_t) / 4);
 		if (!(ioc->transport_cmds.status & LEAPIORAID_CMD_RESET))
 			issue_reset = 1;
 		goto issue_host_reset;
@@ -1463,8 +1463,8 @@ static int
 leapioraid_transport_phy_reset(struct sas_phy *phy, int hard_reset)
 {
 	struct LEAPIORAID_ADAPTER *ioc = phy_to_ioc(phy);
-	LeapioraidSasIoUnitControlRep_t mpi_reply;
-	LeapioraidSasIoUnitControlReq_t mpi_request;
+	struct LeapioraidSasIoUnitControlRep_t mpi_reply;
+	struct LeapioraidSasIoUnitControlReq_t mpi_request;
 	int rc = 0;
 
 	rc = leapioraid_transport_find_parent_node(ioc, phy);
@@ -1477,7 +1477,7 @@ leapioraid_transport_phy_reset(struct sas_phy *phy, int hard_reset)
 						       LEAPIORAID_SMP_PHY_CONTROL_HARD_RESET
 						       :
 						       LEAPIORAID_SMP_PHY_CONTROL_LINK_RESET);
-	memset(&mpi_request, 0, sizeof(LeapioraidSasIoUnitControlReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidSasIoUnitControlReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_SAS_IO_UNIT_CONTROL;
 	mpi_request.Operation = hard_reset ?
 	    LEAPIORAID_SAS_OP_PHY_HARD_RESET : LEAPIORAID_SAS_OP_PHY_LINK_RESET;
@@ -1500,9 +1500,9 @@ static int
 leapioraid_transport_phy_enable(struct sas_phy *phy, int enable)
 {
 	struct LEAPIORAID_ADAPTER *ioc = phy_to_ioc(phy);
-	LeapioraidSasIOUnitP1_t *sas_iounit_pg1 = NULL;
-	LeapioraidSasIOUnitP0_t *sas_iounit_pg0 = NULL;
-	LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidSasIOUnitP1_t *sas_iounit_pg1 = NULL;
+	struct LeapioraidSasIOUnitP0_t *sas_iounit_pg0 = NULL;
+	struct LeapioraidCfgRep_t mpi_reply;
 	u16 ioc_status;
 	u16 sz;
 	int rc = 0;
@@ -1518,9 +1518,9 @@ leapioraid_transport_phy_enable(struct sas_phy *phy, int enable)
 						       LEAPIORAID_SMP_PHY_CONTROL_LINK_RESET
 						       :
 						       LEAPIORAID_SMP_PHY_CONTROL_DISABLE);
-	sz = offsetof(LeapioraidSasIOUnitP0_t,
+	sz = offsetof(struct LeapioraidSasIOUnitP0_t,
 		      PhyData) +
-	    (ioc->sas_hba.num_phys * sizeof(LeapioraidSasIOUnit0PhyData_t));
+	    (ioc->sas_hba.num_phys * sizeof(struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
 	sas_iounit_pg0 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg0) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -1556,9 +1556,9 @@ leapioraid_transport_phy_enable(struct sas_phy *phy, int enable)
 		rc = -EAGAIN;
 		goto out;
 	}
-	sz = offsetof(LeapioraidSasIOUnitP1_t,
+	sz = offsetof(struct LeapioraidSasIOUnitP1_t,
 		      PhyData) +
-	    (ioc->sas_hba.num_phys * sizeof(LeapioraidSasIOUnit1PhyData_t));
+	    (ioc->sas_hba.num_phys * sizeof(struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA));
 	sas_iounit_pg1 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg1) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -1611,9 +1611,9 @@ static int
 leapioraid_transport_phy_speed(struct sas_phy *phy, struct sas_phy_linkrates *rates)
 {
 	struct LEAPIORAID_ADAPTER *ioc = phy_to_ioc(phy);
-	LeapioraidSasIOUnitP1_t *sas_iounit_pg1 = NULL;
-	LeapioraidSasPhyP0_t phy_pg0;
-	LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidSasIOUnitP1_t *sas_iounit_pg1 = NULL;
+	struct LeapioraidSasPhyP0_t phy_pg0;
+	struct LeapioraidCfgRep_t mpi_reply;
 	u16 ioc_status;
 	u16 sz;
 	int i;
@@ -1636,9 +1636,9 @@ leapioraid_transport_phy_speed(struct sas_phy *phy, struct sas_phy_linkrates *ra
 		return leapioraid_transport_expander_phy_control(ioc, phy,
 						       LEAPIORAID_SMP_PHY_CONTROL_LINK_RESET);
 	}
-	sz = offsetof(LeapioraidSasIOUnitP1_t,
+	sz = offsetof(struct LeapioraidSasIOUnitP1_t,
 		      PhyData) +
-	    (ioc->sas_hba.num_phys * sizeof(LeapioraidSasIOUnit1PhyData_t));
+	    (ioc->sas_hba.num_phys * sizeof(struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA));
 	sas_iounit_pg1 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg1) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -1730,8 +1730,8 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 		       struct sas_rphy *rphy)
 {
 	struct LEAPIORAID_ADAPTER *ioc = shost_priv(shost);
-	LeapioraidSmpPassthroughReq_t *mpi_request;
-	LeapioraidSmpPassthroughRep_t *mpi_reply;
+	struct LeapioraidSmpPassthroughReq_t *mpi_request;
+	struct LeapioraidSmpPassthroughRep_t *mpi_reply;
 	int rc;
 	u16 smid;
 	u32 ioc_state;
@@ -1804,7 +1804,7 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 	rc = 0;
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->transport_cmds.smid = smid;
-	memset(mpi_request, 0, sizeof(LeapioraidSmpPassthroughReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidSmpPassthroughReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_SMP_PASSTHROUGH;
 	mpi_request->PhysicalPort = leapioraid_transport_get_port_id_by_rphy(ioc, rphy);
 	mpi_request->SASAddress = (rphy) ?
@@ -1823,7 +1823,7 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 	if (!(ioc->transport_cmds.status & LEAPIORAID_CMD_COMPLETE)) {
 		pr_err("%s %s : timeout\n", __func__, ioc->name);
 		leapioraid_debug_dump_mf(mpi_request,
-			       sizeof(LeapioraidSmpPassthroughReq_t) / 4);
+			       sizeof(struct LeapioraidSmpPassthroughReq_t) / 4);
 		if (!(ioc->transport_cmds.status & LEAPIORAID_CMD_RESET)) {
 			leapioraid_base_hard_reset_handler(ioc,
 							   FORCE_BIG_HAMMER);

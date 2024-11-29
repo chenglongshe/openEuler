@@ -224,8 +224,8 @@ leapioraid_base_pci_device_is_available(struct LEAPIORAID_ADAPTER *ioc)
 static void
 leapioraid_base_sync_drv_fw_timestamp(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidIoUnitControlReq_t *mpi_request;
-	LeapioraidIoUnitControlRep_t *mpi_reply;
+	struct LeapioraidIoUnitControlReq_t *mpi_request;
+	struct LeapioraidIoUnitControlRep_t *mpi_reply;
 	u16 smid;
 	ktime_t current_time;
 	u64 TimeStamp = 0;
@@ -245,7 +245,7 @@ leapioraid_base_sync_drv_fw_timestamp(struct LEAPIORAID_ADAPTER *ioc)
 	}
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->scsih_cmds.smid = smid;
-	memset(mpi_request, 0, sizeof(LeapioraidIoUnitControlReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidIoUnitControlReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_IO_UNIT_CONTROL;
 	mpi_request->Operation = 0x0F;
 	mpi_request->IOCParameter = 0x81;
@@ -265,7 +265,7 @@ leapioraid_base_sync_drv_fw_timestamp(struct LEAPIORAID_ADAPTER *ioc)
 					     ioc->scsih_cmds.status,
 					     mpi_request,
 					     sizeof
-					     (LeapioraidSasIoUnitControlReq_t)
+					     (struct LeapioraidSasIoUnitControlReq_t)
 					     / 4, issue_reset);
 		goto issue_host_reset;
 	}
@@ -774,8 +774,8 @@ leapioraid_base_group_cpus_on_irq(struct LEAPIORAID_ADAPTER *ioc)
 
 static void
 leapioraid_base_sas_ioc_info(struct LEAPIORAID_ADAPTER *ioc,
-			     LeapioraidDefaultRep_t *mpi_reply,
-			     LeapioraidReqHeader_t *request_hdr)
+			     struct LeapioraidDefaultRep_t *mpi_reply,
+			     struct LeapioraidReqHeader_t *request_hdr)
 {
 	u16 ioc_status = le16_to_cpu(mpi_reply->IOCStatus) &
 	    LEAPIORAID_IOCSTATUS_MASK;
@@ -903,32 +903,32 @@ leapioraid_base_sas_ioc_info(struct LEAPIORAID_ADAPTER *ioc,
 		return;
 	switch (request_hdr->Function) {
 	case LEAPIORAID_FUNC_CONFIG:
-		frame_sz = sizeof(LeapioraidCfgReq_t) + ioc->sge_size;
+		frame_sz = sizeof(struct LeapioraidCfgReq_t) + ioc->sge_size;
 		func_str = "config_page";
 		break;
 	case LEAPIORAID_FUNC_SCSI_TASK_MGMT:
-		frame_sz = sizeof(LeapioraidSCSITmgReq_t);
+		frame_sz = sizeof(struct LeapioraidSCSITmgReq_t);
 		func_str = "task_mgmt";
 		break;
 	case LEAPIORAID_FUNC_SAS_IO_UNIT_CONTROL:
-		frame_sz = sizeof(LeapioraidSasIoUnitControlReq_t);
+		frame_sz = sizeof(struct LeapioraidSasIoUnitControlReq_t);
 		func_str = "sas_iounit_ctl";
 		break;
 	case LEAPIORAID_FUNC_SCSI_ENCLOSURE_PROCESSOR:
-		frame_sz = sizeof(LeapioraidSepReq_t);
+		frame_sz = sizeof(struct LeapioraidSepReq_t);
 		func_str = "enclosure";
 		break;
 	case LEAPIORAID_FUNC_IOC_INIT:
-		frame_sz = sizeof(LeapioraidIOCInitReq_t);
+		frame_sz = sizeof(struct LeapioraidIOCInitReq_t);
 		func_str = "ioc_init";
 		break;
 	case LEAPIORAID_FUNC_PORT_ENABLE:
-		frame_sz = sizeof(LeapioraidPortEnableReq_t);
+		frame_sz = sizeof(struct LeapioraidPortEnableReq_t);
 		func_str = "port_enable";
 		break;
 	case LEAPIORAID_FUNC_SMP_PASSTHROUGH:
 		frame_sz =
-		    sizeof(LeapioraidSmpPassthroughReq_t) + ioc->sge_size;
+		    sizeof(struct LeapioraidSmpPassthroughReq_t) + ioc->sge_size;
 		func_str = "smp_passthru";
 		break;
 	default:
@@ -943,7 +943,7 @@ leapioraid_base_sas_ioc_info(struct LEAPIORAID_ADAPTER *ioc,
 
 static void
 leapioraid_base_display_event_data(struct LEAPIORAID_ADAPTER *ioc,
-				   LeapioraidEventNotificationRep_t *mpi_reply)
+				   struct LeapioraidEventNotificationRep_t *mpi_reply)
 {
 	char *desc = NULL;
 	u16 event;
@@ -982,8 +982,8 @@ leapioraid_base_display_event_data(struct LEAPIORAID_ADAPTER *ioc,
 		break;
 	case LEAPIORAID_EVENT_SAS_DISCOVERY:
 		{
-			LeapioraidEventDataSasDiscovery_t *event_data =
-				(LeapioraidEventDataSasDiscovery_t *) mpi_reply->EventData;
+			struct LeapioraidEventDataSasDiscovery_t *event_data =
+				(struct LeapioraidEventDataSasDiscovery_t *) mpi_reply->EventData;
 			pr_info("%s SAS Discovery: (%s)",
 			       ioc->name,
 			       (event_data->ReasonCode ==
@@ -1079,7 +1079,7 @@ static void
 leapioraid_base_display_reply_info(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 				   u8 msix_index, u32 reply)
 {
-	LeapioraidDefaultRep_t *mpi_reply;
+	struct LeapioraidDefaultRep_t *mpi_reply;
 	u16 ioc_status;
 	u32 loginfo = 0;
 
@@ -1107,7 +1107,7 @@ u8
 leapioraid_base_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 		     u32 reply)
 {
-	LeapioraidDefaultRep_t *mpi_reply;
+	struct LeapioraidDefaultRep_t *mpi_reply;
 
 	mpi_reply = leapioraid_base_get_reply_virt_addr(ioc, reply);
 	if (mpi_reply && mpi_reply->Function == LEAPIORAID_FUNC_EVENT_ACK)
@@ -1128,8 +1128,8 @@ leapioraid_base_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 static u8
 leapioraid_base_async_event(struct LEAPIORAID_ADAPTER *ioc, u8 msix_index, u32 reply)
 {
-	LeapioraidEventNotificationRep_t *mpi_reply;
-	LeapioraidEventAckReq_t *ack_request;
+	struct LeapioraidEventNotificationRep_t *mpi_reply;
+	struct LeapioraidEventAckReq_t *ack_request;
 	u16 smid;
 	struct leapioraid_event_ack_list *delayed_event_ack;
 
@@ -1159,7 +1159,7 @@ leapioraid_base_async_event(struct LEAPIORAID_ADAPTER *ioc, u8 msix_index, u32 r
 		goto out;
 	}
 	ack_request = leapioraid_base_get_msg_frame(ioc, smid);
-	memset(ack_request, 0, sizeof(LeapioraidEventAckReq_t));
+	memset(ack_request, 0, sizeof(struct LeapioraidEventAckReq_t));
 	ack_request->Function = LEAPIORAID_FUNC_EVENT_ACK;
 	ack_request->Event = mpi_reply->Event;
 	ack_request->EventContext = mpi_reply->EventContext;
@@ -1295,7 +1295,7 @@ leapioraid_base_process_reply_queue(struct leapioraid_adapter_reply_queue *reply
 	u32 reply;
 	u8 msix_index = reply_q->msix_index;
 	struct LEAPIORAID_ADAPTER *ioc = reply_q->ioc;
-	LeapioraidRepDescUnion_t *rpf;
+	union LeapioraidRepDescUnion_t *rpf;
 	u8 rc;
 
 	completed_cmds = 0;
@@ -1573,7 +1573,7 @@ static void
 leapioraid_base_add_sg_single_32(void *paddr, u32 flags_length,
 				 dma_addr_t dma_addr)
 {
-	LeapioSGESimple32_t *sgel = paddr;
+	struct LeapioSGESimple32_t *sgel = paddr;
 
 	flags_length |= (LEAPIORAID_SGE_FLAGS_32_BIT_ADDRESSING |
 			 LEAPIORAID_SGE_FLAGS_SYSTEM_ADDRESS) <<
@@ -1586,7 +1586,7 @@ static void
 leapioraid_base_add_sg_single_64(void *paddr, u32 flags_length,
 				 dma_addr_t dma_addr)
 {
-	LeapioSGESimple64_t *sgel = paddr;
+	struct LeapioSGESimple64_t *sgel = paddr;
 
 	flags_length |= (LEAPIORAID_SGE_FLAGS_64_BIT_ADDRESSING |
 			 LEAPIORAID_SGE_FLAGS_SYSTEM_ADDRESS) <<
@@ -1677,7 +1677,7 @@ static void
 leapioraid_base_add_sg_single_ieee(void *paddr, u8 flags, u8 chain_offset,
 				   u32 length, dma_addr_t dma_addr)
 {
-	LeapioIeeeSgeChain64_t *sgel = paddr;
+	struct LEAPIORAID_IEEE_SGE_CHAIN64 *sgel = paddr;
 
 	sgel->Flags = flags;
 	sgel->NextChainOffset = chain_offset;
@@ -1700,7 +1700,7 @@ static int
 leapioraid_base_build_sg_scmd_ieee(struct LEAPIORAID_ADAPTER *ioc,
 				   struct scsi_cmnd *scmd, u16 smid)
 {
-	LeapioraidSCSIIOReq_t *mpi_request;
+	struct LeapioraidSCSIIOReq_t *mpi_request;
 	dma_addr_t chain_dma;
 	struct scatterlist *sg_scmd;
 	void *sg_local, *chain, *sgl_zero_addr;
@@ -1731,12 +1731,12 @@ leapioraid_base_build_sg_scmd_ieee(struct LEAPIORAID_ADAPTER *ioc,
 	}
 	sgl_zero_addr = sg_local = &mpi_request->SGL;
 	sges_in_segment = (ioc->request_sz -
-			   offsetof(LeapioraidSCSIIOReq_t,
+			   offsetof(struct LeapioraidSCSIIOReq_t,
 				    SGL)) / ioc->sge_size_ieee;
 	if (sges_left <= sges_in_segment)
 		goto fill_in_last_segment;
 	mpi_request->ChainOffset = (sges_in_segment - 1) +
-	    (offsetof(LeapioraidSCSIIOReq_t, SGL) / ioc->sge_size_ieee);
+	    (offsetof(struct LeapioraidSCSIIOReq_t, SGL) / ioc->sge_size_ieee);
 	while (sges_in_segment > 1) {
 		leapioraid_base_add_sg_single_ieee(sg_local, simple_sgl_flags,
 						   0, sg_dma_len(sg_scmd),
@@ -1864,7 +1864,7 @@ leapioraid_base_config_dma_addressing(struct LEAPIORAID_ADAPTER *ioc,
 		    !dma_set_coherent_mask(&pdev->dev, consistant_dma_mask)) {
 			ioc->base_add_sg_single =
 			    &leapioraid_base_add_sg_single_64;
-			ioc->sge_size = sizeof(LeapioSGESimple64_t);
+			ioc->sge_size = sizeof(struct LeapioSGESimple64_t);
 			if (!ioc->use_32bit_dma)
 				goto out;
 			return 0;
@@ -1873,7 +1873,7 @@ leapioraid_base_config_dma_addressing(struct LEAPIORAID_ADAPTER *ioc,
 	if (!dma_set_mask(&pdev->dev, DMA_BIT_MASK(32))
 	    && !dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32))) {
 		ioc->base_add_sg_single = &leapioraid_base_add_sg_single_32;
-		ioc->sge_size = sizeof(LeapioSGESimple32_t);
+		ioc->sge_size = sizeof(struct LeapioSGESimple32_t);
 		desc = "32";
 		ioc->dma_mask = 32;
 	} else
@@ -2361,7 +2361,7 @@ leapioraid_base_handshake_req_reply_wait(struct LEAPIORAID_ADAPTER *ioc,
 					 int reply_bytes, u16 *reply,
 					 int timeout)
 {
-	LeapioraidDefaultRep_t *default_reply = (LeapioraidDefaultRep_t *) reply;
+	struct LeapioraidDefaultRep_t *default_reply = (struct LeapioraidDefaultRep_t *) reply;
 	int i;
 	u8 failed;
 	__le32 *mfp;
@@ -2704,8 +2704,8 @@ leapioraid_base_check_for_fault_and_issue_reset(struct LEAPIORAID_ADAPTER *ioc)
 static int
 leapioraid_base_get_ioc_facts(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidIOCFactsReq_t mpi_request;
-	LeapioraidIOCFactsRep_t mpi_reply;
+	struct LeapioraidIOCFactsReq_t mpi_request;
+	struct LeapioraidIOCFactsRep_t mpi_reply;
 	struct leapioraid_facts *facts;
 	int mpi_reply_sz, mpi_request_sz, r;
 
@@ -2718,8 +2718,8 @@ leapioraid_base_get_ioc_facts(struct LEAPIORAID_ADAPTER *ioc)
 		       __func__);
 		return r;
 	}
-	mpi_reply_sz = sizeof(LeapioraidIOCFactsRep_t);
-	mpi_request_sz = sizeof(LeapioraidIOCFactsReq_t);
+	mpi_reply_sz = sizeof(struct LeapioraidIOCFactsRep_t);
+	mpi_request_sz = sizeof(struct LeapioraidIOCFactsReq_t);
 	memset(&mpi_request, 0, mpi_request_sz);
 	mpi_request.Function = LEAPIORAID_FUNC_IOC_FACTS;
 	r = leapioraid_base_handshake_req_reply_wait(ioc, mpi_request_sz,
@@ -3167,7 +3167,7 @@ static void
 leapioraid_base_put_smid_scsi_io(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 				 u16 handle)
 {
-	LeapioraidReqDescUnion_t descriptor;
+	union LeapioraidReqDescUnion_t descriptor;
 	u64 *request = (u64 *) &descriptor;
 
 	descriptor.SCSIIO.RequestFlags = LEAPIORAID_REQ_DESCRIPT_FLAGS_SCSI_IO;
@@ -3183,7 +3183,7 @@ static void
 leapioraid_base_put_smid_fast_path(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 				   u16 handle)
 {
-	LeapioraidReqDescUnion_t descriptor;
+	union LeapioraidReqDescUnion_t descriptor;
 	u64 *request = (u64 *) &descriptor;
 
 	descriptor.SCSIIO.RequestFlags =
@@ -3200,7 +3200,7 @@ static void
 leapioraid_base_put_smid_hi_priority(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 				     u16 msix_task)
 {
-	LeapioraidReqDescUnion_t descriptor;
+	union LeapioraidReqDescUnion_t descriptor;
 	u64 *request;
 
 	request = (u64 *) &descriptor;
@@ -3217,7 +3217,7 @@ leapioraid_base_put_smid_hi_priority(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 static void
 leapioraid_base_put_smid_default(struct LEAPIORAID_ADAPTER *ioc, u16 smid)
 {
-	LeapioraidReqDescUnion_t descriptor;
+	union LeapioraidReqDescUnion_t descriptor;
 	u64 *request;
 
 	request = (u64 *) &descriptor;
@@ -3235,7 +3235,7 @@ static void
 leapioraid_base_put_smid_scsi_io_atomic(struct LEAPIORAID_ADAPTER *ioc,
 					u16 smid, u16 handle)
 {
-	LeapioraidAtomicReqDesc_t descriptor;
+	struct LeapioraidAtomicReqDesc_t descriptor;
 	u32 *request = (u32 *) &descriptor;
 
 	descriptor.RequestFlags = LEAPIORAID_REQ_DESCRIPT_FLAGS_SCSI_IO;
@@ -3248,7 +3248,7 @@ static void
 leapioraid_base_put_smid_fast_path_atomic(struct LEAPIORAID_ADAPTER *ioc,
 					  u16 smid, u16 handle)
 {
-	LeapioraidAtomicReqDesc_t descriptor;
+	struct LeapioraidAtomicReqDesc_t descriptor;
 	u32 *request = (u32 *) &descriptor;
 
 	descriptor.RequestFlags = LEAPIORAID_REQ_DESCRIPT_FLAGS_FAST_PATH_SCSI_IO;
@@ -3261,7 +3261,7 @@ static void
 leapioraid_base_put_smid_hi_priority_atomic(struct LEAPIORAID_ADAPTER *ioc,
 					    u16 smid, u16 msix_task)
 {
-	LeapioraidAtomicReqDesc_t descriptor;
+	struct LeapioraidAtomicReqDesc_t descriptor;
 	u32 *request = (u32 *) &descriptor;
 
 	descriptor.RequestFlags = LEAPIORAID_REQ_DESCRIPT_FLAGS_HIGH_PRIORITY;
@@ -3274,7 +3274,7 @@ static void
 leapioraid_base_put_smid_default_atomic(struct LEAPIORAID_ADAPTER *ioc,
 					u16 smid)
 {
-	LeapioraidAtomicReqDesc_t descriptor;
+	struct LeapioraidAtomicReqDesc_t descriptor;
 	u32 *request = (u32 *)(&descriptor);
 
 	descriptor.RequestFlags = LEAPIORAID_REQ_DESCRIPT_FLAGS_DEFAULT_TYPE;
@@ -3286,10 +3286,10 @@ leapioraid_base_put_smid_default_atomic(struct LEAPIORAID_ADAPTER *ioc,
 static int
 leapioraid_base_display_fwpkg_version(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidFWImgHeader_t *fw_img_hdr;
-	LeapioraidComptImgHeader_t *cmp_img_hdr;
-	LeapioraidFWUploadReq_t *mpi_request;
-	LeapioraidFWUploadRep_t mpi_reply;
+	struct LeapioraidFWImgHeader_t *fw_img_hdr;
+	struct LeapioraidComptImgHeader_t *cmp_img_hdr;
+	struct LeapioraidFWUploadReq_t *mpi_request;
+	struct LeapioraidFWUploadRep_t mpi_reply;
 	int r = 0, issue_diag_reset = 0;
 	u32 package_version = 0;
 	void *fwpkg_data = NULL;
@@ -3304,7 +3304,7 @@ leapioraid_base_display_fwpkg_version(struct LEAPIORAID_ADAPTER *ioc)
 		       __func__);
 		return -EAGAIN;
 	}
-	data_length = sizeof(LeapioraidFWImgHeader_t);
+	data_length = sizeof(struct LeapioraidFWImgHeader_t);
 	fwpkg_data = dma_alloc_coherent(&ioc->pdev->dev, data_length,
 					&fwpkg_data_dma, GFP_ATOMIC);
 	if (!fwpkg_data) {
@@ -3323,7 +3323,7 @@ leapioraid_base_display_fwpkg_version(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->base_cmds.status = LEAPIORAID_CMD_PENDING;
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->base_cmds.smid = smid;
-	memset(mpi_request, 0, sizeof(LeapioraidFWUploadReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidFWUploadReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_FW_UPLOAD;
 	mpi_request->ImageType = 0x01;
 	mpi_request->ImageSize = data_length;
@@ -3338,22 +3338,22 @@ leapioraid_base_display_fwpkg_version(struct LEAPIORAID_ADAPTER *ioc)
 		pr_err("%s %s: timeout\n",
 		       ioc->name, __func__);
 		leapioraid_debug_dump_mf(mpi_request,
-			       sizeof(LeapioraidFWUploadReq_t) / 4);
+			       sizeof(struct LeapioraidFWUploadReq_t) / 4);
 		issue_diag_reset = 1;
 	} else {
-		memset(&mpi_reply, 0, sizeof(LeapioraidFWUploadRep_t));
+		memset(&mpi_reply, 0, sizeof(struct LeapioraidFWUploadRep_t));
 		if (ioc->base_cmds.status & LEAPIORAID_CMD_REPLY_VALID) {
 			memcpy(&mpi_reply, ioc->base_cmds.reply,
-			       sizeof(LeapioraidFWUploadRep_t));
+			       sizeof(struct LeapioraidFWUploadRep_t));
 			ioc_status = le16_to_cpu(mpi_reply.IOCStatus) &
 			    LEAPIORAID_IOCSTATUS_MASK;
 			if (ioc_status == LEAPIORAID_IOCSTATUS_SUCCESS) {
 				fw_img_hdr =
-				    (LeapioraidFWImgHeader_t *) fwpkg_data;
+				    (struct LeapioraidFWImgHeader_t *) fwpkg_data;
 				if (le32_to_cpu(fw_img_hdr->Signature) ==
 				    0xEB000042) {
 					cmp_img_hdr =
-					    (LeapioraidComptImgHeader_t
+					    (struct LeapioraidComptImgHeader_t
 					     *) (fwpkg_data);
 					package_version =
 					    le32_to_cpu(cmp_img_hdr->ApplicationSpecific);
@@ -3373,7 +3373,7 @@ leapioraid_base_display_fwpkg_version(struct LEAPIORAID_ADAPTER *ioc)
 					       (package_version) & 0x000000FF);
 			} else {
 				leapioraid_debug_dump_mf(&mpi_reply,
-					       sizeof(LeapioraidFWUploadRep_t) /
+					       sizeof(struct LeapioraidFWUploadRep_t) /
 					       4);
 			}
 		}
@@ -3460,14 +3460,14 @@ static int
 leapioraid_base_update_ioc_page1_inlinewith_perf_mode(struct LEAPIORAID_ADAPTER
 						      *ioc)
 {
-	LeapioraidIOCP1_t ioc_pg1;
-	LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidIOCP1_t ioc_pg1;
+	struct LeapioraidCfgRep_t mpi_reply;
 	int rc;
 
 	rc = leapioraid_config_get_ioc_pg1(ioc, &mpi_reply, &ioc->ioc_pg1_copy);
 	if (rc)
 		return rc;
-	memcpy(&ioc_pg1, &ioc->ioc_pg1_copy, sizeof(LeapioraidIOCP1_t));
+	memcpy(&ioc_pg1, &ioc->ioc_pg1_copy, sizeof(struct LeapioraidIOCP1_t));
 	switch (perf_mode) {
 	case LEAPIORAID_PERF_MODE_DEFAULT:
 	case LEAPIORAID_PERF_MODE_BALANCED:
@@ -3513,8 +3513,8 @@ leapioraid_base_update_ioc_page1_inlinewith_perf_mode(struct LEAPIORAID_ADAPTER
 static int
 leapioraid_base_assign_fw_reported_qd(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidCfgRep_t mpi_reply;
-	LeapioraidSasIOUnitP1_t *sas_iounit_pg1 = NULL;
+	struct LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidSasIOUnitP1_t *sas_iounit_pg1 = NULL;
 	int sz;
 	int rc = 0;
 
@@ -3522,7 +3522,7 @@ leapioraid_base_assign_fw_reported_qd(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->max_narrowport_qd = LEAPIORAID_SAS_QUEUE_DEPTH;
 	ioc->max_sata_qd = LEAPIORAID_SATA_QUEUE_DEPTH;
 
-	sz = offsetof(LeapioraidSasIOUnitP1_t, PhyData);
+	sz = offsetof(struct LeapioraidSasIOUnitP1_t, PhyData);
 	sas_iounit_pg1 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg1) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -3558,7 +3558,7 @@ out:
 static int
 leapioraid_base_static_config_pages(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidCfgRep_t mpi_reply;
 	u32 iounit_pg1_flags;
 	int rc;
 
@@ -3815,7 +3815,7 @@ base_alloc_rdpq_dma_pool(struct LEAPIORAID_ADAPTER *ioc, int sz)
 	int i = 0;
 	u32 dma_alloc_count = 0;
 	int reply_post_free_sz = ioc->reply_post_queue_depth *
-	    sizeof(LeapioraidDefaultRepDesc_t);
+	    sizeof(struct LeapioraidDefaultRepDesc_t);
 	int count = ioc->rdpq_array_enable ? ioc->reply_queue_count : 1;
 
 	ioc->reply_post =
@@ -3856,7 +3856,7 @@ base_alloc_rdpq_dma_pool(struct LEAPIORAID_ADAPTER *ioc, int sz)
 			dma_alloc_count--;
 		} else {
 			ioc->reply_post[i].reply_post_free =
-			    (LeapioraidRepDescUnion_t *)
+			    (union LeapioraidRepDescUnion_t *)
 			    ((long)ioc->reply_post[i - 1].reply_post_free
 			     + reply_post_free_sz);
 			ioc->reply_post[i].reply_post_free_dma = (dma_addr_t)
@@ -4073,7 +4073,7 @@ retry_allocation:
 	total_sz = 0;
 	max_sge_elements =
 	    ioc->request_sz -
-	    ((sizeof(LeapioraidSCSIIOReq_t) - sizeof(LeapioIeeeSGEIOUnion_t)) +
+	    ((sizeof(struct LeapioraidSCSIIOReq_t) - sizeof(union LEAPIORAID_IEEE_SGE_IO_UNION)) +
 	     2 * sge_size);
 	ioc->max_sges_in_main_message = max_sge_elements / sge_size;
 	max_sge_elements = ioc->chain_segment_sz - sge_size;
@@ -4271,7 +4271,7 @@ retry_allocation:
 		goto try_32bit_dma;
 	total_sz += sz;
 	reply_post_free_sz = ioc->reply_post_queue_depth *
-	    sizeof(LeapioraidDefaultRepDesc_t);
+	    sizeof(struct LeapioraidDefaultRepDesc_t);
 	rdpq_sz = reply_post_free_sz * LEAPIORAID_RDPQ_MAX_INDEX_IN_ONE_CHUNK;
 	if ((leapioraid_base_is_controller_msix_enabled(ioc)
 	     && !ioc->rdpq_array_enable)
@@ -4285,7 +4285,7 @@ retry_allocation:
 	else {
 		if (ioc->rdpq_array_enable && rc == 0) {
 			reply_post_free_array_sz = ioc->reply_queue_count *
-			    sizeof(LeapioraidIOCInitRDPQArrayEntry);
+			    sizeof(struct LeapioraidIOCInitRDPQArrayEntry);
 			rc = leapioraid_base_allocate_reply_post_free_array(
 				ioc, reply_post_free_array_sz);
 			if (rc == -ENOMEM)
@@ -4447,8 +4447,8 @@ leapioraid_wait_for_ioc_to_operational(struct LEAPIORAID_ADAPTER *ioc,
 
 int
 leapioraid_base_sas_iounit_control(struct LEAPIORAID_ADAPTER *ioc,
-				   LeapioraidSasIoUnitControlRep_t *mpi_reply,
-				   LeapioraidSasIoUnitControlReq_t *mpi_request)
+				   struct LeapioraidSasIoUnitControlRep_t *mpi_reply,
+				   struct LeapioraidSasIoUnitControlReq_t *mpi_request)
 {
 	u16 smid;
 	u8 issue_reset;
@@ -4478,7 +4478,7 @@ leapioraid_base_sas_iounit_control(struct LEAPIORAID_ADAPTER *ioc,
 	ioc->base_cmds.status = LEAPIORAID_CMD_PENDING;
 	request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->base_cmds.smid = smid;
-	memcpy(request, mpi_request, sizeof(LeapioraidSasIoUnitControlReq_t));
+	memcpy(request, mpi_request, sizeof(struct LeapioraidSasIoUnitControlReq_t));
 	if (mpi_request->Operation == LEAPIORAID_SAS_OP_PHY_HARD_RESET ||
 	    mpi_request->Operation == LEAPIORAID_SAS_OP_PHY_LINK_RESET)
 		ioc->ioc_link_reset_in_progress = 1;
@@ -4494,15 +4494,15 @@ leapioraid_base_sas_iounit_control(struct LEAPIORAID_ADAPTER *ioc,
 		leapioraid_check_cmd_timeout(ioc,
 					     ioc->base_cmds.status, mpi_request,
 					     sizeof
-					     (LeapioraidSasIoUnitControlReq_t)
+					     (struct LeapioraidSasIoUnitControlReq_t)
 					     / 4, issue_reset);
 		goto issue_host_reset;
 	}
 	if (ioc->base_cmds.status & LEAPIORAID_CMD_REPLY_VALID)
 		memcpy(mpi_reply, ioc->base_cmds.reply,
-		       sizeof(LeapioraidSasIoUnitControlRep_t));
+		       sizeof(struct LeapioraidSasIoUnitControlRep_t));
 	else
-		memset(mpi_reply, 0, sizeof(LeapioraidSasIoUnitControlRep_t));
+		memset(mpi_reply, 0, sizeof(struct LeapioraidSasIoUnitControlRep_t));
 	ioc->base_cmds.status = LEAPIORAID_CMD_NOT_USED;
 	goto out;
 issue_host_reset:
@@ -4517,8 +4517,8 @@ out:
 
 int
 leapioraid_base_scsi_enclosure_processor(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidSepRep_t *mpi_reply,
-					 LeapioraidSepReq_t *mpi_request)
+					 struct LeapioraidSepRep_t *mpi_reply,
+					 struct LeapioraidSepReq_t *mpi_request)
 {
 	u16 smid;
 	u8 issue_reset;
@@ -4549,7 +4549,7 @@ leapioraid_base_scsi_enclosure_processor(struct LEAPIORAID_ADAPTER *ioc,
 	request = leapioraid_base_get_msg_frame(ioc, smid);
 	memset(request, 0, ioc->request_sz);
 	ioc->base_cmds.smid = smid;
-	memcpy(request, mpi_request, sizeof(LeapioraidSepReq_t));
+	memcpy(request, mpi_request, sizeof(struct LeapioraidSepReq_t));
 	init_completion(&ioc->base_cmds.done);
 	ioc->put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->base_cmds.done,
@@ -4557,15 +4557,15 @@ leapioraid_base_scsi_enclosure_processor(struct LEAPIORAID_ADAPTER *ioc,
 	if (!(ioc->base_cmds.status & LEAPIORAID_CMD_COMPLETE)) {
 		leapioraid_check_cmd_timeout(ioc,
 					     ioc->base_cmds.status, mpi_request,
-					     sizeof(LeapioraidSepReq_t) / 4,
+					     sizeof(struct LeapioraidSepReq_t) / 4,
 					     issue_reset);
 		goto issue_host_reset;
 	}
 	if (ioc->base_cmds.status & LEAPIORAID_CMD_REPLY_VALID)
 		memcpy(mpi_reply, ioc->base_cmds.reply,
-		       sizeof(LeapioraidSepRep_t));
+		       sizeof(struct LeapioraidSepRep_t));
 	else
-		memset(mpi_reply, 0, sizeof(LeapioraidSepRep_t));
+		memset(mpi_reply, 0, sizeof(struct LeapioraidSepRep_t));
 	ioc->base_cmds.status = LEAPIORAID_CMD_NOT_USED;
 	goto out;
 issue_host_reset:
@@ -4581,15 +4581,15 @@ out:
 static int
 leapioraid_base_get_port_facts(struct LEAPIORAID_ADAPTER *ioc, int port)
 {
-	LeapioraidPortFactsReq_t mpi_request;
-	LeapioraidPortFactsRep_t mpi_reply;
+	struct LeapioraidPortFactsReq_t mpi_request;
+	struct LeapioraidPortFactsRep_t mpi_reply;
 	struct leapioraid_port_facts *pfacts;
 	int mpi_reply_sz, mpi_request_sz, r;
 
 	dinitprintk(ioc, pr_info("%s %s\n", ioc->name,
 				__func__));
-	mpi_reply_sz = sizeof(LeapioraidPortFactsRep_t);
-	mpi_request_sz = sizeof(LeapioraidPortFactsReq_t);
+	mpi_reply_sz = sizeof(struct LeapioraidPortFactsRep_t);
+	mpi_request_sz = sizeof(struct LeapioraidPortFactsReq_t);
 	memset(&mpi_request, 0, mpi_request_sz);
 	mpi_request.Function = LEAPIORAID_FUNC_PORT_FACTS;
 	mpi_request.PortNumber = port;
@@ -4615,8 +4615,8 @@ leapioraid_base_get_port_facts(struct LEAPIORAID_ADAPTER *ioc, int port)
 static int
 leapioraid_base_send_ioc_init(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidIOCInitReq_t mpi_request;
-	LeapioraidIOCInitRep_t mpi_reply;
+	struct LeapioraidIOCInitReq_t mpi_request;
+	struct LeapioraidIOCInitRep_t mpi_reply;
 	int i, r = 0;
 	ktime_t current_time;
 	u16 ioc_status;
@@ -4624,7 +4624,7 @@ leapioraid_base_send_ioc_init(struct LEAPIORAID_ADAPTER *ioc)
 
 	dinitprintk(ioc, pr_info("%s %s\n", ioc->name,
 				__func__));
-	memset(&mpi_request, 0, sizeof(LeapioraidIOCInitReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidIOCInitReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_IOC_INIT;
 	mpi_request.WhoInit = LEAPIORAID_WHOINIT_HOST_DRIVER;
 	mpi_request.VF_ID = 0;
@@ -4649,7 +4649,7 @@ leapioraid_base_send_ioc_init(struct LEAPIORAID_ADAPTER *ioc)
 	    cpu_to_le64((u64) ioc->reply_free_dma);
 	if (ioc->rdpq_array_enable) {
 		reply_post_free_ary_sz = ioc->reply_queue_count *
-		    sizeof(LeapioraidIOCInitRDPQArrayEntry);
+		    sizeof(struct LeapioraidIOCInitRDPQArrayEntry);
 		memset(ioc->reply_post_free_array, 0, reply_post_free_ary_sz);
 		for (i = 0; i < ioc->reply_queue_count; i++)
 			ioc->reply_post_free_array[i].RDPQBaseAddress =
@@ -4670,16 +4670,16 @@ leapioraid_base_send_ioc_init(struct LEAPIORAID_ADAPTER *ioc)
 
 		mfp = (__le32 *) &mpi_request;
 		pr_info("%s \toffset:data\n", ioc->name);
-		for (i = 0; i < sizeof(LeapioraidIOCInitReq_t) / 4; i++)
+		for (i = 0; i < sizeof(struct LeapioraidIOCInitReq_t) / 4; i++)
 			pr_info("%s \t[0x%02x]:%08x\n",
 			       ioc->name, i * 4, le32_to_cpu(mfp[i]));
 	}
 	r = leapioraid_base_handshake_req_reply_wait(ioc,
 						     sizeof
-						     (LeapioraidIOCInitReq_t),
+						     (struct LeapioraidIOCInitReq_t),
 						     (u32 *) &mpi_request,
 						     sizeof
-						     (LeapioraidIOCInitRep_t),
+						     (struct LeapioraidIOCInitRep_t),
 						     (u16 *) &mpi_reply, 30);
 	if (r != 0) {
 		pr_err("%s %s: handshake failed (r=%d)\n",
@@ -4699,8 +4699,8 @@ leapioraid_base_send_ioc_init(struct LEAPIORAID_ADAPTER *ioc)
 int
 leapioraid_base_trace_log_init(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidIOCLogReq_t mpi_request;
-	LeapioraidIOCLogRep_t mpi_reply;
+	struct LeapioraidIOCLogReq_t mpi_request;
+	struct LeapioraidIOCLogRep_t mpi_reply;
 	u16 ioc_status;
 	u32 r;
 
@@ -4711,16 +4711,16 @@ leapioraid_base_trace_log_init(struct LEAPIORAID_ADAPTER *ioc)
 		    dma_alloc_coherent(&ioc->pdev->dev, SYS_LOG_BUF_SIZE,
 				       &ioc->log_buffer_dma, GFP_KERNEL);
 	}
-	memset(&mpi_request, 0, sizeof(LeapioraidIOCLogReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidIOCLogReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_LOG_INIT;
 	mpi_request.BufAddr = ioc->log_buffer_dma;
 	mpi_request.BufSize = SYS_LOG_BUF_SIZE;
 	r = leapioraid_base_handshake_req_reply_wait(ioc,
 						     sizeof
-						     (LeapioraidIOCLogReq_t),
+						     (struct LeapioraidIOCLogReq_t),
 						     (u32 *) &mpi_request,
 						     sizeof
-						     (LeapioraidIOCLogRep_t),
+						     (struct LeapioraidIOCLogRep_t),
 						     (u16 *) &mpi_reply, 30);
 	if (r != 0) {
 		pr_err("%s %s: handshake failed (r=%d)\n",
@@ -4749,7 +4749,7 @@ u8
 leapioraid_port_enable_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 			    u8 msix_index, u32 reply)
 {
-	LeapioraidDefaultRep_t *mpi_reply;
+	struct LeapioraidDefaultRep_t *mpi_reply;
 	u16 ioc_status;
 
 	if (ioc->port_enable_cmds.status == LEAPIORAID_CMD_NOT_USED)
@@ -4785,8 +4785,8 @@ leapioraid_port_enable_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 static int
 leapioraid_base_send_port_enable(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidPortEnableReq_t *mpi_request;
-	LeapioraidPortEnableRep_t *mpi_reply;
+	struct LeapioraidPortEnableReq_t *mpi_request;
+	struct LeapioraidPortEnableRep_t *mpi_reply;
 	int r = 0;
 	u16 smid;
 	u16 ioc_status;
@@ -4807,7 +4807,7 @@ leapioraid_base_send_port_enable(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->port_enable_cmds.status = LEAPIORAID_CMD_PENDING;
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->port_enable_cmds.smid = smid;
-	memset(mpi_request, 0, sizeof(LeapioraidPortEnableReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidPortEnableReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_PORT_ENABLE;
 	init_completion(&ioc->port_enable_cmds.done);
 	ioc->put_smid_default(ioc, smid);
@@ -4816,7 +4816,7 @@ leapioraid_base_send_port_enable(struct LEAPIORAID_ADAPTER *ioc)
 		pr_err("%s %s: timeout\n",
 		       ioc->name, __func__);
 		leapioraid_debug_dump_mf(mpi_request,
-			       sizeof(LeapioraidPortEnableReq_t) / 4);
+			       sizeof(struct LeapioraidPortEnableReq_t) / 4);
 		if (ioc->port_enable_cmds.status & LEAPIORAID_CMD_RESET)
 			r = -EFAULT;
 		else
@@ -4844,7 +4844,7 @@ out:
 int
 leapioraid_port_enable(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidPortEnableReq_t *mpi_request;
+	struct LeapioraidPortEnableReq_t *mpi_request;
 	u16 smid;
 
 	pr_info("%s sending port enable !!\n", ioc->name);
@@ -4865,7 +4865,7 @@ leapioraid_port_enable(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->port_enable_cmds.status |= LEAPIORAID_CMD_COMPLETE_ASYNC;
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->port_enable_cmds.smid = smid;
-	memset(mpi_request, 0, sizeof(LeapioraidPortEnableReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidPortEnableReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_PORT_ENABLE;
 	ioc->put_smid_default(ioc, smid);
 	return 0;
@@ -4912,7 +4912,7 @@ leapioraid_base_unmask_events(struct LEAPIORAID_ADAPTER *ioc, u16 event)
 static int
 leapioraid_base_event_notification(struct LEAPIORAID_ADAPTER *ioc)
 {
-	LeapioraidEventNotificationReq_t *mpi_request;
+	struct LeapioraidEventNotificationReq_t *mpi_request;
 	u16 smid;
 	int r = 0;
 	int i, issue_diag_reset = 0;
@@ -4934,7 +4934,7 @@ leapioraid_base_event_notification(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->base_cmds.status = LEAPIORAID_CMD_PENDING;
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->base_cmds.smid = smid;
-	memset(mpi_request, 0, sizeof(LeapioraidEventNotificationReq_t));
+	memset(mpi_request, 0, sizeof(struct LeapioraidEventNotificationReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_EVENT_NOTIFICATION;
 	mpi_request->VF_ID = 0;
 	mpi_request->VP_ID = 0;
@@ -4947,7 +4947,7 @@ leapioraid_base_event_notification(struct LEAPIORAID_ADAPTER *ioc)
 		pr_err("%s %s: timeout\n",
 		       ioc->name, __func__);
 		leapioraid_debug_dump_mf(mpi_request,
-			       sizeof(LeapioraidEventNotificationReq_t) / 4);
+			       sizeof(struct LeapioraidEventNotificationReq_t) / 4);
 		if (ioc->base_cmds.status & LEAPIORAID_CMD_RESET)
 			r = -EFAULT;
 		else
@@ -5069,7 +5069,7 @@ leapioraid_base_make_ioc_operational(struct LEAPIORAID_ADAPTER *ioc)
 	struct leapioraid_sc_list *delayed_sc, *delayed_sc_next;
 	struct leapioraid_event_ack_list *delayed_event_ack, *delayed_event_ack_next;
 	struct leapioraid_adapter_reply_queue *reply_q;
-	LeapioraidRepDescUnion_t *reply_post_free_contig;
+	union LeapioraidRepDescUnion_t *reply_post_free_contig;
 
 	dinitprintk(ioc, pr_info("%s %s\n", ioc->name,
 				__func__));
@@ -5241,7 +5241,7 @@ leapioraid_base_attach(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->build_sg = &leapioraid_base_build_sg_ieee;
 	ioc->build_zero_len_sge =
 		&leapioraid_base_build_zero_len_sge_ieee;
-	ioc->sge_size_ieee = sizeof(LeapioIeeeSgeSimple64_t);
+	ioc->sge_size_ieee = sizeof(struct LEAPIORAID_IEEE_SGE_SIMPLE64);
 	if (ioc->high_iops_queues)
 		ioc->get_msix_index_for_smlio =
 			&leapioraid_base_get_high_iops_msix_index;
@@ -5743,9 +5743,9 @@ struct config_request {
 static void
 leapioraid_config_display_some_debug(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 			   char *calling_function_name,
-			   LeapioraidDefaultRep_t *mpi_reply)
+			   struct LeapioraidDefaultRep_t *mpi_reply)
 {
-	LeapioraidCfgReq_t *mpi_request;
+	struct LeapioraidCfgReq_t *mpi_request;
 	char *desc = NULL;
 
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
@@ -5852,7 +5852,7 @@ u8
 leapioraid_config_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 		       u32 reply)
 {
-	LeapioraidDefaultRep_t *mpi_reply;
+	struct LeapioraidDefaultRep_t *mpi_reply;
 
 	if (ioc->config_cmds.status == LEAPIORAID_CMD_NOT_USED)
 		return 1;
@@ -5874,12 +5874,12 @@ leapioraid_config_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 }
 
 static int
-leapioraid_config_request(struct LEAPIORAID_ADAPTER *ioc, LeapioraidCfgReq_t
-		*mpi_request, LeapioraidCfgRep_t *mpi_reply, int timeout,
+leapioraid_config_request(struct LEAPIORAID_ADAPTER *ioc, struct LeapioraidCfgReq_t
+		*mpi_request, struct LeapioraidCfgRep_t *mpi_reply, int timeout,
 		void *config_page, u16 config_page_sz)
 {
 	u16 smid;
-	LeapioraidCfgReq_t *config_request;
+	struct LeapioraidCfgReq_t *config_request;
 	int r;
 	u8 retry_count, issue_host_reset = 0;
 	struct config_request mem;
@@ -5953,12 +5953,12 @@ retry_config:
 		goto free_mem;
 	}
 	r = 0;
-	memset(mpi_reply, 0, sizeof(LeapioraidCfgRep_t));
-	memset(ioc->config_cmds.reply, 0, sizeof(LeapioraidCfgRep_t));
+	memset(mpi_reply, 0, sizeof(struct LeapioraidCfgRep_t));
+	memset(ioc->config_cmds.reply, 0, sizeof(struct LeapioraidCfgRep_t));
 	ioc->config_cmds.status = LEAPIORAID_CMD_PENDING;
 	config_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->config_cmds.smid = smid;
-	memcpy(config_request, mpi_request, sizeof(LeapioraidCfgReq_t));
+	memcpy(config_request, mpi_request, sizeof(struct LeapioraidCfgReq_t));
 	if (ioc->logging_level & LEAPIORAID_DEBUG_CONFIG)
 		leapioraid_config_display_some_debug(ioc, smid, "config_request", NULL);
 	init_completion(&ioc->config_cmds.done);
@@ -5971,7 +5971,7 @@ retry_config:
 						   NULL);
 		leapioraid_check_cmd_timeout(ioc, ioc->config_cmds.status,
 					     mpi_request,
-					     sizeof(LeapioraidCfgReq_t) / 4,
+					     sizeof(struct LeapioraidCfgReq_t) / 4,
 					     issue_reset);
 		retry_count++;
 		if (ioc->config_cmds.smid == smid)
@@ -5987,7 +5987,7 @@ retry_config:
 	}
 	if (ioc->config_cmds.status & LEAPIORAID_CMD_REPLY_VALID) {
 		memcpy(mpi_reply, ioc->config_cmds.reply,
-		       sizeof(LeapioraidCfgRep_t));
+		       sizeof(struct LeapioraidCfgRep_t));
 		if ((mpi_request->Header.PageType & 0xF) !=
 		    (mpi_reply->Header.PageType & 0xF)) {
 			if (!(ioc->logging_level & LEAPIORAID_DEBUG_CONFIG))
@@ -6091,14 +6091,14 @@ out:
 
 int
 leapioraid_config_get_manufacturing_pg0(struct LEAPIORAID_ADAPTER *ioc,
-					LeapioraidCfgRep_t *mpi_reply,
-					LeapioraidManP0_t *
+					struct LeapioraidCfgRep_t *mpi_reply,
+					struct LeapioraidManP0_t *
 					config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_MANUFACTURING;
@@ -6119,14 +6119,13 @@ out:
 
 int
 leapioraid_config_get_manufacturing_pg7(struct LEAPIORAID_ADAPTER *ioc,
-					LeapioraidCfgRep_t *mpi_reply,
-					LeapioraidManP7_t *
-					config_page, u16 sz)
+					struct LeapioraidCfgRep_t *mpi_reply,
+					struct LeapioraidManP7_t *config_page, u16 sz)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_MANUFACTURING;
@@ -6147,13 +6146,13 @@ out:
 
 int
 leapioraid_config_get_manufacturing_pg10(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidCfgRep_t *mpi_reply,
+					 struct LeapioraidCfgRep_t *mpi_reply,
 					 struct LeapioraidManuP10_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_MANUFACTURING;
@@ -6174,14 +6173,14 @@ out:
 
 int
 leapioraid_config_get_manufacturing_pg11(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidCfgRep_t *mpi_reply,
+					 struct LeapioraidCfgRep_t *mpi_reply,
 					 struct LeapioraidManuP11_t
 					 *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_MANUFACTURING;
@@ -6202,14 +6201,14 @@ out:
 
 int
 leapioraid_config_set_manufacturing_pg11(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidCfgRep_t *mpi_reply,
+					 struct LeapioraidCfgRep_t *mpi_reply,
 					 struct LeapioraidManuP11_t
 					 *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_MANUFACTURING;
@@ -6230,13 +6229,13 @@ out:
 
 int
 leapioraid_config_get_bios_pg2(struct LEAPIORAID_ADAPTER *ioc,
-			       LeapioraidCfgRep_t *mpi_reply,
-			       LeapioraidBiosP2_t *config_page)
+			       struct LeapioraidCfgRep_t *mpi_reply,
+			       struct LeapioraidBiosP2_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_BIOS;
@@ -6257,13 +6256,13 @@ out:
 
 int
 leapioraid_config_get_bios_pg3(struct LEAPIORAID_ADAPTER *ioc,
-			       LeapioraidCfgRep_t *mpi_reply,
-			       LeapioraidBiosP3_t *config_page)
+			       struct LeapioraidCfgRep_t *mpi_reply,
+			       struct LeapioraidBiosP3_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_BIOS;
@@ -6284,13 +6283,13 @@ out:
 
 int
 leapioraid_config_get_iounit_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				 LeapioraidCfgRep_t *mpi_reply,
-				 LeapioraidIOUnitP0_t *config_page)
+				 struct LeapioraidCfgRep_t *mpi_reply,
+				 struct LeapioraidIOUnitP0_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_IO_UNIT;
@@ -6311,13 +6310,13 @@ out:
 
 int
 leapioraid_config_get_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				 LeapioraidCfgRep_t *mpi_reply,
-				 LeapioraidIOUnitP1_t *config_page)
+				 struct LeapioraidCfgRep_t *mpi_reply,
+				 struct LeapioraidIOUnitP1_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_IO_UNIT;
@@ -6338,13 +6337,13 @@ out:
 
 int
 leapioraid_config_set_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				 LeapioraidCfgRep_t *mpi_reply,
-				 LeapioraidIOUnitP1_t *config_page)
+				 struct LeapioraidCfgRep_t *mpi_reply,
+				 struct LeapioraidIOUnitP1_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_IO_UNIT;
@@ -6365,13 +6364,13 @@ out:
 
 int
 leapioraid_config_get_iounit_pg8(struct LEAPIORAID_ADAPTER *ioc,
-				 LeapioraidCfgRep_t *mpi_reply,
-				 LeapioraidIOUnitP8_t *config_page)
+				 struct LeapioraidCfgRep_t *mpi_reply,
+				 struct LeapioraidIOUnitP8_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_IO_UNIT;
@@ -6392,13 +6391,13 @@ out:
 
 int
 leapioraid_config_get_ioc_pg1(struct LEAPIORAID_ADAPTER *ioc,
-			      LeapioraidCfgRep_t *mpi_reply,
-			      LeapioraidIOCP1_t *config_page)
+			      struct LeapioraidCfgRep_t *mpi_reply,
+			      struct LeapioraidIOCP1_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_IOC;
@@ -6419,13 +6418,13 @@ out:
 
 int
 leapioraid_config_set_ioc_pg1(struct LEAPIORAID_ADAPTER *ioc,
-			      LeapioraidCfgRep_t *mpi_reply,
-			      LeapioraidIOCP1_t *config_page)
+			      struct LeapioraidCfgRep_t *mpi_reply,
+			      struct LeapioraidIOCP1_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_IOC;
@@ -6446,13 +6445,13 @@ out:
 
 int
 leapioraid_config_get_ioc_pg8(struct LEAPIORAID_ADAPTER *ioc,
-			      LeapioraidCfgRep_t *mpi_reply,
-			      LeapioraidIOCP8_t *config_page)
+			      struct LeapioraidCfgRep_t *mpi_reply,
+			      struct LeapioraidIOCP8_t *config_page)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_IOC;
@@ -6473,14 +6472,14 @@ out:
 
 int
 leapioraid_config_get_sas_device_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidSasDevP0_t *config_page,
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidSasDevP0_t *config_page,
 				     u32 form, u32 handle)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6505,14 +6504,14 @@ int
 leapioraid_config_get_number_hba_phys(struct LEAPIORAID_ADAPTER *ioc,
 				      u8 *num_phys)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 	u16 ioc_status;
-	LeapioraidCfgRep_t mpi_reply;
-	LeapioraidSasIOUnitP0_t config_page;
+	struct LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidSasIOUnitP0_t config_page;
 
 	*num_phys = 0;
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6527,7 +6526,7 @@ leapioraid_config_get_number_hba_phys(struct LEAPIORAID_ADAPTER *ioc,
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_READ_CURRENT;
 	r = leapioraid_config_request(ioc, &mpi_request, &mpi_reply,
 			    LEAPIORAID_CONFIG_PAGE_DEFAULT_TIMEOUT, &config_page,
-			    sizeof(LeapioraidSasIOUnitP0_t));
+			    sizeof(struct LeapioraidSasIOUnitP0_t));
 	if (!r) {
 		ioc_status = le16_to_cpu(mpi_reply.IOCStatus) &
 		    LEAPIORAID_IOCSTATUS_MASK;
@@ -6540,14 +6539,14 @@ out:
 
 int
 leapioraid_config_get_sas_iounit_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidSasIOUnitP0_t *config_page,
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidSasIOUnitP0_t *config_page,
 				     u16 sz)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6569,14 +6568,14 @@ out:
 
 int
 leapioraid_config_get_sas_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidSasIOUnitP1_t *config_page,
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidSasIOUnitP1_t *config_page,
 				     u16 sz)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6598,14 +6597,14 @@ out:
 
 int
 leapioraid_config_set_sas_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidSasIOUnitP1_t *config_page,
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidSasIOUnitP1_t *config_page,
 				     u16 sz)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6630,14 +6629,14 @@ out:
 
 int
 leapioraid_config_get_expander_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				   LeapioraidCfgRep_t *mpi_reply,
-				   LeapioraidExpanderP0_t *config_page,
+				   struct LeapioraidCfgRep_t *mpi_reply,
+				   struct LeapioraidExpanderP0_t *config_page,
 				   u32 form, u32 handle)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6660,14 +6659,14 @@ out:
 
 int
 leapioraid_config_get_expander_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				   LeapioraidCfgRep_t *mpi_reply,
-				   LeapioraidExpanderP1_t *config_page,
+				   struct LeapioraidCfgRep_t *mpi_reply,
+				   struct LeapioraidExpanderP1_t *config_page,
 				   u32 phy_number, u16 handle)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6693,14 +6692,14 @@ out:
 
 int
 leapioraid_config_get_enclosure_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				    LeapioraidCfgRep_t *mpi_reply,
-				    LeapioraidSasEncP0_t *config_page,
+				    struct LeapioraidCfgRep_t *mpi_reply,
+				    struct LeapioraidSasEncP0_t *config_page,
 				    u32 form, u32 handle)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6723,14 +6722,14 @@ out:
 
 int
 leapioraid_config_get_phy_pg0(struct LEAPIORAID_ADAPTER *ioc,
-			      LeapioraidCfgRep_t *mpi_reply,
-			      LeapioraidSasPhyP0_t *config_page,
+			      struct LeapioraidCfgRep_t *mpi_reply,
+			      struct LeapioraidSasPhyP0_t *config_page,
 			      u32 phy_number)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6754,14 +6753,14 @@ out:
 
 int
 leapioraid_config_get_phy_pg1(struct LEAPIORAID_ADAPTER *ioc,
-			      LeapioraidCfgRep_t *mpi_reply,
-			      LeapioraidSasPhyP1_t *config_page,
+			      struct LeapioraidCfgRep_t *mpi_reply,
+			      struct LeapioraidSasPhyP1_t *config_page,
 			      u32 phy_number)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6785,14 +6784,14 @@ out:
 
 int
 leapioraid_config_get_raid_volume_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				      LeapioraidCfgRep_t *mpi_reply,
-				      LeapioraidRaidVolP1_t *config_page,
+				      struct LeapioraidCfgRep_t *mpi_reply,
+				      struct LeapioraidRaidVolP1_t *config_page,
 				      u32 form, u32 handle)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_RAID_VOLUME;
@@ -6816,13 +6815,13 @@ int
 leapioraid_config_get_number_pds(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 				 u8 *num_pds)
 {
-	LeapioraidCfgReq_t mpi_request;
-	LeapioraidRaidVolP0_t config_page;
-	LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidRaidVolP0_t config_page;
+	struct LeapioraidCfgRep_t mpi_reply;
 	int r;
 	u16 ioc_status;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	*num_pds = 0;
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
@@ -6839,7 +6838,7 @@ leapioraid_config_get_number_pds(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_READ_CURRENT;
 	r = leapioraid_config_request(ioc, &mpi_request, &mpi_reply,
 			    LEAPIORAID_CONFIG_PAGE_DEFAULT_TIMEOUT, &config_page,
-			    sizeof(LeapioraidRaidVolP0_t));
+			    sizeof(struct LeapioraidRaidVolP0_t));
 	if (!r) {
 		ioc_status = le16_to_cpu(mpi_reply.IOCStatus) &
 		    LEAPIORAID_IOCSTATUS_MASK;
@@ -6852,14 +6851,14 @@ out:
 
 int
 leapioraid_config_get_raid_volume_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				      LeapioraidCfgRep_t *mpi_reply,
-				      LeapioraidRaidVolP0_t *config_page,
+				      struct LeapioraidCfgRep_t *mpi_reply,
+				      struct LeapioraidRaidVolP0_t *config_page,
 				      u32 form, u32 handle, u16 sz)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_RAID_VOLUME;
@@ -6881,14 +6880,14 @@ out:
 
 int
 leapioraid_config_get_phys_disk_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				    LeapioraidCfgRep_t *mpi_reply,
-				    LeapioraidRaidPDP0_t *config_page,
+				    struct LeapioraidCfgRep_t *mpi_reply,
+				    struct LeapioraidRaidPDP0_t *config_page,
 				    u32 form, u32 form_specific)
 {
-	LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgReq_t mpi_request;
 	int r;
 
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_RAID_PHYSDISK;
@@ -6912,9 +6911,9 @@ int
 leapioraid_config_get_volume_handle(struct LEAPIORAID_ADAPTER *ioc,
 				    u16 pd_handle, u16 *volume_handle)
 {
-	LeapioraidRaidCfgP0_t *config_page = NULL;
-	LeapioraidCfgReq_t mpi_request;
-	LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidRaidCfgP0_t *config_page = NULL;
+	struct LeapioraidCfgReq_t mpi_request;
+	struct LeapioraidCfgRep_t mpi_reply;
 	int r, i, config_page_sz;
 	u16 ioc_status;
 	int config_num;
@@ -6922,7 +6921,7 @@ leapioraid_config_get_volume_handle(struct LEAPIORAID_ADAPTER *ioc,
 	u16 phys_disk_dev_handle;
 
 	*volume_handle = 0;
-	memset(&mpi_request, 0, sizeof(LeapioraidCfgReq_t));
+	memset(&mpi_request, 0, sizeof(struct LeapioraidCfgReq_t));
 	mpi_request.Function = LEAPIORAID_FUNC_CONFIG;
 	mpi_request.Action = LEAPIORAID_CONFIG_ACTION_PAGE_HEADER;
 	mpi_request.Header.PageType = LEAPIORAID_CONFIG_PAGETYPE_EXTENDED;
@@ -6990,8 +6989,8 @@ int
 leapioraid_config_get_volume_wwid(struct LEAPIORAID_ADAPTER *ioc,
 				  u16 volume_handle, u64 *wwid)
 {
-	LeapioraidCfgRep_t mpi_reply;
-	LeapioraidRaidVolP1_t raid_vol_pg1;
+	struct LeapioraidCfgRep_t mpi_reply;
+	struct LeapioraidRaidVolP1_t raid_vol_pg1;
 
 	*wwid = 0;
 	if (!(leapioraid_config_get_raid_volume_pg1(ioc, &mpi_reply,

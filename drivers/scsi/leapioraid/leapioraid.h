@@ -70,46 +70,45 @@ typedef volatile struct LEAPIORAID_SYSTEM_INTERFACE_REGS {
 #define LEAPIORAID_REQ_DESCRIPT_FLAGS_DEFAULT_TYPE      (0x08)
 #define LEAPIORAID_REQ_DESCRIPT_FLAGS_FAST_PATH_SCSI_IO (0x0C)
 
-typedef struct _LEAPIORAID_DEFAULT_REQUEST_DESCRIPTOR {
+struct LEAPIORAID_DEFAULT_REQUEST_DESCRIPTOR {
 	U8 RequestFlags;
 	U8 MSIxIndex;
 	U16 SMID;
 	U16 LMID;
 	U16 DescriptorTypeDependent;
-} LEAPIORAID_DEFAULT_REQUEST_DESCRIPTOR;
+};
 
-typedef struct _LEAPIORAID_HIGH_PRIORITY_REQUEST_DESCRIPTOR {
+struct LEAPIORAID_HIGH_PRIORITY_REQUEST_DESCRIPTOR {
 	U8 RequestFlags;
 	U8 MSIxIndex;
 	U16 SMID;
 	U16 LMID;
 	U16 Reserved1;
-} LEAPIORAID_HIGH_PRIORITY_REQUEST_DESCRIPTOR;
+};
 
-typedef struct _LEAPIORAID_SCSI_IO_REQUEST_DESCRIPTOR {
+struct LEAPIORAID_SCSI_IO_REQUEST_DESCRIPTOR {
 	U8 RequestFlags;
 	U8 MSIxIndex;
 	U16 SMID;
 	U16 LMID;
 	U16 DevHandle;
-} LEAPIORAID_SCSI_IO_REQUEST_DESCRIPTOR;
+};
 
-typedef LEAPIORAID_SCSI_IO_REQUEST_DESCRIPTOR LEAPIORAID_FP_SCSI_IO_REQUEST_DESCRIPTOR;
+typedef struct LEAPIORAID_SCSI_IO_REQUEST_DESCRIPTOR LEAPIORAID_FP_SCSI_IO_REQUEST_DESCRIPTOR;
 
-typedef union _LEAPIORAID_REQUEST_DESCRIPTOR_UNION {
-	LEAPIORAID_DEFAULT_REQUEST_DESCRIPTOR Default;
-	LEAPIORAID_HIGH_PRIORITY_REQUEST_DESCRIPTOR HighPriority;
-	LEAPIORAID_SCSI_IO_REQUEST_DESCRIPTOR SCSIIO;
+union LeapioraidReqDescUnion_t {
+	struct LEAPIORAID_DEFAULT_REQUEST_DESCRIPTOR Default;
+	struct LEAPIORAID_HIGH_PRIORITY_REQUEST_DESCRIPTOR HighPriority;
+	struct LEAPIORAID_SCSI_IO_REQUEST_DESCRIPTOR SCSIIO;
 	LEAPIORAID_FP_SCSI_IO_REQUEST_DESCRIPTOR FastPathSCSIIO;
 	U64 Words;
-} LeapioraidReqDescUnion_t;
+};
 
-typedef struct _LEAPIORAID_ATOMIC_REQUEST_DESCRIPTOR {
+struct LeapioraidAtomicReqDesc_t {
 	U8 RequestFlags;
 	U8 MSIxIndex;
 	U16 SMID;
-} LeapioraidAtomicReqDesc_t;
-
+};
 
 #define LEAPIORAID_RPY_DESCRIPT_FLAGS_TYPE_MASK                 (0x0F)
 #define LEAPIORAID_RPY_DESCRIPT_FLAGS_SCSI_IO_SUCCESS           (0x00)
@@ -117,38 +116,37 @@ typedef struct _LEAPIORAID_ATOMIC_REQUEST_DESCRIPTOR {
 #define LEAPIORAID_RPY_DESCRIPT_FLAGS_FAST_PATH_SCSI_IO_SUCCESS (0x06)
 #define LEAPIORAID_RPY_DESCRIPT_FLAGS_UNUSED                    (0x0F)
 
-typedef struct _LEAPIORAID_DEFAULT_REPLY_DESCRIPTOR {
+struct LeapioraidDefaultRepDesc_t {
 	U8 ReplyFlags;
 	U8 MSIxIndex;
 	U16 DescriptorTypeDependent1;
 	U32 DescriptorTypeDependent2;
-} LEAPIORAID_DEFAULT_REPLY_DESCRIPTOR,
-	LeapioraidDefaultRepDesc_t;
+};
 
-typedef struct _LEAPIORAID_ADDRESS_REPLY_DESCRIPTOR {
+struct LEAPIORAID_ADDRESS_REPLY_DESCRIPTOR {
 	U8 ReplyFlags;
 	U8 MSIxIndex;
 	U16 SMID;
 	U32 ReplyFrameAddress;
-} LEAPIORAID_ADDRESS_REPLY_DESCRIPTOR;
+};
 
-typedef struct _LEAPIORAID_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR {
+struct LEAPIORAID_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR {
 	U8 ReplyFlags;
 	U8 MSIxIndex;
 	U16 SMID;
 	U16 TaskTag;
 	U16 Reserved1;
-} LEAPIORAID_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR;
+};
 
-typedef LEAPIORAID_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR LEAPIORAID_FP_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR;
+typedef struct LEAPIORAID_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR LEAPIORAID_FP_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR;
 
-typedef union _LEAPIORAID_REPLY_DESCRIPTORS_UNION {
-	LEAPIORAID_DEFAULT_REPLY_DESCRIPTOR Default;
-	LEAPIORAID_ADDRESS_REPLY_DESCRIPTOR AddressReply;
-	LEAPIORAID_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR SCSIIOSuccess;
+union LeapioraidRepDescUnion_t {
+	struct LeapioraidDefaultRepDesc_t Default;
+	struct LEAPIORAID_ADDRESS_REPLY_DESCRIPTOR AddressReply;
+	struct LEAPIORAID_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR SCSIIOSuccess;
 	LEAPIORAID_FP_SCSI_IO_SUCCESS_REPLY_DESCRIPTOR FastPathSCSIIOSuccess;
 	U64 Words;
-} LeapioraidRepDescUnion_t;
+};
 
 #define LEAPIORAID_FUNC_SCSI_IO_REQUEST             (0x00)
 #define LEAPIORAID_FUNC_SCSI_TASK_MGMT              (0x01)
@@ -224,7 +222,7 @@ typedef union _LEAPIORAID_REPLY_DESCRIPTORS_UNION {
 #define LEAPIORAID_IOCSTATUS_SAS_SMP_DATA_OVERRUN         (0x0091)
 #define LEAPIORAID_IOCSTATUS_FLAG_LOG_INFO_AVAILABLE      (0x8000)
 
-typedef struct _LEAPIORAID_REQUEST_HEADER {
+struct LeapioraidReqHeader_t {
 	U16 FunctionDependent1;
 	U8 ChainOffset;
 	U8 Function;
@@ -234,9 +232,9 @@ typedef struct _LEAPIORAID_REQUEST_HEADER {
 	U8 VP_ID;
 	U8 VF_ID;
 	U16 Reserved1;
-} LeapioraidReqHeader_t;
+};
 
-typedef struct _LEAPIORAID_DEFAULT_REPLY {
+struct LeapioraidDefaultRep_t {
 	U16 FunctionDependent1;
 	U8 MsgLength;
 	U8 Function;
@@ -249,39 +247,39 @@ typedef struct _LEAPIORAID_DEFAULT_REPLY {
 	U16 FunctionDependent5;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-} LeapioraidDefaultRep_t;
+};
 
-typedef struct _LEAPIORAID_VERSION_STRUCT {
+struct LEAPIORAID_VERSION_STRUCT {
 	U8 Dev;
 	U8 Unit;
 	U8 Minor;
 	U8 Major;
-} LEAPIORAID_VERSION_STRUCT;
+};
 
-typedef union _LEAPIORAID_VERSION_UNION {
-	LEAPIORAID_VERSION_STRUCT Struct;
+union LEAPIORAID_VERSION_UNION {
+	struct LEAPIORAID_VERSION_STRUCT Struct;
 	U32 Word;
-} LEAPIORAID_VERSION_UNION;
+};
 
-typedef struct _LEAPIORAID_SGE_SIMPLE32 {
+struct LeapioSGESimple32_t {
 	U32 FlagsLength;
 	U32 Address;
-} LeapioSGESimple32_t;
+};
 
-typedef struct _LEAPIORAID_SGE_SIMPLE64 {
+struct LeapioSGESimple64_t {
 	U32 FlagsLength;
 	U64 Address;
-} LeapioSGESimple64_t;
+};
 
-typedef struct _LEAPIORAID_SGE_SIMPLE_UNION {
+struct LEAPIORAID_SGE_SIMPLE_UNION {
 	U32 FlagsLength;
 	union {
 		U32 Address32;
 		U64 Address64;
 	} u;
-} LEAPIORAID_SGE_SIMPLE_UNION;
+};
 
-typedef struct _LEAPIORAID_SGE_CHAIN_UNION {
+struct LEAPIORAID_SGE_CHAIN_UNION {
 	U16 Length;
 	U8 NextChainOffset;
 	U8 Flags;
@@ -289,7 +287,7 @@ typedef struct _LEAPIORAID_SGE_CHAIN_UNION {
 		U32 Address32;
 		U64 Address64;
 	} u;
-} LEAPIORAID_SGE_CHAIN_UNION;
+};
 
 #define LEAPIORAID_SGE_FLAGS_LAST_ELEMENT             (0x80)
 #define LEAPIORAID_SGE_FLAGS_END_OF_BUFFER            (0x40)
@@ -301,67 +299,67 @@ typedef struct _LEAPIORAID_SGE_CHAIN_UNION {
 #define LEAPIORAID_SGE_FLAGS_32_BIT_ADDRESSING        (0x00)
 #define LEAPIORAID_SGE_FLAGS_64_BIT_ADDRESSING        (0x02)
 
-typedef struct _LEAPIORAID_IEEE_SGE_SIMPLE32 {
+struct LEAPIORAID_IEEE_SGE_SIMPLE32 {
 	U32 Address;
 	U32 FlagsLength;
-} LEAPIORAID_IEEE_SGE_SIMPLE32;
+};
 
-typedef struct _LEAPIORAID_IEEE_SGE_SIMPLE64 {
+struct LEAPIORAID_IEEE_SGE_SIMPLE64 {
 	U64 Address;
 	U32 Length;
 	U16 Reserved1;
 	U8 Reserved2;
 	U8 Flags;
-} LEAPIORAID_IEEE_SGE_SIMPLE64, LeapioIeeeSgeSimple64_t;
+};
 
-typedef union _LEAPIORAID_IEEE_SGE_SIMPLE_UNION {
-	LEAPIORAID_IEEE_SGE_SIMPLE32 Simple32;
-	LEAPIORAID_IEEE_SGE_SIMPLE64 Simple64;
-} LEAPIORAID_IEEE_SGE_SIMPLE_UNION;
+union LEAPIORAID_IEEE_SGE_SIMPLE_UNION {
+	struct LEAPIORAID_IEEE_SGE_SIMPLE32 Simple32;
+	struct LEAPIORAID_IEEE_SGE_SIMPLE64 Simple64;
+};
 
-typedef union _LEAPIORAID_IEEE_SGE_CHAIN_UNION {
-	LEAPIORAID_IEEE_SGE_SIMPLE32 Chain32;
-	LEAPIORAID_IEEE_SGE_SIMPLE64 Chain64;
-} LEAPIORAID_IEEE_SGE_CHAIN_UNION;
+union LEAPIORAID_IEEE_SGE_CHAIN_UNION {
+	struct LEAPIORAID_IEEE_SGE_SIMPLE32 Chain32;
+	struct LEAPIORAID_IEEE_SGE_SIMPLE64 Chain64;
+};
 
-typedef struct _LEAPIORAID_IEEE_SGE_CHAIN64 {
+struct LEAPIORAID_IEEE_SGE_CHAIN64 {
 	U64 Address;
 	U32 Length;
 	U16 Reserved1;
 	U8 NextChainOffset;
 	U8 Flags;
-} LEAPIORAID_IEEE_SGE_CHAIN64, LeapioIeeeSgeChain64_t;
+};
 
-typedef union _LEAPIORAID_IEEE_SGE_IO_UNION {
-	LEAPIORAID_IEEE_SGE_SIMPLE64 IeeeSimple;
-	LEAPIORAID_IEEE_SGE_CHAIN64 IeeeChain;
-} LEAPIORAID_IEEE_SGE_IO_UNION, LeapioIeeeSGEIOUnion_t;
+union LEAPIORAID_IEEE_SGE_IO_UNION {
+	struct LEAPIORAID_IEEE_SGE_SIMPLE64 IeeeSimple;
+	struct LEAPIORAID_IEEE_SGE_CHAIN64 IeeeChain;
+};
 
 #define LEAPIORAID_IEEE_SGE_FLAGS_END_OF_LIST       (0x40)
 #define LEAPIORAID_IEEE_SGE_FLAGS_SIMPLE_ELEMENT    (0x00)
 #define LEAPIORAID_IEEE_SGE_FLAGS_CHAIN_ELEMENT     (0x80)
 #define LEAPIORAID_IEEE_SGE_FLAGS_SYSTEM_ADDR       (0x00)
 
-typedef union _LEAPIORAID_SIMPLE_SGE_UNION {
-	LEAPIORAID_SGE_SIMPLE_UNION LeapioSimple;
-	LEAPIORAID_IEEE_SGE_SIMPLE_UNION IeeeSimple;
-} LEAPIORAID_SIMPLE_SGE_UNION;
+union LEAPIORAID_SIMPLE_SGE_UNION {
+	struct LEAPIORAID_SGE_SIMPLE_UNION LeapioSimple;
+	union LEAPIORAID_IEEE_SGE_SIMPLE_UNION IeeeSimple;
+};
 
-typedef union _LEAPIORAID_SGE_IO_UNION {
-	LEAPIORAID_SGE_SIMPLE_UNION LeapioSimple;
-	LEAPIORAID_SGE_CHAIN_UNION LeapioChain;
-	LEAPIORAID_IEEE_SGE_SIMPLE_UNION IeeeSimple;
-	LEAPIORAID_IEEE_SGE_CHAIN_UNION IeeeChain;
-} LEAPIORAID_SGE_IO_UNION;
+union LEAPIORAID_SGE_IO_UNION {
+	struct LEAPIORAID_SGE_SIMPLE_UNION LeapioSimple;
+	struct LEAPIORAID_SGE_CHAIN_UNION LeapioChain;
+	union LEAPIORAID_IEEE_SGE_SIMPLE_UNION IeeeSimple;
+	union LEAPIORAID_IEEE_SGE_CHAIN_UNION IeeeChain;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_HEADER {
+struct LEAPIORAID_CONFIG_PAGE_HEADER {
 	U8 PageVersion;
 	U8 PageLength;
 	U8 PageNumber;
 	U8 PageType;
-} LEAPIORAID_CONFIG_PAGE_HEADER;
+};
 
-typedef struct _LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER {
+struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER {
 	U8 PageVersion;
 	U8 Reserved1;
 	U8 PageNumber;
@@ -369,7 +367,7 @@ typedef struct _LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER {
 	U16 ExtPageLength;
 	U8 ExtPageType;
 	U8 Reserved2;
-} LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER;
+};
 
 #define LEAPIORAID_CONFIG_PAGETYPE_IO_UNIT                (0x00)
 #define LEAPIORAID_CONFIG_PAGETYPE_IOC                    (0x01)
@@ -407,7 +405,7 @@ typedef struct _LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER {
 #define LEAPIORAID_SAS_ENCLOS_PGAD_FORM_HANDLE            (0x10000000)
 #define LEAPIORAID_RAID_PGAD_FORM_GET_NEXT_CONFIGNUM      (0x00000000)
 
-typedef struct _LEAPIORAID_CONFIG_REQUEST {
+struct LeapioraidCfgReq_t {
 	U8 Action;
 	U8 SGLFlags;
 	U8 ChainOffset;
@@ -422,17 +420,17 @@ typedef struct _LEAPIORAID_CONFIG_REQUEST {
 	U8 ProxyVF_ID;
 	U16 Reserved4;
 	U32 Reserved3;
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U32 PageAddress;
-	LEAPIORAID_SGE_IO_UNION PageBufferSGE;
-} LeapioraidCfgReq_t;
+	union LEAPIORAID_SGE_IO_UNION PageBufferSGE;
+};
 
 #define LEAPIORAID_CONFIG_ACTION_PAGE_HEADER              (0x00)
 #define LEAPIORAID_CONFIG_ACTION_PAGE_READ_CURRENT        (0x01)
 #define LEAPIORAID_CONFIG_ACTION_PAGE_WRITE_CURRENT       (0x02)
 #define LEAPIORAID_CONFIG_ACTION_PAGE_WRITE_NVRAM         (0x04)
 
-typedef struct _LEAPIORAID_CONFIG_REPLY {
+struct LeapioraidCfgRep_t {
 	U8 Action;
 	U8 SGLFlags;
 	U8 MsgLength;
@@ -446,19 +444,19 @@ typedef struct _LEAPIORAID_CONFIG_REPLY {
 	U16 Reserved2;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
-} LeapioraidCfgRep_t;
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_MAN_0 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidManP0_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U8 ChipName[16];
 	U8 ChipRevision[8];
 	U8 BoardName[16];
 	U8 BoardAssembly[16];
 	U8 BoardTracerNumber[16];
-} LeapioraidManP0_t;
+};
 
-typedef struct _LEAPIORAID_MANPAGE7_CONNECTOR_INFO {
+struct LEAPIORAID_MANPAGE7_CONNECTOR_INFO {
 	U32 Pinout;
 	U8 Connector[16];
 	U8 Location;
@@ -466,10 +464,10 @@ typedef struct _LEAPIORAID_MANPAGE7_CONNECTOR_INFO {
 	U16 Slot;
 	U16 Slotx2;
 	U16 Slotx4;
-} LEAPIORAID_MANPAGE7_CONNECTOR_INFO;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_MAN_7 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidManP7_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U32 Reserved1;
 	U32 Reserved2;
 	U32 Flags;
@@ -477,45 +475,45 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_MAN_7 {
 	U8 NumPhys;
 	U8 Reserved3;
 	U16 Reserved4;
-	LEAPIORAID_MANPAGE7_CONNECTOR_INFO ConnectorInfo[1];
-} LeapioraidManP7_t;
+	struct LEAPIORAID_MANPAGE7_CONNECTOR_INFO ConnectorInfo[1];
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_IO_UNIT_0 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidIOUnitP0_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U64 UniqueValue;
-	LEAPIORAID_VERSION_UNION NvdataVersionDefault;
-	LEAPIORAID_VERSION_UNION NvdataVersionPersistent;
-} LeapioraidIOUnitP0_t;
+	union LEAPIORAID_VERSION_UNION NvdataVersionDefault;
+	union LEAPIORAID_VERSION_UNION NvdataVersionPersistent;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_IO_UNIT_1 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidIOUnitP1_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U32 Flags;
-} LeapioraidIOUnitP1_t;
+};
 
 #define LEAPIORAID_IOUNITPAGE1_NATIVE_COMMAND_Q_DISABLE       (0x00000100)
 #define LEAPIORAID_IOUNITPAGE1_DISABLE_TASK_SET_FULL_HANDLING (0x00000020)
 
-typedef struct _LEAPIORAID_IOUNIT8_SENSOR {
+struct LEAPIORAID_IOUNIT8_SENSOR {
 	U16 Flags;
 	U16 Reserved1;
 	U16 Threshold[4];
 	U32 Reserved2;
 	U32 Reserved3;
 	U32 Reserved4;
-} LEAPIORAID_IOUNIT8_SENSOR;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_IO_UNIT_8 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidIOUnitP8_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U32 Reserved1;
 	U32 Reserved2;
 	U8 NumSensors;
 	U8 PollingInterval;
 	U16 Reserved3;
-	LEAPIORAID_IOUNIT8_SENSOR Sensor[1];
-} LeapioraidIOUnitP8_t;
+	struct LEAPIORAID_IOUNIT8_SENSOR Sensor[1];
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_IOC_1 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidIOCP1_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U32 Flags;
 	U32 CoalescingTimeout;
 	U8 CoalescingDepth;
@@ -524,10 +522,10 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_IOC_1 {
 	U8 PCIDomainSegment;
 	U32 Reserved1;
 	U32 ProductSpecific;
-} LeapioraidIOCP1_t;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_IOC_8 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidIOCP8_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U8 NumDevsPerEnclosure;
 	U8 Reserved1;
 	U16 Reserved2;
@@ -538,52 +536,52 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_IOC_8 {
 	U16 IRVolumeMappingFlags;
 	U16 Reserved4;
 	U32 Reserved5;
-} LeapioraidIOCP8_t;
+};
 
 #define LEAPIORAID_IOCPAGE8_IRFLAGS_MASK_VOLUME_MAPPING_MODE  (0x00000003)
 #define LEAPIORAID_IOCPAGE8_IRFLAGS_LOW_VOLUME_MAPPING        (0x00000000)
 
-typedef struct _LEAPIORAID_BOOT_DEVICE_ADAPTER_ORDER {
+struct LEAPIORAID_BOOT_DEVICE_ADAPTER_ORDER {
 	U32 Reserved1;
 	U32 Reserved2;
 	U32 Reserved3;
 	U32 Reserved4;
 	U32 Reserved5;
 	U32 Reserved6;
-} LEAPIORAID_BOOT_DEVICE_ADAPTER_ORDER;
+};
 
-typedef struct _LEAPIORAID_BOOT_DEVICE_SAS_WWID {
+struct LEAPIORAID_BOOT_DEVICE_SAS_WWID {
 	U64 SASAddress;
 	U8 LUN[8];
 	U32 Reserved1;
 	U32 Reserved2;
-} LEAPIORAID_BOOT_DEVICE_SAS_WWID, LeapioraidBootDevSasWwid_t;
+};
 
-typedef struct _LEAPIORAID_BOOT_DEVICE_ENCLOSURE_SLOT {
+struct LEAPIORAID_BOOT_DEVICE_ENCLOSURE_SLOT {
 	U64 EnclosureLogicalID;
 	U32 Reserved1;
 	U32 Reserved2;
 	U16 SlotNumber;
 	U16 Reserved3;
 	U32 Reserved4;
-} LEAPIORAID_BOOT_DEVICE_ENCLOSURE_SLOT, LeapioraidBootDevEncSlot_t;
+};
 
-typedef struct _LEAPIORAID_BOOT_DEVICE_DEVICE_NAME {
+struct LEAPIORAID_BOOT_DEVICE_DEVICE_NAME {
 	U64 DeviceName;
 	U8 LUN[8];
 	U32 Reserved1;
 	U32 Reserved2;
-} LEAPIORAID_BOOT_DEVICE_DEVICE_NAME, LeapioraidBootDevName_t;
+};
 
-typedef union _LEAPIORAID_LEAPIORAID_BIOSPAGE2_BOOT_DEVICE {
-	LEAPIORAID_BOOT_DEVICE_ADAPTER_ORDER AdapterOrder;
-	LEAPIORAID_BOOT_DEVICE_SAS_WWID SasWwid;
-	LEAPIORAID_BOOT_DEVICE_ENCLOSURE_SLOT EnclosureSlot;
-	LEAPIORAID_BOOT_DEVICE_DEVICE_NAME DeviceName;
-} LEAPIORAID_BIOSPAGE2_BOOT_DEVICE, LeapioraidBiosP2BootDev_t;
+union LEAPIORAID_BIOSPAGE2_BOOT_DEVICE {
+	struct LEAPIORAID_BOOT_DEVICE_ADAPTER_ORDER AdapterOrder;
+	struct LEAPIORAID_BOOT_DEVICE_SAS_WWID SasWwid;
+	struct LEAPIORAID_BOOT_DEVICE_ENCLOSURE_SLOT EnclosureSlot;
+	struct LEAPIORAID_BOOT_DEVICE_DEVICE_NAME DeviceName;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_BIOS_2 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidBiosP2_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U32 Reserved1;
 	U32 Reserved2;
 	U32 Reserved3;
@@ -593,16 +591,16 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_BIOS_2 {
 	U8 ReqBootDeviceForm;
 	U8 Reserved7;
 	U16 Reserved8;
-	LEAPIORAID_BIOSPAGE2_BOOT_DEVICE RequestedBootDevice;
+	union LEAPIORAID_BIOSPAGE2_BOOT_DEVICE RequestedBootDevice;
 	U8 ReqAltBootDeviceForm;
 	U8 Reserved9;
 	U16 Reserved10;
-	LEAPIORAID_BIOSPAGE2_BOOT_DEVICE RequestedAltBootDevice;
+	union LEAPIORAID_BIOSPAGE2_BOOT_DEVICE RequestedAltBootDevice;
 	U8 CurrentBootDeviceForm;
 	U8 Reserved11;
 	U16 Reserved12;
-	LEAPIORAID_BIOSPAGE2_BOOT_DEVICE CurrentBootDevice;
-} LeapioraidBiosP2_t;
+	union LEAPIORAID_BIOSPAGE2_BOOT_DEVICE CurrentBootDevice;
+};
 
 #define LEAPIORAID_BIOSPAGE2_FORM_MASK                        (0x0F)
 #define LEAPIORAID_BIOSPAGE2_FORM_NO_DEVICE_SPECIFIED         (0x00)
@@ -610,47 +608,47 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_BIOS_2 {
 #define LEAPIORAID_BIOSPAGE2_FORM_ENCLOSURE_SLOT              (0x06)
 #define LEAPIORAID_BIOSPAGE2_FORM_DEVICE_NAME                 (0x07)
 
-typedef struct _LEAPIORAID_ADAPTER_INFO {
+struct LEAPIORAID_ADAPTER_INFO {
 	U8 PciBusNumber;
 	U8 PciDeviceAndFunctionNumber;
 	U16 AdapterFlags;
-} LEAPIORAID_ADAPTER_INFO;
+};
 
-typedef struct _LEAPIORAID_ADAPTER_ORDER_AUX {
+struct LEAPIORAID_ADAPTER_ORDER_AUX {
 	U64 WWID;
 	U32 Reserved1;
 	U32 Reserved2;
-} LEAPIORAID_ADAPTER_ORDER_AUX;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_BIOS_3 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidBiosP3_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U32 GlobalFlags;
 	U32 BiosVersion;
-	LEAPIORAID_ADAPTER_INFO AdapterOrder[4];
+	struct LEAPIORAID_ADAPTER_INFO AdapterOrder[4];
 	U32 Reserved1;
-	LEAPIORAID_ADAPTER_ORDER_AUX AdapterOrderAux[4];
-} LeapioraidBiosP3_t;
+	struct LEAPIORAID_ADAPTER_ORDER_AUX AdapterOrderAux[4];
+};
 
-typedef struct _LEAPIORAID_RAIDVOL0_PHYS_DISK {
+struct LEAPIORAID_RAIDVOL0_PHYS_DISK {
 	U8 RAIDSetNum;
 	U8 PhysDiskMap;
 	U8 PhysDiskNum;
 	U8 Reserved;
-} LEAPIORAID_RAIDVOL0_PHYS_DISK, LeapioraidRaidVol0PD_t;
+};
 
-typedef struct _LEAPIORAID_RAIDVOL0_SETTINGS {
+struct LEAPIORAID_RAIDVOL0_SETTINGS {
 	U16 Settings;
 	U8 HotSparePool;
 	U8 Reserved;
-} LEAPIORAID_RAIDVOL0_SETTINGS;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_RAID_VOL_0 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidRaidVolP0_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U16 DevHandle;
 	U8 VolumeState;
 	U8 VolumeType;
 	U32 VolumeStatusFlags;
-	LEAPIORAID_RAIDVOL0_SETTINGS VolumeSettings;
+	struct LEAPIORAID_RAIDVOL0_SETTINGS VolumeSettings;
 	U64 MaxLBA;
 	U32 StripeSize;
 	U16 BlockSize;
@@ -662,8 +660,8 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_RAID_VOL_0 {
 	U8 Reserved2;
 	U8 Reserved3;
 	U8 InactiveStatus;
-	LEAPIORAID_RAIDVOL0_PHYS_DISK PhysDisk[1];
-} LeapioraidRaidVolP0_t;
+	struct LEAPIORAID_RAIDVOL0_PHYS_DISK PhysDisk[1];
+};
 
 #define LEAPIORAID_RAID_VOL_STATE_MISSING                         (0x00)
 #define LEAPIORAID_RAID_VOL_STATE_FAILED                          (0x01)
@@ -679,8 +677,8 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_RAID_VOL_0 {
 
 #define LEAPIORAID_RAIDVOL0_STATUS_FLAG_RESYNC_IN_PROGRESS        (0x00010000)
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_RAID_VOL_1 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidRaidVolP1_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U16 DevHandle;
 	U16 Reserved0;
 	U8 GUID[24];
@@ -688,29 +686,29 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_RAID_VOL_1 {
 	U64 WWID;
 	U32 Reserved1;
 	U32 Reserved2;
-} LeapioraidRaidVolP1_t;
+};
 
-typedef struct _LEAPIORAID_RAIDPHYSDISK0_SETTINGS {
+struct LEAPIORAID_RAIDPHYSDISK0_SETTINGS {
 	U16 Reserved1;
 	U8 HotSparePool;
 	U8 Reserved2;
-} LEAPIORAID_RAIDPHYSDISK0_SETTINGS;
+};
 
-typedef struct _LEAPIORAID_RAIDPHYSDISK0_INQUIRY_DATA {
+struct LEAPIORAID_RAIDPHYSDISK0_INQUIRY_DATA {
 	U8 VendorID[8];
 	U8 ProductID[16];
 	U8 ProductRevLevel[4];
 	U8 SerialNum[32];
-} LEAPIORAID_RAIDPHYSDISK0_INQUIRY_DATA;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_RD_PDISK_0 {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+struct LeapioraidRaidPDP0_t {
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U16 DevHandle;
 	U8 Reserved1;
 	U8 PhysDiskNum;
-	LEAPIORAID_RAIDPHYSDISK0_SETTINGS PhysDiskSettings;
+	struct LEAPIORAID_RAIDPHYSDISK0_SETTINGS PhysDiskSettings;
 	U32 Reserved2;
-	LEAPIORAID_RAIDPHYSDISK0_INQUIRY_DATA InquiryData;
+	struct LEAPIORAID_RAIDPHYSDISK0_INQUIRY_DATA InquiryData;
 	U32 Reserved3;
 	U8 PhysDiskState;
 	U8 OfflineReason;
@@ -723,7 +721,7 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_RD_PDISK_0 {
 	U16 BlockSize;
 	U16 Reserved5;
 	U32 Reserved6;
-} LeapioraidRaidPDP0_t;
+};
 
 #define LEAPIORAID_RAID_PD_STATE_NOT_CONFIGURED               (0x00)
 #define LEAPIORAID_RAID_PD_STATE_NOT_COMPATIBLE               (0x01)
@@ -751,7 +749,7 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_RD_PDISK_0 {
 #define LEAPIORAID_SAS_PRATE_MIN_RATE_MASK                    (0x0F)
 #define LEAPIORAID_SAS_HWRATE_MIN_RATE_MASK                   (0x0F)
 
-typedef struct _LEAPIORAID_SAS_IO_UNIT0_PHY_DATA {
+struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA {
 	U8 Port;
 	U8 PortFlags;
 	U8 PhyFlags;
@@ -761,23 +759,23 @@ typedef struct _LEAPIORAID_SAS_IO_UNIT0_PHY_DATA {
 	U16 ControllerDevHandle;
 	U32 DiscoveryStatus;
 	U32 Reserved;
-} LEAPIORAID_SAS_IO_UNIT0_PHY_DATA, LeapioraidSasIOUnit0PhyData_t;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_SASIOUNIT_0 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidSasIOUnitP0_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U32 Reserved1;
 	U8 NumPhys;
 	U8 Reserved2;
 	U16 Reserved3;
-	LEAPIORAID_SAS_IO_UNIT0_PHY_DATA PhyData[1];
-} LeapioraidSasIOUnitP0_t;
+	struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA PhyData[1];
+};
 
 #define LEAPIORAID_SASIOUNIT0_PORTFLAGS_DISCOVERY_IN_PROGRESS     (0x08)
 #define LEAPIORAID_SASIOUNIT0_PORTFLAGS_AUTO_PORT_CONFIG          (0x01)
 #define LEAPIORAID_SASIOUNIT0_PHYFLAGS_ZONING_ENABLED             (0x10)
 #define LEAPIORAID_SASIOUNIT0_PHYFLAGS_PHY_DISABLED               (0x08)
 
-typedef struct _LEAPIORAID_SAS_IO_UNIT1_PHY_DATA {
+struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA {
 	U8 Port;
 	U8 PortFlags;
 	U8 PhyFlags;
@@ -785,10 +783,10 @@ typedef struct _LEAPIORAID_SAS_IO_UNIT1_PHY_DATA {
 	U32 ControllerPhyDeviceInfo;
 	U16 MaxTargetPortConnectTime;
 	U16 Reserved1;
-} LEAPIORAID_SAS_IO_UNIT1_PHY_DATA, LeapioraidSasIOUnit1PhyData_t;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_SASIOUNIT_1 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidSasIOUnitP1_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U16 ControlFlags;
 	U16 SASNarrowMaxQueueDepth;
 	U16 AdditionalControlFlags;
@@ -797,16 +795,16 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_SASIOUNIT_1 {
 	U8 SATAMaxQDepth;
 	U8 ReportDeviceMissingDelay;
 	U8 IODeviceMissingDelay;
-	LEAPIORAID_SAS_IO_UNIT1_PHY_DATA PhyData[1];
-} LeapioraidSasIOUnitP1_t;
+	struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA PhyData[1];
+};
 
 #define LEAPIORAID_SASIOUNIT1_REPORT_MISSING_TIMEOUT_MASK                 (0x7F)
 #define LEAPIORAID_SASIOUNIT1_REPORT_MISSING_UNIT_16                      (0x80)
 #define LEAPIORAID_SASIOUNIT1_PHYFLAGS_ZONING_ENABLE                      (0x10)
 #define LEAPIORAID_SASIOUNIT1_PHYFLAGS_PHY_DISABLE                        (0x08)
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_EXPANDER_0 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidExpanderP0_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U8 PhysicalPort;
 	U8 ReportGenLength;
 	U16 EnclosureHandle;
@@ -830,10 +828,10 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_EXPANDER_0 {
 	U8 InitialTimeToReducedFunc;
 	U8 MaxReducedFuncTime;
 	U8 Reserved2;
-} LeapioraidExpanderP0_t;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_EXPANDER_1 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidExpanderP1_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U8 PhysicalPort;
 	U8 Reserved1;
 	U16 Reserved2;
@@ -856,10 +854,10 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_EXPANDER_1 {
 	U8 ZoneGroup;
 	U8 SelfConfigStatus;
 	U16 Reserved4;
-} LeapioraidExpanderP1_t;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_DEV_0 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidSasDevP0_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U16 Slot;
 	U16 EnclosureHandle;
 	U64 SASAddress;
@@ -880,7 +878,7 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_DEV_0 {
 	U8 EnclosureLevel;
 	U8 ConnectorName[4];
 	U32 Reserved3;
-} LeapioraidSasDevP0_t;
+};
 
 #define LEAPIORAID_SAS_DEVICE0_ASTATUS_NO_ERRORS                  (0x00)
 #define LEAPIORAID_SAS_DEVICE0_ASTATUS_SATA_INIT_FAILED           (0x01)
@@ -910,8 +908,8 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_DEV_0 {
 #define LEAPIORAID_SAS_DEVICE0_FLAGS_ENCL_LEVEL_VALID             (0x0002)
 #define LEAPIORAID_SAS_DEVICE0_FLAGS_DEVICE_PRESENT               (0x0001)
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_PHY_0 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidSasPhyP0_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U16 OwnerDevHandle;
 	U16 Reserved1;
 	U16 AttachedDevHandle;
@@ -926,19 +924,19 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_PHY_0 {
 	U8 NegotiatedLinkRate;
 	U8 Reserved3;
 	U16 Reserved4;
-} LeapioraidSasPhyP0_t;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_PHY_1 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidSasPhyP1_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U32 Reserved1;
 	U32 InvalidDwordCount;
 	U32 RunningDisparityErrorCount;
 	U32 LossDwordSynchCount;
 	U32 PhyResetProblemCount;
-} LeapioraidSasPhyP1_t;
+};
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_ENCLOSURE_0 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidSasEncP0_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U32 Reserved1;
 	U64 EnclosureLogicalID;
 	U16 Flags;
@@ -952,25 +950,25 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_SAS_ENCLOSURE_0 {
 	U8 Reserved1a;
 	U16 Reserved2;
 	U32 Reserved3;
-} LeapioraidSasEncP0_t;
+};
 
 #define LEAPIORAID_SAS_ENCLS0_FLAGS_CHASSIS_SLOT_VALID    (0x0020)
 
-typedef struct _LEAPIORAID_RAIDCONFIG0_CONFIG_ELEMENT {
+struct LEAPIORAID_RAIDCONFIG0_CONFIG_ELEMENT {
 	U16 ElementFlags;
 	U16 VolDevHandle;
 	U8 HotSparePool;
 	U8 PhysDiskNum;
 	U16 PhysDiskDevHandle;
-} LEAPIORAID_RAIDCONFIG0_CONFIG_ELEMENT;
+};
 
 #define LEAPIORAID_RAIDCONFIG0_EFLAGS_MASK_ELEMENT_TYPE       (0x000F)
 #define LEAPIORAID_RAIDCONFIG0_EFLAGS_VOL_PHYS_DISK_ELEMENT   (0x0001)
 #define LEAPIORAID_RAIDCONFIG0_EFLAGS_HOT_SPARE_ELEMENT       (0x0002)
 #define LEAPIORAID_RAIDCONFIG0_EFLAGS_OCE_ELEMENT             (0x0003)
 
-typedef struct _LEAPIORAID_CONFIG_PAGE_RAID_CONFIGURATION_0 {
-	LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
+struct LeapioraidRaidCfgP0_t {
+	struct LEAPIORAID_CONFIG_EXTENDED_PAGE_HEADER Header;
 	U8 NumHotSpares;
 	U8 NumPhysDisks;
 	U8 NumVolumes;
@@ -981,18 +979,18 @@ typedef struct _LEAPIORAID_CONFIG_PAGE_RAID_CONFIGURATION_0 {
 	U8 NumElements;
 	U8 Reserved2;
 	U16 Reserved3;
-	LEAPIORAID_RAIDCONFIG0_CONFIG_ELEMENT ConfigElement[1];
-} LeapioraidRaidCfgP0_t;
+	struct LEAPIORAID_RAIDCONFIG0_CONFIG_ELEMENT ConfigElement[1];
+};
 
-typedef struct _LEAPIORAID_FW_IMAGE_HEADER {
+struct LeapioraidFWImgHeader_t {
 	U32 Signature;
 	U32 Signature0;
 	U32 Signature1;
 	U32 Signature2;
-	LEAPIORAID_VERSION_UNION LEAPIOVersion;
-	LEAPIORAID_VERSION_UNION FWVersion;
-	LEAPIORAID_VERSION_UNION NVDATAVersion;
-	LEAPIORAID_VERSION_UNION PackageVersion;
+	union LEAPIORAID_VERSION_UNION LEAPIOVersion;
+	union LEAPIORAID_VERSION_UNION FWVersion;
+	union LEAPIORAID_VERSION_UNION NVDATAVersion;
+	union LEAPIORAID_VERSION_UNION PackageVersion;
 	U16 VendorID;
 	U16 ProductID;
 	U16 ProtocolFlags;
@@ -1030,14 +1028,14 @@ typedef struct _LEAPIORAID_FW_IMAGE_HEADER {
 	U32 ReservedF4;
 	U32 ReservedF8;
 	U32 ReservedFC;
-} LeapioraidFWImgHeader_t;
+};
 
-typedef struct _LEAPIORAID_HASH_EXCLUSION_FORMAT {
+struct LEAPIORAID_HASH_EXCLUSION_FORMAT {
 	U32 Offset;
 	U32 Size;
-} LEAPIORAID_HASH_EXCLUSION_FORMAT;
+};
 
-typedef struct _LEAPIORAID_COMPONENT_IMAGE_HEADER {
+struct LeapioraidComptImgHeader_t {
 	U32 Signature0;
 	U32 LoadAddress;
 	U32 DataSize;
@@ -1059,30 +1057,30 @@ typedef struct _LEAPIORAID_COMPONENT_IMAGE_HEADER {
 	U32 SecondaryFlashOffset;
 	U32 Reserved44;
 	U32 Reserved48;
-	LEAPIORAID_VERSION_UNION RMCInterfaceVersion;
-	LEAPIORAID_VERSION_UNION Reserved50;
-	LEAPIORAID_VERSION_UNION FWVersion;
-	LEAPIORAID_VERSION_UNION NvdataVersion;
-	LEAPIORAID_HASH_EXCLUSION_FORMAT HashExclusion[4];
+	union LEAPIORAID_VERSION_UNION RMCInterfaceVersion;
+	union LEAPIORAID_VERSION_UNION Reserved50;
+	union LEAPIORAID_VERSION_UNION FWVersion;
+	union LEAPIORAID_VERSION_UNION NvdataVersion;
+	struct LEAPIORAID_HASH_EXCLUSION_FORMAT HashExclusion[4];
 	U32 NextImageHeaderOffset;
 	U32 Reserved80[32];
-} LeapioraidComptImgHeader_t;
+};
 
-typedef struct _LEAPIORAID_SCSI_IO_CDB_EEDP32 {
+struct LEAPIORAID_SCSI_IO_CDB_EEDP32 {
 	U8 CDB[20];
 	__be32 PrimaryReferenceTag;
 	U16 PrimaryApplicationTag;
 	U16 PrimaryApplicationTagMask;
 	U32 TransferLength;
-} LEAPIORAID_SCSI_IO_CDB_EEDP32;
+};
 
-typedef union _LEAPIO_SCSI_IO_CDB_UNION {
+union LEAPIO_SCSI_IO_CDB_UNION {
 	U8 CDB32[32];
-	LEAPIORAID_SCSI_IO_CDB_EEDP32 EEDP32;
-	LEAPIORAID_SGE_SIMPLE_UNION SGE;
-} LEAPIO_SCSI_IO_CDB_UNION;
+	struct LEAPIORAID_SCSI_IO_CDB_EEDP32 EEDP32;
+	struct LEAPIORAID_SGE_SIMPLE_UNION SGE;
+};
 
-typedef struct _LEAPIO_SCSI_IO_REQUEST {
+struct LeapioSCSIIOReq_t {
 	U16 DevHandle;
 	U8 ChainOffset;
 	U8 Function;
@@ -1111,9 +1109,9 @@ typedef struct _LEAPIO_SCSI_IO_REQUEST {
 	U16 ApplicationTagTranslationMask;
 	U8 LUN[8];
 	U32 Control;
-	LEAPIO_SCSI_IO_CDB_UNION CDB;
-	LEAPIORAID_SGE_IO_UNION SGL;
-} LeapioSCSIIOReq_t;
+	union LEAPIO_SCSI_IO_CDB_UNION CDB;
+	union LEAPIORAID_SGE_IO_UNION SGL;
+};
 
 #define LEAPIORAID_SCSIIO_MSGFLAGS_SYSTEM_SENSE_ADDR      (0x00)
 
@@ -1127,13 +1125,13 @@ typedef struct _LEAPIO_SCSI_IO_REQUEST {
 #define LEAPIORAID_SCSIIO_CONTROL_ORDEREDQ            (0x00000200)
 #define LEAPIORAID_SCSIIO_CONTROL_TLR_ON              (0x00000040)
 
-typedef union _LEAPIORAID_SCSI_IO_CDB_UNION {
+union LEAPIORAID_SCSI_IO_CDB_UNION {
 	U8 CDB32[32];
-	LEAPIORAID_SCSI_IO_CDB_EEDP32 EEDP32;
-	LEAPIORAID_IEEE_SGE_SIMPLE64 SGE;
-} LEAPIORAID_SCSI_IO_CDB_UNION;
+	struct LEAPIORAID_SCSI_IO_CDB_EEDP32 EEDP32;
+	struct LEAPIORAID_IEEE_SGE_SIMPLE64 SGE;
+};
 
-typedef struct _LEAPIORAID_SCSI_IO_REQUEST {
+struct LeapioraidSCSIIOReq_t {
 	U16 DevHandle;
 	U8 ChainOffset;
 	U8 Function;
@@ -1164,11 +1162,11 @@ typedef struct _LEAPIORAID_SCSI_IO_REQUEST {
 	U16 ApplicationTagTranslationMask;
 	U8 LUN[8];
 	U32 Control;
-	LEAPIORAID_SCSI_IO_CDB_UNION CDB;
-	LEAPIORAID_IEEE_SGE_IO_UNION SGL;
-} LeapioraidSCSIIOReq_t;
+	union LEAPIORAID_SCSI_IO_CDB_UNION CDB;
+	union LEAPIORAID_IEEE_SGE_IO_UNION SGL;
+};
 
-typedef struct _LEAPIORAID_SCSI_IO_REPLY {
+struct LeapioraidSCSIIORep_t {
 	U16 DevHandle;
 	U8 MsgLength;
 	U8 Function;
@@ -1192,7 +1190,7 @@ typedef struct _LEAPIORAID_SCSI_IO_REPLY {
 	U16 EEDPObservedAppTag;
 	U16 EEDPObservedGuard;
 	U32 EEDPObservedRefTag;
-} LeapioraidSCSIIORep_t;
+};
 
 #define LEAPIORAID_SCSI_STATUS_GOOD                   (0x00)
 #define LEAPIORAID_SCSI_STATUS_CHECK_CONDITION        (0x02)
@@ -1211,7 +1209,7 @@ typedef struct _LEAPIORAID_SCSI_IO_REPLY {
 #define LEAPIORAID_SCSI_STATE_AUTOSENSE_FAILED        (0x02)
 #define LEAPIORAID_SCSI_STATE_AUTOSENSE_VALID         (0x01)
 
-typedef struct _LEAPIORAID_SCSI_TASK_MANAGE_REQUEST {
+struct LeapioraidSCSITmgReq_t {
 	U16 DevHandle;
 	U8 ChainOffset;
 	U8 Function;
@@ -1226,7 +1224,7 @@ typedef struct _LEAPIORAID_SCSI_TASK_MANAGE_REQUEST {
 	U32 Reserved4[7];
 	U16 TaskMID;
 	U16 Reserved5;
-} LeapioraidSCSITmgReq_t;
+};
 
 #define LEAPIORAID_SCSITASKMGMT_TASKTYPE_ABORT_TASK           (0x01)
 #define LEAPIORAID_SCSITASKMGMT_TASKTYPE_ABRT_TASK_SET        (0x02)
@@ -1235,7 +1233,7 @@ typedef struct _LEAPIORAID_SCSI_TASK_MANAGE_REQUEST {
 #define LEAPIORAID_SCSITASKMGMT_TASKTYPE_QUERY_TASK           (0x07)
 #define LEAPIORAID_SCSITASKMGMT_MSGFLAGS_LINK_RESET           (0x00)
 
-typedef struct _LEAPIORAID_SCSI_TASK_MANAGE_REPLY {
+struct LeapioraidSCSITmgRep_t {
 	U16 DevHandle;
 	U8 MsgLength;
 	U8 Function;
@@ -1251,7 +1249,7 @@ typedef struct _LEAPIORAID_SCSI_TASK_MANAGE_REPLY {
 	U32 IOCLogInfo;
 	U32 TerminationCount;
 	U32 ResponseInfo;
-} LeapioraidSCSITmgRep_t;
+};
 
 #define LEAPIORAID_SCSITASKMGMT_RSP_TM_COMPLETE               (0x00)
 #define LEAPIORAID_SCSITASKMGMT_RSP_INVALID_FRAME             (0x02)
@@ -1261,7 +1259,7 @@ typedef struct _LEAPIORAID_SCSI_TASK_MANAGE_REPLY {
 #define LEAPIORAID_SCSITASKMGMT_RSP_TM_INVALID_LUN            (0x09)
 #define LEAPIORAID_SCSITASKMGMT_RSP_IO_QUEUED_ON_IOC          (0x80)
 
-typedef struct _LEAPIORAID_SEP_REQUEST {
+struct LeapioraidSepReq_t {
 	U16 DevHandle;
 	U8 ChainOffset;
 	U8 Function;
@@ -1278,14 +1276,14 @@ typedef struct _LEAPIORAID_SEP_REQUEST {
 	U32 Reserved5;
 	U16 Slot;
 	U16 EnclosureHandle;
-} LeapioraidSepReq_t;
+};
 
 #define LEAPIORAID_SEP_REQ_ACTION_WRITE_STATUS                (0x00)
 #define LEAPIORAID_SEP_REQ_FLAGS_DEVHANDLE_ADDRESS            (0x00)
 #define LEAPIORAID_SEP_REQ_FLAGS_ENCLOSURE_SLOT_ADDRESS       (0x01)
 #define LEAPIORAID_SEP_REQ_SLOTSTATUS_PREDICTED_FAULT         (0x00000040)
 
-typedef struct _LEAPIORAID_SEP_REPLY {
+struct LeapioraidSepRep_t {
 	U16 DevHandle;
 	U8 MsgLength;
 	U8 Function;
@@ -1303,9 +1301,9 @@ typedef struct _LEAPIORAID_SEP_REPLY {
 	U32 Reserved4;
 	U16 Slot;
 	U16 EnclosureHandle;
-} LeapioraidSepRep_t;
+};
 
-typedef struct _LEAPIORAID_IOC_INIT_REQUEST {
+struct LeapioraidIOCInitReq_t {
 	U8 WhoInit;
 	U8 Reserved1;
 	U8 ChainOffset;
@@ -1332,18 +1330,18 @@ typedef struct _LEAPIORAID_IOC_INIT_REQUEST {
 	U64 ReplyDescriptorPostQueueAddress;
 	U64 ReplyFreeQueueAddress;
 	U64 TimeStamp;
-} LeapioraidIOCInitReq_t;
+};
 
 #define LEAPIORAID_WHOINIT_HOST_DRIVER                (0x04)
 #define LEAPIORAID_IOCINIT_MSGFLAG_RDPQ_ARRAY_MODE    (0x01)
 
-typedef struct _LEAPIORAID_IOC_INIT_RDPQ_ARRAY_ENTRY {
+struct LeapioraidIOCInitRDPQArrayEntry {
 	U64 RDPQBaseAddress;
 	U32 Reserved1;
 	U32 Reserved2;
-} LeapioraidIOCInitRDPQArrayEntry;
+};
 
-typedef struct _LEAPIORAID_IOC_INIT_REPLY {
+struct LeapioraidIOCInitRep_t {
 	U8 WhoInit;
 	U8 Reserved1;
 	U8 MsgLength;
@@ -1357,9 +1355,9 @@ typedef struct _LEAPIORAID_IOC_INIT_REPLY {
 	U16 Reserved5;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-} LeapioraidIOCInitRep_t;
+};
 
-typedef struct _LEAPIORAID_IOC_LOG_REQUEST {
+struct LeapioraidIOCLogReq_t {
 	U16 Reserved1;
 	U8 ChainOffset;
 	U8 Function;
@@ -1371,9 +1369,9 @@ typedef struct _LEAPIORAID_IOC_LOG_REQUEST {
 	U16 Reserved4;
 	U64 BufAddr;
 	U32 BufSize;
-} LeapioraidIOCLogReq_t;
+};
 
-typedef struct _LEAPIORAID_IOC_LOG_REPLY {
+struct LeapioraidIOCLogRep_t {
 	U16 Reserved1;
 	U8 MsgLength;
 	U8 Function;
@@ -1386,9 +1384,9 @@ typedef struct _LEAPIORAID_IOC_LOG_REPLY {
 	U16 Reserved5;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-} LeapioraidIOCLogRep_t;
+};
 
-typedef struct _LEAPIORAID_IOC_FACTS_REQUEST {
+struct LeapioraidIOCFactsReq_t {
 	U16 Reserved1;
 	U8 ChainOffset;
 	U8 Function;
@@ -1398,9 +1396,9 @@ typedef struct _LEAPIORAID_IOC_FACTS_REQUEST {
 	U8 VP_ID;
 	U8 VF_ID;
 	U16 Reserved4;
-} LeapioraidIOCFactsReq_t;
+};
 
-typedef struct _LEAPIORAID_IOC_FACTS_REPLY {
+struct LeapioraidIOCFactsRep_t {
 	U16 MsgVersion;
 	U8 MsgLength;
 	U8 Function;
@@ -1420,7 +1418,7 @@ typedef struct _LEAPIORAID_IOC_FACTS_REPLY {
 	U16 RequestCredit;
 	U16 ProductID;
 	U32 IOCCapabilities;
-	LEAPIORAID_VERSION_UNION FWVersion;
+	union LEAPIORAID_VERSION_UNION FWVersion;
 	U16 IOCRequestFrameSize;
 	U16 IOCMaxChainSegmentSize;
 	U16 MaxInitiators;
@@ -1441,7 +1439,7 @@ typedef struct _LEAPIORAID_IOC_FACTS_REPLY {
 	U8 SGEModifierValue;
 	U8 SGEModifierShift;
 	U8 Reserved5;
-} LeapioraidIOCFactsRep_t;
+};
 
 #define LEAPIORAID_IOCFACTS_CAPABILITY_ATOMIC_REQ               (0x00080000)
 #define LEAPIORAID_IOCFACTS_CAPABILITY_RDPQ_ARRAY_CAPABLE       (0x00040000)
@@ -1456,7 +1454,7 @@ typedef struct _LEAPIORAID_IOC_FACTS_REPLY {
 #define LEAPIORAID_IOCFACTS_PROTOCOL_SCSI_INITIATOR             (0x0002)
 #define LEAPIORAID_IOCFACTS_PROTOCOL_SCSI_TARGET                (0x0001)
 
-typedef struct _LEAPIORAID_PORT_FACTS_REQUEST {
+struct LeapioraidPortFactsReq_t {
 	U16 Reserved1;
 	U8 ChainOffset;
 	U8 Function;
@@ -1466,9 +1464,9 @@ typedef struct _LEAPIORAID_PORT_FACTS_REQUEST {
 	U8 VP_ID;
 	U8 VF_ID;
 	U16 Reserved3;
-} LeapioraidPortFactsReq_t;
+};
 
-typedef struct _LEAPIORAID_PORT_FACTS_REPLY {
+struct LeapioraidPortFactsRep_t {
 	U16 Reserved1;
 	U8 MsgLength;
 	U8 Function;
@@ -1486,9 +1484,9 @@ typedef struct _LEAPIORAID_PORT_FACTS_REPLY {
 	U16 Reserved6;
 	U16 MaxPostedCmdBuffers;
 	U16 Reserved7;
-} LeapioraidPortFactsRep_t;
+};
 
-typedef struct _LEAPIORAID_PORT_ENABLE_REQUEST {
+struct LeapioraidPortEnableReq_t {
 	U16 Reserved1;
 	U8 ChainOffset;
 	U8 Function;
@@ -1499,9 +1497,9 @@ typedef struct _LEAPIORAID_PORT_ENABLE_REQUEST {
 	U8 VP_ID;
 	U8 VF_ID;
 	U16 Reserved4;
-} LeapioraidPortEnableReq_t;
+};
 
-typedef struct _LEAPIORAID_PORT_ENABLE_REPLY {
+struct LeapioraidPortEnableRep_t {
 	U16 Reserved1;
 	U8 MsgLength;
 	U8 Function;
@@ -1515,10 +1513,10 @@ typedef struct _LEAPIORAID_PORT_ENABLE_REPLY {
 	U16 Reserved5;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-} LeapioraidPortEnableRep_t;
+};
 
 #define LEAPIORAID_EVENT_NOTIFY_EVENTMASK_WORDS           (4)
-typedef struct _LEAPIORAID_EVENT_NOTIFICATION_REQUEST {
+struct LeapioraidEventNotificationReq_t {
 	U16 Reserved1;
 	U8 ChainOffset;
 	U8 Function;
@@ -1534,9 +1532,9 @@ typedef struct _LEAPIORAID_EVENT_NOTIFICATION_REQUEST {
 	U16 SASBroadcastPrimitiveMasks;
 	U16 SASNotifyPrimitiveMasks;
 	U32 Reserved8;
-} LeapioraidEventNotificationReq_t;
+};
 
-typedef struct _LEAPIORAID_EVENT_NOTIFICATION_REPLY {
+struct LeapioraidEventNotificationRep_t {
 	U16 EventDataLength;
 	U8 MsgLength;
 	U8 Function;
@@ -1553,7 +1551,7 @@ typedef struct _LEAPIORAID_EVENT_NOTIFICATION_REPLY {
 	U16 Reserved4;
 	U32 EventContext;
 	U32 EventData[1];
-} LeapioraidEventNotificationRep_t;
+};
 
 #define LEAPIORAID_EVENT_NOTIFICATION_ACK_REQUIRED        (0x01)
 #define LEAPIORAID_EVENT_LOG_DATA                         (0x0001)
@@ -1576,7 +1574,7 @@ typedef struct _LEAPIORAID_EVENT_NOTIFICATION_REPLY {
 #define LEAPIORAID_EVENT_TEMP_THRESHOLD                   (0x0027)
 #define LEAPIORAID_EVENT_SAS_DEVICE_DISCOVERY_ERROR       (0x0035)
 
-typedef struct _LEAPIORAID_EVENT_DATA_SAS_DEVICE_STATUS_CHANGE {
+struct LeapioraidEventDataSasDeviceStatusChange_t {
 	U16 TaskTag;
 	U8 ReasonCode;
 	U8 PhysicalPort;
@@ -1586,7 +1584,7 @@ typedef struct _LEAPIORAID_EVENT_DATA_SAS_DEVICE_STATUS_CHANGE {
 	U32 Reserved2;
 	U64 SASAddress;
 	U8 LUN[8];
-} LeapioraidEventDataSasDeviceStatusChange_t;
+};
 
 #define LEAPIORAID_EVENT_SAS_DEV_STAT_RC_SMART_DATA                           (0x05)
 #define LEAPIORAID_EVENT_SAS_DEV_STAT_RC_UNSUPPORTED                          (0x07)
@@ -1602,14 +1600,14 @@ typedef struct _LEAPIORAID_EVENT_DATA_SAS_DEVICE_STATUS_CHANGE {
 #define LEAPIORAID_EVENT_SAS_DEV_STAT_RC_EXPANDER_REDUCED_FUNCTIONALITY       (0x11)
 #define LEAPIORAID_EVENT_SAS_DEV_STAT_RC_CMP_EXPANDER_REDUCED_FUNCTIONALITY   (0x12)
 
-typedef struct _LEAPIORAID_EVENT_DATA_IR_OPERATION_STATUS {
+struct LeapioraidEventDataIrOpStatus_t {
 	U16 VolDevHandle;
 	U16 Reserved1;
 	U8 RAIDOperation;
 	U8 PercentComplete;
 	U16 Reserved2;
 	U32 ElapsedSeconds;
-} LeapioraidEventDataIrOpStatus_t;
+};
 
 #define LEAPIORAID_EVENT_IR_RAIDOP_RESYNC                     (0x00)
 #define LEAPIORAID_EVENT_IR_RAIDOP_ONLINE_CAP_EXPANSION       (0x01)
@@ -1617,16 +1615,16 @@ typedef struct _LEAPIORAID_EVENT_DATA_IR_OPERATION_STATUS {
 #define LEAPIORAID_EVENT_IR_RAIDOP_BACKGROUND_INIT            (0x03)
 #define LEAPIORAID_EVENT_IR_RAIDOP_MAKE_DATA_CONSISTENT       (0x04)
 
-typedef struct _LEAPIORAID_EVENT_DATA_IR_VOLUME {
+struct LeapioraidEventDataIrVol_t {
 	U16 VolDevHandle;
 	U8 ReasonCode;
 	U8 Reserved1;
 	U32 NewValue;
 	U32 PreviousValue;
-} LeapioraidEventDataIrVol_t;
+};
 
 #define LEAPIORAID_EVENT_IR_VOLUME_RC_STATE_CHANGED           (0x03)
-typedef struct _LEAPIORAID_EVENT_DATA_IR_PHYSICAL_DISK {
+struct LeapioraidEventDataIrPhyDisk_t {
 	U16 Reserved1;
 	U8 ReasonCode;
 	U8 PhysDiskNum;
@@ -1636,17 +1634,17 @@ typedef struct _LEAPIORAID_EVENT_DATA_IR_PHYSICAL_DISK {
 	U16 EnclosureHandle;
 	U32 NewValue;
 	U32 PreviousValue;
-} LeapioraidEventDataIrPhyDisk_t;
+};
 
 #define LEAPIORAID_EVENT_IR_PHYSDISK_RC_STATE_CHANGED         (0x03)
 
-typedef struct _LEAPIORAID_EVENT_IR_CONFIG_ELEMENT {
+struct LeapioraidEventIrCfgEle_t {
 	U16 ElementFlags;
 	U16 VolDevHandle;
 	U8 ReasonCode;
 	U8 PhysDiskNum;
 	U16 PhysDiskDevHandle;
-} LEAPIORAID_EVENT_IR_CONFIG_ELEMENT, LeapioraidEventIrCfgEle_t;
+};
 
 #define LEAPIORAID_EVENT_IR_CHANGE_EFLAGS_ELEMENT_TYPE_MASK   (0x000F)
 #define LEAPIORAID_EVENT_IR_CHANGE_EFLAGS_VOLUME_ELEMENT      (0x0000)
@@ -1662,42 +1660,42 @@ typedef struct _LEAPIORAID_EVENT_IR_CONFIG_ELEMENT {
 #define LEAPIORAID_EVENT_IR_CHANGE_RC_PD_CREATED              (0x08)
 #define LEAPIORAID_EVENT_IR_CHANGE_RC_PD_DELETED              (0x09)
 
-typedef struct _LEAPIORAID_EVENT_DATA_IR_CONFIG_CHANGE_LIST {
+struct LeapioraidEventDataIrCfgChangeList_t {
 	U8 NumElements;
 	U8 Reserved1;
 	U8 Reserved2;
 	U8 ConfigNum;
 	U32 Flags;
-	LEAPIORAID_EVENT_IR_CONFIG_ELEMENT ConfigElement[1];
-} LeapioraidEventDataIrCfgChangeList_t;
+	struct LeapioraidEventIrCfgEle_t ConfigElement[1];
+};
 
 #define LEAPIORAID_EVENT_IR_CHANGE_FLAGS_FOREIGN_CONFIG   (0x00000001)
-typedef struct _LEAPIORAID_EVENT_DATA_SAS_DISCOVERY {
+struct LeapioraidEventDataSasDiscovery_t {
 	U8 Flags;
 	U8 ReasonCode;
 	U8 PhysicalPort;
 	U8 Reserved1;
 	U32 DiscoveryStatus;
-} LeapioraidEventDataSasDiscovery_t;
+};
 
 #define LEAPIORAID_EVENT_SAS_DISC_RC_STARTED                      (0x01)
 
-typedef struct _LEAPIORAID_EVENT_DATA_SAS_BROADCAST_PRIMITIVE {
+struct LeapioraidEventDataSasBroadcastPrimitive_t {
 	U8 PhyNum;
 	U8 Port;
 	U8 PortWidth;
 	U8 Primitive;
-} LeapioraidEventDataSasBroadcastPrimitive_t;
+};
 
 #define LEAPIORAID_EVENT_PRIMITIVE_ASYNCHRONOUS_EVENT             (0x04)
 
-typedef struct _LEAPIORAID_EVENT_SAS_TOPO_PHY_ENTRY {
+struct LEAPIORAID_EVENT_SAS_TOPO_PHY_ENTRY {
 	U16 AttachedDevHandle;
 	U8 LinkRate;
 	U8 PhyStatus;
-} LEAPIORAID_EVENT_SAS_TOPO_PHY_ENTRY;
+};
 
-typedef struct _LEAPIORAID_EVENT_DATA_SAS_TOPOLOGY_CHANGE_LIST {
+struct LeapioraidEventDataSasTopoChangeList_t {
 	U16 EnclosureHandle;
 	U16 ExpanderDevHandle;
 	U8 NumPhys;
@@ -1707,8 +1705,8 @@ typedef struct _LEAPIORAID_EVENT_DATA_SAS_TOPOLOGY_CHANGE_LIST {
 	U8 StartPhyNum;
 	U8 ExpStatus;
 	U8 PhysicalPort;
-	LEAPIORAID_EVENT_SAS_TOPO_PHY_ENTRY PHY[1];
-} LeapioraidEventDataSasTopoChangeList_t;
+	struct LEAPIORAID_EVENT_SAS_TOPO_PHY_ENTRY PHY[1];
+};
 
 #define LEAPIORAID_EVENT_SAS_TOPO_ES_ADDED                        (0x01)
 #define LEAPIORAID_EVENT_SAS_TOPO_ES_NOT_RESPONDING               (0x02)
@@ -1722,7 +1720,7 @@ typedef struct _LEAPIORAID_EVENT_DATA_SAS_TOPOLOGY_CHANGE_LIST {
 #define LEAPIORAID_EVENT_SAS_TOPO_RC_NO_CHANGE                    (0x04)
 #define LEAPIORAID_EVENT_SAS_TOPO_RC_DELAY_NOT_RESPONDING         (0x05)
 
-typedef struct _LEAPIORAID_EVENT_DATA_SAS_ENCL_DEV_STATUS_CHANGE {
+struct LeapioraidEventDataSasEnclDevStatusChange_t {
 	U16 EnclosureHandle;
 	U8 ReasonCode;
 	U8 PhysicalPort;
@@ -1730,24 +1728,24 @@ typedef struct _LEAPIORAID_EVENT_DATA_SAS_ENCL_DEV_STATUS_CHANGE {
 	U16 NumSlots;
 	U16 StartSlot;
 	U32 PhyBits;
-} LeapioraidEventDataSasEnclDevStatusChange_t;
+};
 
 #define LEAPIORAID_EVENT_SAS_ENCL_RC_ADDED                (0x01)
 #define LEAPIORAID_EVENT_SAS_ENCL_RC_NOT_RESPONDING       (0x02)
 
-typedef struct _LEAPIORAID_EVENT_DATA_SAS_DEVICE_DISCOVERY_ERROR {
+struct LeapioraidEventDataSasDeviceDiscoveryError_t {
 	U16 DevHandle;
 	U8 ReasonCode;
 	U8 PhysicalPort;
 	U32 Reserved1[2];
 	U64 SASAddress;
 	U32 Reserved2[2];
-} LeapioraidEventDataSasDeviceDiscoveryError_t;
+};
 
 #define LEAPIORAID_EVENT_SAS_DISC_ERR_SMP_FAILED         (0x01)
 #define LEAPIORAID_EVENT_SAS_DISC_ERR_SMP_TIMEOUT        (0x02)
 
-typedef struct _LEAPIORAID_EVENT_ACK_REQUEST {
+struct LeapioraidEventAckReq_t {
 	U16 Reserved1;
 	U8 ChainOffset;
 	U8 Function;
@@ -1760,9 +1758,9 @@ typedef struct _LEAPIORAID_EVENT_ACK_REQUEST {
 	U16 Event;
 	U16 Reserved5;
 	U32 EventContext;
-} LeapioraidEventAckReq_t;
+};
 
-typedef struct _LEAPIORAID_FW_UPLOAD_REQUEST {
+struct LeapioraidFWUploadReq_t {
 	U8 ImageType;
 	U8 Reserved1;
 	U8 ChainOffset;
@@ -1778,10 +1776,10 @@ typedef struct _LEAPIORAID_FW_UPLOAD_REQUEST {
 	U32 Reserved7;
 	U32 ImageOffset;
 	U32 ImageSize;
-	LEAPIORAID_IEEE_SGE_IO_UNION SGL;
-} LeapioraidFWUploadReq_t;
+	union LEAPIORAID_IEEE_SGE_IO_UNION SGL;
+};
 
-typedef struct _LEAPIORAID_FW_UPLOAD_REPLY {
+struct LeapioraidFWUploadRep_t {
 	U8 ImageType;
 	U8 Reserved1;
 	U8 MsgLength;
@@ -1796,9 +1794,9 @@ typedef struct _LEAPIORAID_FW_UPLOAD_REPLY {
 	U16 IOCStatus;
 	U32 IOCLogInfo;
 	U32 ActualImageSize;
-} LeapioraidFWUploadRep_t;
+};
 
-typedef struct _LEAPIORAID_IOUNIT_CONTROL_REQUEST {
+struct LeapioraidIoUnitControlReq_t {
 	U8 Operation;
 	U8 Reserved1;
 	U8 ChainOffset;
@@ -1820,11 +1818,11 @@ typedef struct _LEAPIORAID_IOUNIT_CONTROL_REQUEST {
 	U32 IOCParameterValue;
 	U32 IOCParameterValue2;
 	U32 Reserved8;
-} LeapioraidIoUnitControlReq_t;
+};
 
 #define LEAPIORAID_CTRL_OP_REMOVE_DEVICE (0x0D)
 
-typedef struct _LEAPIORAID_IOUNIT_CONTROL_REPLY {
+struct LeapioraidIoUnitControlRep_t {
 	U8 Operation;
 	U8 Reserved1;
 	U8 MsgLength;
@@ -1838,48 +1836,48 @@ typedef struct _LEAPIORAID_IOUNIT_CONTROL_REPLY {
 	U16 Reserved4;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-} LeapioraidIoUnitControlRep_t;
+};
 
-typedef struct _LEAPIORAID_RAID_ACTION_RATE_DATA {
+struct LEAPIORAID_RAID_ACTION_RATE_DATA {
 	U8 RateToChange;
 	U8 RateOrMode;
 	U16 DataScrubDuration;
-} LEAPIORAID_RAID_ACTION_RATE_DATA;
+};
 
-typedef struct _LEAPIORAID_RAID_ACTION_START_RAID_FUNCTION {
+struct LEAPIORAID_RAID_ACTION_START_RAID_FUNCTION {
 	U8 RAIDFunction;
 	U8 Flags;
 	U16 Reserved1;
-} LEAPIORAID_RAID_ACTION_START_RAID_FUNCTION;
+};
 
-typedef struct _LEAPIORAID_RAID_ACTION_STOP_RAID_FUNCTION {
+struct LEAPIORAID_RAID_ACTION_STOP_RAID_FUNCTION {
 	U8 RAIDFunction;
 	U8 Flags;
 	U16 Reserved1;
-} LEAPIORAID_RAID_ACTION_STOP_RAID_FUNCTION;
+};
 
-typedef struct _LEAPIORAID_RAID_ACTION_HOT_SPARE {
+struct LEAPIORAID_RAID_ACTION_HOT_SPARE {
 	U8 HotSparePool;
 	U8 Reserved1;
 	U16 DevHandle;
-} LEAPIORAID_RAID_ACTION_HOT_SPARE;
+};
 
-typedef struct _LEAPIORAID_RAID_ACTION_FW_UPDATE_MODE {
+struct LEAPIORAID_RAID_ACTION_FW_UPDATE_MODE {
 	U8 Flags;
 	U8 DeviceFirmwareUpdateModeTimeout;
 	U16 Reserved1;
-} LEAPIORAID_RAID_ACTION_FW_UPDATE_MODE;
+};
 
-typedef union _LEAPIORAID_RAID_ACTION_DATA {
+union LEAPIORAID_RAID_ACTION_DATA {
 	U32 Word;
-	LEAPIORAID_RAID_ACTION_RATE_DATA Rates;
-	LEAPIORAID_RAID_ACTION_START_RAID_FUNCTION StartRaidFunction;
-	LEAPIORAID_RAID_ACTION_STOP_RAID_FUNCTION StopRaidFunction;
-	LEAPIORAID_RAID_ACTION_HOT_SPARE HotSpare;
-	LEAPIORAID_RAID_ACTION_FW_UPDATE_MODE FwUpdateMode;
-} LEAPIORAID_RAID_ACTION_DATA;
+	struct LEAPIORAID_RAID_ACTION_RATE_DATA Rates;
+	struct LEAPIORAID_RAID_ACTION_START_RAID_FUNCTION StartRaidFunction;
+	struct LEAPIORAID_RAID_ACTION_STOP_RAID_FUNCTION StopRaidFunction;
+	struct LEAPIORAID_RAID_ACTION_HOT_SPARE HotSpare;
+	struct LEAPIORAID_RAID_ACTION_FW_UPDATE_MODE FwUpdateMode;
+};
 
-typedef struct _LEAPIORAID_RAID_ACTION_REQUEST {
+struct LeapioraidRaidActionReq_t {
 	U8 Action;
 	U8 Reserved1;
 	U8 ChainOffset;
@@ -1891,18 +1889,18 @@ typedef struct _LEAPIORAID_RAID_ACTION_REQUEST {
 	U8 VF_ID;
 	U16 Reserved2;
 	U32 Reserved3;
-	LEAPIORAID_RAID_ACTION_DATA ActionDataWord;
-	LEAPIORAID_SGE_SIMPLE_UNION ActionDataSGE;
-} LeapioraidRaidActionReq_t;
+	union LEAPIORAID_RAID_ACTION_DATA ActionDataWord;
+	struct LEAPIORAID_SGE_SIMPLE_UNION ActionDataSGE;
+};
 
-typedef struct _LEAPIORAID_RAID_VOL_INDICATOR {
+struct LEAPIORAID_RAID_VOL_INDICATOR {
 	U64 TotalBlocks;
 	U64 BlocksRemaining;
 	U32 Flags;
 	U32 ElapsedSeconds;
-} LEAPIORAID_RAID_VOL_INDICATOR;
+};
 
-typedef struct _LEAPIORAID_RAID_COMPATIBILITY_RESULT_STRUCT {
+struct LEAPIORAID_RAID_COMPATIBILITY_RESULT_STRUCT {
 	U8 State;
 	U8 Reserved1;
 	U16 Reserved2;
@@ -1910,18 +1908,18 @@ typedef struct _LEAPIORAID_RAID_COMPATIBILITY_RESULT_STRUCT {
 	U32 OEMSpecificAttributes;
 	U32 Reserved3;
 	U32 Reserved4;
-} LEAPIORAID_RAID_COMPATIBILITY_RESULT_STRUCT;
+};
 
-typedef union _LEAPIORAID_RAID_ACTION_REPLY_DATA {
+union LEAPIORAID_RAID_ACTION_REPLY_DATA {
 	U32 Word[6];
-	LEAPIORAID_RAID_VOL_INDICATOR RaidVolumeIndicator;
+	struct LEAPIORAID_RAID_VOL_INDICATOR RaidVolumeIndicator;
 	U16 VolDevHandle;
 	U8 VolumeState;
 	U8 PhysDiskNum;
-	LEAPIORAID_RAID_COMPATIBILITY_RESULT_STRUCT RaidCompatibilityResult;
-} LEAPIORAID_RAID_ACTION_REPLY_DATA;
+	struct LEAPIORAID_RAID_COMPATIBILITY_RESULT_STRUCT RaidCompatibilityResult;
+};
 
-typedef struct _LEAPIORAID_RAID_ACTION_REPLY {
+struct LeapioraidRaidActionRep_t {
 	U8 Action;
 	U8 Reserved1;
 	U8 MsgLength;
@@ -1935,8 +1933,8 @@ typedef struct _LEAPIORAID_RAID_ACTION_REPLY {
 	U16 Reserved3;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-	LEAPIORAID_RAID_ACTION_REPLY_DATA ActionData;
-} LeapioraidRaidActionRep_t;
+	union LEAPIORAID_RAID_ACTION_REPLY_DATA ActionData;
+};
 
 #define LEAPIORAID_SAS_DEVICE_INFO_SEP                (0x00004000)
 #define LEAPIORAID_SAS_DEVICE_INFO_ATAPI_DEVICE       (0x00002000)
@@ -1954,7 +1952,7 @@ typedef struct _LEAPIORAID_RAID_ACTION_REPLY {
 #define LEAPIORAID_SAS_DEVICE_INFO_EDGE_EXPANDER      (0x00000002)
 #define LEAPIORAID_SAS_DEVICE_INFO_FANOUT_EXPANDER    (0x00000003)
 
-typedef struct _LEAPIORAID_SMP_PASSTHROUGH_REQUEST {
+struct LeapioraidSmpPassthroughReq_t {
 	U8 PassthroughFlags;
 	U8 PhysicalPort;
 	U8 ChainOffset;
@@ -1969,10 +1967,10 @@ typedef struct _LEAPIORAID_SMP_PASSTHROUGH_REQUEST {
 	U64 SASAddress;
 	U32 Reserved3;
 	U32 Reserved4;
-	LEAPIORAID_SIMPLE_SGE_UNION SGL;
-} LeapioraidSmpPassthroughReq_t;
+	union LEAPIORAID_SIMPLE_SGE_UNION SGL;
+};
 
-typedef struct _LEAPIORAID_SMP_PASSTHROUGH_REPLY {
+struct LeapioraidSmpPassthroughRep_t {
 	U8 PassthroughFlags;
 	U8 PhysicalPort;
 	U8 MsgLength;
@@ -1989,9 +1987,9 @@ typedef struct _LEAPIORAID_SMP_PASSTHROUGH_REPLY {
 	U32 IOCLogInfo;
 	U32 Reserved3;
 	U8 ResponseData[4];
-} LeapioraidSmpPassthroughRep_t;
+};
 
-typedef struct _LEAPIORAID_SAS_IOUNIT_CONTROL_REQUEST {
+struct LeapioraidSasIoUnitControlReq_t {
 	U8 Operation;
 	U8 Reserved1;
 	U8 ChainOffset;
@@ -2013,12 +2011,12 @@ typedef struct _LEAPIORAID_SAS_IOUNIT_CONTROL_REQUEST {
 	U32 IOCParameterValue;
 	U32 Reserved7;
 	U32 Reserved8;
-} LeapioraidSasIoUnitControlReq_t;
+};
 
 #define LEAPIORAID_SAS_OP_PHY_LINK_RESET              (0x06)
 #define LEAPIORAID_SAS_OP_PHY_HARD_RESET              (0x07)
 #define LEAPIORAID_SAS_OP_REMOVE_DEVICE               (0x0D)
-typedef struct _LEAPIORAID_SAS_IOUNIT_CONTROL_REPLY {
+struct LeapioraidSasIoUnitControlRep_t {
 	U8 Operation;
 	U8 Reserved1;
 	U8 MsgLength;
@@ -2032,5 +2030,5 @@ typedef struct _LEAPIORAID_SAS_IOUNIT_CONTROL_REPLY {
 	U16 Reserved4;
 	U16 IOCStatus;
 	U32 IOCLogInfo;
-} LeapioraidSasIoUnitControlRep_t;
+};
 #endif
