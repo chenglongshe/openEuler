@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * 
+ *
  * Copyright 2000-2020 Broadcom Inc. All rights reserved.
- * 
+ *
  * Copyright (C) 2024 LeapIO Tech Inc.
- * 
+ *
  */
 
 #ifndef LEAPIORAID_H
@@ -295,23 +295,11 @@ typedef struct _LEAPIORAID_SGE_CHAIN_UNION {
 #define LEAPIORAID_SGE_FLAGS_END_OF_BUFFER            (0x40)
 #define LEAPIORAID_SGE_FLAGS_END_OF_LIST              (0x01)
 #define LEAPIORAID_SGE_FLAGS_SHIFT                    (24)
-#define LEAPIORAID_SGE_LENGTH_MASK                    (0x00FFFFFF)
-#define LEAPIORAID_SGE_CHAIN_LENGTH_MASK              (0x0000FFFF)
 #define LEAPIORAID_SGE_FLAGS_SIMPLE_ELEMENT           (0x10)
 #define LEAPIORAID_SGE_FLAGS_SYSTEM_ADDRESS           (0x00)
-#define LEAPIORAID_SGE_FLAGS_IOC_TO_HOST              (0x00)
 #define LEAPIORAID_SGE_FLAGS_HOST_TO_IOC              (0x04)
-#define LEAPIORAID_SGE_FLAGS_DEST                     (0x00)
-#define LEAPIORAID_SGE_FLAGS_SOURCE                   (0x04)
 #define LEAPIORAID_SGE_FLAGS_32_BIT_ADDRESSING        (0x00)
 #define LEAPIORAID_SGE_FLAGS_64_BIT_ADDRESSING        (0x02)
-#define LEAPIORAID_SGE_CHAIN_OFFSET_MASK              (0x00FF0000)
-#define LEAPIORAID_SGE_CHAIN_OFFSET_SHIFT             (16)
-#define LEAPIORAID_SGE_SET_FLAGS(f)             ((U32)(f) << LEAPIORAID_SGE_FLAGS_SHIFT)
-#define LEAPIORAID_SGE_GET_FLAGS(f)             (((f) & ~LEAPIORAID_SGE_LENGTH_MASK) >> LEAPIORAID_SGE_FLAGS_SHIFT)
-#define LEAPIORAID_SGE_LENGTH(f)                ((f) & LEAPIORAID_SGE_LENGTH_MASK)
-#define LEAPIORAID_SGE_CHAIN_LENGTH(f)          ((f) & LEAPIORAID_SGE_CHAIN_LENGTH_MASK)
-#define LEAPIORAID_SGE_SET_FLAGS_LENGTH(f, l)   (LEAPIORAID_SGE_SET_FLAGS(f) | LEAPIORAID_SGE_LENGTH(l))
 
 typedef struct _LEAPIORAID_IEEE_SGE_SIMPLE32 {
 	U32 Address;

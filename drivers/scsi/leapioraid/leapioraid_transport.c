@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * SAS Transport Layer for MPT (Message Passing Technology) based controllers
  *
@@ -38,11 +38,6 @@
  * TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
  * USE OR DISTRIBUTION OF THE PROGRAM OR THE EXERCISE OF ANY RIGHTS GRANTED
  * HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES
-
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
- * USA.
  */
 
 #include <linux/module.h>
@@ -61,9 +56,10 @@
 #include <scsi/scsi_dbg.h>
 #include "leapioraid_func.h"
 
-static struct leapioraid_raid_sas_node *leapioraid_transport_sas_node_find_by_sas_address(
-								 struct LEAPIORAID_ADAPTER *ioc,
-								 u64 sas_address, struct leapioraid_hba_port *port)
+static 
+struct leapioraid_raid_sas_node *leapioraid_transport_sas_node_find_by_sas_address(
+			struct LEAPIORAID_ADAPTER *ioc,
+			u64 sas_address, struct leapioraid_hba_port *port)
 {
 	if (ioc->sas_hba.sas_address == sas_address)
 		return &ioc->sas_hba;
@@ -390,17 +386,17 @@ leapioraid_transport_expander_report_manufacture(struct LEAPIORAID_ADAPTER *ioc,
 		    sizeof(struct leapioraid_rep_manu_reply))
 			goto out;
 		manufacture_reply = data_out + sizeof(struct leapioraid_rep_manu_request);
-		strncpy(edev->vendor_id, manufacture_reply->vendor_id,
-			SAS_EXPANDER_VENDOR_ID_LEN);
-		strncpy(edev->product_id, manufacture_reply->product_id,
-			SAS_EXPANDER_PRODUCT_ID_LEN);
-		strncpy(edev->product_rev, manufacture_reply->product_rev,
-			SAS_EXPANDER_PRODUCT_REV_LEN);
+		strscpy(edev->vendor_id, manufacture_reply->vendor_id,
+			sizeof(edev->vendor_id));
+		strscpy(edev->product_id, manufacture_reply->product_id,
+			sizeof(edev->product_id));
+		strscpy(edev->product_rev, manufacture_reply->product_rev,
+			sizeof(edev->product_rev));
 		edev->level = manufacture_reply->sas_format & 1;
 		if (edev->level) {
-			strncpy(edev->component_vendor_id,
+			strscpy(edev->component_vendor_id,
 				manufacture_reply->component_vendor_id,
-				SAS_EXPANDER_COMPONENT_VENDOR_ID_LEN);
+				sizeof(edev->component_vendor_id));
 			tmp = (u8 *) &manufacture_reply->component_id;
 			edev->component_id = tmp[0] << 8 | tmp[1];
 			edev->component_revision_id =
@@ -617,8 +613,8 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAP
 	}
 	leapioraid_port->hba_port = hba_port;
 	leapioraid_transport_sanity_check(ioc, sas_node,
-				leapioraid_port->remote_identify.sas_address,
-				hba_port);
+		leapioraid_port->remote_identify.sas_address,
+		hba_port);
 	for (i = 0; i < sas_node->num_phys; i++) {
 		if (sas_node->phy[i].remote_identify.sas_address !=
 		    leapioraid_port->remote_identify.sas_address ||
@@ -941,9 +937,10 @@ leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapior
 }
 
 int
-leapioraid_transport_add_expander_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy *leapioraid_phy,
-					  LeapioraidExpanderP1_t expander_pg1,
-					  struct device *parent_dev)
+leapioraid_transport_add_expander_phy(
+		struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy *leapioraid_phy,
+		LeapioraidExpanderP1_t expander_pg1,
+		struct device *parent_dev)
 {
 	struct sas_phy *phy;
 	int phy_index = leapioraid_phy->phy_id;
@@ -1041,9 +1038,9 @@ leapioraid_transport_update_links(struct LEAPIORAID_ADAPTER *ioc,
 			}
 		}
 		leapioraid_transport_add_phy_to_an_existing_port(ioc, sas_node,
-								 leapioraid_phy,
-								 leapioraid_phy->remote_identify.sas_address,
-								 port);
+				leapioraid_phy,
+				leapioraid_phy->remote_identify.sas_address,
+				port);
 #endif
 	} else
 		memset(&leapioraid_phy->remote_identify, 0, sizeof(struct
