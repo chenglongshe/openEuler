@@ -1359,7 +1359,7 @@ leapioraid_base_process_reply_queue(struct leapioraid_adapter_reply_queue *reply
 				    0 : ioc->reply_free_host_index + 1;
 				ioc->reply_free[ioc->reply_free_host_index] =
 				    cpu_to_le32(reply);
-				wmb();
+				wmb(); /* Make sure that all write ops are in order */
 				writel(ioc->reply_free_host_index,
 				       &ioc->chip->ReplyFreeHostIndex);
 			}
@@ -1406,7 +1406,7 @@ out:
 		atomic_dec(&reply_q->busy);
 		return completed_cmds;
 	}
-	wmb();
+	wmb(); /* Make sure that all write ops are in order */
 	if (ioc->combined_reply_queue) {
 		writel(reply_q->reply_post_host_index | ((msix_index & 7) <<
 							 LEAPIORAID_RPHI_MSIX_INDEX_SHIFT),
