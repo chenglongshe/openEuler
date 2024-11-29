@@ -429,7 +429,7 @@ leapioraid_transport_delete_port(struct LEAPIORAID_ADAPTER *ioc,
 	    leapioraid_port->remote_identify.device_type;
 
 #if defined(LEAPIORAID_WIDE_PORT_API)
-	dev_printk(KERN_INFO, &leapioraid_port->port->dev,
+	dev_info(&leapioraid_port->port->dev,
 		   "remove: sas_addr(0x%016llx)\n",
 		   (unsigned long long)sas_address);
 #endif
@@ -450,7 +450,7 @@ leapioraid_transport_delete_phy(struct LEAPIORAID_ADAPTER *ioc,
 {
 	u64 sas_address = leapioraid_port->remote_identify.sas_address;
 
-	dev_printk(KERN_INFO, &leapioraid_phy->phy->dev,
+	dev_info(&leapioraid_phy->phy->dev,
 		   "remove: sas_addr(0x%016llx), phy(%d)\n",
 		   (unsigned long long)sas_address, leapioraid_phy->phy_id);
 	list_del(&leapioraid_phy->port_siblings);
@@ -466,7 +466,7 @@ leapioraid_transport_add_phy(struct LEAPIORAID_ADAPTER *ioc,
 {
 	u64 sas_address = leapioraid_port->remote_identify.sas_address;
 
-	dev_printk(KERN_INFO, &leapioraid_phy->phy->dev,
+	dev_info(&leapioraid_phy->phy->dev,
 		   "add: sas_addr(0x%016llx), phy(%d)\n", (unsigned long long)
 		   sas_address, leapioraid_phy->phy_id);
 	list_add_tail(&leapioraid_phy->port_siblings,
@@ -667,7 +667,7 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAP
 	list_for_each_entry(leapioraid_phy, &leapioraid_port->phy_list,
 			    port_siblings) {
 		if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-			dev_printk(KERN_INFO, &port->dev, "add: handle(0x%04x), sas_addr(0x%016llx), phy(%d)\n",
+			dev_info(&port->dev, "add: handle(0x%04x), sas_addr(0x%016llx), phy(%d)\n",
 					handle,
 					(unsigned long long)
 					leapioraid_port->remote_identify.sas_address,
@@ -713,7 +713,7 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAP
 		sas_device->pend_sas_rphy_add = 0;
 		leapioraid_sas_device_put(sas_device);
 	}
-	dev_printk(KERN_INFO, &rphy->dev,
+	dev_info(&rphy->dev,
 		   "%s: added: handle(0x%04x), sas_addr(0x%016llx)\n",
 		   __func__, handle, (unsigned long long)
 		   leapioraid_port->remote_identify.sas_address);
@@ -840,7 +840,7 @@ out:
 	list_for_each_entry_safe(leapioraid_phy, next_phy,
 				 &leapioraid_port->phy_list, port_siblings) {
 		if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-			dev_printk(KERN_INFO, &leapioraid_port->port->dev,
+			dev_info(&leapioraid_port->port->dev,
 				   "remove: sas_addr(0x%016llx), phy(%d)\n",
 				   (unsigned long long)
 				   leapioraid_port->remote_identify.sas_address,
@@ -857,7 +857,7 @@ out:
 	       ioc->name, __func__, (unsigned long long)sas_address);
 #else
 	if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-		dev_printk(KERN_INFO, &leapioraid_port->rphy->dev,
+		dev_info(&leapioraid_port->rphy->dev,
 			   "remove: sas_addr(0x%016llx)\n",
 			   (unsigned long long)sas_address);
 	if (!ioc->remove_host)
@@ -925,7 +925,7 @@ leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapior
 		return -1;
 	}
 	if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-		dev_printk(KERN_INFO, &phy->dev,
+		dev_info(&phy->dev,
 			   "add: handle(0x%04x), sas_addr(0x%016llx)\n"
 			   "\tattached_handle(0x%04x), sas_addr(0x%016llx)\n",
 			   leapioraid_phy->handle, (unsigned long long)
@@ -990,7 +990,7 @@ leapioraid_transport_add_expander_phy(
 		return -1;
 	}
 	if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-		dev_printk(KERN_INFO, &phy->dev,
+		dev_info(&phy->dev,
 			   "add: handle(0x%04x), sas_addr(0x%016llx)\n"
 			   "\tattached_handle(0x%04x), sas_addr(0x%016llx)\n",
 			   leapioraid_phy->handle, (unsigned long long)
@@ -1049,7 +1049,7 @@ leapioraid_transport_update_links(struct LEAPIORAID_ADAPTER *ioc,
 		leapioraid_phy->phy->negotiated_linkrate =
 		    leapioraid_transport_convert_phy_link_rate(link_rate);
 	if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-		dev_printk(KERN_INFO, &leapioraid_phy->phy->dev,
+		dev_info(&leapioraid_phy->phy->dev,
 			   "refresh: parent sas_addr(0x%016llx),\n"
 			   "\tlink_rate(0x%02x), phy(%d)\n"
 			   "\tattached_handle(0x%04x), sas_addr(0x%016llx)\n",
