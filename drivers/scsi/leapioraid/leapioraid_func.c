@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * This is the Fusion MPT base driver providing common API layer interface
  * for access to MPT (Message Passing Technology) firmware.
@@ -39,11 +39,6 @@
  * TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
  * USE OR DISTRIBUTION OF THE PROGRAM OR THE EXERCISE OF ANY RIGHTS GRANTED
  * HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES
-
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
- * USA.
  */
 
 #include <linux/version.h>
@@ -89,7 +84,7 @@ static LEAPIORAID_CALLBACK leapioraid_callbacks[LEAPIORAID_MAX_CALLBACKS];
 static int smp_affinity_enable = 1;
 module_param(smp_affinity_enable, int, 0444);
 MODULE_PARM_DESC(smp_affinity_enable,
-		 "SMP affinity feature enable/disbale Default: enable(1)");
+		 "SMP affinity feature enable/disable Default: enable(1)");
 
 static int max_msix_vectors = -1;
 module_param(max_msix_vectors, int, 0444);
@@ -320,9 +315,8 @@ leapioraid_udp_init(void)
 static void
 leapioraid_udp_exit(void)
 {
-	if (sock) {
+	if (sock)
 		sock_release(sock);
-	}
 }
 
 static int
@@ -365,14 +359,15 @@ leapioraid_base_pcie_log_work(struct work_struct *work)
 			pr_err("log thread error:data size overflow\n");
 			return;
 		}
-		if (offset + datasize > SYS_LOG_BUF_SIZE) {
+
+		if (offset + datasize > SYS_LOG_BUF_SIZE)
 			send_sz = SYS_LOG_BUF_SIZE - offset;
-		} else {
+		else
 			send_sz = datasize;
-		}
-		if (send_sz > MAX_UPD_PAYLOAD_SZ) {
+
+		if (send_sz > MAX_UPD_PAYLOAD_SZ)
 			send_sz = MAX_UPD_PAYLOAD_SZ;
-		}
+
 		actual_send_sz =
 		    leapioraid_send_udp_pkg(ioc->log_buffer + offset, send_sz);
 		host_logbuf_position += actual_send_sz;
@@ -463,11 +458,11 @@ leapioraid_base_fault_reset_work(struct work_struct *work)
 		p = kthread_run(leapioraid_remove_dead_ioc_func, ioc,
 				"%s_dead_ioc_%d", ioc->driver_name, ioc->id);
 		if (IS_ERR(p))
-			pr_err(
-			       "%s %s: Running leapioraid_dead_ioc thread failed !!!!\n", ioc->name, __func__);
+			pr_err("%s %s: Running leapioraid_dead_ioc thread failed !!!!\n", 
+				ioc->name, __func__);
 		else
-			pr_err(
-			       "%s %s: Running leapioraid_dead_ioc thread success !!!!\n", ioc->name, __func__);
+			pr_err("%s %s: Running leapioraid_dead_ioc thread success !!!!\n", 
+				ioc->name, __func__);
 		return;
 	}
 	if ((doorbell & LEAPIORAID_IOC_STATE_MASK) == LEAPIORAID_IOC_STATE_COREDUMP) {
@@ -838,7 +833,7 @@ leapioraid_base_sas_ioc_info(struct LEAPIORAID_ADAPTER *ioc,
 		desc = "config no defaults";
 		break;
 	case LEAPIORAID_IOCSTATUS_CONFIG_CANT_COMMIT:
-		desc = "config cant commit";
+		desc = "config can not commit";
 		break;
 	case LEAPIORAID_IOCSTATUS_SCSI_RECOVERED_ERROR:
 	case LEAPIORAID_IOCSTATUS_SCSI_INVALID_DEVHANDLE:
@@ -941,7 +936,8 @@ leapioraid_base_sas_ioc_info(struct LEAPIORAID_ADAPTER *ioc,
 		func_str = "unknown";
 		break;
 	}
-	pr_warn("%s ioc_status: %s(0x%04x), request(0x%p), (%s)\n", ioc->name, desc, ioc_status, request_hdr, func_str);
+	pr_warn("%s ioc_status: %s(0x%04x), request(0x%p), (%s)\n", 
+		ioc->name, desc, ioc_status, request_hdr, func_str);
 	leapioraid_debug_dump_mf(request_hdr, frame_sz / 4);
 }
 
@@ -1075,8 +1071,8 @@ leapioraid_base_sas_log_info(struct LEAPIORAID_ADAPTER *ioc, u32 log_info)
 			originator_str = "IR";
 		break;
 	}
-	pr_warn("%s log_info(0x%08x): originator(%s), code(0x%02x), sub_code(0x%04x)\n", ioc->name, log_info,
-	       originator_str, sas_loginfo.dw.code, sas_loginfo.dw.subcode);
+	pr_warn("%s log_info(0x%08x): originator(%s), code(0x%02x), sub_code(0x%04x)\n", 
+		ioc->name, log_info, originator_str, sas_loginfo.dw.code, sas_loginfo.dw.subcode);
 }
 
 static void
@@ -2247,7 +2243,7 @@ leapioraid_base_wait_for_doorbell_int(struct LEAPIORAID_ADAPTER *ioc,
 		    ioc->base_readl(&ioc->chip->HostInterruptStatus,
 				    LEAPIORAID_READL_RETRY_COUNT_OF_THREE);
 		if (int_status & LEAPIORAID_HIS_IOC2SYS_DB_STATUS) {
-			dhsprintk(ioc, pr_info("%s %s: successfull count(%d), timeout(%d)\n",
+			dhsprintk(ioc, pr_info("%s %s: successful count(%d), timeout(%d)\n",
 					      ioc->name, __func__, count,
 					      timeout));
 			return 0;
@@ -2255,7 +2251,8 @@ leapioraid_base_wait_for_doorbell_int(struct LEAPIORAID_ADAPTER *ioc,
 		msleep(1);
 		count++;
 	} while (--cntdn);
-	pr_err("%s %s: failed due to timeout count(%d), int_status(%x)!\n", ioc->name, __func__, count, int_status);
+	pr_err("%s %s: failed due to timeout count(%d), int_status(%x)!\n", 
+		ioc->name, __func__, count, int_status);
 	return -EFAULT;
 }
 
@@ -2282,7 +2279,8 @@ leapioraid_base_spin_on_doorbell_int(struct LEAPIORAID_ADAPTER *ioc,
 		udelay(500);
 		count++;
 	} while (--cntdn);
-	pr_err("%s %s: failed due to timeout count(%d), int_status(%x)!\n", ioc->name, __func__, count, int_status);
+	pr_err("%s %s: failed due to timeout count(%d), int_status(%x)!\n", 
+		ioc->name, __func__, count, int_status);
 	return -EFAULT;
 }
 
@@ -2301,7 +2299,7 @@ leapioraid_base_wait_for_doorbell_ack(struct LEAPIORAID_ADAPTER *ioc,
 		    ioc->base_readl(&ioc->chip->HostInterruptStatus,
 				    LEAPIORAID_READL_RETRY_COUNT_OF_THREE);
 		if (!(int_status & LEAPIORAID_HIS_SYS2IOC_DB_STATUS)) {
-			dhsprintk(ioc, pr_info("%s %s: successfull count(%d), timeout(%d)\n",
+			dhsprintk(ioc, pr_info("%s %s: successful count(%d), timeout(%d)\n",
 					      ioc->name, __func__, count,
 					      timeout));
 			return 0;
@@ -2325,7 +2323,8 @@ leapioraid_base_wait_for_doorbell_ack(struct LEAPIORAID_ADAPTER *ioc,
 		count++;
 	} while (--cntdn);
 out:
-	pr_err("%s %s: failed due to timeout count(%d), int_status(%x)!\n", ioc->name, __func__, count, int_status);
+	pr_err("%s %s: failed due to timeout count(%d), int_status(%x)!\n", 
+		ioc->name, __func__, count, int_status);
 	return -EFAULT;
 }
 
@@ -2351,7 +2350,8 @@ leapioraid_base_wait_for_doorbell_not_used(struct LEAPIORAID_ADAPTER *ioc,
 		msleep(1);
 		count++;
 	} while (--cntdn);
-	pr_err("%s %s: failed due to timeout count(%d), doorbell_reg(%x)!\n", ioc->name, __func__, count, doorbell_reg);
+	pr_err("%s %s: failed due to timeout count(%d), doorbell_reg(%x)!\n", 
+		ioc->name, __func__, count, doorbell_reg);
 	return -EFAULT;
 }
 
@@ -2605,7 +2605,8 @@ leapioraid_base_diag_reset(struct LEAPIORAID_ADAPTER *ioc)
 	ioc_state =
 	    leapioraid_base_wait_on_iocstate(ioc, LEAPIORAID_IOC_STATE_READY, 20);
 	if (ioc_state) {
-		pr_err("%s %s: failed going to ready state (ioc_state=0x%x)\n", ioc->name, __func__, ioc_state);
+		pr_err("%s %s: failed going to ready state (ioc_state=0x%x)\n", 
+			ioc->name, __func__, ioc_state);
 		leapioraid_base_dump_reg_set(ioc);
 		goto out;
 	}
@@ -2653,14 +2654,16 @@ leapioraid_base_wait_for_iocstate(struct LEAPIORAID_ADAPTER *ioc, int timeout)
 		goto issue_diag_reset;
 	} else if ((ioc_state & LEAPIORAID_IOC_STATE_MASK) ==
 		   LEAPIORAID_IOC_STATE_COREDUMP) {
-		pr_err("%s %s: Skipping the diag reset here. (ioc_state=0x%x)\n", ioc->name, __func__, ioc_state);
+		pr_err("%s %s: Skipping the diag reset here. (ioc_state=0x%x)\n", 
+			ioc->name, __func__, ioc_state);
 		return -EFAULT;
 	}
 	ioc_state =
 	    leapioraid_base_wait_on_iocstate(ioc, LEAPIORAID_IOC_STATE_READY,
 					     timeout);
 	if (ioc_state) {
-		pr_err("%s %s: failed going to ready state (ioc_state=0x%x)\n", ioc->name, __func__, ioc_state);
+		pr_err("%s %s: failed going to ready state (ioc_state=0x%x)\n", 
+			ioc->name, __func__, ioc_state);
 		return -EFAULT;
 	}
 issue_diag_reset:
@@ -2777,7 +2780,8 @@ leapioraid_base_get_ioc_facts(struct LEAPIORAID_ADAPTER *ioc)
 	facts->CurrentHostPageSize = mpi_reply.CurrentHostPageSize;
 	ioc->page_size = 1 << facts->CurrentHostPageSize;
 	if (ioc->page_size == 1) {
-		pr_err("%s CurrentHostPageSize is 0: Setting default host page size to 4k\n", ioc->name);
+		pr_err("%s CurrentHostPageSize is 0: Setting default host page size to 4k\n", 
+			ioc->name);
 		ioc->page_size = 1 << 12;
 	}
 	dinitprintk(ioc,
@@ -3398,7 +3402,7 @@ leapioraid_base_display_ioc_capabilities(struct LEAPIORAID_ADAPTER *ioc)
 	u32 iounit_pg1_flags;
 
 	pci_read_config_byte(ioc->pdev, PCI_CLASS_REVISION, &revision);
-	strncpy(desc, ioc->manu_pg0.ChipName, 16);
+	strscpy(desc, ioc->manu_pg0.ChipName, sizeof(desc));
 	pr_info("%s %s: FWVersion(%02d.%02d.%02d.%02d), ChipRevision(0x%02x)\n",
 	       ioc->name, desc,
 	       (ioc->facts.FWVersion.Word & 0xFF000000) >> 24,
@@ -3469,8 +3473,8 @@ leapioraid_base_update_ioc_page1_inlinewith_perf_mode(struct LEAPIORAID_ADAPTER
 	case LEAPIORAID_PERF_MODE_BALANCED:
 		if (ioc->high_iops_queues) {
 			pr_err(
-			       "%s Enable interrupt coalescing only for first %d reply queues\n", ioc->name,
-			       LEAPIORAID_HIGH_IOPS_REPLY_QUEUES);
+			       "%s Enable interrupt coalescing only for first %d reply queues\n", 
+				   	ioc->name, LEAPIORAID_HIGH_IOPS_REPLY_QUEUES);
 			ioc_pg1.ProductSpecific = cpu_to_le32(0x80000000 |
 							      ((1 <<
 								LEAPIORAID_HIGH_IOPS_REPLY_QUEUES
@@ -4282,8 +4286,8 @@ retry_allocation:
 		if (ioc->rdpq_array_enable && rc == 0) {
 			reply_post_free_array_sz = ioc->reply_queue_count *
 			    sizeof(LeapioraidIOCInitRDPQArrayEntry);
-			rc = leapioraid_base_allocate_reply_post_free_array(ioc,
-									    reply_post_free_array_sz);
+			rc = leapioraid_base_allocate_reply_post_free_array(
+				ioc, reply_post_free_array_sz);
 			if (rc == -ENOMEM)
 				return -ENOMEM;
 			else if (rc == -EAGAIN)
@@ -4301,10 +4305,10 @@ retry_allocation:
 		rc = -ENOMEM;
 		goto out;
 	}
-	pr_err(
-	       "%s config page(0x%p) - dma(0x%llx): size(%d)\n", ioc->name,
-	       ioc->config_page, (unsigned long long)ioc->config_page_dma,
-	       ioc->config_page_sz);
+	pr_err("%s config page(0x%p) - dma(0x%llx): size(%d)\n", 
+		ioc->name, ioc->config_page, 
+		(unsigned long long)ioc->config_page_dma, 
+		ioc->config_page_sz);
 	total_sz += ioc->config_page_sz;
 	pr_info("%s Allocated physical memory: size(%d kB)\n",
 	       ioc->name, total_sz / 1024);
@@ -5526,8 +5530,8 @@ leapioraid_wait_for_commands_to_complete(struct LEAPIORAID_ADAPTER *ioc)
 
 	ioc->pending_io_count = 0;
 	if (!leapioraid_base_pci_device_is_available(ioc)) {
-		pr_err(
-		       "%s %s: pci error recovery reset or pci device unplug occured\n", ioc->name, __func__);
+		pr_err("%s %s: pci error recovery reset or pci device unplug occurred\n", 
+			ioc->name, __func__);
 		return;
 	}
 	ioc_state = leapioraid_base_get_iocstate(ioc, 0);
@@ -5602,8 +5606,9 @@ leapioraid_base_check_ioc_facts_changes(struct LEAPIORAID_ADAPTER *ioc)
 			     GFP_KERNEL);
 		if (!device_remove_in_progress) {
 			pr_err(
-			       "%s Unable to allocate the memory for device_remove_in_progress of sz: %d\n",
-			       ioc->name, pd_handles_sz);
+			       "%s Unable to allocate the memory \
+					for device_remove_in_progress of sz: %d\n",
+			       	ioc->name, pd_handles_sz);
 			return -ENOMEM;
 		}
 		memset(device_remove_in_progress +
@@ -5683,12 +5688,14 @@ leapioraid_base_hard_reset_handler(struct LEAPIORAID_ADAPTER *ioc,
 		goto out;
 	r = leapioraid_base_check_ioc_facts_changes(ioc);
 	if (r) {
-		pr_err(
-		       "%s Some of the parameters got changed in this new firmware image and it requires system reboot\n", ioc->name);
+		pr_err("%s Some of the parameters got changed in this \
+			   new firmware image and it requires system reboot\n", ioc->name);
 		goto out;
 	}
 	if (ioc->rdpq_array_enable && !ioc->rdpq_array_capable)
-		panic("%s: Issue occurred with flashing controller firmware. Please reboot the system and ensure that the correct firmware version is running\n", ioc->name);
+		panic("%s: Issue occurred with flashing controller firmware. \
+			Please reboot the system and ensure that the correct firmware version is running\n", 
+			ioc->name);
 	r = leapioraid_base_make_ioc_operational(ioc);
 	if (!r)
 		leapioraid_base_reset_handler(ioc, LEAPIORAID_IOC_DONE_RESET_PHASE);
