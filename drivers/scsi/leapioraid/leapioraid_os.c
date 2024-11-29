@@ -211,7 +211,7 @@ leapioraid_scsihost_set_debug_level(const char *val, const struct kernel_param *
 
 	if (ret)
 		return ret;
-	printk(KERN_INFO "setting logging_level(0x%08x)\n", logging_level);
+	pr_info("setting logging_level(0x%08x)\n", logging_level);
 	spin_lock(&leapioraid_gioc_lock);
 	list_for_each_entry(ioc, &leapioraid_ioc_list, list)
 		ioc->logging_level = logging_level;
@@ -6287,7 +6287,7 @@ leapioraid_scsihost_sas_topology_change_event_debug(struct LEAPIORAID_ADAPTER *i
 	}
 	pr_info("%s sas topology change: (%s)\n",
 	       ioc->name, status_str);
-	printk(KERN_INFO "\thandle(0x%04x), enclosure_handle(0x%04x) start_phy(%02d), count(%d)\n",
+	pr_info("\thandle(0x%04x), enclosure_handle(0x%04x) start_phy(%02d), count(%d)\n",
 	       le16_to_cpu(event_data->ExpanderDevHandle),
 	       le16_to_cpu(event_data->EnclosureHandle),
 	       event_data->StartPhyNum, event_data->NumEntries);
@@ -6320,7 +6320,7 @@ leapioraid_scsihost_sas_topology_change_event_debug(struct LEAPIORAID_ADAPTER *i
 		}
 		link_rate = event_data->PHY[i].LinkRate >> 4;
 		prev_link_rate = event_data->PHY[i].LinkRate & 0xF;
-		printk(KERN_INFO "\tphy(%02d), attached_handle(0x%04x): %s: \
+		pr_info("\tphy(%02d), attached_handle(0x%04x): %s: \
 			link rate: new(0x%02x), old(0x%02x)\n",
 		    phy_number, handle, status_str, link_rate, prev_link_rate);
 	}
@@ -6523,7 +6523,7 @@ leapioraid_scsihost_sas_device_status_change_event_debug(struct LEAPIORAID_ADAPT
 	if (event_data->ReasonCode == LEAPIORAID_EVENT_SAS_DEV_STAT_RC_SMART_DATA)
 		pr_info("%s , ASC(0x%x), ASCQ(0x%x)\n",
 		       ioc->name, event_data->ASC, event_data->ASCQ);
-	printk(KERN_INFO "\n");
+	pr_info("\n");
 }
 
 static void
@@ -6798,9 +6798,9 @@ leapioraid_scsihost_sas_discovery_event(struct LEAPIORAID_ADAPTER *ioc,
 		       (event_data->ReasonCode ==
 			LEAPIORAID_EVENT_SAS_DISC_RC_STARTED) ? "start" : "stop");
 		if (event_data->DiscoveryStatus)
-			printk(KERN_INFO "discovery_status(0x%08x)",
+			pr_info("discovery_status(0x%08x)",
 			       le32_to_cpu(event_data->DiscoveryStatus));
-		printk(KERN_INFO "\n");
+		pr_info("\n");
 	}
 	if (event_data->ReasonCode == LEAPIORAID_EVENT_SAS_DISC_RC_STARTED &&
 	    !ioc->sas_hba.num_phys) {
@@ -7184,7 +7184,7 @@ leapioraid_scsihost_sas_ir_config_change_event_debug(struct LEAPIORAID_ADAPTER *
 			element_str = "unknown element";
 			break;
 		}
-		printk(KERN_INFO "\t(%s:%s), vol handle(0x%04x), pd handle(0x%04x), pd num(0x%02x)\n",
+		pr_info("\t(%s:%s), vol handle(0x%04x), pd handle(0x%04x), pd num(0x%02x)\n",
 		       element_str,
 		       reason_str, le16_to_cpu(element->VolDevHandle),
 		       le16_to_cpu(element->PhysDiskDevHandle),
@@ -7565,7 +7565,7 @@ leapioraid_scsihost_mark_responding_sas_device(struct LEAPIORAID_ADAPTER *ioc,
 			if (sas_device->handle ==
 			    le16_to_cpu(sas_device_pg0->DevHandle))
 				goto out;
-			printk(KERN_INFO "\thandle changed from(0x%04x)!!!\n",
+			pr_info("\thandle changed from(0x%04x)!!!\n",
 			       sas_device->handle);
 			sas_device->handle =
 			    le16_to_cpu(sas_device_pg0->DevHandle);
@@ -7679,7 +7679,7 @@ leapioraid_scsihost_mark_responding_raid_device(struct LEAPIORAID_ADAPTER *ioc, 
 						       flags);
 				return;
 			}
-			printk(KERN_INFO "\thandle changed from(0x%04x)!!!\n",
+			pr_info("\thandle changed from(0x%04x)!!!\n",
 			       raid_device->handle);
 			raid_device->handle = handle;
 			if (sas_target_priv_data)
@@ -7791,7 +7791,7 @@ leapioraid_scsihost_mark_responding_expander(struct LEAPIORAID_ADAPTER *ioc,
 		}
 		if (sas_expander->handle == handle)
 			goto out;
-		printk(KERN_INFO "\texpander(0x%016llx): handle changed from(0x%04x) to (0x%04x)!!!\n",
+		pr_info("\texpander(0x%016llx): handle changed from(0x%04x) to (0x%04x)!!!\n",
 		       (unsigned long long)sas_expander->sas_address,
 		       sas_expander->handle, handle);
 		sas_expander->handle = handle;
@@ -7833,7 +7833,7 @@ leapioraid_scsihost_search_responding_expanders(struct LEAPIORAID_ADAPTER *ioc)
 		handle = le16_to_cpu(expander_pg0.DevHandle);
 		sas_address = le64_to_cpu(expander_pg0.SASAddress);
 		port = expander_pg0.PhysicalPort;
-		printk(KERN_INFO "\texpander present: handle(0x%04x), sas_addr(0x%016llx), port:%d\n", handle,
+		pr_info("\texpander present: handle(0x%04x), sas_addr(0x%016llx), port:%d\n", handle,
 		       (unsigned long long)sas_address,
 		       ((ioc->multipath_on_hba) ?
 			(port) : (LEAPIORAID_MULTIPATH_DISABLED_PORT_ID)));

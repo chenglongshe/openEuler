@@ -130,7 +130,7 @@ leapioraid_scsihost_set_fwfault_debug(const char *val, const struct kernel_param
 
 	if (ret)
 		return ret;
-	printk(KERN_INFO "setting fwfault_debug(%d)\n",
+	pr_info("setting fwfault_debug(%d)\n",
 	       leapioraid_fwfault_debug);
 	spin_lock(&leapioraid_gioc_lock);
 	list_for_each_entry(ioc, &leapioraid_ioc_list, list)
@@ -294,8 +294,7 @@ leapioraid_udp_init(void)
 	if (sock)
 		return 0;
 	if (!in4_pton(dest_ip, -1, (u8 *) &ip, -1, NULL)) {
-		printk(KERN_ERR
-		       "Invalid IP address: %s, set to default: 127.0.0.1\n",
+		pr_err("Invalid IP address: %s, set to default: 127.0.0.1\n",
 		       dest_ip);
 		dest_ip = "127.0.0.1";
 	}
@@ -990,9 +989,9 @@ leapioraid_base_display_event_data(struct LEAPIORAID_ADAPTER *ioc,
 				LEAPIORAID_EVENT_SAS_DISC_RC_STARTED) ? "start" :
 			       "stop");
 			if (event_data->DiscoveryStatus)
-				printk(KERN_INFO "discovery_status(0x%08x)",
+				pr_info("discovery_status(0x%08x)",
 				       le32_to_cpu(event_data->DiscoveryStatus));
-			printk(KERN_INFO "\n");
+			pr_info("\n");
 			return;
 		}
 	case LEAPIORAID_EVENT_SAS_BROADCAST_PRIMITIVE:
@@ -2479,7 +2478,7 @@ leapioraid_base_dump_reg_set(struct LEAPIORAID_ADAPTER *ioc)
 
 	pr_info("%s System Register set:\n", ioc->name);
 	for (i = 0; i < (sz / sizeof(u32)); i++)
-		printk(KERN_INFO "%08x: %08x\n", (i * 4), readl(&reg[i]));
+		pr_info("%08x: %08x\n", (i * 4), readl(&reg[i]));
 }
 
 int
@@ -2563,7 +2562,7 @@ leapioraid_base_diag_reset(struct LEAPIORAID_ADAPTER *ioc)
 		else if (count++ >= 300)
 			goto out;
 		if (!(count % 20))
-			printk(KERN_INFO "waiting on diag reset bit to clear, count = %d\n", (count / 20));
+			pr_info("waiting on diag reset bit to clear, count = %d\n", (count / 20));
 	} while (host_diagnostic & LEAPIORAID_DIAG_RESET_ADAPTER);
 #else
 	msleep(50);
@@ -3411,49 +3410,49 @@ leapioraid_base_display_ioc_capabilities(struct LEAPIORAID_ADAPTER *ioc)
 	       ioc->facts.FWVersion.Word & 0x000000FF, revision);
 	pr_info("%s Protocol=(", ioc->name);
 	if (ioc->facts.ProtocolFlags & LEAPIORAID_IOCFACTS_PROTOCOL_SCSI_INITIATOR) {
-		printk(KERN_INFO "Initiator");
+		pr_info("Initiator");
 		i++;
 	}
 	if (ioc->facts.ProtocolFlags & LEAPIORAID_IOCFACTS_PROTOCOL_SCSI_TARGET) {
-		printk(KERN_INFO "%sTarget", i ? "," : "");
+		pr_info("%sTarget", i ? "," : "");
 		i++;
 	}
 	i = 0;
-	printk(KERN_INFO "), ");
-	printk(KERN_INFO "Capabilities=(");
+	pr_info("), ");
+	pr_info("Capabilities=(");
 	if ((!ioc->warpdrive_msg) && (ioc->facts.IOCCapabilities &
 				      LEAPIORAID_IOCFACTS_CAPABILITY_INTEGRATED_RAID)) {
-		printk(KERN_INFO "Raid");
+		pr_info("Raid");
 		i++;
 	}
 	if (ioc->facts.IOCCapabilities & LEAPIORAID_IOCFACTS_CAPABILITY_TLR) {
-		printk(KERN_INFO "%sTLR", i ? "," : "");
+		pr_info("%sTLR", i ? "," : "");
 		i++;
 	}
 	if (ioc->facts.IOCCapabilities & LEAPIORAID_IOCFACTS_CAPABILITY_MULTICAST) {
-		printk(KERN_INFO "%sMulticast", i ? "," : "");
+		pr_info("%sMulticast", i ? "," : "");
 		i++;
 	}
 	if (ioc->facts.IOCCapabilities &
 	    LEAPIORAID_IOCFACTS_CAPABILITY_BIDIRECTIONAL_TARGET) {
-		printk(KERN_INFO "%sBIDI Target", i ? "," : "");
+		pr_info("%sBIDI Target", i ? "," : "");
 		i++;
 	}
 	if (ioc->facts.IOCCapabilities & LEAPIORAID_IOCFACTS_CAPABILITY_EEDP) {
-		printk(KERN_INFO "%sEEDP", i ? "," : "");
+		pr_info("%sEEDP", i ? "," : "");
 		i++;
 	}
 	if (ioc->facts.IOCCapabilities &
 	    LEAPIORAID_IOCFACTS_CAPABILITY_TASK_SET_FULL_HANDLING) {
-		printk(KERN_INFO "%sTask Set Full", i ? "," : "");
+		pr_info("%sTask Set Full", i ? "," : "");
 		i++;
 	}
 	iounit_pg1_flags = le32_to_cpu(ioc->iounit_pg1.Flags);
 	if (!(iounit_pg1_flags & LEAPIORAID_IOUNITPAGE1_NATIVE_COMMAND_Q_DISABLE)) {
-		printk(KERN_INFO "%sNCQ", i ? "," : "");
+		pr_info("%sNCQ", i ? "," : "");
 		i++;
 	}
-	printk(KERN_INFO ")\n");
+	pr_info(")\n");
 }
 
 static int

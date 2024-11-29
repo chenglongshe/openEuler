@@ -1568,7 +1568,7 @@ leapioraid_ctl_tm_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 			mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 			smid_task_abort = le16_to_cpu(mpi_request->TaskMID);
 		}
-		printk(KERN_INFO "\tcomplete: sas_addr(0x%016llx), handle(0x%04x), smid(%d), term(%d)\n",
+		pr_info("\tcomplete: sas_addr(0x%016llx), handle(0x%04x), smid(%d), term(%d)\n",
 		       (unsigned long long)sas_device->sas_address, handle,
 		       (smid_task_abort ? smid_task_abort : smid),
 		       le32_to_cpu(mpi_reply->TerminationCount));
@@ -1577,7 +1577,7 @@ leapioraid_ctl_tm_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 	spin_lock_irqsave(&ioc->raid_device_lock, flags);
 	raid_device = leapioraid_ctl_raid_device_find_by_handle(ioc, handle);
 	if (raid_device)
-		printk(KERN_INFO "\tcomplete: wwid(0x%016llx), handle(0x%04x), smid(%d), term(%d)\n",
+		pr_info("\tcomplete: wwid(0x%016llx), handle(0x%04x), smid(%d), term(%d)\n",
 		       (unsigned long long)raid_device->wwid, handle,
 		       smid, le32_to_cpu(mpi_reply->TerminationCount));
 	spin_unlock_irqrestore(&ioc->raid_device_lock, flags);
