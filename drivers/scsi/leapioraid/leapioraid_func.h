@@ -171,7 +171,7 @@ static inline void *leapioraid_shost_private(struct Scsi_Host *shost)
 }
 
 struct LeapioraidManuP10_t {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	U8 OEMIdentifier;
 	U8 Reserved1;
 	U16 Reserved2;
@@ -185,7 +185,7 @@ struct LeapioraidManuP10_t {
 };
 
 struct LeapioraidManuP11_t {
-	LEAPIORAID_CONFIG_PAGE_HEADER Header;
+	struct LEAPIORAID_CONFIG_PAGE_HEADER Header;
 	__le32 Reserved1;
 	u8 Reserved2;
 	u8 EEDPTagMode;
@@ -408,7 +408,7 @@ struct leapioraid_raid_sas_node {
 
 struct leapioraid_enclosure_node {
 	struct list_head list;
-	LeapioraidSasEncP0_t pg0;
+	struct LeapioraidSasEncP0_t pg0;
 };
 
 enum reset_type {
@@ -462,7 +462,7 @@ struct leapioraid_adapter_reply_queue {
 	struct LEAPIORAID_ADAPTER *ioc;
 	u8 msix_index;
 	u32 reply_post_host_index;
-	LeapioraidRepDescUnion_t *reply_post_free;
+	union LeapioraidRepDescUnion_t *reply_post_free;
 	char name[LEAPIORAID_NAME_LENGTH];
 	atomic_t busy;
 	cpumask_var_t affinity_hint;
@@ -481,7 +481,7 @@ struct leapioraid_blk_mq_poll_queue {
 };
 
 union leapioraid_version_union {
-	LEAPIORAID_VERSION_STRUCT Struct;
+	struct LEAPIORAID_VERSION_STRUCT Struct;
 	u32 Word;
 };
 
@@ -545,7 +545,7 @@ struct leapioraid_port_facts {
 };
 
 struct leapioraid_reply_post_struct {
-	LeapioraidRepDescUnion_t *reply_post_free;
+	union LeapioraidRepDescUnion_t *reply_post_free;
 	dma_addr_t reply_post_free_dma;
 };
 
@@ -693,16 +693,16 @@ struct LEAPIORAID_ADAPTER {
 	struct leapioraid_facts facts;
 	struct leapioraid_facts prev_fw_facts;
 	struct leapioraid_port_facts *pfacts;
-	LeapioraidManP0_t manu_pg0;
+	struct LeapioraidManP0_t manu_pg0;
 	struct LeapioraidManuP10_t manu_pg10;
 	struct LeapioraidManuP11_t manu_pg11;
-	LeapioraidBiosP2_t bios_pg2;
-	LeapioraidBiosP3_t bios_pg3;
-	LeapioraidIOCP8_t ioc_pg8;
-	LeapioraidIOUnitP0_t iounit_pg0;
-	LeapioraidIOUnitP1_t iounit_pg1;
-	LeapioraidIOUnitP8_t iounit_pg8;
-	LeapioraidIOCP1_t ioc_pg1_copy;
+	struct LeapioraidBiosP2_t bios_pg2;
+	struct LeapioraidBiosP3_t bios_pg3;
+	struct LeapioraidIOCP8_t ioc_pg8;
+	struct LeapioraidIOUnitP0_t iounit_pg0;
+	struct LeapioraidIOUnitP1_t iounit_pg1;
+	struct LeapioraidIOUnitP8_t iounit_pg8;
+	struct LeapioraidIOCP1_t ioc_pg1_copy;
 	struct leapioraid_boot_device req_boot_device;
 	struct leapioraid_boot_device req_alt_boot_device;
 	struct leapioraid_boot_device current_boot_device;
@@ -786,7 +786,7 @@ struct LEAPIORAID_ADAPTER {
 	struct leapioraid_reply_post_struct *reply_post;
 	struct dma_pool *reply_post_free_dma_pool;
 	struct dma_pool *reply_post_free_array_dma_pool;
-	LeapioraidIOCInitRDPQArrayEntry *reply_post_free_array;
+	struct LeapioraidIOCInitRDPQArrayEntry *reply_post_free_array;
 	dma_addr_t reply_post_free_array_dma;
 	u8 reply_queue_count;
 	struct list_head reply_queue_list;
@@ -1003,13 +1003,13 @@ void leapioraid_base_coredump_info(struct LEAPIORAID_ADAPTER *ioc,
 int leapioraid_base_wait_for_coredump_completion(struct LEAPIORAID_ADAPTER *ioc,
 						 const char *caller);
 int leapioraid_base_sas_iounit_control(struct LEAPIORAID_ADAPTER *ioc,
-				       LeapioraidSasIoUnitControlRep_t *
+				       struct LeapioraidSasIoUnitControlRep_t *
 				       mpi_reply,
-				       LeapioraidSasIoUnitControlReq_t *
+				       struct LeapioraidSasIoUnitControlReq_t *
 				       mpi_request);
 int leapioraid_base_scsi_enclosure_processor(struct LEAPIORAID_ADAPTER *ioc,
-					     LeapioraidSepRep_t *mpi_reply,
-					     LeapioraidSepReq_t *mpi_request);
+					     struct LeapioraidSepRep_t *mpi_reply,
+					     struct LeapioraidSepReq_t *mpi_request);
 void leapioraid_base_validate_event_type(struct LEAPIORAID_ADAPTER *ioc,
 					 u32 *event_type);
 void leapioraid_halt_firmware(struct LEAPIORAID_ADAPTER *ioc, u8 set_fault);
@@ -1117,101 +1117,100 @@ u8 leapioraid_config_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 int leapioraid_config_get_number_hba_phys(struct LEAPIORAID_ADAPTER *ioc,
 					  u8 *num_phys);
 int leapioraid_config_get_manufacturing_pg0(struct LEAPIORAID_ADAPTER *ioc,
-					    LeapioraidCfgRep_t *mpi_reply,
-					    LeapioraidManP0_t *
+					    struct LeapioraidCfgRep_t *mpi_reply,
+					    struct LeapioraidManP0_t *
 					    config_page);
 int leapioraid_config_get_manufacturing_pg7(struct LEAPIORAID_ADAPTER *ioc,
-					    LeapioraidCfgRep_t *mpi_reply,
-					    LeapioraidManP7_t *
-					    config_page, u16 sz);
+					    struct LeapioraidCfgRep_t *mpi_reply,
+					    struct LeapioraidManP7_t *config_page, u16 sz);
 int leapioraid_config_get_manufacturing_pg10(struct LEAPIORAID_ADAPTER *ioc,
-					     LeapioraidCfgRep_t *mpi_reply,
+					     struct LeapioraidCfgRep_t *mpi_reply,
 					     struct LeapioraidManuP10_t
 					     *config_page);
 int leapioraid_config_get_manufacturing_pg11(struct LEAPIORAID_ADAPTER *ioc,
-					     LeapioraidCfgRep_t *mpi_reply,
+					     struct LeapioraidCfgRep_t *mpi_reply,
 					     struct LeapioraidManuP11_t
 					     *config_page);
 int leapioraid_config_set_manufacturing_pg11(struct LEAPIORAID_ADAPTER *ioc,
-					     LeapioraidCfgRep_t *mpi_reply,
+					     struct LeapioraidCfgRep_t *mpi_reply,
 					     struct LeapioraidManuP11_t
 					     *config_page);
 int leapioraid_config_get_bios_pg2(struct LEAPIORAID_ADAPTER *ioc,
-				   LeapioraidCfgRep_t *mpi_reply,
-				   LeapioraidBiosP2_t *config_page);
+				   struct LeapioraidCfgRep_t *mpi_reply,
+				   struct LeapioraidBiosP2_t *config_page);
 int leapioraid_config_get_bios_pg3(struct LEAPIORAID_ADAPTER *ioc,
-				   LeapioraidCfgRep_t *mpi_reply,
-				   LeapioraidBiosP3_t *config_page);
+				   struct LeapioraidCfgRep_t *mpi_reply,
+				   struct LeapioraidBiosP3_t *config_page);
 int leapioraid_config_get_iounit_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidIOUnitP0_t *config_page);
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidIOUnitP0_t *config_page);
 int leapioraid_config_get_sas_device_pg0(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidCfgRep_t *mpi_reply,
-					 LeapioraidSasDevP0_t *config_page,
+					 struct LeapioraidCfgRep_t *mpi_reply,
+					 struct LeapioraidSasDevP0_t *config_page,
 					 u32 form, u32 handle);
 int leapioraid_config_get_sas_iounit_pg0(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidCfgRep_t *mpi_reply,
-					 LeapioraidSasIOUnitP0_t *config_page,
+					 struct LeapioraidCfgRep_t *mpi_reply,
+					 struct LeapioraidSasIOUnitP0_t *config_page,
 					 u16 sz);
 int leapioraid_config_get_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidIOUnitP1_t *config_page);
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidIOUnitP1_t *config_page);
 int leapioraid_config_set_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidIOUnitP1_t *config_page);
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidIOUnitP1_t *config_page);
 int leapioraid_config_get_iounit_pg8(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidCfgRep_t *mpi_reply,
-				     LeapioraidIOUnitP8_t *config_page);
+				     struct LeapioraidCfgRep_t *mpi_reply,
+				     struct LeapioraidIOUnitP8_t *config_page);
 int leapioraid_config_get_sas_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidCfgRep_t *mpi_reply,
-					 LeapioraidSasIOUnitP1_t *config_page,
+					 struct LeapioraidCfgRep_t *mpi_reply,
+					 struct LeapioraidSasIOUnitP1_t *config_page,
 					 u16 sz);
 int leapioraid_config_set_sas_iounit_pg1(struct LEAPIORAID_ADAPTER *ioc,
-					 LeapioraidCfgRep_t *mpi_reply,
-					 LeapioraidSasIOUnitP1_t *config_page,
+					 struct LeapioraidCfgRep_t *mpi_reply,
+					 struct LeapioraidSasIOUnitP1_t *config_page,
 					 u16 sz);
 int leapioraid_config_get_ioc_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				  LeapioraidCfgRep_t *mpi_reply,
-				  LeapioraidIOCP1_t *config_page);
+				  struct LeapioraidCfgRep_t *mpi_reply,
+				  struct LeapioraidIOCP1_t *config_page);
 int leapioraid_config_set_ioc_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				  LeapioraidCfgRep_t *mpi_reply,
-				  LeapioraidIOCP1_t *config_page);
+				  struct LeapioraidCfgRep_t *mpi_reply,
+				  struct LeapioraidIOCP1_t *config_page);
 int leapioraid_config_get_ioc_pg8(struct LEAPIORAID_ADAPTER *ioc,
-				  LeapioraidCfgRep_t *mpi_reply,
-				  LeapioraidIOCP8_t *config_page);
+				  struct LeapioraidCfgRep_t *mpi_reply,
+				  struct LeapioraidIOCP8_t *config_page);
 int leapioraid_config_get_expander_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				       LeapioraidCfgRep_t *mpi_reply,
-				       LeapioraidExpanderP0_t *config_page,
+				       struct LeapioraidCfgRep_t *mpi_reply,
+				       struct LeapioraidExpanderP0_t *config_page,
 				       u32 form, u32 handle);
 int leapioraid_config_get_expander_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				       LeapioraidCfgRep_t *mpi_reply,
-				       LeapioraidExpanderP1_t *config_page,
+				       struct LeapioraidCfgRep_t *mpi_reply,
+				       struct LeapioraidExpanderP1_t *config_page,
 				       u32 phy_number, u16 handle);
 int leapioraid_config_get_enclosure_pg0(struct LEAPIORAID_ADAPTER *ioc,
-					LeapioraidCfgRep_t *mpi_reply,
-					LeapioraidSasEncP0_t *
+					struct LeapioraidCfgRep_t *mpi_reply,
+					struct LeapioraidSasEncP0_t *
 					config_page, u32 form, u32 handle);
 int leapioraid_config_get_phy_pg0(struct LEAPIORAID_ADAPTER *ioc,
-				  LeapioraidCfgRep_t *mpi_reply,
-				  LeapioraidSasPhyP0_t *config_page,
+				  struct LeapioraidCfgRep_t *mpi_reply,
+				  struct LeapioraidSasPhyP0_t *config_page,
 				  u32 phy_number);
 int leapioraid_config_get_phy_pg1(struct LEAPIORAID_ADAPTER *ioc,
-				  LeapioraidCfgRep_t *mpi_reply,
-				  LeapioraidSasPhyP1_t *config_page,
+				  struct LeapioraidCfgRep_t *mpi_reply,
+				  struct LeapioraidSasPhyP1_t *config_page,
 				  u32 phy_number);
 int leapioraid_config_get_raid_volume_pg1(struct LEAPIORAID_ADAPTER *ioc,
-					  LeapioraidCfgRep_t *mpi_reply,
-					  LeapioraidRaidVolP1_t *config_page,
+					  struct LeapioraidCfgRep_t *mpi_reply,
+					  struct LeapioraidRaidVolP1_t *config_page,
 					  u32 form, u32 handle);
 int leapioraid_config_get_number_pds(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 				     u8 *num_pds);
 int leapioraid_config_get_raid_volume_pg0(struct LEAPIORAID_ADAPTER *ioc,
-					  LeapioraidCfgRep_t *mpi_reply,
-					  LeapioraidRaidVolP0_t *config_page,
+					  struct LeapioraidCfgRep_t *mpi_reply,
+					  struct LeapioraidRaidVolP0_t *config_page,
 					  u32 form, u32 handle, u16 sz);
 int leapioraid_config_get_phys_disk_pg0(struct LEAPIORAID_ADAPTER *ioc,
-					LeapioraidCfgRep_t *mpi_reply,
-					LeapioraidRaidPDP0_t *
+					struct LeapioraidCfgRep_t *mpi_reply,
+					struct LeapioraidRaidPDP0_t *
 					config_page, u32 form,
 					u32 form_specific);
 int leapioraid_config_get_volume_handle(struct LEAPIORAID_ADAPTER *ioc,
@@ -1231,7 +1230,7 @@ void leapioraid_ctl_reset_handler(struct LEAPIORAID_ADAPTER *ioc,
 u8 leapioraid_ctl_event_callback(struct LEAPIORAID_ADAPTER *ioc, u8 msix_index,
 				 u32 reply);
 void leapioraid_ctl_add_to_event_log(struct LEAPIORAID_ADAPTER *ioc,
-				     LeapioraidEventNotificationRep_t *
+				     struct LeapioraidEventNotificationRep_t *
 				     mpi_reply);
 void leapioraid_ctl_clear_outstanding_ioctls(struct LEAPIORAID_ADAPTER *ioc);
 int leapioraid_ctl_release(struct inode *inode, struct file *filep);
@@ -1247,11 +1246,11 @@ void leapioraid_transport_port_remove(struct LEAPIORAID_ADAPTER *ioc,
 				      struct leapioraid_hba_port *port);
 int leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy
 				      *leapioraid_phy,
-				      LeapioraidSasPhyP0_t phy_pg0,
+				      struct LeapioraidSasPhyP0_t phy_pg0,
 				      struct device *parent_dev);
 int leapioraid_transport_add_expander_phy(struct LEAPIORAID_ADAPTER *ioc,
 					  struct leapioraid_sas_phy *leapioraid_phy,
-					  LeapioraidExpanderP1_t expander_pg1,
+					  struct LeapioraidExpanderP1_t expander_pg1,
 					  struct device *parent_dev);
 void leapioraid_transport_update_links(struct LEAPIORAID_ADAPTER *ioc,
 				       u64 sas_address, u16 handle,

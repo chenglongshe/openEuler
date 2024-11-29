@@ -193,9 +193,9 @@ enum leapioraid_block_state {
 static void
 leapioraid_ctl_display_some_debug(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 			char *calling_function_name,
-			LeapioraidDefaultRep_t *mpi_reply)
+			struct LeapioraidDefaultRep_t *mpi_reply)
 {
-	LeapioraidCfgReq_t *mpi_request;
+	struct LeapioraidCfgReq_t *mpi_request;
 	char *desc = NULL;
 
 	if (!(ioc->logging_level & LEAPIORAID_DEBUG_IOCTL))
@@ -204,8 +204,8 @@ leapioraid_ctl_display_some_debug(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 	switch (mpi_request->Function) {
 	case LEAPIORAID_FUNC_SCSI_IO_REQUEST:
 		{
-			LeapioSCSIIOReq_t *scsi_request =
-			    (LeapioSCSIIOReq_t *) mpi_request;
+			struct LeapioSCSIIOReq_t *scsi_request =
+			    (struct LeapioSCSIIOReq_t *) mpi_request;
 			snprintf(ioc->tmp_string, LEAPIORAID_STRING_LENGTH,
 				 "scsi_io, cmd(0x%02x), cdb_len(%d)",
 				 scsi_request->CDB.CDB32[0],
@@ -224,8 +224,8 @@ leapioraid_ctl_display_some_debug(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 		break;
 	case LEAPIORAID_FUNC_CONFIG:
 		{
-			LeapioraidCfgReq_t *config_request =
-			    (LeapioraidCfgReq_t *) mpi_request;
+			struct LeapioraidCfgReq_t *config_request =
+			    (struct LeapioraidCfgReq_t *) mpi_request;
 			snprintf(ioc->tmp_string, LEAPIORAID_STRING_LENGTH,
 				 "config, type(0x%02x), ext_type(0x%02x), number(%d)",
 				 (config_request->Header.PageType &
@@ -255,8 +255,8 @@ leapioraid_ctl_display_some_debug(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 		break;
 	case LEAPIORAID_FUNC_RAID_SCSI_IO_PASSTHROUGH:
 		{
-			LeapioSCSIIOReq_t *scsi_request =
-			    (LeapioSCSIIOReq_t *) mpi_request;
+			struct LeapioSCSIIOReq_t *scsi_request =
+			    (struct LeapioSCSIIOReq_t *) mpi_request;
 			snprintf(ioc->tmp_string, LEAPIORAID_STRING_LENGTH,
 				 "raid_pass, cmd(0x%02x), cdb_len(%d)",
 				 scsi_request->CDB.CDB32[0],
@@ -288,8 +288,8 @@ leapioraid_ctl_display_some_debug(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 	if (mpi_request->Function == LEAPIORAID_FUNC_SCSI_IO_REQUEST ||
 	    mpi_request->Function ==
 	    LEAPIORAID_FUNC_RAID_SCSI_IO_PASSTHROUGH) {
-		LeapioraidSCSIIORep_t *scsi_reply =
-		    (LeapioraidSCSIIORep_t *) mpi_reply;
+		struct LeapioraidSCSIIORep_t *scsi_reply =
+		    (struct LeapioraidSCSIIORep_t *) mpi_reply;
 		struct leapioraid_sas_device *sas_device = NULL;
 
 		sas_device = leapioraid_get_sdev_by_handle(ioc,
@@ -317,8 +317,8 @@ u8
 leapioraid_ctl_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 		    u32 reply)
 {
-	LeapioraidDefaultRep_t *mpi_reply;
-	LeapioraidSCSIIORep_t *scsiio_reply;
+	struct LeapioraidDefaultRep_t *mpi_reply;
+	struct LeapioraidSCSIIORep_t *scsiio_reply;
 	const void *sense_data;
 	u32 sz;
 
@@ -335,7 +335,7 @@ leapioraid_ctl_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 		if (mpi_reply->Function == LEAPIORAID_FUNC_SCSI_IO_REQUEST ||
 		    mpi_reply->Function ==
 		    LEAPIORAID_FUNC_RAID_SCSI_IO_PASSTHROUGH) {
-			scsiio_reply = (LeapioraidSCSIIORep_t *) mpi_reply;
+			scsiio_reply = (struct LeapioraidSCSIIORep_t *) mpi_reply;
 			if (scsiio_reply->SCSIState &
 			    LEAPIORAID_SCSI_STATE_AUTOSENSE_VALID) {
 				sz = min_t(u32, SCSI_SENSE_BUFFERSIZE,
@@ -368,7 +368,7 @@ static int leapioraid_ctl_check_event_type(struct LEAPIORAID_ADAPTER *ioc, u16 e
 
 void
 leapioraid_ctl_add_to_event_log(struct LEAPIORAID_ADAPTER *ioc,
-				LeapioraidEventNotificationRep_t *mpi_reply)
+				struct LeapioraidEventNotificationRep_t *mpi_reply)
 {
 	struct LEAPIORAID_IOCTL_EVENTS *event_log;
 	u16 event;
@@ -403,7 +403,7 @@ u8
 leapioraid_ctl_event_callback(struct LEAPIORAID_ADAPTER *ioc, u8 msix_index,
 			      u32 reply)
 {
-	LeapioraidEventNotificationRep_t *mpi_reply;
+	struct LeapioraidEventNotificationRep_t *mpi_reply;
 
 	mpi_reply = leapioraid_base_get_reply_virt_addr(ioc, reply);
 	if (mpi_reply)
@@ -491,14 +491,14 @@ leapioraid_ctl_poll(struct file *filep, poll_table *wait)
 static int
 leapioraid_ctl_set_task_mid(struct LEAPIORAID_ADAPTER *ioc,
 		  struct leapio_ioctl_command *karg,
-		  LeapioraidSCSITmgReq_t *tm_request)
+		  struct LeapioraidSCSITmgReq_t *tm_request)
 {
 	u8 found = 0;
 	u16 smid;
 	u16 handle;
 	struct scsi_cmnd *scmd;
 	struct LEAPIORAID_DEVICE *priv_data;
-	LeapioraidSCSITmgRep_t *tm_reply;
+	struct LeapioraidSCSITmgRep_t *tm_reply;
 	u32 sz;
 	u32 lun;
 	char *desc = NULL;
@@ -543,7 +543,7 @@ leapioraid_ctl_set_task_mid(struct LEAPIORAID_ADAPTER *ioc,
 		tm_reply->Function = LEAPIORAID_FUNC_SCSI_TASK_MGMT;
 		tm_reply->TaskType = tm_request->TaskType;
 		tm_reply->MsgLength =
-		    sizeof(LeapioraidSCSITmgRep_t) / 4;
+		    sizeof(struct LeapioraidSCSITmgRep_t) / 4;
 		tm_reply->VP_ID = tm_request->VP_ID;
 		tm_reply->VF_ID = tm_request->VF_ID;
 		sz = min_t(u32, karg->max_reply_bytes, ioc->reply_sz);
@@ -564,8 +564,8 @@ static long
 leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 			struct leapio_ioctl_command karg, void __user *mf)
 {
-	LeapioraidReqHeader_t *mpi_request = NULL, *request;
-	LeapioraidDefaultRep_t *mpi_reply;
+	struct LeapioraidReqHeader_t *mpi_request = NULL, *request;
+	struct LeapioraidDefaultRep_t *mpi_reply;
 	u16 smid;
 	unsigned long timeout;
 	u8 issue_reset;
@@ -676,8 +676,8 @@ leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 	case LEAPIORAID_FUNC_SCSI_IO_REQUEST:
 	case LEAPIORAID_FUNC_RAID_SCSI_IO_PASSTHROUGH:
 		{
-			LeapioSCSIIOReq_t *scsiio_request =
-			    (LeapioSCSIIOReq_t *) request;
+			struct LeapioSCSIIOReq_t *scsiio_request =
+			    (struct LeapioSCSIIOReq_t *) request;
 			scsiio_request->SenseBufferLength =
 			    SCSI_SENSE_BUFFERSIZE;
 			scsiio_request->SenseBufferLowAddress =
@@ -704,8 +704,8 @@ leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 		}
 	case LEAPIORAID_FUNC_SCSI_TASK_MGMT:
 		{
-			LeapioraidSCSITmgReq_t *tm_request =
-			    (LeapioraidSCSITmgReq_t *) request;
+			struct LeapioraidSCSITmgReq_t *tm_request =
+			    (struct LeapioraidSCSITmgReq_t *) request;
 			dtmprintk(ioc,
 				  pr_info("%s TASK_MGMT: handle(0x%04x), task_type(0x%02x)\n",
 					 ioc->name,
@@ -742,8 +742,8 @@ leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 		}
 	case LEAPIORAID_FUNC_SMP_PASSTHROUGH:
 		{
-			LeapioraidSmpPassthroughReq_t *smp_request =
-			    (LeapioraidSmpPassthroughReq_t *) mpi_request;
+			struct LeapioraidSmpPassthroughReq_t *smp_request =
+			    (struct LeapioraidSmpPassthroughReq_t *) mpi_request;
 			u8 *data;
 
 			if (!ioc->multipath_on_hba)
@@ -798,8 +798,8 @@ leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 		}
 	case LEAPIORAID_FUNC_SAS_IO_UNIT_CONTROL:
 		{
-			LeapioraidSasIoUnitControlReq_t *sasiounit_request =
-			    (LeapioraidSasIoUnitControlReq_t *) mpi_request;
+			struct LeapioraidSasIoUnitControlReq_t *sasiounit_request =
+			    (struct LeapioraidSasIoUnitControlReq_t *) mpi_request;
 			if (sasiounit_request->Operation ==
 			    LEAPIORAID_SAS_OP_PHY_HARD_RESET
 			    || sasiounit_request->Operation ==
@@ -820,8 +820,8 @@ leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 		timeout = LEAPIORAID_IOCTL_DEFAULT_TIMEOUT;
 	wait_for_completion_timeout(&ioc->ctl_cmds.done, timeout * HZ);
 	if (mpi_request->Function == LEAPIORAID_FUNC_SCSI_TASK_MGMT) {
-		LeapioraidSCSITmgReq_t *tm_request =
-		    (LeapioraidSCSITmgReq_t *) mpi_request;
+		struct LeapioraidSCSITmgReq_t *tm_request =
+		    (struct LeapioraidSCSITmgReq_t *) mpi_request;
 		leapioraid_scsihost_clear_tm_flag(ioc,
 						  le16_to_cpu(tm_request->DevHandle));
 	} else if ((mpi_request->Function == LEAPIORAID_FUNC_SMP_PASSTHROUGH
@@ -840,8 +840,8 @@ leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 	mpi_reply = ioc->ctl_cmds.reply;
 	if (mpi_reply->Function == LEAPIORAID_FUNC_SCSI_TASK_MGMT &&
 	    (ioc->logging_level & LEAPIORAID_DEBUG_TM)) {
-		LeapioraidSCSITmgRep_t *tm_reply =
-		    (LeapioraidSCSITmgRep_t *) mpi_reply;
+		struct LeapioraidSCSITmgRep_t *tm_reply =
+		    (struct LeapioraidSCSITmgRep_t *) mpi_reply;
 		pr_info("%s TASK_MGMT: IOCStatus(0x%04x), IOCLogInfo(0x%08x), TerminationCount(0x%08x)\n",
 		       ioc->name,
 		       le16_to_cpu(tm_reply->IOCStatus),
@@ -1548,8 +1548,8 @@ leapioraid_ctl_tm_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
 	struct leapioraid_raid_device *raid_device;
 	u16 smid_task_abort;
 	u16 handle;
-	LeapioraidSCSITmgReq_t *mpi_request;
-	LeapioraidSCSITmgRep_t *mpi_reply =
+	struct LeapioraidSCSITmgReq_t *mpi_request;
+	struct LeapioraidSCSITmgRep_t *mpi_reply =
 	    leapioraid_base_get_reply_virt_addr(ioc, reply);
 
 	rc = 1;
@@ -1599,7 +1599,7 @@ leapioraid_ctl_tm_sysfs(struct LEAPIORAID_ADAPTER *ioc, u8 task_type)
 {
 	struct leapioraid_sas_device *sas_device;
 	struct leapioraid_raid_device *raid_device;
-	LeapioraidSCSITmgReq_t *mpi_request;
+	struct LeapioraidSCSITmgReq_t *mpi_request;
 	u16 smid, handle, hpr_smid;
 	struct LEAPIORAID_DEVICE *device_priv_data;
 	struct LEAPIORAID_TARGET *target_priv_data;
@@ -1668,7 +1668,7 @@ leapioraid_ctl_tm_sysfs(struct LEAPIORAID_ADAPTER *ioc, u8 task_type)
 			mpi_request =
 			    leapioraid_base_get_msg_frame(ioc, hpr_smid);
 			memset(mpi_request, 0,
-			       sizeof(LeapioraidSCSITmgReq_t));
+			       sizeof(struct LeapioraidSCSITmgReq_t));
 			mpi_request->Function = LEAPIORAID_FUNC_SCSI_TASK_MGMT;
 			mpi_request->DevHandle = cpu_to_le16(handle);
 			mpi_request->TaskType =
@@ -1721,7 +1721,7 @@ leapioraid_ctl_tm_sysfs(struct LEAPIORAID_ADAPTER *ioc, u8 task_type)
 			mpi_request =
 			    leapioraid_base_get_msg_frame(ioc, hpr_smid);
 			memset(mpi_request, 0,
-			       sizeof(LeapioraidSCSITmgReq_t));
+			       sizeof(struct LeapioraidSCSITmgReq_t));
 			mpi_request->Function = LEAPIORAID_FUNC_SCSI_TASK_MGMT;
 			mpi_request->DevHandle =
 			    cpu_to_le16(sas_device->handle);
@@ -1771,7 +1771,7 @@ leapioraid_ctl_tm_sysfs(struct LEAPIORAID_ADAPTER *ioc, u8 task_type)
 			mpi_request =
 			    leapioraid_base_get_msg_frame(ioc, hpr_smid);
 			memset(mpi_request, 0,
-			       sizeof(LeapioraidSCSITmgReq_t));
+			       sizeof(struct LeapioraidSCSITmgReq_t));
 			mpi_request->Function = LEAPIORAID_FUNC_SCSI_TASK_MGMT;
 			mpi_request->DevHandle =
 			    cpu_to_le16(raid_device->handle);
@@ -1830,7 +1830,7 @@ leapioraid_ctl_tm_sysfs(struct LEAPIORAID_ADAPTER *ioc, u8 task_type)
 			mpi_request =
 			    leapioraid_base_get_msg_frame(ioc, hpr_smid);
 			memset(mpi_request, 0,
-			       sizeof(LeapioraidSCSITmgReq_t));
+			       sizeof(struct LeapioraidSCSITmgReq_t));
 			mpi_request->Function = LEAPIORAID_FUNC_SCSI_TASK_MGMT;
 			mpi_request->DevHandle = cpu_to_le16(handle);
 			mpi_request->TaskType = task_type;
