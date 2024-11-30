@@ -327,18 +327,9 @@ struct blk_mq_ops {
 	 */
 	void (*commit_rqs)(struct blk_mq_hw_ctx *);
 
-	/**
-	 * @get_budget: Reserve budget before queue request, once .queue_rq is
-	 * run, it is driver's responsibility to release the
-	 * reserved budget. Also we have to handle failure case
-	 * of .get_budget for avoiding I/O deadlock.
-	 */
-	bool (*get_budget)(struct request_queue *);
+	KABI_DEPRECATE_FN(bool, get_budget, struct request_queue *)
 
-	/**
-	 * @put_budget: Release the reserved budget.
-	 */
-	void (*put_budget)(struct request_queue *);
+	KABI_DEPRECATE_FN(void, put_budget, struct request_queue *)
 
 	/**
 	 * @timeout: Called on request timeout.
@@ -411,10 +402,27 @@ struct blk_mq_ops {
 	void (*show_rq)(struct seq_file *m, struct request *rq);
 #endif
 
-	KABI_RESERVE(1)
-	KABI_RESERVE(2)
-	KABI_RESERVE(3)
-	KABI_RESERVE(4)
+	/**
+	 * @set_rq_budget_token: store rq's budget token
+	 */
+	KABI_USE(1, void (*set_rq_budget_token)(struct request *, int))
+	/**
+	 * @get_rq_budget_token: retrieve rq's budget token
+	 */
+	KABI_USE(2, int (*get_rq_budget_token)(struct request *))
+
+	/**
+	 * @get_budget: Reserve budget before queue request, once .queue_rq is
+	 * run, it is driver's responsibility to release the
+	 * reserved budget. Also we have to handle failure case
+	 * of .get_budget for avoiding I/O deadlock.
+	 */
+	KABI_USE(3, int (*get_budget)(struct request_queue *))
+
+	/**
+	 * @put_budget: Release the reserved budget.
+	 */
+	KABI_USE(4, void (*put_budget)(struct request_queue *, int))
 	KABI_RESERVE(5)
 	KABI_RESERVE(6)
 	KABI_RESERVE(7)

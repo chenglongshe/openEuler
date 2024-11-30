@@ -41,7 +41,7 @@ struct scsi_host_template {
 	 *
 	 * Status: OPTIONAL
 	 */
-	const char *(* info)(struct Scsi_Host *);
+	const char *(*info)(struct Scsi_Host *);
 
 	/*
 	 * Ioctl interface
@@ -53,7 +53,7 @@ struct scsi_host_template {
 
 
 #ifdef CONFIG_COMPAT
-	/* 
+	/*
 	 * Compat handler. Handle 32bit ABI.
 	 * When unknown ioctl is passed return -ENOIOCTLCMD.
 	 *
@@ -66,51 +66,9 @@ struct scsi_host_template {
 	int (*init_cmd_priv)(struct Scsi_Host *shost, struct scsi_cmnd *cmd);
 	int (*exit_cmd_priv)(struct Scsi_Host *shost, struct scsi_cmnd *cmd);
 
-	/*
-	 * The queuecommand function is used to queue up a scsi
-	 * command block to the LLDD.  When the driver finished
-	 * processing the command the done callback is invoked.
-	 *
-	 * If queuecommand returns 0, then the driver has accepted the
-	 * command.  It must also push it to the HBA if the scsi_cmnd
-	 * flag SCMD_LAST is set, or if the driver does not implement
-	 * commit_rqs.  The done() function must be called on the command
-	 * when the driver has finished with it. (you may call done on the
-	 * command before queuecommand returns, but in this case you
-	 * *must* return 0 from queuecommand).
-	 *
-	 * Queuecommand may also reject the command, in which case it may
-	 * not touch the command and must not call done() for it.
-	 *
-	 * There are two possible rejection returns:
-	 *
-	 *   SCSI_MLQUEUE_DEVICE_BUSY: Block this device temporarily, but
-	 *   allow commands to other devices serviced by this host.
-	 *
-	 *   SCSI_MLQUEUE_HOST_BUSY: Block all devices served by this
-	 *   host temporarily.
-	 *
-         * For compatibility, any other non-zero return is treated the
-         * same as SCSI_MLQUEUE_HOST_BUSY.
-	 *
-	 * NOTE: "temporarily" means either until the next command for#
-	 * this device/host completes, or a period of time determined by
-	 * I/O pressure in the system if there are no other outstanding
-	 * commands.
-	 *
-	 * STATUS: REQUIRED
-	 */
-	int (* queuecommand)(struct Scsi_Host *, struct scsi_cmnd *);
+	KABI_DEPRECATE_FN(int, queuecommand, struct Scsi_Host *, struct scsi_cmnd *)
 
-	/*
-	 * The commit_rqs function is used to trigger a hardware
-	 * doorbell after some requests have been queued with
-	 * queuecommand, when an error is encountered before sending
-	 * the request with SCMD_LAST set.
-	 *
-	 * STATUS: OPTIONAL
-	 */
-	void (*commit_rqs)(struct Scsi_Host *, u16);
+	KABI_DEPRECATE_FN(void, commit_rqs, struct Scsi_Host *, u16)
 
 	/*
 	 * This is an error handling strategy routine.  You don't need to
@@ -479,18 +437,67 @@ struct scsi_host_template {
 	 */
 	u64 vendor_id;
 
-	/*
-	 * Additional per-command data allocated for the driver.
-	 */
-	unsigned int cmd_size;
+	KABI_DEPRECATE(unsigned int, cmd_size)
 	struct scsi_host_cmd_pool *cmd_pool;
 
 	/* Delay for runtime autosuspend */
 	int rpm_autosuspend_delay;
 
-	KABI_RESERVE(1)
-	KABI_RESERVE(2)
-	KABI_RESERVE(3)
+	/*
+	 * Put fields referenced in IO submission path together in
+	 * same cacheline
+	 */
+
+	/*
+	 * Additional per-command data allocated for the driver.
+	 */
+	KABI_USE(1, unsigned int cmd_size)
+
+	/*
+	 * The queuecommand function is used to queue up a scsi
+	 * command block to the LLDD.  When the driver finished
+	 * processing the command the done callback is invoked.
+	 *
+	 * If queuecommand returns 0, then the driver has accepted the
+	 * command.  It must also push it to the HBA if the scsi_cmnd
+	 * flag SCMD_LAST is set, or if the driver does not implement
+	 * commit_rqs.  The done() function must be called on the command
+	 * when the driver has finished with it. (you may call done on the
+	 * command before queuecommand returns, but in this case you
+	 * *must* return 0 from queuecommand).
+	 *
+	 * Queuecommand may also reject the command, in which case it may
+	 * not touch the command and must not call done() for it.
+	 *
+	 * There are two possible rejection returns:
+	 *
+	 *   SCSI_MLQUEUE_DEVICE_BUSY: Block this device temporarily, but
+	 *   allow commands to other devices serviced by this host.
+	 *
+	 *   SCSI_MLQUEUE_HOST_BUSY: Block all devices served by this
+	 *   host temporarily.
+	 *
+         * For compatibility, any other non-zero return is treated the
+         * same as SCSI_MLQUEUE_HOST_BUSY.
+	 *
+	 * NOTE: "temporarily" means either until the next command for#
+	 * this device/host completes, or a period of time determined by
+	 * I/O pressure in the system if there are no other outstanding
+	 * commands.
+	 *
+	 * STATUS: REQUIRED
+	 */
+	KABI_USE(2, int (*queuecommand)(struct Scsi_Host *, struct scsi_cmnd *))
+
+	/*
+	 * The commit_rqs function is used to trigger a hardware
+	 * doorbell after some requests have been queued with
+	 * queuecommand, when an error is encountered before sending
+	 * the request with SCMD_LAST set.
+	 *
+	 * STATUS: OPTIONAL
+	 */
+	KABI_USE(3, void (*commit_rqs)(struct Scsi_Host *, u16))
 	KABI_RESERVE(4)
 };
 
