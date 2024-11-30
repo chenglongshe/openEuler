@@ -1,8 +1,6 @@
 /*
- * Broadcom NetXtreme-E RoCE driver.
- *
- * Copyright (c) 2016 - 2017, Broadcom. All rights reserved.  The term
- * Broadcom refers to Broadcom Limited and/or its subsidiaries.
+ * Copyright (c) 2015-2023, Broadcom. All rights reserved.  The term
+ * Broadcom refers to Broadcom Inc. and/or its subsidiaries.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -33,17 +31,39 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * Author: Eddie Wai <eddie.wai@broadcom.com>
+ *
  * Description: QPLib resource manager (header)
  */
 
 #ifndef __BNXT_QPLIB_RES_H__
 #define __BNXT_QPLIB_RES_H__
 
+#include "bnxt_dbr.h"
+#include "bnxt_ulp.h"
+
 extern const struct bnxt_qplib_gid bnxt_qplib_gid_zero;
 
 #define CHIP_NUM_57508		0x1750
 #define CHIP_NUM_57504		0x1751
 #define CHIP_NUM_57502		0x1752
+#define CHIP_NUM_58818          0xd818
+#define CHIP_NUM_57608		0x1760
+
+#define BNXT_QPLIB_MAX_QPC_COUNT	(64 * 1024)
+#define BNXT_QPLIB_MAX_SRQC_COUNT	(64 * 1024)
+#define BNXT_QPLIB_MAX_CQ_COUNT		(64 * 1024)
+#define BNXT_QPLIB_MAX_CQ_COUNT_P5	(128 * 1024)
+
+/* TODO:Remove this temporary define once HSI change is merged */
+#define BNXT_QPLIB_DBR_VALID (0x1UL << 26)
+#define BNXT_QPLIB_DBR_EPOCH_SHIFT   24
+#define BNXT_QPLIB_DBR_TOGGLE_SHIFT  25
+
+#define BNXT_QPLIB_DBR_PF_DB_OFFSET	0x10000
+#define BNXT_QPLIB_DBR_VF_DB_OFFSET	0x4000
+
+#define BNXT_QPLIB_DBR_KEY_INVALID	-1
 
 enum bnxt_qplib_wqe_mode {
 	BNXT_QPLIB_WQE_MODE_STATIC	= 0x00,
@@ -51,18 +71,109 @@ enum bnxt_qplib_wqe_mode {
 	BNXT_QPLIB_WQE_MODE_INVALID	= 0x02
 };
 
+#define BNXT_RE_PUSH_MODE_NONE	0
+#define BNXT_RE_PUSH_MODE_WCB	1
+#define BNXT_RE_PUSH_MODE_PPP	2
+#define BNXT_RE_PUSH_ENABLED(mode) ((mode) == BNXT_RE_PUSH_MODE_WCB ||\
+				    (mode) == BNXT_RE_PUSH_MODE_PPP)
+#define BNXT_RE_PPP_ENABLED(cctx) ((cctx)->modes.db_push_mode ==\
+				   BNXT_RE_PUSH_MODE_PPP)
+
 struct bnxt_qplib_drv_modes {
 	u8	wqe_mode;
-	/* Other modes to follow here */
+	u8	te_bypass;
+	u8	db_push_mode;
+	/* To control advanced cc params display in configfs */
+	u8	cc_pr_mode;
+	/* Other modes to follow here e.g. GSI QP mode */
+	u8	dbr_pacing;
+	u8	dbr_pacing_ext;
+	u8	dbr_drop_recov;
+	u8	dbr_primary_pf;
+	u8	dbr_pacing_v0;
+	u8	hdbr_enabled;
+	u8	steering_tag_supported;
+	u8	express_mode_supported;
 };
 
 struct bnxt_qplib_chip_ctx {
-	u16	chip_num;
-	u8	chip_rev;
-	u8	chip_metal;
+	u16     chip_num;
+	u8      chip_rev;
+	u8      chip_metal;
+	u64	hwrm_intf_ver;
+	struct bnxt_qplib_drv_modes	modes;
+	u32	dbr_stat_db_fifo;
+	u32	dbr_aeq_arm_reg;
+	u32	dbr_throttling_reg;
 	u16	hw_stats_size;
-	struct bnxt_qplib_drv_modes modes;
+	u16	hwrm_cmd_max_timeout;
 };
+
+static inline bool _is_chip_num_p7(u16 chip_num)
+{
+	return (chip_num == CHIP_NUM_58818 ||
+		chip_num == CHIP_NUM_57608);
+}
+
+static inline bool _is_chip_p7(struct bnxt_qplib_chip_ctx *cctx)
+{
+	return _is_chip_num_p7(cctx->chip_num);
+}
+
+/* SR2 is Gen P5 */
+static inline bool _is_chip_gen_p5(struct bnxt_qplib_chip_ctx *cctx)
+{
+	return (cctx->chip_num == CHIP_NUM_57508 ||
+		cctx->chip_num == CHIP_NUM_57504 ||
+		cctx->chip_num == CHIP_NUM_57502);
+}
+
+static inline bool _is_chip_gen_p5_p7(struct bnxt_qplib_chip_ctx *cctx)
+{
+	return (_is_chip_gen_p5(cctx) || _is_chip_p7(cctx));
+}
+
+static inline bool _is_wqe_mode_variable(struct bnxt_qplib_chip_ctx *cctx)
+{
+	return cctx->modes.wqe_mode == BNXT_QPLIB_WQE_MODE_VARIABLE;
+}
+
+struct bnxt_qplib_db_pacing_data {
+	u32 do_pacing;
+	u32 pacing_th;
+	u32 dev_err_state;
+	u32 alarm_th;
+	u32 grc_reg_offset;
+	u32 fifo_max_depth;
+	u32 fifo_room_mask;
+	u8  fifo_room_shift;
+};
+
+static inline u8 bnxt_qplib_dbr_pacing_en(struct bnxt_qplib_chip_ctx *cctx)
+{
+	return cctx->modes.dbr_pacing;
+}
+
+static inline u8 bnxt_qplib_dbr_pacing_ext_en(struct bnxt_qplib_chip_ctx *cctx)
+{
+	return cctx->modes.dbr_pacing_ext;
+}
+
+static inline u8 bnxt_qplib_dbr_pacing_is_primary_pf(struct bnxt_qplib_chip_ctx *cctx)
+{
+	return cctx->modes.dbr_primary_pf;
+}
+
+static inline void bnxt_qplib_dbr_pacing_set_primary_pf
+		(struct bnxt_qplib_chip_ctx *cctx, u8 val)
+{
+	cctx->modes.dbr_primary_pf = val;
+}
+
+/* Defines for handling the HWRM version check */
+#define HWRM_VERSION_DEV_ATTR_MAX_DPI	0x1000A0000000D
+#define HWRM_VERSION_ROCE_STATS_FN_ID	0x1000A00000045
+#define HWRM_VERSION_ROCE_QP_EXT_STATS_CTX_ID_VALID 0x1000A00020098
 
 #define PTR_CNT_PER_PG		(PAGE_SIZE / sizeof(void *))
 #define PTR_MAX_IDX_PER_PG	(PTR_CNT_PER_PG - 1)
@@ -70,7 +181,6 @@ struct bnxt_qplib_chip_ctx {
 #define PTR_IDX(x)		((x) & PTR_MAX_IDX_PER_PG)
 
 #define HWQ_CMP(idx, hwq)	((idx) & ((hwq)->max_elements - 1))
-
 #define HWQ_FREE_SLOTS(hwq)	(hwq->max_elements - \
 				((HWQ_CMP(hwq->prod, hwq)\
 				- HWQ_CMP(hwq->cons, hwq))\
@@ -85,9 +195,7 @@ enum bnxt_qplib_hwq_type {
 #define MAX_PBL_LVL_0_PGS		1
 #define MAX_PBL_LVL_1_PGS		512
 #define MAX_PBL_LVL_1_PGS_SHIFT		9
-#define MAX_PBL_LVL_1_PGS_FOR_LVL_2	256
-#define MAX_PBL_LVL_2_PGS		(256 * 512)
-#define MAX_PDL_LVL_SHIFT               9
+#define MAX_PDL_LVL_SHIFT		9
 
 enum bnxt_qplib_pbl_lvl {
 	PBL_LVL_0,
@@ -102,7 +210,6 @@ enum bnxt_qplib_pbl_lvl {
 #define ROCE_PG_SIZE_2M		(2 * 1024 * 1024)
 #define ROCE_PG_SIZE_8M		(8 * 1024 * 1024)
 #define ROCE_PG_SIZE_1G		(1024 * 1024 * 1024)
-
 enum bnxt_qplib_hwrm_pg_size {
 	BNXT_QPLIB_HWRM_PG_SIZE_4K	= 0,
 	BNXT_QPLIB_HWRM_PG_SIZE_8K	= 1,
@@ -115,6 +222,7 @@ enum bnxt_qplib_hwrm_pg_size {
 struct bnxt_qplib_reg_desc {
 	u8		bar_id;
 	resource_size_t	bar_base;
+	unsigned long	offset;
 	void __iomem	*bar_reg;
 	size_t		len;
 };
@@ -127,8 +235,13 @@ struct bnxt_qplib_pbl {
 };
 
 struct bnxt_qplib_sg_info {
+#ifndef HAVE_RDMA_UMEM_FOR_EACH_DMA_BLOCK
+        struct scatterlist              *sghead;
+        u32                             nmap;
+#else
 	struct ib_umem			*umem;
-	u32				npages;
+#endif
+        u32                             npages;
 	u32				pgshft;
 	u32				pgsize;
 	bool				nopte;
@@ -146,18 +259,17 @@ struct bnxt_qplib_hwq_attr {
 
 struct bnxt_qplib_hwq {
 	struct pci_dev			*pdev;
-	/* lock to protect qplib_hwq */
 	spinlock_t			lock;
-	struct bnxt_qplib_pbl		pbl[PBL_LVL_MAX + 1];
+	struct bnxt_qplib_pbl		pbl[PBL_LVL_MAX];
 	enum bnxt_qplib_pbl_lvl		level;		/* 0, 1, or 2 */
-	/* ptr for easy access to the PBL entries */
-	void				**pbl_ptr;
-	/* ptr for easy access to the dma_addr */
-	dma_addr_t			*pbl_dma_ptr;
+	void				**pbl_ptr;	/* ptr for easy access
+							   to the PBL entries */
+	dma_addr_t			*pbl_dma_ptr;	/* ptr for easy access
+							   to the dma_addr */
 	u32				max_elements;
-	u32				depth;
+	u32				depth;	/* original requested depth */
 	u16				element_size;	/* Size of each entry */
-	u16				qe_ppg;	/* queue entry per page */
+	u16				qe_ppg;		/* queue entry per page */
 
 	u32				prod;		/* raw */
 	u32				cons;		/* raw */
@@ -172,8 +284,32 @@ struct bnxt_qplib_db_info {
 	void __iomem		*db;
 	void __iomem		*priv_db;
 	struct bnxt_qplib_hwq	*hwq;
+	struct bnxt_qplib_res   *res;
 	u32			xid;
 	u32			max_slot;
+	u32			flags;
+	u8			toggle;
+	spinlock_t		lock;
+	u64			shadow_key;
+	u64			shadow_key_arm_ena;
+	/* DB copy Thor2 recovery */
+	__le64			*dbc; /* offset 0 of the DB copy block */
+	int			ktbl_idx;
+	void			*app;
+	u8			dbc_dt;
+	u32			seed; /* For DB pacing */
+};
+
+enum bnxt_qplib_db_info_flags_mask {
+	BNXT_QPLIB_FLAG_EPOCH_CONS_SHIFT	= 0x0UL,
+	BNXT_QPLIB_FLAG_EPOCH_PROD_SHIFT	= 0x1UL,
+	BNXT_QPLIB_FLAG_EPOCH_CONS_MASK		= 0x1UL,
+	BNXT_QPLIB_FLAG_EPOCH_PROD_MASK		= 0x2UL,
+};
+
+enum bnxt_qplib_db_epoch_flag_shift {
+	BNXT_QPLIB_DB_EPOCH_CONS_SHIFT	= BNXT_QPLIB_DBR_EPOCH_SHIFT,
+	BNXT_QPLIB_DB_EPOCH_PROD_SHIFT	= (BNXT_QPLIB_DBR_EPOCH_SHIFT - 1)
 };
 
 /* Tables */
@@ -188,27 +324,32 @@ struct bnxt_qplib_sgid_tbl {
 	u16				max;
 	u16				active;
 	void				*ctx;
-	u8				*vlan;
+	bool                            *vlan;
 };
 
-struct bnxt_qplib_pkey_tbl {
-	u16				*tbl;
-	u16				max;
-	u16				active;
+enum bnxt_qplib_dpi_type {
+	BNXT_QPLIB_DPI_TYPE_KERNEL	= 0,
+	BNXT_QPLIB_DPI_TYPE_UC		= 1,
+	BNXT_QPLIB_DPI_TYPE_WC		= 2
 };
 
 struct bnxt_qplib_dpi {
 	u32				dpi;
-	void __iomem			*dbr;
+	u32				bit;
 	u64				umdbr;
+	void __iomem			*dbr;
+	enum bnxt_qplib_dpi_type	type;
 };
 
+#define BNXT_QPLIB_MAX_EXTENDED_PPP_PAGES	512
 struct bnxt_qplib_dpi_tbl {
 	void				**app_tbl;
 	unsigned long			*tbl;
 	u16				max;
-	void __iomem			*dbr_bar_reg_iomem;
-	u64				unmapped_dbr;
+	u16				avail_ppp;
+	struct bnxt_qplib_reg_desc	ucreg; /* Hold entire DB bar. */
+	struct bnxt_qplib_reg_desc	wcreg;
+	void __iomem			*priv_db;
 };
 
 struct bnxt_qplib_stats {
@@ -219,11 +360,11 @@ struct bnxt_qplib_stats {
 };
 
 struct bnxt_qplib_vf_res {
-	u32 max_qp_per_vf;
-	u32 max_mrw_per_vf;
-	u32 max_srq_per_vf;
-	u32 max_cq_per_vf;
-	u32 max_gid_per_vf;
+	u32 max_qp;
+	u32 max_mrw;
+	u32 max_srq;
+	u32 max_cq;
+	u32 max_gid;
 };
 
 #define BNXT_QPLIB_MAX_QP_CTX_ENTRY_SIZE	448
@@ -231,95 +372,138 @@ struct bnxt_qplib_vf_res {
 #define BNXT_QPLIB_MAX_CQ_CTX_ENTRY_SIZE	64
 #define BNXT_QPLIB_MAX_MRW_CTX_ENTRY_SIZE	128
 
-#define MAX_TQM_ALLOC_REQ               48
-#define MAX_TQM_ALLOC_BLK_SIZE          8
+#define MAX_TQM_ALLOC_REQ		48
+#define MAX_TQM_ALLOC_BLK_SIZE		8
 struct bnxt_qplib_tqm_ctx {
-	struct bnxt_qplib_hwq           pde;
-	u8                              pde_level; /* Original level */
-	struct bnxt_qplib_hwq           qtbl[MAX_TQM_ALLOC_REQ];
-	u8                              qcount[MAX_TQM_ALLOC_REQ];
+	struct bnxt_qplib_hwq		pde;
+	enum bnxt_qplib_pbl_lvl		pde_level; /* Original level */
+	struct bnxt_qplib_hwq		qtbl[MAX_TQM_ALLOC_REQ];
+	u8				qcount[MAX_TQM_ALLOC_REQ];
 };
 
+struct bnxt_qplib_hctx {
+	struct bnxt_qplib_hwq	hwq;
+	u32			max;
+};
+
+struct bnxt_qplib_refrec {
+	void *handle;
+	u32 xid;
+};
+
+struct bnxt_qplib_reftbl {
+	struct bnxt_qplib_refrec *rec;
+	u32 max;
+	spinlock_t lock; /* reftbl lock */
+};
+
+struct bnxt_qplib_reftbls {
+	struct bnxt_qplib_reftbl qpref;
+	struct bnxt_qplib_reftbl cqref;
+	struct bnxt_qplib_reftbl srqref;
+};
+
+#define GET_TBL_INDEX(id, tbl) ((id) % (((tbl)->max) - 1))
+static inline u32 map_qp_id_to_tbl_indx(u32 qid, struct bnxt_qplib_reftbl *tbl)
+{
+	return (qid == 1) ? tbl->max : GET_TBL_INDEX(qid, tbl);
+}
+
+/*
+ * This structure includes the number of various roce resource table sizes
+ * actually allocated by the driver. May be less than the maximums the firmware
+ * allows if the driver imposes lower limits than the firmware.
+ */
 struct bnxt_qplib_ctx {
-	u32				qpc_count;
-	struct bnxt_qplib_hwq		qpc_tbl;
-	u32				mrw_count;
-	struct bnxt_qplib_hwq		mrw_tbl;
-	u32				srqc_count;
-	struct bnxt_qplib_hwq		srqc_tbl;
-	u32				cq_count;
-	struct bnxt_qplib_hwq		cq_tbl;
-	struct bnxt_qplib_hwq		tim_tbl;
+	struct bnxt_qplib_hctx		qp_ctx;
+	struct bnxt_qplib_hctx		mrw_ctx;
+	struct bnxt_qplib_hctx		srq_ctx;
+	struct bnxt_qplib_hctx		cq_ctx;
+	struct bnxt_qplib_hctx		tim_ctx;
 	struct bnxt_qplib_tqm_ctx	tqm_ctx;
+
 	struct bnxt_qplib_stats		stats;
+	struct bnxt_qplib_stats		stats2;
 	struct bnxt_qplib_vf_res	vf_res;
-	u64				hwrm_intf_ver;
 };
 
 struct bnxt_qplib_res {
 	struct pci_dev			*pdev;
 	struct bnxt_qplib_chip_ctx	*cctx;
+	struct bnxt_qplib_dev_attr      *dattr;
+	struct bnxt_qplib_ctx		*hctx;
 	struct net_device		*netdev;
+	struct bnxt_en_dev		*en_dev;
 
 	struct bnxt_qplib_rcfw		*rcfw;
+
 	struct bnxt_qplib_pd_tbl	pd_tbl;
+	struct mutex			pd_tbl_lock;
 	struct bnxt_qplib_sgid_tbl	sgid_tbl;
-	struct bnxt_qplib_pkey_tbl	pkey_tbl;
 	struct bnxt_qplib_dpi_tbl	dpi_tbl;
+	struct mutex			dpi_tbl_lock;
+	struct bnxt_qplib_reftbls	reftbl;
 	bool				prio;
+	bool				is_vf;
+	struct bnxt_qplib_db_pacing_data *pacing_data;
 };
 
-static inline bool bnxt_qplib_is_chip_gen_p5(struct bnxt_qplib_chip_ctx *cctx)
-{
-	return (cctx->chip_num == CHIP_NUM_57508 ||
-		cctx->chip_num == CHIP_NUM_57504 ||
-		cctx->chip_num == CHIP_NUM_57502);
-}
+struct bnxt_qplib_query_stats_info {
+	u32 function_id;
+	u8 collection_id;
+	bool vf_valid;
+};
 
-static inline u8 bnxt_qplib_get_hwq_type(struct bnxt_qplib_res *res)
-{
-	return bnxt_qplib_is_chip_gen_p5(res->cctx) ?
-					HWQ_TYPE_QUEUE : HWQ_TYPE_L2_CMPL;
-}
+struct bnxt_qplib_query_qp_info {
+	u32 function_id;
+	u32 num_qps;
+	u32 start_index;
+	bool vf_valid;
+};
 
-static inline u8 bnxt_qplib_get_ring_type(struct bnxt_qplib_chip_ctx *cctx)
-{
-	return bnxt_qplib_is_chip_gen_p5(cctx) ?
-	       RING_ALLOC_REQ_RING_TYPE_NQ :
-	       RING_ALLOC_REQ_RING_TYPE_ROCE_CMPL;
-}
+struct bnxt_qplib_query_fn_info {
+	bool vf_valid;
+	u32 host;
+	u32 filter;
+};
 
-static inline u8 bnxt_qplib_base_pg_size(struct bnxt_qplib_hwq *hwq)
-{
-	u8 pg_size = BNXT_QPLIB_HWRM_PG_SIZE_4K;
-	struct bnxt_qplib_pbl *pbl;
+#define to_bnxt_qplib(ptr, type, member)	\
+	container_of(ptr, type, member)
 
-	pbl = &hwq->pbl[PBL_LVL_0];
-	switch (pbl->pg_size) {
-	case ROCE_PG_SIZE_4K:
-		pg_size = BNXT_QPLIB_HWRM_PG_SIZE_4K;
-		break;
-	case ROCE_PG_SIZE_8K:
-		pg_size = BNXT_QPLIB_HWRM_PG_SIZE_8K;
-		break;
-	case ROCE_PG_SIZE_64K:
-		pg_size = BNXT_QPLIB_HWRM_PG_SIZE_64K;
-		break;
-	case ROCE_PG_SIZE_2M:
-		pg_size = BNXT_QPLIB_HWRM_PG_SIZE_2M;
-		break;
-	case ROCE_PG_SIZE_8M:
-		pg_size = BNXT_QPLIB_HWRM_PG_SIZE_8M;
-		break;
-	case ROCE_PG_SIZE_1G:
-		pg_size = BNXT_QPLIB_HWRM_PG_SIZE_1G;
-		break;
-	default:
-		break;
-	}
+struct bnxt_qplib_pd;
+struct bnxt_qplib_dev_attr;
 
-	return pg_size;
-}
+bool _is_alloc_mr_unified(struct bnxt_qplib_dev_attr *dattr);
+void bnxt_qplib_free_hwq(struct bnxt_qplib_res *res,
+			 struct bnxt_qplib_hwq *hwq);
+int bnxt_qplib_alloc_init_hwq(struct bnxt_qplib_hwq *hwq,
+			      struct bnxt_qplib_hwq_attr *hwq_attr);
+int bnxt_qplib_alloc_pd(struct bnxt_qplib_res *res,
+			struct bnxt_qplib_pd *pd);
+int bnxt_qplib_dealloc_pd(struct bnxt_qplib_res *res,
+			  struct bnxt_qplib_pd_tbl *pd_tbl,
+			  struct bnxt_qplib_pd *pd);
+int bnxt_qplib_alloc_dpi(struct bnxt_qplib_res *res,
+			 struct bnxt_qplib_dpi *dpi,
+			 void *app, enum bnxt_qplib_dpi_type type);
+int bnxt_qplib_dealloc_dpi(struct bnxt_qplib_res *res,
+			   struct bnxt_qplib_dpi *dpi);
+int bnxt_qplib_stop_res(struct bnxt_qplib_res *res);
+void bnxt_qplib_clear_tbls(struct bnxt_qplib_res *res);
+void bnxt_qplib_init_tbls(struct bnxt_qplib_res *res);
+void bnxt_qplib_free_tbls(struct bnxt_qplib_res *res);
+int bnxt_qplib_alloc_tbls(struct bnxt_qplib_res *res);
+void bnxt_qplib_free_hwctx(struct bnxt_qplib_res *res);
+int bnxt_qplib_alloc_hwctx(struct bnxt_qplib_res *res);
+int bnxt_qplib_alloc_stat_mem(struct pci_dev *pdev,
+			      struct bnxt_qplib_chip_ctx *cctx,
+			      struct bnxt_qplib_stats *stats);
+void bnxt_qplib_free_stat_mem(struct bnxt_qplib_res *res,
+			      struct bnxt_qplib_stats *stats);
+
+int bnxt_qplib_map_db_bar(struct bnxt_qplib_res *res);
+void bnxt_qplib_unmap_db_bar(struct bnxt_qplib_res *res);
+int bnxt_qplib_enable_atomic_ops_to_root(struct pci_dev *dev, bool is_virtfn);
 
 static inline void *bnxt_qplib_get_qe(struct bnxt_qplib_hwq *hwq,
 				      u32 indx, u64 *pg)
@@ -333,114 +517,346 @@ static inline void *bnxt_qplib_get_qe(struct bnxt_qplib_hwq *hwq,
 	return (void *)(hwq->pbl_ptr[pg_num] + hwq->element_size * pg_idx);
 }
 
-static inline void *bnxt_qplib_get_prod_qe(struct bnxt_qplib_hwq *hwq, u32 idx)
+static inline void bnxt_qplib_hwq_incr_prod(struct bnxt_qplib_db_info *dbinfo,
+					    struct bnxt_qplib_hwq *hwq, u32 cnt)
 {
-	idx += hwq->prod;
-	if (idx >= hwq->depth)
-		idx -= hwq->depth;
-	return bnxt_qplib_get_qe(hwq, idx, NULL);
+	/* move prod and update toggle/epoch if wrap around */
+	hwq->prod += cnt;
+	if (hwq->prod >= hwq->depth) {
+		hwq->prod %= hwq->depth;
+		dbinfo->flags ^= 1UL << BNXT_QPLIB_FLAG_EPOCH_PROD_SHIFT;
+	}
 }
 
-#define to_bnxt_qplib(ptr, type, member)	\
-	container_of(ptr, type, member)
-
-struct bnxt_qplib_pd;
-struct bnxt_qplib_dev_attr;
-
-void bnxt_qplib_free_hwq(struct bnxt_qplib_res *res,
-			 struct bnxt_qplib_hwq *hwq);
-int bnxt_qplib_alloc_init_hwq(struct bnxt_qplib_hwq *hwq,
-			      struct bnxt_qplib_hwq_attr *hwq_attr);
-void bnxt_qplib_get_guid(const u8 *dev_addr, u8 *guid);
-int bnxt_qplib_alloc_pd(struct bnxt_qplib_pd_tbl *pd_tbl,
-			struct bnxt_qplib_pd *pd);
-int bnxt_qplib_dealloc_pd(struct bnxt_qplib_res *res,
-			  struct bnxt_qplib_pd_tbl *pd_tbl,
-			  struct bnxt_qplib_pd *pd);
-int bnxt_qplib_alloc_dpi(struct bnxt_qplib_dpi_tbl *dpit,
-			 struct bnxt_qplib_dpi     *dpi,
-			 void                      *app);
-int bnxt_qplib_dealloc_dpi(struct bnxt_qplib_res *res,
-			   struct bnxt_qplib_dpi_tbl *dpi_tbl,
-			   struct bnxt_qplib_dpi *dpi);
-void bnxt_qplib_cleanup_res(struct bnxt_qplib_res *res);
-int bnxt_qplib_init_res(struct bnxt_qplib_res *res);
-void bnxt_qplib_free_res(struct bnxt_qplib_res *res);
-int bnxt_qplib_alloc_res(struct bnxt_qplib_res *res, struct pci_dev *pdev,
-			 struct net_device *netdev,
-			 struct bnxt_qplib_dev_attr *dev_attr);
-void bnxt_qplib_free_ctx(struct bnxt_qplib_res *res,
-			 struct bnxt_qplib_ctx *ctx);
-int bnxt_qplib_alloc_ctx(struct bnxt_qplib_res *res,
-			 struct bnxt_qplib_ctx *ctx,
-			 bool virt_fn, bool is_p5);
-
-static inline void bnxt_qplib_hwq_incr_prod(struct bnxt_qplib_hwq *hwq, u32 cnt)
+static inline void bnxt_qplib_hwq_incr_cons(u32 max_elements, u32 *cons,
+					    u32 cnt, u32 *dbinfo_flags)
 {
-	hwq->prod = (hwq->prod + cnt) % hwq->depth;
+	/* move cons and update toggle/epoch if wrap around */
+	*cons += cnt;
+	if (*cons >= max_elements) {
+		*cons %= max_elements;
+		*dbinfo_flags ^= 1UL << BNXT_QPLIB_FLAG_EPOCH_CONS_SHIFT;
+	}
 }
 
-static inline void bnxt_qplib_hwq_incr_cons(struct bnxt_qplib_hwq *hwq,
-					    u32 cnt)
+static inline u8 _get_pte_pg_size(struct bnxt_qplib_hwq *hwq)
 {
-	hwq->cons = (hwq->cons + cnt) % hwq->depth;
+	u8 pg_size = BNXT_QPLIB_HWRM_PG_SIZE_4K;
+	struct bnxt_qplib_pbl *pbl;
+
+	pbl = &hwq->pbl[hwq->level];
+	switch (pbl->pg_size) {
+		case ROCE_PG_SIZE_4K: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_4K;
+		break;
+		case ROCE_PG_SIZE_8K: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_8K;
+		break;
+		case ROCE_PG_SIZE_64K: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_64K;
+		break;
+		case ROCE_PG_SIZE_2M: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_2M;
+		break;
+		case ROCE_PG_SIZE_8M: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_8M;
+		break;
+		case ROCE_PG_SIZE_1G: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_1G;
+		break;
+		default:
+		break;
+	}
+	return pg_size;
+}
+
+static inline u64 _get_base_addr(struct bnxt_qplib_hwq *hwq)
+{
+	return hwq->pbl[PBL_LVL_0].pg_map_arr[0];
+}
+
+static inline u8 _get_base_pg_size(struct bnxt_qplib_hwq *hwq)
+{
+	u8 pg_size = BNXT_QPLIB_HWRM_PG_SIZE_4K;
+	struct bnxt_qplib_pbl *pbl;
+
+	pbl = &hwq->pbl[PBL_LVL_0];
+	switch (pbl->pg_size) {
+		case ROCE_PG_SIZE_4K: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_4K;
+		break;
+		case ROCE_PG_SIZE_8K: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_8K;
+		break;
+		case ROCE_PG_SIZE_64K: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_64K;
+		break;
+		case ROCE_PG_SIZE_2M: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_2M;
+		break;
+		case ROCE_PG_SIZE_8M: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_8M;
+		break;
+		case ROCE_PG_SIZE_1G: pg_size = BNXT_QPLIB_HWRM_PG_SIZE_1G;
+		break;
+		default:
+		break;
+	}
+	return pg_size;
+}
+
+static inline enum bnxt_qplib_hwq_type _get_hwq_type(struct bnxt_qplib_res *res)
+{
+	return _is_chip_gen_p5_p7(res->cctx) ? HWQ_TYPE_QUEUE : HWQ_TYPE_L2_CMPL;
+}
+
+static inline bool _is_ext_stats_supported(u16 dev_cap_flags)
+{
+	return dev_cap_flags &
+		CREQ_QUERY_FUNC_RESP_SB_EXT_STATS;
+}
+
+static inline int bnxt_ext_stats_supported(struct bnxt_qplib_chip_ctx *ctx,
+					   u16 flags, bool virtfn)
+{
+	/* ext stats supported if cap flag is set AND is a PF OR a Thor2 VF */
+	return (_is_ext_stats_supported(flags) &&
+		((virtfn && _is_chip_p7(ctx)) || (!virtfn)));
+}
+
+static inline bool _is_hw_retx_supported(u16 dev_cap_flags)
+{
+	return dev_cap_flags &
+		(CREQ_QUERY_FUNC_RESP_SB_HW_REQUESTER_RETX_ENABLED |
+		 CREQ_QUERY_FUNC_RESP_SB_HW_RESPONDER_RETX_ENABLED);
+}
+
+static inline bool _is_drv_ver_reg_supported(u8 dev_cap_ext_flags)
+{
+	return dev_cap_ext_flags &
+		CREQ_QUERY_FUNC_RESP_SB_DRV_VERSION_RGTR_SUPPORTED;
+}
+
+static inline bool _is_small_recv_wqe_supported(u8 dev_cap_ext_flags)
+{
+	return dev_cap_ext_flags &
+		CREQ_QUERY_FUNC_RESP_SB_CREATE_SRQ_SGE_SUPPORTED;
+}
+
+#define BNXT_RE_INIT_FW_DRV_VER_SUPPORT_CMD_SIZE 16
+
+#define BNXT_RE_CREATE_QP_EXT_STAT_CONTEXT_SIZE 8
+#define BNXT_RE_MODIFY_QP_EXT_STAT_CONTEXT_SIZE 8
+
+#define BNXT_RE_EXP_MODE_ENABLED_CMD_SIZE_CREATE_QP		4
+#define BNXT_RE_STEERING_TAG_SUPPORTED_CMD_SIZE_CREATE_QP	4
+#define BNXT_RE_STEERING_TAG_SUPPORTED_CMD_SIZE_MODIFY_QP	8
+#define BNXT_RE_STEERING_TAG_SUPPORTED_CMD_SIZE			16
+static inline bool _is_steering_tag_supported(struct bnxt_qplib_res *res)
+{
+	return res->cctx->modes.steering_tag_supported;
+}
+
+static inline bool _is_qp_exp_mode_supported(struct bnxt_qplib_res *res)
+{
+	return res->cctx->modes.express_mode_supported;
+}
+
+/* Disable HW_RETX */
+#define BNXT_RE_HW_RETX(a) _is_hw_retx_supported((a))
+
+static inline bool _is_cqe_v2_supported(u16 dev_cap_flags)
+{
+	return dev_cap_flags &
+		CREQ_QUERY_FUNC_RESP_SB_CQE_V2;
+}
+
+static inline void bnxt_qplib_do_pacing(struct bnxt_qplib_db_info *info)
+{
+	struct bnxt_qplib_db_pacing_data *pacing_data;
+	struct bnxt_qplib_res *res = info->res;
+
+	pacing_data = res->pacing_data;
+	if (pacing_data && pacing_data->do_pacing)
+		bnxt_do_pacing(res->en_dev->bar0, res->en_dev->en_dbr, &info->seed,
+			       pacing_data->pacing_th, pacing_data->do_pacing);
 }
 
 static inline void bnxt_qplib_ring_db32(struct bnxt_qplib_db_info *info,
 					bool arm)
 {
-	u32 key;
+	u32 key = 0;
 
-	key = info->hwq->cons & (info->hwq->max_elements - 1);
-	key |= (CMPL_DOORBELL_IDX_VALID |
+	key = info->hwq->cons | (CMPL_DOORBELL_IDX_VALID |
 		(CMPL_DOORBELL_KEY_CMPL & CMPL_DOORBELL_KEY_MASK));
 	if (!arm)
 		key |= CMPL_DOORBELL_MASK;
+	/* memory barrier */
+	wmb();
 	writel(key, info->db);
+}
+
+#define HDBR_DBC_DEBUG_TRACE    (0x1ULL << 59)
+#define HDBR_DBC_OFFSET_SQ		0
+#define HDBR_DBC_OFFSET_RQ		0
+#define HDBR_DBC_OFFSET_SRQ		0
+#define HDBR_DBC_OFFSET_SRQ_ARMENA	1
+#define HDBR_DBC_OFFSET_SRQ_ARM		2
+#define HDBR_DBC_OFFSET_CQ		0
+#define HDBR_DBC_OFFSET_CQ_ARMENA	1
+#define HDBR_DBC_OFFSET_CQ_ARMSE	2
+#define HDBR_DBC_OFFSET_CQ_ARMALL	2
+#define HDBR_DBC_OFFSET_CQ_CUTOFF_ACK	3
+
+static inline int bnxt_re_hdbr_get_dbc_offset(u32 type)
+{
+	switch (type) {
+	case DBC_DBC_TYPE_SQ:
+		return HDBR_DBC_OFFSET_SQ;
+
+	case DBC_DBC_TYPE_RQ:
+		return HDBR_DBC_OFFSET_RQ;
+
+	case DBC_DBC_TYPE_SRQ:
+		return HDBR_DBC_OFFSET_SRQ;
+
+	case DBC_DBC_TYPE_SRQ_ARMENA:
+		return HDBR_DBC_OFFSET_SRQ_ARMENA;
+
+	case DBC_DBC_TYPE_SRQ_ARM:
+		return HDBR_DBC_OFFSET_SRQ_ARM;
+
+	case DBC_DBC_TYPE_CQ:
+		return HDBR_DBC_OFFSET_CQ;
+
+	case DBC_DBC_TYPE_CQ_ARMENA:
+		return HDBR_DBC_OFFSET_CQ_ARMENA;
+
+	case DBC_DBC_TYPE_CQ_ARMSE:
+		return HDBR_DBC_OFFSET_CQ_ARMSE;
+
+	case DBC_DBC_TYPE_CQ_ARMALL:
+		return HDBR_DBC_OFFSET_CQ_ARMALL;
+
+	case DBC_DBC_TYPE_CQ_CUTOFF_ACK:
+		return HDBR_DBC_OFFSET_CQ_CUTOFF_ACK;
+	}
+
+	return -1;
+}
+
+static inline void bnxt_re_hdbr_db_copy(struct bnxt_qplib_db_info *info, u64 key)
+{
+	int offset;
+
+	if (!info->dbc)
+		return;
+	offset = bnxt_re_hdbr_get_dbc_offset((u32)(key >> 32) & DBC_DBC_TYPE_MASK);
+	if (offset < 0)
+		return;
+	if (info->dbc_dt)
+		key |= HDBR_DBC_DEBUG_TRACE;
+	*(info->dbc + offset) = cpu_to_le64(key);
+	wmb(); /* Sync DB copy before it is written into HW */
+}
+
+#define BNXT_QPLIB_INIT_DBHDR(xid, type, indx, toggle)				\
+	(((u64)(((xid) & DBC_DBC_XID_MASK) | DBC_DBC_PATH_ROCE |	\
+	    (type) | BNXT_QPLIB_DBR_VALID) << 32) | (indx) |	\
+	    (((u32)(toggle)) << (BNXT_QPLIB_DBR_TOGGLE_SHIFT)))
+
+static inline void bnxt_qplib_write_db(struct bnxt_qplib_db_info *info,
+				       u64 key, void __iomem *db,
+				       u64 *shadow_key)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&info->lock, flags);
+	bnxt_qplib_do_pacing(info);
+	*shadow_key = key;
+	bnxt_re_hdbr_db_copy(info, key);
+	writeq(key, db);
+	spin_unlock_irqrestore(&info->lock, flags);
+}
+
+static inline void __replay_writeq(u64 key, void __iomem *db)
+{
+	/* No need to replay uninitialised shadow_keys */
+	if (key != BNXT_QPLIB_DBR_KEY_INVALID)
+		writeq(key, db);
+}
+
+static inline void bnxt_qplib_replay_db(struct bnxt_qplib_db_info *info,
+				        bool is_arm_ena)
+
+{
+	unsigned long flags;
+
+	if (!spin_trylock_irqsave(&info->lock, flags))
+		return;
+
+	bnxt_qplib_do_pacing(info);
+	if (is_arm_ena)
+		__replay_writeq(info->shadow_key_arm_ena, info->priv_db);
+	else
+		__replay_writeq(info->shadow_key, info->db);
+
+	spin_unlock_irqrestore(&info->lock, flags);
 }
 
 static inline void bnxt_qplib_ring_db(struct bnxt_qplib_db_info *info,
 				      u32 type)
 {
 	u64 key = 0;
+	u32 indx;
+	u8 toggle = 0;
 
-	key = (info->xid & DBC_DBC_XID_MASK) | DBC_DBC_PATH_ROCE | type;
-	key <<= 32;
-	key |= (info->hwq->cons & (info->hwq->max_elements - 1)) &
-		DBC_DBC_INDEX_MASK;
-	writeq(key, info->db);
+	if (type == DBC_DBC_TYPE_CQ_ARMALL ||
+	    type == DBC_DBC_TYPE_CQ_ARMSE)
+		toggle = info->toggle;
+
+	indx = ((info->hwq->cons & DBC_DBC_INDEX_MASK) |
+		((info->flags & BNXT_QPLIB_FLAG_EPOCH_CONS_MASK) <<
+		 BNXT_QPLIB_DB_EPOCH_CONS_SHIFT));
+
+	key = BNXT_QPLIB_INIT_DBHDR(info->xid, type, indx, toggle);
+	bnxt_qplib_write_db(info, key, info->db, &info->shadow_key);
 }
 
 static inline void bnxt_qplib_ring_prod_db(struct bnxt_qplib_db_info *info,
 					   u32 type)
 {
 	u64 key = 0;
+	u32 indx;
 
-	key = (info->xid & DBC_DBC_XID_MASK) | DBC_DBC_PATH_ROCE | type;
-	key <<= 32;
-	key |= ((info->hwq->prod / info->max_slot)) & DBC_DBC_INDEX_MASK;
-	writeq(key, info->db);
+	indx = (((info->hwq->prod / info->max_slot) & DBC_DBC_INDEX_MASK) |
+		((info->flags & BNXT_QPLIB_FLAG_EPOCH_PROD_MASK) <<
+		 BNXT_QPLIB_DB_EPOCH_PROD_SHIFT));
+	key = BNXT_QPLIB_INIT_DBHDR(info->xid, type, indx, 0);
+	bnxt_qplib_write_db(info, key, info->db, &info->shadow_key);
 }
 
 static inline void bnxt_qplib_armen_db(struct bnxt_qplib_db_info *info,
 				       u32 type)
 {
 	u64 key = 0;
+	u8 toggle = 0;
 
-	key = (info->xid & DBC_DBC_XID_MASK) | DBC_DBC_PATH_ROCE | type;
-	key <<= 32;
-	writeq(key, info->priv_db);
+	if (type == DBC_DBC_TYPE_CQ_ARMENA || type == DBC_DBC_TYPE_SRQ_ARMENA)
+		toggle = info->toggle;
+	/* Index always at 0 */
+	key = BNXT_QPLIB_INIT_DBHDR(info->xid, type, 0, toggle);
+	bnxt_qplib_write_db(info, key, info->priv_db,
+			    &info->shadow_key_arm_ena);
 }
 
-static inline void bnxt_qplib_srq_arm_db(struct bnxt_qplib_db_info *info,
-					 u32 th)
+static inline void bnxt_qplib_cq_coffack_db(struct bnxt_qplib_db_info *info)
 {
 	u64 key = 0;
 
-	key = (info->xid & DBC_DBC_XID_MASK) | DBC_DBC_PATH_ROCE | th;
-	key <<= 32;
-	key |=  th & DBC_DBC_INDEX_MASK;
-	writeq(key, info->priv_db);
+	/* Index always at 0 */
+	key = BNXT_QPLIB_INIT_DBHDR(info->xid, DBC_DBC_TYPE_CQ_CUTOFF_ACK, 0, 0);
+	bnxt_qplib_write_db(info, key, info->priv_db, &info->shadow_key);
+}
+
+static inline void bnxt_qplib_srq_arm_db(struct bnxt_qplib_db_info *info)
+{
+	u64 key = 0;
+	u8 toggle = 0;
+
+	toggle = info->toggle;
+	/* Index always at 0 */
+	key = BNXT_QPLIB_INIT_DBHDR(info->xid, DBC_DBC_TYPE_SRQ_ARM, 0, toggle);
+	bnxt_qplib_write_db(info, key, info->priv_db, &info->shadow_key);
 }
 
 static inline void bnxt_qplib_ring_nq_db(struct bnxt_qplib_db_info *info,
@@ -450,9 +866,119 @@ static inline void bnxt_qplib_ring_nq_db(struct bnxt_qplib_db_info *info,
 	u32 type;
 
 	type = arm ? DBC_DBC_TYPE_NQ_ARM : DBC_DBC_TYPE_NQ;
-	if (bnxt_qplib_is_chip_gen_p5(cctx))
+	if (_is_chip_gen_p5_p7(cctx))
 		bnxt_qplib_ring_db(info, type);
 	else
 		bnxt_qplib_ring_db32(info, arm);
 }
-#endif /* __BNXT_QPLIB_RES_H__ */
+
+struct bnxt_qplib_max_res {
+	u32 max_qp;
+	u32 max_mr;
+	u32 max_cq;
+	u32 max_srq;
+	u32 max_ah;
+	u32 max_pd;
+};
+
+/*
+ * Defines for maximum resources supported for chip revisions
+ * Maximum PDs supported are restricted to Max QPs
+ * GENP4 - Wh+
+ * GENP7 - Thor2
+ * DEFAULT - Thor
+ */
+#define BNXT_QPLIB_GENP4_PF_MAX_QP	(16 * 1024)
+#define BNXT_QPLIB_GENP4_PF_MAX_MRW	(16 * 1024)
+#define BNXT_QPLIB_GENP4_PF_MAX_CQ	(16 * 1024)
+#define BNXT_QPLIB_GENP4_PF_MAX_SRQ	(1 * 1024)
+#define BNXT_QPLIB_GENP4_PF_MAX_AH	(16 * 1024)
+#define BNXT_QPLIB_GENP4_PF_MAX_PD	 BNXT_QPLIB_GENP4_PF_MAX_QP
+
+#define BNXT_QPLIB_DEFAULT_PF_MAX_QP	(64 * 1024)
+#define BNXT_QPLIB_DEFAULT_PF_MAX_MRW	(256 * 1024)
+#define BNXT_QPLIB_DEFAULT_PF_MAX_CQ	(64 * 1024)
+#define BNXT_QPLIB_DEFAULT_PF_MAX_SRQ	(4 * 1024)
+#define BNXT_QPLIB_DEFAULT_PF_MAX_AH	(128 * 1024)
+#define BNXT_QPLIB_DEFAULT_PF_MAX_PD	BNXT_QPLIB_DEFAULT_PF_MAX_QP
+
+#define BNXT_QPLIB_DEFAULT_VF_MAX_QP	(6 * 1024)
+#define BNXT_QPLIB_DEFAULT_VF_MAX_MRW	(6 * 1024)
+#define BNXT_QPLIB_DEFAULT_VF_MAX_CQ	(6 * 1024)
+#define BNXT_QPLIB_DEFAULT_VF_MAX_SRQ	(4 * 1024)
+#define BNXT_QPLIB_DEFAULT_VF_MAX_AH	(6 * 1024)
+#define BNXT_QPLIB_DEFAULT_VF_MAX_PD	BNXT_QPLIB_DEFAULT_VF_MAX_QP
+
+#ifdef BNXT_FPGA
+#define BNXT_QPLIB_GENP7_FPGA_PF_MAX_QP	(256)
+#define BNXT_QPLIB_GENP7_FPGA_PF_MAX_MRW (2 * 1024)
+#define BNXT_QPLIB_GENP7_FPGA_PF_MAX_CQ	(256)
+#define BNXT_QPLIB_GENP7_FPGA_PF_MAX_SRQ (256)
+#define BNXT_QPLIB_GENP7_FPGA_PF_MAX_AH	(256)
+#define BNXT_QPLIB_GENP7_FPGA_PF_MAX_PD	BNXT_QPLIB_GENP7_FPGA_PF_MAX_QP
+
+#define BNXT_QPLIB_GENP7_FPGA_VF_MAX_QP	(64)
+#define BNXT_QPLIB_GENP7_FPGA_VF_MAX_MRW (1024)
+#define BNXT_QPLIB_GENP7_FPGA_VF_MAX_CQ	(64)
+#define BNXT_QPLIB_GENP7_FPGA_VF_MAX_SRQ (64)
+#define BNXT_QPLIB_GENP7_FPGA_VF_MAX_AH (64)
+#define BNXT_QPLIB_GENP7_FPGA_VF_MAX_PD BNXT_QPLIB_GENP7_FPGA_VF_MAX_QP
+#endif
+
+static inline void bnxt_qplib_max_res_supported(struct bnxt_qplib_chip_ctx *cctx,
+						struct bnxt_qplib_res *qpl_res,
+						struct bnxt_qplib_max_res *max_res,
+						bool vf_res_limit)
+{
+	switch (cctx->chip_num) {
+	case CHIP_NUM_57608:
+	case CHIP_NUM_58818:
+#ifdef BNXT_FPGA
+		if (vf_res_limit) {
+			max_res->max_qp = BNXT_QPLIB_GENP7_FPGA_VF_MAX_QP;
+			max_res->max_mr = BNXT_QPLIB_GENP7_FPGA_VF_MAX_MRW;
+			max_res->max_cq = BNXT_QPLIB_GENP7_FPGA_VF_MAX_CQ;
+			max_res->max_srq = BNXT_QPLIB_GENP7_FPGA_VF_MAX_SRQ;
+			max_res->max_ah = BNXT_QPLIB_GENP7_FPGA_VF_MAX_AH;
+			max_res->max_pd = BNXT_QPLIB_GENP7_FPGA_VF_MAX_PD;
+		} else {
+			max_res->max_qp = BNXT_QPLIB_GENP7_FPGA_PF_MAX_QP;
+			max_res->max_mr = BNXT_QPLIB_GENP7_FPGA_PF_MAX_MRW;
+			max_res->max_cq = BNXT_QPLIB_GENP7_FPGA_PF_MAX_CQ;
+			max_res->max_srq = BNXT_QPLIB_GENP7_FPGA_PF_MAX_SRQ;
+			max_res->max_ah = BNXT_QPLIB_GENP7_FPGA_PF_MAX_AH;
+			max_res->max_pd = BNXT_QPLIB_GENP7_FPGA_PF_MAX_PD;
+		}
+		break;
+#endif
+	case CHIP_NUM_57504:
+	case CHIP_NUM_57502:
+	case CHIP_NUM_57508:
+		if (vf_res_limit) {
+			max_res->max_qp = BNXT_QPLIB_DEFAULT_VF_MAX_QP;
+			max_res->max_mr = BNXT_QPLIB_DEFAULT_VF_MAX_MRW;
+			max_res->max_cq = BNXT_QPLIB_DEFAULT_VF_MAX_CQ;
+			max_res->max_srq = BNXT_QPLIB_DEFAULT_VF_MAX_SRQ;
+			max_res->max_ah = BNXT_QPLIB_DEFAULT_VF_MAX_AH;
+			max_res->max_pd = BNXT_QPLIB_DEFAULT_VF_MAX_PD;
+		} else {
+			max_res->max_qp = BNXT_QPLIB_DEFAULT_PF_MAX_QP;
+			max_res->max_mr = BNXT_QPLIB_DEFAULT_PF_MAX_MRW;
+			max_res->max_cq = BNXT_QPLIB_DEFAULT_PF_MAX_CQ;
+			max_res->max_srq = BNXT_QPLIB_DEFAULT_PF_MAX_SRQ;
+			max_res->max_ah = BNXT_QPLIB_DEFAULT_PF_MAX_AH;
+			max_res->max_pd = BNXT_QPLIB_DEFAULT_PF_MAX_PD;
+		}
+		break;
+	default:
+		/* Wh+/Stratus max resources */
+		max_res->max_qp = BNXT_QPLIB_GENP4_PF_MAX_QP;
+		max_res->max_mr = BNXT_QPLIB_GENP4_PF_MAX_MRW;
+		max_res->max_cq = BNXT_QPLIB_GENP4_PF_MAX_CQ;
+		max_res->max_srq = BNXT_QPLIB_GENP4_PF_MAX_SRQ;
+		max_res->max_ah = BNXT_QPLIB_GENP4_PF_MAX_AH;
+		max_res->max_pd = BNXT_QPLIB_GENP4_PF_MAX_PD;
+		break;
+	}
+}
+#endif
