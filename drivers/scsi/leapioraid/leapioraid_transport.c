@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * SAS Transport Layer for MPT (Message Passing Technology) based controllers
  *
@@ -8,7 +8,7 @@
  *  (mailto:MPT-FusionLinux.pdl@broadcom.com)
  *
  * Copyright (C) 2024 LeapIO Tech Inc.
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -56,7 +56,7 @@
 #include <scsi/scsi_dbg.h>
 #include "leapioraid_func.h"
 
-static 
+static
 struct leapioraid_raid_sas_node *leapioraid_transport_sas_node_find_by_sas_address(
 			struct LEAPIORAID_ADAPTER *ioc,
 			u64 sas_address, struct leapioraid_hba_port *port)
@@ -339,8 +339,6 @@ leapioraid_transport_expander_report_manufacture(
 	data_out = dma_alloc_coherent(&ioc->pdev->dev, data_out_sz + data_in_sz,
 				      &data_out_dma, GFP_ATOMIC);
 	if (!data_out) {
-		pr_err("failure at %s:%d/%s()!\n", __FILE__,
-		       __LINE__, __func__);
 		rc = -ENOMEM;
 		leapioraid_base_free_smid(ioc, smid);
 		goto out;
@@ -586,11 +584,8 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(
 		return NULL;
 	}
 	leapioraid_port = kzalloc(sizeof(struct leapioraid_sas_port), GFP_KERNEL);
-	if (!leapioraid_port) {
-		pr_err("%s failure at %s:%d/%s()!\n",
-		       ioc->name, __FILE__, __LINE__, __func__);
+	if (!leapioraid_port)
 		return NULL;
-	}
 	INIT_LIST_HEAD(&leapioraid_port->port_list);
 	INIT_LIST_HEAD(&leapioraid_port->phy_list);
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
@@ -672,7 +667,7 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(
 	list_for_each_entry(leapioraid_phy, &leapioraid_port->phy_list,
 			    port_siblings) {
 		if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-			dev_info(&port->dev, 
+			dev_info(&port->dev,
 				"add: handle(0x%04x), sas_addr(0x%016llx), phy(%d)\n",
 				handle,
 				(unsigned long long)
@@ -796,8 +791,9 @@ out:
 						 &port->vphys_list, list) {
 				if (vphy->sas_address != sas_address)
 					continue;
-				pr_err("%s remove vphy entry: %p of port:%p, \
-					from %d port's vphys list\n",
+				pr_err(
+					"%s remove vphy entry: %p of port:%p, "
+					"from %d port's vphys list\n",
 					ioc->name,
 					vphy, port, port->port_id);
 				port->vphys_mask &= ~vphy->phy_mask;
@@ -805,8 +801,8 @@ out:
 				kfree(vphy);
 			}
 			if (!port->vphys_mask && !port->sas_address) {
-				pr_err("%s remove hba_port entry: %p port: %d \
-					from hba_port list\n",
+				pr_err(
+					"%s remove hba_port entry: %p port: %d from hba_port list\n",
 					ioc->name,
 				    port, port->port_id);
 				list_del(&port->list);
@@ -821,17 +817,16 @@ out:
 				continue;
 			if (!port->vphys_mask) {
 				pr_err(
-				       "%s remove hba_port entry: %p port: %d \
-					   from hba_port list\n",
-					   ioc->name,
-				       hba_port, hba_port->port_id);
+					"%s remove hba_port entry: %p port: %d from hba_port list\n",
+					ioc->name,
+				    hba_port, hba_port->port_id);
 				list_del(&hba_port->list);
 				kfree(hba_port);
 			} else {
 				pr_err(
-				       "%s clearing sas_address from hba_port entry: %p \
-					   port: %d from hba_port list\n",
-				       ioc->name, hba_port, hba_port->port_id);
+					"%s clearing sas_address from hba_port entry: %p "
+					"port: %d from hba_port list\n",
+					ioc->name, hba_port, hba_port->port_id);
 				port->sas_address = 0;
 			}
 			break;
@@ -879,7 +874,7 @@ out:
 
 int
 leapioraid_transport_add_host_phy(
-	struct LEAPIORAID_ADAPTER *ioc, 
+	struct LEAPIORAID_ADAPTER *ioc,
 	struct leapioraid_sas_phy *leapioraid_phy,
 	struct LeapioraidSasPhyP0_t phy_pg0,
 	struct device *parent_dev)
@@ -954,7 +949,7 @@ leapioraid_transport_add_host_phy(
 
 int
 leapioraid_transport_add_expander_phy(
-		struct LEAPIORAID_ADAPTER *ioc, 
+		struct LEAPIORAID_ADAPTER *ioc,
 		struct leapioraid_sas_phy *leapioraid_phy,
 		struct LeapioraidExpanderP1_t expander_pg1,
 		struct device *parent_dev)
@@ -1164,7 +1159,7 @@ leapioraid_transport_get_expander_phy_error_log(
 	sz = sizeof(struct leapioraid_phy_error_log_request) +
 	    sizeof(struct leapioraid_phy_error_log_reply);
 	data_out =
-	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma, 
+	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma,
 			GFP_ATOMIC);
 	if (!data_out) {
 		pr_err("failure at %s:%d/%s()!\n", __FILE__,
@@ -1402,7 +1397,7 @@ leapioraid_transport_expander_phy_control(
 	sz = sizeof(struct leapioraid_phy_control_request) +
 	    sizeof(struct leapioraid_phy_control_reply);
 	data_out =
-	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma, 
+	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma,
 			GFP_ATOMIC);
 	if (!data_out) {
 		pr_err("failure at %s:%d/%s()!\n", __FILE__,
@@ -1573,8 +1568,9 @@ leapioraid_transport_phy_enable(struct sas_phy *phy, int enable)
 	for (i = 0, discovery_active = 0; i < ioc->sas_hba.num_phys; i++) {
 		if (sas_iounit_pg0->PhyData[i].PortFlags &
 		    LEAPIORAID_SASIOUNIT0_PORTFLAGS_DISCOVERY_IN_PROGRESS) {
-			pr_err("%s discovery is active on port = %d, phy = %d: \
-				unable to enable/disable phys, try again later!\n",
+			pr_err(
+				"%s discovery is active on port = %d, phy = %d: "
+				"unable to enable/disable phys, try again later!\n",
 				ioc->name,
 				sas_iounit_pg0->PhyData[i].Port,
 				i);

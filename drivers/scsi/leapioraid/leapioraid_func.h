@@ -9,7 +9,7 @@
  *  (mailto:MPT-FusionLinux.pdl@broadcom.com)
  *
  * Copyright (C) 2024 LeapIO Tech Inc.
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -322,19 +322,19 @@ struct leapioraid_sas_device {
 	struct sas_rphy *rphy;
 };
 
-static inline 
+static inline
 void leapioraid_sas_device_get(struct leapioraid_sas_device *s)
 {
 	kref_get(&s->refcount);
 }
 
-static inline 
+static inline
 void leapioraid_sas_device_free(struct kref *r)
 {
 	kfree(container_of(r, struct leapioraid_sas_device, refcount));
 }
 
-static inline 
+static inline
 void leapioraid_sas_device_put(struct leapioraid_sas_device *s)
 {
 	kref_put(&s->refcount, leapioraid_sas_device_free);
@@ -1069,7 +1069,7 @@ void leapioraid_scsihost_set_tm_flag(struct LEAPIORAID_ADAPTER *ioc,
 void leapioraid_scsihost_clear_tm_flag(struct LEAPIORAID_ADAPTER *ioc,
 				       u16 handle);
 void leapioraid_expander_remove(
-	struct LEAPIORAID_ADAPTER *ioc, u64 sas_address, 
+	struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
 	struct leapioraid_hba_port *port);
 void leapioraid_device_remove_by_sas_address(struct LEAPIORAID_ADAPTER *ioc,
 					     u64 sas_address,
@@ -1095,7 +1095,7 @@ struct leapioraid_sas_device *leapioraid_get_sdev_by_addr(
 	u64 sas_address,
 	struct leapioraid_hba_port *port);
 struct leapioraid_sas_device *leapioraid_get_sdev_by_handle(
-	struct LEAPIORAID_ADAPTER*ioc, u16 handle);
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle);
 void leapioraid_scsihost_flush_running_cmds(struct LEAPIORAID_ADAPTER *ioc);
 void leapioraid_port_enable_complete(struct LEAPIORAID_ADAPTER *ioc);
 struct leapioraid_raid_device *leapioraid_raid_device_find_by_handle(
@@ -1116,9 +1116,6 @@ int leapioraid_config_get_manufacturing_pg0(struct LEAPIORAID_ADAPTER *ioc,
 					    struct LeapioraidCfgRep_t *mpi_reply,
 					    struct LeapioraidManP0_t *
 					    config_page);
-int leapioraid_config_get_manufacturing_pg7(struct LEAPIORAID_ADAPTER *ioc,
-					    struct LeapioraidCfgRep_t *mpi_reply,
-					    struct LeapioraidManP7_t *config_page, u16 sz);
 int leapioraid_config_get_manufacturing_pg10(struct LEAPIORAID_ADAPTER *ioc,
 					     struct LeapioraidCfgRep_t *mpi_reply,
 					     struct LeapioraidManuP10_t
@@ -1242,7 +1239,7 @@ void leapioraid_transport_port_remove(struct LEAPIORAID_ADAPTER *ioc,
 				      u64 sas_address, u64 sas_address_parent,
 				      struct leapioraid_hba_port *port);
 int leapioraid_transport_add_host_phy(
-			struct LEAPIORAID_ADAPTER *ioc, 
+			struct LEAPIORAID_ADAPTER *ioc,
 			struct leapioraid_sas_phy *leapioraid_phy,
 			struct LeapioraidSasPhyP0_t phy_pg0,
 			struct device *parent_dev);
