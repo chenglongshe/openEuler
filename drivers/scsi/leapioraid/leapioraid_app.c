@@ -147,7 +147,7 @@ struct LEAPIORAID_IOCTL_EVENTS {
 
 struct leapio_ioctl_eventreport {
 	struct leapio_ioctl_header hdr;
-	struct LEAPIORAID_IOCTL_EVENTS event_data[1];
+	struct LEAPIORAID_IOCTL_EVENTS event_data[];
 };
 
 struct leapio_ioctl_command {
@@ -162,7 +162,7 @@ struct leapio_ioctl_command {
 	uint32_t data_out_size;
 	uint32_t max_sense_bytes;
 	uint32_t data_sge_offset;
-	uint8_t mf[1];
+	uint8_t mf[];
 };
 
 #ifdef CONFIG_COMPAT
@@ -178,7 +178,7 @@ struct leapio_ioctl_command32 {
 	uint32_t data_out_size;
 	uint32_t max_sense_bytes;
 	uint32_t data_sge_offset;
-	uint8_t mf[1];
+	uint8_t mf[];
 };
 #endif
 
