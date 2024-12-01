@@ -59,8 +59,9 @@
 
 #define RAID_CHANNEL 1
 
-static void leapioraid_scsihost_expander_node_remove(struct LEAPIORAID_ADAPTER *ioc,
-					   struct leapioraid_raid_sas_node *sas_expander);
+static void leapioraid_scsihost_expander_node_remove(
+			struct LEAPIORAID_ADAPTER *ioc,
+			struct leapioraid_raid_sas_node *sas_expander);
 static void leapioraid_firmware_event_work(struct work_struct *work);
 static void leapioraid_firmware_event_work_delayed(struct work_struct *work);
 static enum device_responsive_state
@@ -70,30 +71,32 @@ static enum device_responsive_state
 leapioraid_scsihost_inquiry_vpd_supported_pages(struct LEAPIORAID_ADAPTER *ioc,
 				      u16 handle, u32 lun, void *data,
 				      u32 data_length);
-static enum device_responsive_state leapioraid_scsihost_ata_pass_thru_idd(struct
-								LEAPIORAID_ADAPTER
-								*ioc,
-								u16 handle,
-								u8 *
-								is_ssd_device,
-								u8 tr_timeout,
-								u8 tr_method);
+static enum device_responsive_state leapioraid_scsihost_ata_pass_thru_idd(
+			struct LEAPIORAID_ADAPTER *ioc,
+			u16 handle,
+			u8 *is_ssd_device,
+			u8 tr_timeout,
+			u8 tr_method);
 static enum device_responsive_state
-leapioraid_scsihost_wait_for_target_to_become_ready(struct LEAPIORAID_ADAPTER *ioc,
-					  u16 handle, u8 retry_count, u8 is_pd,
-					  u8 tr_timeout, u8 tr_method);
+leapioraid_scsihost_wait_for_target_to_become_ready(
+			struct LEAPIORAID_ADAPTER *ioc,
+			u16 handle, u8 retry_count, u8 is_pd,
+			u8 tr_timeout, u8 tr_method);
 static enum device_responsive_state
-leapioraid_scsihost_wait_for_device_to_become_ready(struct LEAPIORAID_ADAPTER *ioc,
-					  u16 handle, u8 retry_count, u8 is_pd,
-					  int lun, u8 tr_timeout, u8 tr_method);
-static void leapioraid_scsihost_remove_device(struct LEAPIORAID_ADAPTER *ioc,
-				    struct leapioraid_sas_device *sas_device);
-static int leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-				u8 retry_count, u8 is_pd);
-static u8 leapioraid_scsihost_check_for_pending_tm(struct LEAPIORAID_ADAPTER *ioc,
-					 u16 smid);
-static void leapioraid_scsihost_send_event_to_turn_on_pfa_led(struct LEAPIORAID_ADAPTER
-						    *ioc, u16 handle);
+leapioraid_scsihost_wait_for_device_to_become_ready(
+			struct LEAPIORAID_ADAPTER *ioc,
+			u16 handle, u8 retry_count, u8 is_pd,
+			int lun, u8 tr_timeout, u8 tr_method);
+static void leapioraid_scsihost_remove_device(
+			struct LEAPIORAID_ADAPTER *ioc,
+			struct leapioraid_sas_device *sas_device);
+static int leapioraid_scsihost_add_device(
+			struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+			u8 retry_count, u8 is_pd);
+static u8 leapioraid_scsihost_check_for_pending_tm(
+			struct LEAPIORAID_ADAPTER *ioc, u16 smid);
+static void leapioraid_scsihost_send_event_to_turn_on_pfa_led(
+			struct LEAPIORAID_ADAPTER*ioc, u16 handle);
 void leapioraid_scsihost_complete_devices_scanning(struct LEAPIORAID_ADAPTER *ioc);
 
 LIST_HEAD(leapioraid_ioc_list);
@@ -174,14 +177,16 @@ leapioraid_fw_event_work_free(struct kref *r)
 {
 	struct leapioraid_fw_event_work *fw_work;
 
-	fw_work = container_of(r, struct leapioraid_fw_event_work, refcount);
+	fw_work = container_of(
+		r, struct leapioraid_fw_event_work, refcount);
 	kfree(fw_work->event_data);
 	kfree(fw_work->retries);
 	kfree(fw_work);
 }
 
 static void
-leapioraid_fw_event_work_get(struct leapioraid_fw_event_work *fw_work)
+leapioraid_fw_event_work_get(
+	struct leapioraid_fw_event_work *fw_work)
 {
 	kref_get(&fw_work->refcount);
 }
@@ -192,7 +197,8 @@ leapioraid_fw_event_work_put(struct leapioraid_fw_event_work *fw_work)
 	kref_put(&fw_work->refcount, leapioraid_fw_event_work_free);
 }
 
-static struct leapioraid_fw_event_work *leapioraid_alloc_fw_event_work(int len)
+static 
+struct leapioraid_fw_event_work *leapioraid_alloc_fw_event_work(int len)
 {
 	struct leapioraid_fw_event_work *fw_event;
 
@@ -204,7 +210,8 @@ static struct leapioraid_fw_event_work *leapioraid_alloc_fw_event_work(int len)
 }
 
 static int
-leapioraid_scsihost_set_debug_level(const char *val, const struct kernel_param *kp)
+leapioraid_scsihost_set_debug_level(
+	const char *val, const struct kernel_param *kp)
 {
 	int ret = param_set_int(val, kp);
 	struct LEAPIORAID_ADAPTER *ioc;
@@ -219,8 +226,9 @@ leapioraid_scsihost_set_debug_level(const char *val, const struct kernel_param *
 	return 0;
 }
 
-module_param_call(logging_level, leapioraid_scsihost_set_debug_level, param_get_int,
-		  &logging_level, 0644);
+module_param_call(logging_level, 
+		leapioraid_scsihost_set_debug_level, param_get_int,
+		&logging_level, 0644);
 
 static inline int
 leapioraid_scsihost_srch_boot_sas_address(u64 sas_address,
@@ -246,42 +254,45 @@ leapioraid_scsihost_srch_boot_encl_slot(u64 enclosure_logical_id, u16 slot_numbe
 }
 
 static void
-leapioraid_scsihost_display_enclosure_chassis_info(struct LEAPIORAID_ADAPTER *ioc,
-					 struct leapioraid_sas_device *sas_device,
-					 struct scsi_device *sdev,
-					 struct scsi_target *starget)
+leapioraid_scsihost_display_enclosure_chassis_info(
+					struct LEAPIORAID_ADAPTER *ioc,
+					struct leapioraid_sas_device *sas_device,
+					struct scsi_device *sdev,
+					struct scsi_target *starget)
 {
 	if (sdev) {
 		if (sas_device->enclosure_handle != 0)
-			sdev_printk(KERN_INFO, sdev, "enclosure logical id(0x%016llx), slot(%d)\n",
-				    (unsigned long long)
-				    sas_device->enclosure_logical_id,
-				    sas_device->slot);
+			sdev_printk(KERN_INFO, sdev, 
+				"enclosure logical id(0x%016llx), slot(%d)\n",
+				(unsigned long long)sas_device->enclosure_logical_id,
+				sas_device->slot);
 		if (sas_device->connector_name[0] != '\0')
-			sdev_printk(KERN_INFO, sdev, "enclosure level(0x%04x), connector name( %s)\n",
-				    sas_device->enclosure_level,
-				    sas_device->connector_name);
+			sdev_printk(KERN_INFO, sdev, 
+				"enclosure level(0x%04x), connector name( %s)\n",
+				sas_device->enclosure_level,
+				sas_device->connector_name);
 		if (sas_device->is_chassis_slot_valid)
 			sdev_printk(KERN_INFO, sdev, "chassis slot(0x%04x)\n",
 				    sas_device->chassis_slot);
 	} else if (starget) {
 		if (sas_device->enclosure_handle != 0)
-			starget_printk(KERN_INFO, starget, "enclosure logical id(0x%016llx), slot(%d)\n",
-				       (unsigned long long)
-				       sas_device->enclosure_logical_id,
-				       sas_device->slot);
+			starget_printk(KERN_INFO, starget, 
+				"enclosure logical id(0x%016llx), slot(%d)\n",
+				(unsigned long long)sas_device->enclosure_logical_id,
+				sas_device->slot);
 		if (sas_device->connector_name[0] != '\0')
-			starget_printk(KERN_INFO, starget, "enclosure level(0x%04x), connector name( %s)\n",
-				       sas_device->enclosure_level,
-				       sas_device->connector_name);
+			starget_printk(KERN_INFO, starget, 
+				"enclosure level(0x%04x), connector name( %s)\n",
+				sas_device->enclosure_level,
+				sas_device->connector_name);
 		if (sas_device->is_chassis_slot_valid)
-			starget_printk(KERN_INFO, starget, "chassis slot(0x%04x)\n", sas_device->chassis_slot);
+			starget_printk(KERN_INFO, starget, 
+				"chassis slot(0x%04x)\n", sas_device->chassis_slot);
 	} else {
 		if (sas_device->enclosure_handle != 0)
 			pr_info("%s enclosure logical id(0x%016llx), slot(%d)\n",
 			       ioc->name,
-			       (unsigned long long)
-			       sas_device->enclosure_logical_id,
+			       (unsigned long long)sas_device->enclosure_logical_id,
 			       sas_device->slot);
 		if (sas_device->connector_name[0] != '\0')
 			pr_info("%s enclosure level(0x%04x),connector name( %s)\n",
@@ -294,8 +305,9 @@ leapioraid_scsihost_display_enclosure_chassis_info(struct LEAPIORAID_ADAPTER *io
 	}
 }
 
-struct leapioraid_hba_port *leapioraid_get_port_by_id(struct LEAPIORAID_ADAPTER *ioc,
-					   u8 port_id, u8 skip_dirty_flag)
+struct leapioraid_hba_port *leapioraid_get_port_by_id(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u8 port_id, u8 skip_dirty_flag)
 {
 	struct leapioraid_hba_port *port, *port_next;
 
@@ -325,17 +337,18 @@ struct leapioraid_hba_port *leapioraid_get_port_by_id(struct LEAPIORAID_ADAPTER 
 			return NULL;
 		}
 		port->port_id = LEAPIORAID_MULTIPATH_DISABLED_PORT_ID;
-		pr_err(
-		       "%s hba_port entry: %p, port: %d is added to hba_port list\n",
-		       ioc->name, port, port->port_id);
+		pr_err("%s hba_port entry: %p, \
+			port: %d is added to hba_port list\n",
+		    ioc->name, port, port->port_id);
 		list_add_tail(&port->list, &ioc->port_table_list);
 		return port;
 	}
 	return NULL;
 }
 
-struct leapioraid_virtual_phy *leapioraid_get_vphy_by_phy(struct LEAPIORAID_ADAPTER *ioc,
-					       struct leapioraid_hba_port *port, u32 phy)
+struct leapioraid_virtual_phy *leapioraid_get_vphy_by_phy(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_hba_port *port, u32 phy)
 {
 	struct leapioraid_virtual_phy *vphy, *vphy_next;
 
@@ -365,9 +378,10 @@ leapioraid_scsihost_is_boot_device(u64 sas_address, u64 device_name,
 	case LEAPIORAID_BIOSPAGE2_FORM_ENCLOSURE_SLOT:
 		if (!enclosure_logical_id)
 			break;
-		rc = leapioraid_scsihost_srch_boot_encl_slot(enclosure_logical_id,
-						   slot,
-						   &boot_device->EnclosureSlot);
+		rc = leapioraid_scsihost_srch_boot_encl_slot(
+			enclosure_logical_id,
+			slot,
+			&boot_device->EnclosureSlot);
 		break;
 	case LEAPIORAID_BIOSPAGE2_FORM_DEVICE_NAME:
 		if (!device_name)
@@ -382,8 +396,9 @@ leapioraid_scsihost_is_boot_device(u64 sas_address, u64 device_name,
 }
 
 static int
-leapioraid_scsihost_get_sas_address(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-			  u64 *sas_address)
+leapioraid_scsihost_get_sas_address(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+	u64 *sas_address)
 {
 	struct LeapioraidSasDevP0_t sas_device_pg0;
 	struct LeapioraidCfgRep_t mpi_reply;
@@ -416,8 +431,9 @@ leapioraid_scsihost_get_sas_address(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 }
 
 static void
-leapioraid_scsihost_determine_boot_device(struct LEAPIORAID_ADAPTER *ioc, void *device,
-				u32 channel)
+leapioraid_scsihost_determine_boot_device(
+	struct LEAPIORAID_ADAPTER *ioc, void *device,
+	u32 channel)
 {
 	struct leapioraid_sas_device *sas_device;
 	struct leapioraid_raid_device *raid_device;
@@ -516,8 +532,9 @@ struct leapioraid_sas_device *leapioraid_get_sdev_from_target(
 	return ret;
 }
 
-struct leapioraid_sas_device *__leapioraid_get_sdev_by_addr(struct LEAPIORAID_ADAPTER *ioc,
-				u64 sas_address, struct leapioraid_hba_port *port)
+struct leapioraid_sas_device *__leapioraid_get_sdev_by_addr(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u64 sas_address, struct leapioraid_hba_port *port)
 {
 	struct leapioraid_sas_device *sas_device;
 
@@ -560,9 +577,10 @@ found_device:
 	return sas_device;
 }
 
-struct leapioraid_sas_device *leapioraid_get_sdev_by_addr(struct LEAPIORAID_ADAPTER *ioc,
-						u64 sas_address,
-						struct leapioraid_hba_port *port)
+struct leapioraid_sas_device *leapioraid_get_sdev_by_addr(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u64 sas_address,
+	struct leapioraid_hba_port *port)
 {
 	struct leapioraid_sas_device *sas_device = NULL;
 	unsigned long flags;
@@ -617,7 +635,8 @@ leapioraid_scsihost_sas_device_remove(struct LEAPIORAID_ADAPTER *ioc,
 	pr_info("%s %s: removing handle(0x%04x), sas_addr(0x%016llx)\n",
 	       ioc->name, __func__, sas_device->handle,
 	       (unsigned long long)sas_device->sas_address);
-	leapioraid_scsihost_display_enclosure_chassis_info(ioc, sas_device, NULL, NULL);
+	leapioraid_scsihost_display_enclosure_chassis_info(
+		ioc, sas_device, NULL, NULL);
 	spin_lock_irqsave(&ioc->sas_device_lock, flags);
 	if (!list_empty(&sas_device->list)) {
 		list_del_init(&sas_device->list);
@@ -742,7 +761,8 @@ leapioraid_scsihost_sas_device_init_add(
 	spin_unlock_irqrestore(&ioc->sas_device_lock, flags);
 }
 
-static struct leapioraid_raid_device *leapioraid_scsihost_raid_device_find_by_id(
+static 
+struct leapioraid_raid_device *leapioraid_scsihost_raid_device_find_by_id(
 								 struct LEAPIORAID_ADAPTER *ioc, int id,
 							     int channel)
 {
@@ -775,7 +795,8 @@ out:
 	return r;
 }
 
-static struct leapioraid_raid_device *leapioraid_scsihost_raid_device_find_by_wwid(
+static 
+struct leapioraid_raid_device *leapioraid_scsihost_raid_device_find_by_wwid(
 							       struct LEAPIORAID_ADAPTER *ioc, u64 wwid)
 {
 	struct leapioraid_raid_device *raid_device, *r;
@@ -905,8 +926,9 @@ leapioraid_scsihost_is_sas_end_device(u32 device_info)
 }
 
 static u8
-leapioraid_scsihost_scsi_lookup_find_by_target(struct LEAPIORAID_ADAPTER *ioc, int id,
-				     int channel)
+leapioraid_scsihost_scsi_lookup_find_by_target(
+	struct LEAPIORAID_ADAPTER *ioc, int id,
+	int channel)
 {
 	int smid;
 	struct scsi_cmnd *scmd;
@@ -922,8 +944,9 @@ leapioraid_scsihost_scsi_lookup_find_by_target(struct LEAPIORAID_ADAPTER *ioc, i
 }
 
 static u8
-leapioraid_scsihost_scsi_lookup_find_by_lun(struct LEAPIORAID_ADAPTER *ioc, int id,
-				  unsigned int lun, int channel)
+leapioraid_scsihost_scsi_lookup_find_by_lun(
+	struct LEAPIORAID_ADAPTER *ioc, int id,
+	unsigned int lun, int channel)
 {
 	int smid;
 	struct scsi_cmnd *scmd;
@@ -977,7 +1000,8 @@ leapioraid_scsihost_display_sdev_qd(struct scsi_device *sdev)
 }
 
 static int
-leapioraid_scsihost_change_queue_depth(struct scsi_device *sdev, int qdepth)
+leapioraid_scsihost_change_queue_depth(
+	struct scsi_device *sdev, int qdepth)
 {
 	struct Scsi_Host *shost = sdev->host;
 	int max_depth;
@@ -1019,7 +1043,8 @@ not_sata:
 }
 
 void
-leapioraid__scsihost_change_queue_depth(struct scsi_device *sdev, int qdepth)
+leapioraid__scsihost_change_queue_depth(
+	struct scsi_device *sdev, int qdepth)
 {
 	struct Scsi_Host *shost = sdev->host;
 	struct LEAPIORAID_ADAPTER *ioc = leapioraid_shost_private(shost);
@@ -1049,8 +1074,8 @@ leapioraid_scsihost_target_alloc(struct scsi_target *starget)
 	sas_target_priv_data->handle = LEAPIORAID_INVALID_DEVICE_HANDLE;
 	if (starget->channel == RAID_CHANNEL) {
 		spin_lock_irqsave(&ioc->raid_device_lock, flags);
-		raid_device = leapioraid_scsihost_raid_device_find_by_id(ioc, starget->id,
-							       starget->channel);
+		raid_device = leapioraid_scsihost_raid_device_find_by_id(
+			ioc, starget->id, starget->channel);
 		if (raid_device) {
 			sas_target_priv_data->handle = raid_device->handle;
 			sas_target_priv_data->sas_address = raid_device->wwid;
@@ -1099,8 +1124,8 @@ leapioraid_scsihost_target_destroy(struct scsi_target *starget)
 		return;
 	if (starget->channel == RAID_CHANNEL) {
 		spin_lock_irqsave(&ioc->raid_device_lock, flags);
-		raid_device = leapioraid_scsihost_raid_device_find_by_id(ioc, starget->id,
-							       starget->channel);
+		raid_device = leapioraid_scsihost_raid_device_find_by_id(
+			ioc, starget->id, starget->channel);
 		if (raid_device) {
 			raid_device->starget = NULL;
 			raid_device->sdev = NULL;
@@ -1212,8 +1237,9 @@ leapioraid_scsihost_slave_destroy(struct scsi_device *sdev)
 }
 
 static void
-leapioraid_scsihost_display_sata_capabilities(struct LEAPIORAID_ADAPTER *ioc,
-				    u16 handle, struct scsi_device *sdev)
+leapioraid_scsihost_display_sata_capabilities(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u16 handle, struct scsi_device *sdev)
 {
 	struct LeapioraidCfgRep_t mpi_reply;
 	struct LeapioraidSasDevP0_t sas_device_pg0;
@@ -1237,7 +1263,8 @@ leapioraid_scsihost_display_sata_capabilities(struct LEAPIORAID_ADAPTER *ioc,
 	flags = le16_to_cpu(sas_device_pg0.Flags);
 	device_info = le32_to_cpu(sas_device_pg0.DeviceInfo);
 	sdev_printk(KERN_INFO, sdev,
-		    "atapi(%s), ncq(%s), asyn_notify(%s), smart(%s), fua(%s), sw_preserve(%s)\n",
+		    "atapi(%s), ncq(%s), asyn_notify(%s), \
+			smart(%s), fua(%s), sw_preserve(%s)\n",
 		    (device_info & LEAPIORAID_SAS_DEVICE_INFO_ATAPI_DEVICE) ? "y" :
 		    "n",
 		    (flags & LEAPIORAID_SAS_DEVICE0_FLAGS_SATA_NCQ_SUPPORTED) ? "y"
@@ -1276,8 +1303,8 @@ leapioraid_scsihost_get_resync(struct device *dev)
 	percent_complete = 0;
 	handle = 0;
 	spin_lock_irqsave(&ioc->raid_device_lock, flags);
-	raid_device = leapioraid_scsihost_raid_device_find_by_id(ioc, sdev->id,
-						       sdev->channel);
+	raid_device = leapioraid_scsihost_raid_device_find_by_id(
+							ioc, sdev->id, sdev->channel);
 	if (raid_device) {
 		handle = raid_device->handle;
 		percent_complete = raid_device->percent_complete;
@@ -1317,8 +1344,8 @@ leapioraid_scsihost_get_state(struct device *dev)
 	u16 handle = 0;
 
 	spin_lock_irqsave(&ioc->raid_device_lock, flags);
-	raid_device = leapioraid_scsihost_raid_device_find_by_id(ioc, sdev->id,
-						       sdev->channel);
+	raid_device = leapioraid_scsihost_raid_device_find_by_id(
+							ioc, sdev->id, sdev->channel);
 	if (raid_device)
 		handle = raid_device->handle;
 	spin_unlock_irqrestore(&ioc->raid_device_lock, flags);
@@ -1377,8 +1404,9 @@ leapioraid_scsihost_set_level(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static int
-leapioraid_scsihost_get_volume_capabilities(struct LEAPIORAID_ADAPTER *ioc,
-				  struct leapioraid_raid_device *raid_device)
+leapioraid_scsihost_get_volume_capabilities(
+				struct LEAPIORAID_ADAPTER *ioc, 
+				struct leapioraid_raid_device *raid_device)
 {
 	struct LeapioraidRaidVolP0_t *vol_pg0;
 	struct LeapioraidRaidPDP0_t pd_pg0;
@@ -1434,7 +1462,8 @@ leapioraid_scsihost_get_volume_capabilities(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_enable_tlr(struct LEAPIORAID_ADAPTER *ioc, struct scsi_device *sdev)
+leapioraid_scsihost_enable_tlr(
+	struct LEAPIORAID_ADAPTER *ioc, struct scsi_device *sdev)
 {
 	u8 data[30];
 	u8 page_len, ii;
@@ -1486,8 +1515,9 @@ leapioraid_scsihost_enable_tlr(struct LEAPIORAID_ADAPTER *ioc, struct scsi_devic
 }
 
 static void
-leapioraid_scsihost_enable_ssu_on_sata(struct leapioraid_sas_device *sas_device,
-			     struct scsi_device *sdev)
+leapioraid_scsihost_enable_ssu_on_sata(
+	struct leapioraid_sas_device *sas_device,
+	struct scsi_device *sdev)
 {
 	if (!(sas_device->device_info & LEAPIORAID_SAS_DEVICE_INFO_SATA_DEVICE))
 		return;
@@ -1660,7 +1690,8 @@ leapioraid_scsihost_slave_configure(struct scsi_device *sdev)
 		    ds, handle, (unsigned long long)sas_device->sas_address,
 		    sas_device->phy,
 		    (unsigned long long)sas_device->device_name);
-	leapioraid_scsihost_display_enclosure_chassis_info(NULL, sas_device, sdev, NULL);
+	leapioraid_scsihost_display_enclosure_chassis_info(
+		NULL, sas_device, sdev, NULL);
 	leapioraid_sas_device_put(sas_device);
 	spin_unlock_irqrestore(&ioc->sas_device_lock, flags);
 	if (!ssp_target) {
@@ -1685,8 +1716,9 @@ leapioraid_scsihost_slave_configure(struct scsi_device *sdev)
 }
 
 static int
-leapioraid_scsihost_bios_param(struct scsi_device *sdev, struct block_device *bdev,
-		     sector_t capacity, int params[])
+leapioraid_scsihost_bios_param(
+	struct scsi_device *sdev, struct block_device *bdev,
+	sector_t capacity, int params[])
 {
 	int heads;
 	int sectors;
@@ -1712,7 +1744,8 @@ leapioraid_scsihost_bios_param(struct scsi_device *sdev, struct block_device *bd
 }
 
 static void
-leapioraid_scsihost_response_code(struct LEAPIORAID_ADAPTER *ioc, u8 response_code)
+leapioraid_scsihost_response_code(
+	struct LEAPIORAID_ADAPTER *ioc, u8 response_code)
 {
 	char *desc;
 
@@ -1750,8 +1783,9 @@ leapioraid_scsihost_response_code(struct LEAPIORAID_ADAPTER *ioc, u8 response_co
 }
 
 static u8
-leapioraid_scsihost_tm_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
-		  u32 reply)
+leapioraid_scsihost_tm_done(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
+	u32 reply)
 {
 	struct LeapioraidDefaultRep_t *mpi_reply;
 
@@ -1770,7 +1804,9 @@ leapioraid_scsihost_tm_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_in
 	return 1;
 }
 
-void leapioraid_scsihost_set_tm_flag(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+void 
+leapioraid_scsihost_set_tm_flag(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct scsi_device *sdev;
@@ -1791,7 +1827,8 @@ void leapioraid_scsihost_set_tm_flag(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 }
 
 void
-leapioraid_scsihost_clear_tm_flag(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_clear_tm_flag(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct scsi_device *sdev;
@@ -1812,8 +1849,9 @@ leapioraid_scsihost_clear_tm_flag(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 }
 
 int
-scsih_tm_cmd_map_status(struct LEAPIORAID_ADAPTER *ioc, uint channel,
-			uint id, uint lun, u8 type, u16 smid_task)
+scsih_tm_cmd_map_status(
+	struct LEAPIORAID_ADAPTER *ioc, uint channel,
+	uint id, uint lun, u8 type, u16 smid_task)
 {
 	if (smid_task <= ioc->shost->can_queue) {
 		switch (type) {
@@ -1856,19 +1894,21 @@ scsih_tm_post_processing(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 	if (rc == SUCCESS)
 		return rc;
 	pr_err(
-	       "%s Poll ReplyDescriptor queues for \
-			completion of smid(%d), task_type(0x%02x), handle(0x%04x)\n",
-	       	ioc->name, smid_task, type, handle);
+		"%s Poll ReplyDescriptor queues for \
+		completion of smid(%d), task_type(0x%02x), handle(0x%04x)\n",
+		ioc->name, smid_task, type, handle);
 	leapioraid_base_mask_interrupts(ioc);
 	leapioraid_base_sync_reply_irqs(ioc, 1);
 	leapioraid_base_unmask_interrupts(ioc);
-	return scsih_tm_cmd_map_status(ioc, channel, id, lun, type, smid_task);
+	return scsih_tm_cmd_map_status(
+		ioc, channel, id, lun, type, smid_task);
 }
 
 int
-leapioraid_scsihost_issue_tm(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-			     uint channel, uint id, uint lun, u8 type,
-			     u16 smid_task, u8 timeout, u8 tr_method)
+leapioraid_scsihost_issue_tm(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+	uint channel, uint id, uint lun, u8 type,
+	u16 smid_task, u8 timeout, u8 tr_method)
 {
 	struct LeapioraidSCSITmgReq_t *mpi_request;
 	struct LeapioraidSCSITmgRep_t *mpi_reply;
@@ -1898,7 +1938,8 @@ leapioraid_scsihost_issue_tm(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 		rc = leapioraid_base_hard_reset_handler(ioc, FORCE_BIG_HAMMER);
 		return (!rc) ? SUCCESS : FAILED;
 	}
-	if ((ioc_state & LEAPIORAID_IOC_STATE_MASK) == LEAPIORAID_IOC_STATE_FAULT) {
+	if ((ioc_state & LEAPIORAID_IOC_STATE_MASK) \
+		== LEAPIORAID_IOC_STATE_FAULT) {
 		leapioraid_print_fault_code(ioc, ioc_state &
 					    LEAPIORAID_DOORBELL_DATA_MASK);
 		rc = leapioraid_base_hard_reset_handler(ioc, FORCE_BIG_HAMMER);
@@ -1969,12 +2010,12 @@ leapioraid_scsihost_issue_tm(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 			le32_to_cpu(mpi_reply->IOCLogInfo),
 			le32_to_cpu(mpi_reply->TerminationCount)));
 		if (ioc->logging_level & LEAPIORAID_DEBUG_TM) {
-			leapioraid_scsihost_response_code(ioc, mpi_reply->ResponseCode);
+			leapioraid_scsihost_response_code(
+				ioc, mpi_reply->ResponseCode);
 			if (mpi_reply->IOCStatus)
-				leapioraid_debug_dump_mf(mpi_request,
-					       sizeof
-					       (struct LeapioraidSCSITmgReq_t)
-					       / 4);
+				leapioraid_debug_dump_mf(
+					mpi_request,
+					sizeof(struct LeapioraidSCSITmgReq_t) / 4);
 		}
 	}
 	switch (type) {
@@ -1984,17 +2025,17 @@ leapioraid_scsihost_issue_tm(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 		if (le16_to_cpu(request->DevHandle) != handle)
 			break;
 		pr_err(
-		       "%s Task abort tm failed: handle(0x%04x), \
-			   	timeout(%d) tr_method(0x%x) smid(%d) msix_index(%d)\n",
-		       	ioc->name, handle, timeout, tr_method, smid_task,
-		       	msix_task);
+			"%s Task abort tm failed: handle(0x%04x), \
+			timeout(%d) tr_method(0x%x) smid(%d) msix_index(%d)\n",
+			ioc->name, handle, timeout, tr_method, smid_task,
+			msix_task);
 		rc = FAILED;
 		break;
 	case LEAPIORAID_SCSITASKMGMT_TASKTYPE_TARGET_RESET:
 	case LEAPIORAID_SCSITASKMGMT_TASKTYPE_ABRT_TASK_SET:
 	case LEAPIORAID_SCSITASKMGMT_TASKTYPE_LOGICAL_UNIT_RESET:
-		rc = scsih_tm_post_processing(ioc, handle, channel, id, lun,
-					      type, smid_task);
+		rc = scsih_tm_post_processing(
+			ioc, handle, channel, id, lun, type, smid_task);
 		break;
 	case LEAPIORAID_SCSITASKMGMT_TASKTYPE_QUERY_TASK:
 		rc = SUCCESS;
@@ -2010,22 +2051,25 @@ out:
 }
 
 int
-leapioraid_scsihost_issue_locked_tm(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-				    uint channel, uint id, uint lun, u8 type,
-				    u16 smid_task, u8 timeout, u8 tr_method)
+leapioraid_scsihost_issue_locked_tm(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+	uint channel, uint id, uint lun, u8 type,
+	u16 smid_task, u8 timeout, u8 tr_method)
 {
 	int ret;
 
 	mutex_lock(&ioc->tm_cmds.mutex);
-	ret = leapioraid_scsihost_issue_tm(ioc, handle, channel, id, lun, type,
-					   smid_task, timeout, tr_method);
+	ret = leapioraid_scsihost_issue_tm(
+		ioc, handle, channel, id, lun, type,
+		smid_task, timeout, tr_method);
 	mutex_unlock(&ioc->tm_cmds.mutex);
 	return ret;
 }
 
 static void
-leapioraid_scsihost_tm_display_info(struct LEAPIORAID_ADAPTER *ioc,
-			  struct scsi_cmnd *scmd)
+leapioraid_scsihost_tm_display_info(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct scsi_cmnd *scmd)
 {
 	struct scsi_target *starget = scmd->device->sdev_target;
 	struct LEAPIORAID_TARGET *priv_target = starget->hostdata;
@@ -2053,14 +2097,14 @@ leapioraid_scsihost_tm_display_info(struct LEAPIORAID_ADAPTER *ioc,
 			if (priv_target->flags &
 			    LEAPIORAID_TARGET_FLAGS_RAID_COMPONENT) {
 				starget_printk(KERN_INFO, starget,
-					       "volume handle(0x%04x), volume wwid(0x%016llx)\n",
-					       sas_device->volume_handle,
-					       (unsigned long long)sas_device->volume_wwid);
+					"volume handle(0x%04x), volume wwid(0x%016llx)\n",
+					sas_device->volume_handle,
+					(unsigned long long)sas_device->volume_wwid);
 			}
 			starget_printk(KERN_INFO, starget,
-				       "%s: handle(0x%04x), sas_address(0x%016llx), phy(%d)\n",
-				       __func__, sas_device->handle,
-				       (unsigned long long)sas_device->sas_address, sas_device->phy);
+				"%s: handle(0x%04x), sas_address(0x%016llx), phy(%d)\n",
+				__func__, sas_device->handle,
+				(unsigned long long)sas_device->sas_address, sas_device->phy);
 			leapioraid_scsihost_display_enclosure_chassis_info(NULL,
 								 sas_device,
 								 NULL, starget);
@@ -2073,22 +2117,25 @@ leapioraid_scsihost_tm_display_info(struct LEAPIORAID_ADAPTER *ioc,
 static int
 leapioraid_scsihost_abort(struct scsi_cmnd *scmd)
 {
-	struct LEAPIORAID_ADAPTER *ioc = leapioraid_shost_private(scmd->device->host);
+	struct LEAPIORAID_ADAPTER *ioc \
+		= leapioraid_shost_private(scmd->device->host);
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	u16 handle;
 	int r;
-	struct leapioraid_scsiio_tracker *st = leapioraid_base_scsi_cmd_priv(scmd);
+	struct leapioraid_scsiio_tracker *st \
+		= leapioraid_base_scsi_cmd_priv(scmd);
 	u8 timeout = 30;
 
 	sdev_printk(KERN_INFO, scmd->device,
-		    "attempting task abort! scmd(0x%p), outstanding for %u ms & timeout %u ms\n",
-		    scmd, jiffies_to_msecs(jiffies - scmd->jiffies_at_alloc),
-		    (scsi_cmd_to_rq(scmd)->timeout / HZ) * 1000);
+		"attempting task abort! scmd(0x%p), \
+		outstanding for %u ms & timeout %u ms\n",
+		scmd, jiffies_to_msecs(jiffies - scmd->jiffies_at_alloc),
+		(scsi_cmd_to_rq(scmd)->timeout / HZ) * 1000);
 	leapioraid_scsihost_tm_display_info(ioc, scmd);
 	if (leapioraid_base_pci_device_is_unplugged(ioc) || ioc->remove_host) {
 		sdev_printk(KERN_INFO, scmd->device, "%s scmd(0x%p)\n",
-			    ((ioc->remove_host) ? ("shost is getting removed!")
-			     : ("pci device been removed!")), scmd);
+			((ioc->remove_host) ? ("shost is getting removed!")
+				: ("pci device been removed!")), scmd);
 		if (st && st->smid)
 			leapioraid_base_free_smid(ioc, st->smid);
 		scmd->result = DID_NO_CONNECT << 16;
@@ -2097,7 +2144,8 @@ leapioraid_scsihost_abort(struct scsi_cmnd *scmd)
 	}
 	sas_device_priv_data = scmd->device->hostdata;
 	if (!sas_device_priv_data || !sas_device_priv_data->sas_target) {
-		sdev_printk(KERN_INFO, scmd->device, "device been deleted! scmd(0x%p)\n", scmd);
+		sdev_printk(KERN_INFO, scmd->device, 
+			"device been deleted! scmd(0x%p)\n", scmd);
 		scmd->result = DID_NO_CONNECT << 16;
 		scsi_done(scmd);
 		r = SUCCESS;
@@ -2105,8 +2153,9 @@ leapioraid_scsihost_abort(struct scsi_cmnd *scmd)
 	}
 	if (st == NULL || st->cb_idx == 0xFF) {
 		sdev_printk(KERN_INFO, scmd->device,
-			    "No reference found at driver, assuming scmd(0x%p) might have completed\n",
-			    scmd);
+			"No reference found at driver, \
+			assuming scmd(0x%p) might have completed\n",
+			scmd);
 		scmd->result = DID_RESET << 16;
 		r = SUCCESS;
 		goto out;
@@ -2120,22 +2169,25 @@ leapioraid_scsihost_abort(struct scsi_cmnd *scmd)
 	}
 	leapioraid_halt_firmware(ioc, 0);
 	handle = sas_device_priv_data->sas_target->handle;
-	r = leapioraid_scsihost_issue_locked_tm(ioc, handle,
-						scmd->device->channel,
-						scmd->device->id,
-						scmd->device->lun,
-						LEAPIORAID_SCSITASKMGMT_TASKTYPE_ABORT_TASK,
-						st->smid, timeout, 0);
+	r = leapioraid_scsihost_issue_locked_tm(
+			ioc, handle,
+			scmd->device->channel,
+			scmd->device->id,
+			scmd->device->lun,
+			LEAPIORAID_SCSITASKMGMT_TASKTYPE_ABORT_TASK,
+			st->smid, timeout, 0);
 out:
-	sdev_printk(KERN_INFO, scmd->device, "task abort: %s scmd(0x%p)\n",
-		    ((r == SUCCESS) ? "SUCCESS" : "FAILED"), scmd);
+	sdev_printk(KERN_INFO, scmd->device, \
+		"task abort: %s scmd(0x%p)\n",
+		((r == SUCCESS) ? "SUCCESS" : "FAILED"), scmd);
 	return r;
 }
 
 static int
 leapioraid_scsihost_dev_reset(struct scsi_cmnd *scmd)
 {
-	struct LEAPIORAID_ADAPTER *ioc = leapioraid_shost_private(scmd->device->host);
+	struct LEAPIORAID_ADAPTER *ioc \
+		= leapioraid_shost_private(scmd->device->host);
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct leapioraid_sas_device *sas_device = NULL;
 	u16 handle;
@@ -2145,19 +2197,21 @@ leapioraid_scsihost_dev_reset(struct scsi_cmnd *scmd)
 	struct scsi_target *starget = scmd->device->sdev_target;
 	struct LEAPIORAID_TARGET *target_priv_data = starget->hostdata;
 
-	sdev_printk(KERN_INFO, scmd->device, "attempting device reset! scmd(0x%p)\n", scmd);
+	sdev_printk(KERN_INFO, scmd->device, 
+		"attempting device reset! scmd(0x%p)\n", scmd);
 	leapioraid_scsihost_tm_display_info(ioc, scmd);
 	if (leapioraid_base_pci_device_is_unplugged(ioc) || ioc->remove_host) {
 		sdev_printk(KERN_INFO, scmd->device, "%s scmd(0x%p)\n",
-			    ((ioc->remove_host) ? ("shost is getting removed!")
-			     : ("pci device been removed!")), scmd);
+			((ioc->remove_host) ? ("shost is getting removed!")
+				: ("pci device been removed!")), scmd);
 		scmd->result = DID_NO_CONNECT << 16;
 		r = FAILED;
 		goto out;
 	}
 	sas_device_priv_data = scmd->device->hostdata;
 	if (!sas_device_priv_data || !sas_device_priv_data->sas_target) {
-		sdev_printk(KERN_INFO, scmd->device, "device been deleted! scmd(0x%p)\n", scmd);
+		sdev_printk(KERN_INFO, scmd->device, 
+			"device been deleted! scmd(0x%p)\n", scmd);
 		scmd->result = DID_NO_CONNECT << 16;
 		scsi_done(scmd);
 		r = SUCCESS;
@@ -2179,14 +2233,15 @@ leapioraid_scsihost_dev_reset(struct scsi_cmnd *scmd)
 	}
 	tr_method = LEAPIORAID_SCSITASKMGMT_MSGFLAGS_LINK_RESET;
 	r = leapioraid_scsihost_issue_locked_tm(ioc, handle,
-						scmd->device->channel,
-						scmd->device->id,
-						scmd->device->lun,
-						LEAPIORAID_SCSITASKMGMT_TASKTYPE_LOGICAL_UNIT_RESET,
-						0, tr_timeout, tr_method);
+			scmd->device->channel,
+			scmd->device->id,
+			scmd->device->lun,
+			LEAPIORAID_SCSITASKMGMT_TASKTYPE_LOGICAL_UNIT_RESET,
+			0, tr_timeout, tr_method);
 out:
-	sdev_printk(KERN_INFO, scmd->device, "device reset: %s scmd(0x%p)\n",
-		    ((r == SUCCESS) ? "SUCCESS" : "FAILED"), scmd);
+	sdev_printk(KERN_INFO, scmd->device, 
+		"device reset: %s scmd(0x%p)\n",
+		((r == SUCCESS) ? "SUCCESS" : "FAILED"), scmd);
 	if (sas_device)
 		leapioraid_sas_device_put(sas_device);
 	return r;
@@ -2195,7 +2250,8 @@ out:
 static int
 leapioraid_scsihost_target_reset(struct scsi_cmnd *scmd)
 {
-	struct LEAPIORAID_ADAPTER *ioc = leapioraid_shost_private(scmd->device->host);
+	struct LEAPIORAID_ADAPTER *ioc \
+		= leapioraid_shost_private(scmd->device->host);
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct leapioraid_sas_device *sas_device = NULL;
 	u16 handle;
@@ -2205,19 +2261,21 @@ leapioraid_scsihost_target_reset(struct scsi_cmnd *scmd)
 	struct scsi_target *starget = scmd->device->sdev_target;
 	struct LEAPIORAID_TARGET *target_priv_data = starget->hostdata;
 
-	starget_printk(KERN_INFO, starget, "attempting target reset! scmd(0x%p)\n", scmd);
+	starget_printk(KERN_INFO, starget, 
+		"attempting target reset! scmd(0x%p)\n", scmd);
 	leapioraid_scsihost_tm_display_info(ioc, scmd);
 	if (leapioraid_base_pci_device_is_unplugged(ioc) || ioc->remove_host) {
 		sdev_printk(KERN_INFO, scmd->device, "%s scmd(0x%p)\n",
-			    ((ioc->remove_host) ? ("shost is getting removed!")
-			     : ("pci device been removed!")), scmd);
+			((ioc->remove_host) ? ("shost is getting removed!")
+				: ("pci device been removed!")), scmd);
 		scmd->result = DID_NO_CONNECT << 16;
 		r = FAILED;
 		goto out;
 	}
 	sas_device_priv_data = scmd->device->hostdata;
 	if (!sas_device_priv_data || !sas_device_priv_data->sas_target) {
-		starget_printk(KERN_INFO, starget, "target been deleted! scmd(0x%p)\n", scmd);
+		starget_printk(KERN_INFO, starget, 
+			"target been deleted! scmd(0x%p)\n", scmd);
 		scmd->result = DID_NO_CONNECT << 16;
 		scsi_done(scmd);
 		r = SUCCESS;
@@ -2239,13 +2297,14 @@ leapioraid_scsihost_target_reset(struct scsi_cmnd *scmd)
 	}
 	tr_method = LEAPIORAID_SCSITASKMGMT_MSGFLAGS_LINK_RESET;
 	r = leapioraid_scsihost_issue_locked_tm(ioc, handle,
-						scmd->device->channel,
-						scmd->device->id, 0,
-						LEAPIORAID_SCSITASKMGMT_TASKTYPE_TARGET_RESET,
-						0, tr_timeout, tr_method);
+			scmd->device->channel,
+			scmd->device->id, 0,
+			LEAPIORAID_SCSITASKMGMT_TASKTYPE_TARGET_RESET,
+			0, tr_timeout, tr_method);
 out:
-	starget_printk(KERN_INFO, starget, "target reset: %s scmd(0x%p)\n",
-		       ((r == SUCCESS) ? "SUCCESS" : "FAILED"), scmd);
+	starget_printk(KERN_INFO, starget, 
+		"target reset: %s scmd(0x%p)\n",
+		((r == SUCCESS) ? "SUCCESS" : "FAILED"), scmd);
 	if (sas_device)
 		leapioraid_sas_device_put(sas_device);
 	return r;
@@ -2254,7 +2313,8 @@ out:
 static int
 leapioraid_scsihost_host_reset(struct scsi_cmnd *scmd)
 {
-	struct LEAPIORAID_ADAPTER *ioc = leapioraid_shost_private(scmd->device->host);
+	struct LEAPIORAID_ADAPTER *ioc \
+		= leapioraid_shost_private(scmd->device->host);
 	int r, retval;
 
 	pr_info("%s attempting host reset! scmd(0x%p)\n",
@@ -2266,11 +2326,13 @@ leapioraid_scsihost_host_reset(struct scsi_cmnd *scmd)
 		r = FAILED;
 		goto out;
 	}
-	retval = leapioraid_base_hard_reset_handler(ioc, FORCE_BIG_HAMMER);
+	retval = leapioraid_base_hard_reset_handler(
+		ioc, FORCE_BIG_HAMMER);
 	r = (retval < 0) ? FAILED : SUCCESS;
 out:
 	pr_info("%s host reset: %s scmd(0x%p)\n",
-	       ioc->name, ((r == SUCCESS) ? "SUCCESS" : "FAILED"), scmd);
+	       ioc->name, ((r == SUCCESS) ? "SUCCESS" : "FAILED"), 
+		   scmd);
 	return r;
 }
 
@@ -2293,8 +2355,9 @@ leapioraid_scsihost_fw_event_add(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_fw_event_del_from_list(struct LEAPIORAID_ADAPTER *ioc,
-						 struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_fw_event_del_from_list(
+			struct LEAPIORAID_ADAPTER *ioc,
+			struct leapioraid_fw_event_work *fw_event)
 {
 	unsigned long flags;
 
@@ -2307,8 +2370,9 @@ leapioraid_scsihost_fw_event_del_from_list(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_fw_event_requeue(struct LEAPIORAID_ADAPTER *ioc,
-					   struct leapioraid_fw_event_work *fw_event, unsigned long delay)
+leapioraid_scsihost_fw_event_requeue(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event, unsigned long delay)
 {
 	unsigned long flags;
 
@@ -2328,7 +2392,8 @@ leapioraid_scsihost_fw_event_requeue(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_error_recovery_delete_devices(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_error_recovery_delete_devices(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct leapioraid_fw_event_work *fw_event;
 
@@ -2373,7 +2438,8 @@ static struct leapioraid_fw_event_work *dequeue_next_fw_event(
 }
 
 static void
-leapioraid_scsihost_fw_event_cleanup_queue(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_fw_event_cleanup_queue(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct leapioraid_fw_event_work *fw_event;
 	bool rc = false;
@@ -2408,9 +2474,10 @@ leapioraid_scsihost_fw_event_cleanup_queue(struct LEAPIORAID_ADAPTER *ioc)
 }
 
 static void
-leapioraid_scsihost_internal_device_block(struct scsi_device *sdev,
-				struct LEAPIORAID_DEVICE
-				*sas_device_priv_data)
+leapioraid_scsihost_internal_device_block(
+	struct scsi_device *sdev,
+	struct LEAPIORAID_DEVICE
+	*sas_device_priv_data)
 {
 	int r = 0;
 
@@ -2421,8 +2488,8 @@ leapioraid_scsihost_internal_device_block(struct scsi_device *sdev,
 	r = scsi_internal_device_block_nowait(sdev);
 	if (r == -EINVAL)
 		sdev_printk(KERN_WARNING, sdev,
-			    "device_block failed with return(%d) for handle(0x%04x)\n",
-			    r, sas_device_priv_data->sas_target->handle);
+			"device_block failed with return(%d) for handle(0x%04x)\n",
+			r, sas_device_priv_data->sas_target->handle);
 }
 
 static void
@@ -2433,16 +2500,16 @@ leapioraid_scsihost_internal_device_unblock(struct scsi_device *sdev,
 	int r = 0;
 
 	sdev_printk(KERN_WARNING, sdev,
-		    "device_unblock and setting to running, handle(0x%04x)\n",
-		    sas_device_priv_data->sas_target->handle);
+		"device_unblock and setting to running, handle(0x%04x)\n",
+		sas_device_priv_data->sas_target->handle);
 	sas_device_priv_data->block = 0;
 
 	r = scsi_internal_device_unblock_nowait(sdev, SDEV_RUNNING);
 	if (r == -EINVAL) {
 		sdev_printk(KERN_WARNING, sdev,
-			    "device_unblock failed with return(%d) \
-				for handle(0x%04x) performing a block followed by an unblock\n",
-			    r, sas_device_priv_data->sas_target->handle);
+			"device_unblock failed with return(%d) \
+			for handle(0x%04x) performing a block followed by an unblock\n",
+			r, sas_device_priv_data->sas_target->handle);
 		sas_device_priv_data->block = 1;
 		r = scsi_internal_device_block_nowait(sdev);
 		if (r)
@@ -2453,7 +2520,8 @@ leapioraid_scsihost_internal_device_unblock(struct scsi_device *sdev,
 
 		r = scsi_internal_device_unblock_nowait(sdev, SDEV_RUNNING);
 		if (r)
-			sdev_printk(KERN_WARNING, sdev, "retried device_unblock failed \
+			sdev_printk(KERN_WARNING, sdev, 
+				"retried device_unblock failed \
 				with return(%d) for handle(0x%04x)\n",
 				r,
 				sas_device_priv_data->sas_target->handle);
@@ -2461,7 +2529,8 @@ leapioraid_scsihost_internal_device_unblock(struct scsi_device *sdev,
 }
 
 static void
-leapioraid_scsihost_ublock_io_all_device(struct LEAPIORAID_ADAPTER *ioc, u8 no_turs)
+leapioraid_scsihost_ublock_io_all_device(
+	struct LEAPIORAID_ADAPTER *ioc, u8 no_turs)
 {
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct LEAPIORAID_TARGET *sas_target;
@@ -2483,21 +2552,22 @@ leapioraid_scsihost_ublock_io_all_device(struct LEAPIORAID_ADAPTER *ioc, u8 no_t
 			continue;
 		count = 0;
 		if (no_turs) {
-			sdev_printk(KERN_WARNING, sdev, "device_unblocked, handle(0x%04x)\n",
-				    sas_device_priv_data->sas_target->handle);
+			sdev_printk(KERN_WARNING, sdev, 
+				"device_unblocked, handle(0x%04x)\n",
+				sas_device_priv_data->sas_target->handle);
 			leapioraid_scsihost_internal_device_unblock(sdev,
 							  sas_device_priv_data);
 			continue;
 		}
 		do {
-			rc = leapioraid_scsihost_wait_for_device_to_become_ready(ioc,
-								       sas_target->handle,
-								       0,
-								       (sas_target->flags &
-									LEAPIORAID_TARGET_FLAGS_RAID_COMPONENT),
-								       sdev->lun,
-								       tr_timeout,
-								       tr_method);
+			rc = leapioraid_scsihost_wait_for_device_to_become_ready(
+					ioc,
+					sas_target->handle,
+					0,
+					(sas_target->flags & LEAPIORAID_TARGET_FLAGS_RAID_COMPONENT),
+					sdev->lun,
+					tr_timeout,
+					tr_method);
 			if (rc == DEVICE_RETRY || rc == DEVICE_START_UNIT
 			    || rc == DEVICE_STOP_UNIT || rc == DEVICE_RETRY_UA)
 				ssleep(1);
@@ -2507,31 +2577,36 @@ leapioraid_scsihost_ublock_io_all_device(struct LEAPIORAID_ADAPTER *ioc, u8 no_t
 		sas_device_priv_data->block = 0;
 		if (rc != DEVICE_READY)
 			sas_device_priv_data->deleted = 1;
-		leapioraid_scsihost_internal_device_unblock(sdev, sas_device_priv_data);
+		leapioraid_scsihost_internal_device_unblock(
+			sdev, sas_device_priv_data);
 		if (rc != DEVICE_READY) {
-			sdev_printk(KERN_WARNING, sdev, "%s: device_offlined, handle(0x%04x)\n",
-				    __func__,
-				    sas_device_priv_data->sas_target->handle);
+			sdev_printk(KERN_WARNING, sdev, 
+				"%s: device_offlined, handle(0x%04x)\n",
+				__func__,
+				sas_device_priv_data->sas_target->handle);
 			scsi_device_set_state(sdev, SDEV_OFFLINE);
 			sas_device = leapioraid_get_sdev_by_addr(ioc,
-								 sas_device_priv_data->sas_target->sas_address,
-								 sas_device_priv_data->sas_target->port);
+						sas_device_priv_data->sas_target->sas_address,
+						sas_device_priv_data->sas_target->port);
 			if (sas_device) {
-				leapioraid_scsihost_display_enclosure_chassis_info(NULL,
-									 sas_device,
-									 sdev,
-									 NULL);
+				leapioraid_scsihost_display_enclosure_chassis_info(
+						NULL,
+						sas_device,
+						sdev,
+						NULL);
 				leapioraid_sas_device_put(sas_device);
 			}
 		} else
-			sdev_printk(KERN_WARNING, sdev, "device_unblocked, handle(0x%04x)\n",
-				    sas_device_priv_data->sas_target->handle);
+			sdev_printk(KERN_WARNING, sdev, 
+				"device_unblocked, handle(0x%04x)\n",
+				sas_device_priv_data->sas_target->handle);
 	}
 }
 
 static void
-leapioraid_scsihost_ublock_io_device_wait(struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
-				struct leapioraid_hba_port *port)
+leapioraid_scsihost_ublock_io_device_wait(
+	struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
+	struct leapioraid_hba_port *port)
 {
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct LEAPIORAID_TARGET *sas_target;
@@ -2574,14 +2649,14 @@ leapioraid_scsihost_ublock_io_device_wait(struct LEAPIORAID_ADAPTER *ioc, u64 sa
 		count = 0;
 		do {
 			host_reset_completion_count = 0;
-			rc = leapioraid_scsihost_wait_for_device_to_become_ready(ioc,
-								       sas_target->handle,
-								       0,
-								       (sas_target->flags &
-									LEAPIORAID_TARGET_FLAGS_RAID_COMPONENT),
-								       sdev->lun,
-								       tr_timeout,
-								       tr_method);
+			rc = leapioraid_scsihost_wait_for_device_to_become_ready(
+				ioc,
+				sas_target->handle,
+				0,
+				(sas_target->flags & LEAPIORAID_TARGET_FLAGS_RAID_COMPONENT),
+				sdev->lun,
+				tr_timeout,
+				tr_method);
 			if (rc == DEVICE_RETRY || rc == DEVICE_START_UNIT
 			    || rc == DEVICE_STOP_UNIT
 			    || rc == DEVICE_RETRY_UA) {
@@ -2593,7 +2668,8 @@ leapioraid_scsihost_ublock_io_device_wait(struct LEAPIORAID_ADAPTER *ioc, u64 sa
 				if (host_reset_completion_count > 1) {
 					rc = leapioraid_scsihost_wait_for_device_to_become_ready(
 						ioc, sas_target->handle, 0, 
-						(sas_target->flags & LEAPIORAID_TARGET_FLAGS_RAID_COMPONENT), 
+						(sas_target->flags \
+						& LEAPIORAID_TARGET_FLAGS_RAID_COMPONENT), 
 						sdev->lun, tr_timeout, tr_method);
 					if (rc == DEVICE_RETRY
 					    || rc == DEVICE_START_UNIT
@@ -2637,8 +2713,9 @@ leapioraid_scsihost_ublock_io_device_wait(struct LEAPIORAID_ADAPTER *ioc, u64 sa
 }
 
 static void
-leapioraid_scsihost_ublock_io_device(struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
-			   struct leapioraid_hba_port *port)
+leapioraid_scsihost_ublock_io_device(
+		struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
+		struct leapioraid_hba_port *port)
 {
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct scsi_device *sdev;
@@ -2659,7 +2736,8 @@ leapioraid_scsihost_ublock_io_device(struct LEAPIORAID_ADAPTER *ioc, u64 sas_add
 	}
 }
 
-static void leapioraid_scsihost_block_io_all_device(struct LEAPIORAID_ADAPTER *ioc)
+static void leapioraid_scsihost_block_io_all_device(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct scsi_device *sdev;
@@ -2677,12 +2755,14 @@ static void leapioraid_scsihost_block_io_all_device(struct LEAPIORAID_ADAPTER *i
 				    sas_device_priv_data->sas_target->handle);
 			continue;
 		}
-		leapioraid_scsihost_internal_device_block(sdev, sas_device_priv_data);
+		leapioraid_scsihost_internal_device_block(
+			sdev, sas_device_priv_data);
 	}
 }
 
 static void
-leapioraid_scsihost_block_io_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_block_io_device(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct scsi_device *sdev;
@@ -2706,15 +2786,17 @@ leapioraid_scsihost_block_io_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 				    sas_device_priv_data->sas_target->handle);
 			continue;
 		}
-		leapioraid_scsihost_internal_device_block(sdev, sas_device_priv_data);
+		leapioraid_scsihost_internal_device_block(
+			sdev, sas_device_priv_data);
 	}
 	if (sas_device)
 		leapioraid_sas_device_put(sas_device);
 }
 
 static void
-leapioraid_scsihost_block_io_to_children_attached_to_ex(struct LEAPIORAID_ADAPTER *ioc,
-					      struct leapioraid_raid_sas_node *sas_expander)
+leapioraid_scsihost_block_io_to_children_attached_to_ex(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_raid_sas_node *sas_expander)
 {
 	struct leapioraid_sas_port *leapioraid_port;
 	struct leapioraid_sas_device *sas_device;
@@ -2729,8 +2811,8 @@ leapioraid_scsihost_block_io_to_children_attached_to_ex(struct LEAPIORAID_ADAPTE
 		    SAS_END_DEVICE) {
 			spin_lock_irqsave(&ioc->sas_device_lock, flags);
 			sas_device = __leapioraid_get_sdev_by_addr(ioc,
-								   leapioraid_port->remote_identify.sas_address,
-								   leapioraid_port->hba_port);
+					leapioraid_port->remote_identify.sas_address,
+					leapioraid_port->hba_port);
 			if (sas_device) {
 				set_bit(sas_device->handle,
 					ioc->blocking_handles);
@@ -2749,15 +2831,16 @@ leapioraid_scsihost_block_io_to_children_attached_to_ex(struct LEAPIORAID_ADAPTE
 			    leapioraid_scsihost_expander_find_by_sas_address
 			    (ioc, leapioraid_port->remote_identify.sas_address,
 			     leapioraid_port->hba_port);
-			leapioraid_scsihost_block_io_to_children_attached_to_ex(ioc,
-								      expander_sibling);
+			leapioraid_scsihost_block_io_to_children_attached_to_ex(
+				ioc, expander_sibling);
 		}
 	}
 }
 
 static void
-leapioraid_scsihost_block_io_to_children_attached_directly(struct LEAPIORAID_ADAPTER *ioc,
-						 struct LeapioraidEventDataSasTopoChangeList_t *event_data)
+leapioraid_scsihost_block_io_to_children_attached_directly(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataSasTopoChangeList_t *event_data)
 {
 	int i;
 	u16 handle;
@@ -2776,7 +2859,8 @@ leapioraid_scsihost_block_io_to_children_attached_directly(struct LEAPIORAID_ADA
 }
 
 static void
-leapioraid_scsihost_tm_tr_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_tm_tr_send(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct LeapioraidSCSITmgReq_t *mpi_request;
 	u16 smid;
@@ -2790,14 +2874,16 @@ leapioraid_scsihost_tm_tr_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 	u8 tr_method = 0;
 
 	if (ioc->pci_error_recovery) {
-		dewtprintk(ioc, pr_info("%s %s: host in pci error recovery: handle(0x%04x)\n",
-				       __func__, ioc->name, handle));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host in pci error recovery: handle(0x%04x)\n",
+			__func__, ioc->name, handle));
 		return;
 	}
 	ioc_state = leapioraid_base_get_iocstate(ioc, 1);
 	if (ioc_state != LEAPIORAID_IOC_STATE_OPERATIONAL) {
-		dewtprintk(ioc, pr_info("%s %s: host is not operational: handle(0x%04x)\n",
-				       __func__, ioc->name, handle));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host is not operational: handle(0x%04x)\n",
+			__func__, ioc->name, handle));
 		return;
 	}
 	if (test_bit(handle, ioc->pd_handles))
@@ -2816,17 +2902,17 @@ leapioraid_scsihost_tm_tr_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 		tr_method = LEAPIORAID_SCSITASKMGMT_MSGFLAGS_LINK_RESET;
 
 	if (sas_target_priv_data) {
-		dewtprintk(ioc,
-			   pr_err(
-				  "%s %s: setting delete flag: handle(0x%04x), sas_addr(0x%016llx)\n",
-				  ioc->name, __func__, handle,
-				  (unsigned long long)sas_address));
+		dewtprintk(ioc, pr_err(
+			"%s %s: setting delete flag: handle(0x%04x), sas_addr(0x%016llx)\n",
+			ioc->name, __func__, handle,
+			(unsigned long long)sas_address));
 		if (sas_device) {
 			dewtprintk(ioc,
-				   leapioraid_scsihost_display_enclosure_chassis_info(ioc,
-									    sas_device,
-									    NULL,
-									    NULL));
+				   leapioraid_scsihost_display_enclosure_chassis_info(
+							ioc,
+							sas_device,
+							NULL,
+							NULL));
 		}
 		leapioraid_scsihost_ublock_io_device(ioc, sas_address, port);
 		sas_target_priv_data->handle =
@@ -2845,9 +2931,10 @@ leapioraid_scsihost_tm_tr_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 				       ioc->name, handle));
 		goto out;
 	}
-	dewtprintk(ioc, pr_info("%s tr_send:handle(0x%04x), (open), smid(%d), cb(%d)\n",
-			       ioc->name, handle,
-			       smid, ioc->tm_tr_cb_idx));
+	dewtprintk(ioc, pr_info(
+		"%s tr_send:handle(0x%04x), (open), smid(%d), cb(%d)\n",
+		ioc->name, handle,
+		smid, ioc->tm_tr_cb_idx));
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	memset(mpi_request, 0, sizeof(struct LeapioraidSCSITmgReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_SCSI_TASK_MGMT;
@@ -2862,8 +2949,9 @@ out:
 }
 
 static u8
-leapioraid_scsihost_tm_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
-			 u8 msix_index, u32 reply)
+leapioraid_scsihost_tm_tr_complete(
+		struct LEAPIORAID_ADAPTER *ioc, u16 smid,
+		u8 msix_index, u32 reply)
 {
 	u16 handle;
 	struct LeapioraidSCSITmgReq_t *mpi_request_tm;
@@ -2875,13 +2963,15 @@ leapioraid_scsihost_tm_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 	struct leapioraid_sc_list *delayed_sc;
 
 	if (ioc->pci_error_recovery) {
-		dewtprintk(ioc, pr_info("%s %s: host in pci error recovery\n", __func__,
-				       ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host in pci error recovery\n", __func__,
+			ioc->name));
 		return 1;
 	}
 	ioc_state = leapioraid_base_get_iocstate(ioc, 1);
 	if (ioc_state != LEAPIORAID_IOC_STATE_OPERATIONAL) {
-		dewtprintk(ioc, pr_info("%s %s: host is not operational\n", __func__, ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host is not operational\n", __func__, ioc->name));
 		return 1;
 	}
 	if (unlikely(!mpi_reply)) {
@@ -2893,18 +2983,18 @@ leapioraid_scsihost_tm_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 	mpi_request_tm = leapioraid_base_get_msg_frame(ioc, smid);
 	handle = le16_to_cpu(mpi_request_tm->DevHandle);
 	if (handle != le16_to_cpu(mpi_reply->DevHandle)) {
-		dewtprintk(ioc,
-			   pr_err("%s spurious interrupt: handle(0x%04x:0x%04x), smid(%d)!!!\n",
-				  ioc->name, handle,
-				  le16_to_cpu(mpi_reply->DevHandle), smid));
+		dewtprintk(ioc, pr_err(
+			"%s spurious interrupt: handle(0x%04x:0x%04x), smid(%d)!!!\n",
+			ioc->name, handle,
+			le16_to_cpu(mpi_reply->DevHandle), smid));
 		return 0;
 	}
 	dewtprintk(ioc, pr_err(
-			       "%s tr_complete:handle(0x%04x), (open) smid(%d), \
-				   ioc_status(0x%04x), loginfo(0x%08x), completed(%d)\n", ioc->name,
-			       handle, smid, le16_to_cpu(mpi_reply->IOCStatus),
-			       le32_to_cpu(mpi_reply->IOCLogInfo),
-			       le32_to_cpu(mpi_reply->TerminationCount)));
+		"%s tr_complete:handle(0x%04x), (open) smid(%d), \
+		ioc_status(0x%04x), loginfo(0x%08x), completed(%d)\n", ioc->name,
+		handle, smid, le16_to_cpu(mpi_reply->IOCStatus),
+		le32_to_cpu(mpi_reply->IOCLogInfo),
+		le32_to_cpu(mpi_reply->TerminationCount)));
 	smid_sas_ctrl =
 	    leapioraid_base_get_smid(ioc, ioc->tm_sas_control_cb_idx);
 	if (!smid_sas_ctrl) {
@@ -2932,8 +3022,9 @@ leapioraid_scsihost_tm_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 }
 
 inline bool
-leapioraid_scsihost_allow_scmd_to_device(struct LEAPIORAID_ADAPTER *ioc,
-					   struct scsi_cmnd *scmd)
+leapioraid_scsihost_allow_scmd_to_device(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct scsi_cmnd *scmd)
 {
 	if (ioc->pci_error_recovery)
 		return false;
@@ -2954,21 +3045,23 @@ leapioraid_scsihost_allow_scmd_to_device(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static u8
-leapioraid_scsihost_sas_control_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
-			       u8 msix_index, u32 reply)
+leapioraid_scsihost_sas_control_complete(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid,
+	u8 msix_index, u32 reply)
 {
 	struct LeapioraidDefaultRep_t *mpi_reply =
 	    leapioraid_base_get_reply_virt_addr(ioc, reply);
 	u16 dev_handle;
 
 	if (likely(mpi_reply)) {
-		dev_handle = ((struct LeapioraidIoUnitControlRep_t *)mpi_reply)->DevHandle;
+		dev_handle \
+			= ((struct LeapioraidIoUnitControlRep_t *)mpi_reply)->DevHandle;
 		dewtprintk(ioc, pr_err(
-				       "%s sc_complete:handle(0x%04x), (open) smid(%d), \
-					   ioc_status(0x%04x), loginfo(0x%08x)\n",
-				       ioc->name, le16_to_cpu(dev_handle), smid,
-				       le16_to_cpu(mpi_reply->IOCStatus),
-				       le32_to_cpu(mpi_reply->IOCLogInfo)));
+			"%s sc_complete:handle(0x%04x), (open) smid(%d), \
+			ioc_status(0x%04x), loginfo(0x%08x)\n",
+			ioc->name, le16_to_cpu(dev_handle), smid,
+			le16_to_cpu(mpi_reply->IOCStatus),
+			le32_to_cpu(mpi_reply->IOCLogInfo)));
 		if (le16_to_cpu(mpi_reply->IOCStatus) ==
 		    LEAPIORAID_IOCSTATUS_SUCCESS) {
 			clear_bit(le16_to_cpu(dev_handle),
@@ -2976,16 +3069,16 @@ leapioraid_scsihost_sas_control_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smi
 			ioc->tm_tr_retry[le16_to_cpu(dev_handle)] = 0;
 		} else if (ioc->tm_tr_retry[le16_to_cpu(dev_handle)] < 3) {
 			dewtprintk(ioc, pr_err(
-					       "%s re-initiating tm_tr_send:handle(0x%04x)\n",
-					       ioc->name,
-					       le16_to_cpu(dev_handle)));
+				"%s re-initiating tm_tr_send:handle(0x%04x)\n",
+				ioc->name,
+				le16_to_cpu(dev_handle)));
 			ioc->tm_tr_retry[le16_to_cpu(dev_handle)]++;
 			leapioraid_scsihost_tm_tr_send(ioc, le16_to_cpu(dev_handle));
 		} else {
 			dewtprintk(ioc, pr_err(
-					       "%s Exiting out of tm_tr_send retries:handle(0x%04x)\n",
-					       ioc->name,
-					       le16_to_cpu(dev_handle)));
+				"%s Exiting out of tm_tr_send retries:handle(0x%04x)\n",
+				ioc->name,
+				le16_to_cpu(dev_handle)));
 			ioc->tm_tr_retry[le16_to_cpu(dev_handle)] = 0;
 			clear_bit(le16_to_cpu(dev_handle),
 				  ioc->device_remove_in_progress);
@@ -2999,15 +3092,16 @@ leapioraid_scsihost_sas_control_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smi
 }
 
 static void
-leapioraid_scsihost_tm_tr_volume_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_tm_tr_volume_send(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct LeapioraidSCSITmgReq_t *mpi_request;
 	u16 smid;
 	struct leapioraid_tr_list *delayed_tr;
 
 	if (ioc->pci_error_recovery) {
-		dewtprintk(ioc,
-			   pr_info("%s %s: host reset in progress!\n", __func__, ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host reset in progress!\n", __func__, ioc->name));
 		return;
 	}
 	smid = leapioraid_base_get_smid_hpr(ioc, ioc->tm_tr_volume_cb_idx);
@@ -3019,8 +3113,8 @@ leapioraid_scsihost_tm_tr_volume_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle
 		delayed_tr->handle = handle;
 		list_add_tail(&delayed_tr->list, &ioc->delayed_tr_volume_list);
 		dewtprintk(ioc, pr_err(
-				       "%s DELAYED:tr:handle(0x%04x), (open)\n",
-				       ioc->name, handle));
+				"%s DELAYED:tr:handle(0x%04x), (open)\n",
+				ioc->name, handle));
 		return;
 	}
 	dewtprintk(ioc, pr_info("%s tr_send:handle(0x%04x), (open), \
@@ -3035,8 +3129,9 @@ leapioraid_scsihost_tm_tr_volume_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle
 }
 
 static u8
-leapioraid_scsihost_tm_volume_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
-				u8 msix_index, u32 reply)
+leapioraid_scsihost_tm_volume_tr_complete(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid,
+	u8 msix_index, u32 reply)
 {
 	u16 handle;
 	struct LeapioraidSCSITmgReq_t *mpi_request_tm;
@@ -3044,36 +3139,37 @@ leapioraid_scsihost_tm_volume_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 sm
 	    leapioraid_base_get_reply_virt_addr(ioc, reply);
 
 	if (ioc->shost_recovery || ioc->pci_error_recovery) {
-		dewtprintk(ioc,
-			   pr_info("%s %s: host reset in progress!\n", __func__, ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host reset in progress!\n", __func__, ioc->name));
 		return 1;
 	}
 	if (unlikely(!mpi_reply)) {
 		pr_err(
-		       "%s mpi_reply not valid at %s:%d/%s()!\n", ioc->name,
-		       __FILE__, __LINE__, __func__);
+			"%s mpi_reply not valid at %s:%d/%s()!\n", ioc->name,
+			__FILE__, __LINE__, __func__);
 		return 1;
 	}
 	mpi_request_tm = leapioraid_base_get_msg_frame(ioc, smid);
 	handle = le16_to_cpu(mpi_request_tm->DevHandle);
 	if (handle != le16_to_cpu(mpi_reply->DevHandle)) {
-		dewtprintk(ioc,
-			   pr_err("%s spurious interrupt: handle(0x%04x:0x%04x), smid(%d)!!!\n",
-				  ioc->name, handle,
-				  le16_to_cpu(mpi_reply->DevHandle), smid));
+		dewtprintk(ioc, pr_err(
+			"%s spurious interrupt: handle(0x%04x:0x%04x), smid(%d)!!!\n",
+			ioc->name, handle,
+			le16_to_cpu(mpi_reply->DevHandle), smid));
 		return 0;
 	}
 	dewtprintk(ioc, pr_err(
-			    "%s tr_complete:handle(0x%04x), (open) smid(%d), \
-				ioc_status(0x%04x), loginfo(0x%08x), completed(%d)\n", ioc->name,
-			    handle, smid, le16_to_cpu(mpi_reply->IOCStatus),
-			    le32_to_cpu(mpi_reply->IOCLogInfo),
-			    le32_to_cpu(mpi_reply->TerminationCount)));
+		"%s tr_complete:handle(0x%04x), (open) smid(%d), \
+		ioc_status(0x%04x), loginfo(0x%08x), completed(%d)\n", ioc->name,
+		handle, smid, le16_to_cpu(mpi_reply->IOCStatus),
+		le32_to_cpu(mpi_reply->IOCLogInfo),
+		le32_to_cpu(mpi_reply->TerminationCount)));
 	return leapioraid_scsihost_check_for_pending_tm(ioc, smid);
 }
 
 static void
-leapioraid_scsihost_tm_internal_tr_send(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_tm_internal_tr_send(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct leapioraid_tr_list *delayed_tr;
 	struct LeapioraidSCSITmgReq_t *mpi_request;
@@ -3108,23 +3204,23 @@ leapioraid_scsihost_tm_internal_tr_send(struct LEAPIORAID_ADAPTER *ioc, u16 hand
 }
 
 static u8
-leapioraid_scsihost_tm_internal_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
-				  u8 msix_index, u32 reply)
+leapioraid_scsihost_tm_internal_tr_complete(
+		struct LEAPIORAID_ADAPTER *ioc, u16 smid,
+		u8 msix_index, u32 reply)
 {
 	struct LeapioraidSCSITmgRep_t *mpi_reply =
 	    leapioraid_base_get_reply_virt_addr(ioc, reply);
 
 	if (likely(mpi_reply)) {
 		dewtprintk(ioc, pr_err(
-				       "%s tr_complete:handle(0x%04x), \
-					   (open) smid(%d), ioc_status(0x%04x), loginfo(0x%08x)\n",
-				       ioc->name,
-				       le16_to_cpu(mpi_reply->DevHandle), smid,
-				       le16_to_cpu(mpi_reply->IOCStatus),
-				       le32_to_cpu(mpi_reply->IOCLogInfo)));
+			"%s tr_complete:handle(0x%04x), \
+			(open) smid(%d), ioc_status(0x%04x), loginfo(0x%08x)\n",
+			ioc->name,
+			le16_to_cpu(mpi_reply->DevHandle), smid,
+			le16_to_cpu(mpi_reply->IOCStatus),
+			le32_to_cpu(mpi_reply->IOCLogInfo)));
 	} else {
-		pr_err(
-		       "%s mpi_reply not valid at %s:%d/%s()!\n", ioc->name,
+		pr_err("%s mpi_reply not valid at %s:%d/%s()!\n", ioc->name,
 		       __FILE__, __LINE__, __func__);
 		return 1;
 	}
@@ -3132,8 +3228,9 @@ leapioraid_scsihost_tm_internal_tr_complete(struct LEAPIORAID_ADAPTER *ioc, u16 
 }
 
 static void
-leapioraid_scsihost_issue_delayed_event_ack(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
-				  U16 event, U32 event_context)
+leapioraid_scsihost_issue_delayed_event_ack(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid,
+	U16 event, U32 event_context)
 {
 	struct LeapioraidEventAckReq_t *ack_request;
 	int i = smid - ioc->internal_smid;
@@ -3157,8 +3254,9 @@ leapioraid_scsihost_issue_delayed_event_ack(struct LEAPIORAID_ADAPTER *ioc, u16 
 }
 
 static void
-leapioraid_scsihost_issue_delayed_sas_io_unit_ctrl(struct LEAPIORAID_ADAPTER *ioc,
-					 u16 smid, u16 handle)
+leapioraid_scsihost_issue_delayed_sas_io_unit_ctrl(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u16 smid, u16 handle)
 {
 	struct LeapioraidSasIoUnitControlReq_t *mpi_request;
 	u32 ioc_state;
@@ -3166,17 +3264,19 @@ leapioraid_scsihost_issue_delayed_sas_io_unit_ctrl(struct LEAPIORAID_ADAPTER *io
 	unsigned long flags;
 
 	if (ioc->remove_host) {
-		dewtprintk(ioc,
-			   pr_info("%s %s: host has been removed\n", __func__, ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host has been removed\n", __func__, ioc->name));
 		return;
 	} else if (ioc->pci_error_recovery) {
-		dewtprintk(ioc, pr_info("%s %s: host in pci error recovery\n", __func__,
-				       ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host in pci error recovery\n", __func__,
+			ioc->name));
 		return;
 	}
 	ioc_state = leapioraid_base_get_iocstate(ioc, 1);
 	if (ioc_state != LEAPIORAID_IOC_STATE_OPERATIONAL) {
-		dewtprintk(ioc, pr_info("%s %s: host is not operational\n", __func__, ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s %s: host is not operational\n", __func__, ioc->name));
 		return;
 	}
 	spin_lock_irqsave(&ioc->scsi_lookup_lock, flags);
@@ -3223,7 +3323,8 @@ leapioraid_check_for_pending_internal_cmds(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static u8
-leapioraid_scsihost_check_for_pending_tm(struct LEAPIORAID_ADAPTER *ioc, u16 smid)
+leapioraid_scsihost_check_for_pending_tm(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid)
 {
 	struct leapioraid_tr_list *delayed_tr;
 
@@ -3249,7 +3350,8 @@ leapioraid_scsihost_check_for_pending_tm(struct LEAPIORAID_ADAPTER *ioc, u16 smi
 		delayed_tr = list_entry(ioc->delayed_internal_tm_list.next,
 					struct leapioraid_tr_list, list);
 		leapioraid_base_free_smid(ioc, smid);
-		leapioraid_scsihost_tm_internal_tr_send(ioc, delayed_tr->handle);
+		leapioraid_scsihost_tm_internal_tr_send(
+			ioc, delayed_tr->handle);
 		list_del(&delayed_tr->list);
 		kfree(delayed_tr);
 		return 0;
@@ -3258,9 +3360,9 @@ leapioraid_scsihost_check_for_pending_tm(struct LEAPIORAID_ADAPTER *ioc, u16 smi
 }
 
 static void
-leapioraid_scsihost_check_topo_delete_events(struct LEAPIORAID_ADAPTER *ioc,
-				   struct LeapioraidEventDataSasTopoChangeList_t *
-				   event_data)
+leapioraid_scsihost_check_topo_delete_events(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataSasTopoChangeList_t *event_data)
 {
 	struct leapioraid_fw_event_work *fw_event;
 	struct LeapioraidEventDataSasTopoChangeList_t *local_event_data;
@@ -3282,17 +3384,17 @@ leapioraid_scsihost_check_topo_delete_events(struct LEAPIORAID_ADAPTER *ioc,
 	}
 	expander_handle = le16_to_cpu(event_data->ExpanderDevHandle);
 	if (expander_handle < ioc->sas_hba.num_phys) {
-		leapioraid_scsihost_block_io_to_children_attached_directly(ioc,
-								 event_data);
+		leapioraid_scsihost_block_io_to_children_attached_directly(
+			ioc, event_data);
 		return;
 	}
 	if (event_data->ExpStatus ==
 	    LEAPIORAID_EVENT_SAS_TOPO_ES_DELAY_NOT_RESPONDING) {
 		spin_lock_irqsave(&ioc->sas_node_lock, flags);
-		sas_expander = leapioraid_scsihost_expander_find_by_handle(ioc,
-									   expander_handle);
-		leapioraid_scsihost_block_io_to_children_attached_to_ex(ioc,
-							      sas_expander);
+		sas_expander = leapioraid_scsihost_expander_find_by_handle(
+			ioc, expander_handle);
+		leapioraid_scsihost_block_io_to_children_attached_to_ex(
+			ioc, sas_expander);
 		spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 		do {
 			handle = find_first_bit(ioc->blocking_handles,
@@ -3302,8 +3404,8 @@ leapioraid_scsihost_check_topo_delete_events(struct LEAPIORAID_ADAPTER *ioc,
 		} while (test_and_clear_bit(handle, ioc->blocking_handles));
 	} else if (event_data->ExpStatus ==
 		   LEAPIORAID_EVENT_SAS_TOPO_ES_RESPONDING)
-		leapioraid_scsihost_block_io_to_children_attached_directly(ioc,
-								 event_data);
+		leapioraid_scsihost_block_io_to_children_attached_directly(
+			ioc, event_data);
 	if (event_data->ExpStatus != LEAPIORAID_EVENT_SAS_TOPO_ES_NOT_RESPONDING)
 		return;
 	spin_lock_irqsave(&ioc->fw_event_lock, flags);
@@ -3319,8 +3421,8 @@ leapioraid_scsihost_check_topo_delete_events(struct LEAPIORAID_ADAPTER *ioc,
 			if (le16_to_cpu(local_event_data->ExpanderDevHandle) ==
 			    expander_handle) {
 				dewtprintk(ioc, pr_err(
-						       "%s setting ignoring flag\n",
-						       ioc->name));
+					"%s setting ignoring flag\n",
+					ioc->name));
 				fw_event->ignore = 1;
 			}
 		}
@@ -3329,28 +3431,31 @@ leapioraid_scsihost_check_topo_delete_events(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_set_volume_delete_flag(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_set_volume_delete_flag(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct leapioraid_raid_device *raid_device;
 	struct LEAPIORAID_TARGET *sas_target_priv_data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&ioc->raid_device_lock, flags);
-	raid_device = leapioraid_raid_device_find_by_handle(ioc, handle);
+	raid_device = leapioraid_raid_device_find_by_handle(
+		ioc, handle);
 	if (raid_device && raid_device->starget &&
 	    raid_device->starget->hostdata) {
 		sas_target_priv_data = raid_device->starget->hostdata;
 		sas_target_priv_data->deleted = 1;
 		dewtprintk(ioc, pr_err(
-				       "%s setting delete flag: handle(0x%04x), \
-					   wwid(0x%016llx)\n", ioc->name, handle,
-				       (unsigned long long)raid_device->wwid));
+			"%s setting delete flag: handle(0x%04x), \
+			wwid(0x%016llx)\n", ioc->name, handle,
+			(unsigned long long)raid_device->wwid));
 	}
 	spin_unlock_irqrestore(&ioc->raid_device_lock, flags);
 }
 
 static void
-leapioraid_scsihost_set_volume_handle_for_tr(u16 handle, u16 *a, u16 *b)
+leapioraid_scsihost_set_volume_handle_for_tr(
+	u16 handle, u16 *a, u16 *b)
 {
 	if (!handle || handle == *a || handle == *b)
 		return;
@@ -3361,9 +3466,9 @@ leapioraid_scsihost_set_volume_handle_for_tr(u16 handle, u16 *a, u16 *b)
 }
 
 static void
-leapioraid_scsihost_check_ir_config_unhide_events(struct LEAPIORAID_ADAPTER *ioc,
-					struct LeapioraidEventDataIrCfgChangeList_t *
-					event_data)
+leapioraid_scsihost_check_ir_config_unhide_events(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataIrCfgChangeList_t *event_data)
 {
 	struct LeapioraidEventIrCfgEle_t *element;
 	int i;
@@ -3383,8 +3488,8 @@ leapioraid_scsihost_check_ir_config_unhide_events(struct LEAPIORAID_ADAPTER *ioc
 		    element->ReasonCode == LEAPIORAID_EVENT_IR_CHANGE_RC_REMOVED) {
 			volume_handle = le16_to_cpu(element->VolDevHandle);
 			leapioraid_scsihost_set_volume_delete_flag(ioc, volume_handle);
-			leapioraid_scsihost_set_volume_handle_for_tr(volume_handle, &a,
-							   &b);
+			leapioraid_scsihost_set_volume_handle_for_tr(
+				volume_handle, &a, &b);
 		}
 	}
 	element =
@@ -3395,8 +3500,8 @@ leapioraid_scsihost_check_ir_config_unhide_events(struct LEAPIORAID_ADAPTER *ioc
 			continue;
 		if (element->ReasonCode == LEAPIORAID_EVENT_IR_CHANGE_RC_UNHIDE) {
 			volume_handle = le16_to_cpu(element->VolDevHandle);
-			leapioraid_scsihost_set_volume_handle_for_tr(volume_handle, &a,
-							   &b);
+			leapioraid_scsihost_set_volume_handle_for_tr(
+				volume_handle, &a, &b);
 		}
 	}
 	if (a)
@@ -3420,16 +3525,17 @@ leapioraid_scsihost_check_ir_config_unhide_events(struct LEAPIORAID_ADAPTER *ioc
 			delayed_tr->handle = handle;
 			list_add_tail(&delayed_tr->list, &ioc->delayed_tr_list);
 			dewtprintk(ioc, pr_err(
-					       "%s DELAYED:tr:handle(0x%04x), (open)\n",
-					       ioc->name, handle));
+				"%s DELAYED:tr:handle(0x%04x), (open)\n",
+				ioc->name, handle));
 		} else
 			leapioraid_scsihost_tm_tr_send(ioc, handle);
 	}
 }
 
 static void
-leapioraid_scsihost_check_volume_delete_events(struct LEAPIORAID_ADAPTER *ioc,
-				     struct LeapioraidEventDataIrVol_t *event_data)
+leapioraid_scsihost_check_volume_delete_events(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataIrVol_t *event_data)
 {
 	u32 state;
 
@@ -3438,12 +3544,13 @@ leapioraid_scsihost_check_volume_delete_events(struct LEAPIORAID_ADAPTER *ioc,
 	state = le32_to_cpu(event_data->NewValue);
 	if (state == LEAPIORAID_RAID_VOL_STATE_MISSING || state ==
 	    LEAPIORAID_RAID_VOL_STATE_FAILED)
-		leapioraid_scsihost_set_volume_delete_flag(ioc,
-						 le16_to_cpu(event_data->VolDevHandle));
+		leapioraid_scsihost_set_volume_delete_flag(
+			ioc, le16_to_cpu(event_data->VolDevHandle));
 }
 
 static int
-leapioraid_scsihost_set_satl_pending(struct scsi_cmnd *scmd, bool pending)
+leapioraid_scsihost_set_satl_pending(
+	struct scsi_cmnd *scmd, bool pending)
 {
 	struct LEAPIORAID_DEVICE *priv = scmd->device->hostdata;
 
@@ -3457,7 +3564,8 @@ leapioraid_scsihost_set_satl_pending(struct scsi_cmnd *scmd, bool pending)
 }
 
 void
-leapioraid_scsihost_flush_running_cmds(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_flush_running_cmds(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct scsi_cmnd *scmd;
 	struct LeapioraidSCSIIOReq_t *mpi_request;
@@ -3490,7 +3598,8 @@ leapioraid_scsihost_flush_running_cmds(struct LEAPIORAID_ADAPTER *ioc)
 			      ioc->name, count));
 }
 
-static inline u8 scsih_is_io_belongs_to_RT_class(struct scsi_cmnd *scmd)
+static inline u8 scsih_is_io_belongs_to_RT_class(
+	struct scsi_cmnd *scmd)
 {
 	struct request *rq = scsi_cmd_to_rq(scmd);
 
@@ -3498,9 +3607,11 @@ static inline u8 scsih_is_io_belongs_to_RT_class(struct scsi_cmnd *scmd)
 }
 
 static int
-leapioraid_scsihost_qcmd(struct Scsi_Host *shost, struct scsi_cmnd *scmd)
+leapioraid_scsihost_qcmd(
+	struct Scsi_Host *shost, struct scsi_cmnd *scmd)
 {
-	struct LEAPIORAID_ADAPTER *ioc = leapioraid_shost_private(scmd->device->host);
+	struct LEAPIORAID_ADAPTER *ioc \
+		= leapioraid_shost_private(scmd->device->host);
 	struct LEAPIORAID_DEVICE *sas_device_priv_data;
 	struct LEAPIORAID_TARGET *sas_target_priv_data;
 	struct LeapioraidSCSIIOReq_t *mpi_request;
@@ -3545,7 +3656,8 @@ leapioraid_scsihost_qcmd(struct Scsi_Host *shost, struct scsi_cmnd *scmd)
 		scmd->result = DID_NO_CONNECT << 16;
 		scsi_done(scmd);
 		goto out;
-	} else if (sas_target_priv_data->tm_busy || sas_device_priv_data->block) {
+	} else if (sas_target_priv_data->tm_busy \
+		|| sas_device_priv_data->block) {
 		rc = SCSI_MLQUEUE_DEVICE_BUSY;
 		goto out;
 	}
@@ -3570,7 +3682,8 @@ leapioraid_scsihost_qcmd(struct Scsi_Host *shost, struct scsi_cmnd *scmd)
 	if ((sas_device_priv_data->flags & LEAPIORAID_DEVICE_TLR_ON) &&
 	    scmd->cmd_len != 32)
 		mpi_control |= LEAPIORAID_SCSIIO_CONTROL_TLR_ON;
-	smid = leapioraid_base_get_smid_scsiio(ioc, ioc->scsi_io_cb_idx, scmd);
+	smid = leapioraid_base_get_smid_scsiio(
+		ioc, ioc->scsi_io_cb_idx, scmd);
 	if (!smid) {
 		pr_err("%s %s: failed obtaining a smid\n",
 		       ioc->name, __func__);
@@ -3623,7 +3736,8 @@ out:
 }
 
 static void
-leapioraid_scsihost_normalize_sense(char *sense_buffer, struct sense_info *data)
+leapioraid_scsihost_normalize_sense(
+	char *sense_buffer, struct sense_info *data)
 {
 	if ((sense_buffer[0] & 0x7F) >= 0x72) {
 		data->skey = sense_buffer[1] & 0x0F;
@@ -3637,9 +3751,10 @@ leapioraid_scsihost_normalize_sense(char *sense_buffer, struct sense_info *data)
 }
 
 static void
-leapioraid_scsihost_scsi_ioc_info(struct LEAPIORAID_ADAPTER *ioc, struct scsi_cmnd *scmd,
-			struct LeapioraidSCSIIORep_t *mpi_reply, u16 smid,
-			u8 scsi_status, u16 error_response_count)
+leapioraid_scsihost_scsi_ioc_info(
+	struct LEAPIORAID_ADAPTER *ioc, struct scsi_cmnd *scmd,
+	struct LeapioraidSCSIIORep_t *mpi_reply, u16 smid,
+	u8 scsi_status, u16 error_response_count)
 {
 	u32 response_info;
 	u8 *response_bytes;
@@ -3801,15 +3916,16 @@ leapioraid_scsihost_scsi_ioc_info(struct LEAPIORAID_ADAPTER *ioc, struct scsi_cm
 		}
 	}
 	pr_warn(
-	       "%s \thandle(0x%04x), ioc_status(%s)(0x%04x), smid(%d)\n",
-	       ioc->name, le16_to_cpu(mpi_reply->DevHandle), desc_ioc_state,
-	       ioc_status, smid);
+		"%s \thandle(0x%04x), ioc_status(%s)(0x%04x), smid(%d)\n",
+		ioc->name, le16_to_cpu(mpi_reply->DevHandle), desc_ioc_state,
+		ioc_status, smid);
 	pr_warn("%s \trequest_len(%d), underflow(%d), resid(%d)\n", 
 		ioc->name, scsi_bufflen(scmd), scmd->underflow,
 	    scsi_get_resid(scmd));
-	pr_warn("%s \ttag(%d), transfer_count(%d), sc->result(0x%08x)\n", ioc->name,
-	       le16_to_cpu(mpi_reply->TaskTag),
-	       le32_to_cpu(mpi_reply->TransferCount), scmd->result);
+	pr_warn("%s \ttag(%d), transfer_count(%d), sc->result(0x%08x)\n", 
+		ioc->name,
+		le16_to_cpu(mpi_reply->TaskTag),
+		le32_to_cpu(mpi_reply->TransferCount), scmd->result);
 	pr_warn("%s \tscsi_status(%s)(0x%02x), scsi_state(%s)(0x%02x)\n", 
 		ioc->name, desc_scsi_status,
 	    scsi_status, desc_scsi_state, scsi_state);
@@ -3817,7 +3933,8 @@ leapioraid_scsihost_scsi_ioc_info(struct LEAPIORAID_ADAPTER *ioc, struct scsi_cm
 		struct sense_info data;
 
 		leapioraid_scsihost_normalize_sense(scmd->sense_buffer, &data);
-		pr_warn("%s \t[sense_key,asc,ascq]: [0x%02x,0x%02x,0x%02x], count(%d)\n", 
+		pr_warn(
+			"%s \t[sense_key,asc,ascq]: [0x%02x,0x%02x,0x%02x], count(%d)\n", 
 			ioc->name,
 		    data.skey, data.asc, data.ascq,
 		    le32_to_cpu(mpi_reply->SenseCount));
@@ -3830,7 +3947,8 @@ leapioraid_scsihost_scsi_ioc_info(struct LEAPIORAID_ADAPTER *ioc, struct scsi_cm
 }
 
 static void
-leapioraid_scsihost_turn_on_pfa_led(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_turn_on_pfa_led(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct LeapioraidSepRep_t mpi_reply;
 	struct LeapioraidSepReq_t mpi_request;
@@ -3897,8 +4015,9 @@ leapioraid_scsihost_turn_off_pfa_led(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_send_event_to_turn_on_pfa_led(struct LEAPIORAID_ADAPTER *ioc,
-					u16 handle)
+leapioraid_scsihost_send_event_to_turn_on_pfa_led(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u16 handle)
 {
 	struct leapioraid_fw_event_work *fw_event;
 
@@ -3913,8 +4032,9 @@ leapioraid_scsihost_send_event_to_turn_on_pfa_led(struct LEAPIORAID_ADAPTER *ioc
 }
 
 static void
-leapioraid_scsihost_smart_predicted_fault(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-				u8 from_sata_smart_polling)
+leapioraid_scsihost_smart_predicted_fault(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+	u8 from_sata_smart_polling)
 {
 	struct scsi_target *starget;
 	struct LEAPIORAID_TARGET *sas_target_priv_data;
@@ -3971,8 +4091,9 @@ out_unlock:
 }
 
 static u8
-leapioraid_scsihost_io_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
-		  u32 reply)
+leapioraid_scsihost_io_done(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
+	u32 reply)
 {
 	struct LeapioraidSCSIIOReq_t *mpi_request;
 	struct LeapioraidSCSIIORep_t *mpi_reply;
@@ -4032,7 +4153,8 @@ leapioraid_scsihost_io_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_in
 	scsi_status = mpi_reply->SCSIStatus;
 	xfer_cnt = le32_to_cpu(mpi_reply->TransferCount);
 	scsi_set_resid(scmd, scsi_bufflen(scmd) - xfer_cnt);
-	if (ioc_status == LEAPIORAID_IOCSTATUS_SCSI_DATA_UNDERRUN && xfer_cnt == 0
+	if (ioc_status == LEAPIORAID_IOCSTATUS_SCSI_DATA_UNDERRUN 
+		&& xfer_cnt == 0
 	    && (scsi_status == LEAPIORAID_SCSI_STATUS_BUSY
 		|| scsi_status == LEAPIORAID_SCSI_STATUS_RESERVATION_CONFLICT
 		|| scsi_status == LEAPIORAID_SCSI_STATUS_TASK_SET_FULL)) {
@@ -4151,8 +4273,9 @@ leapioraid_scsihost_io_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_in
 		break;
 	}
 	if (scmd->result && (ioc->logging_level & LEAPIORAID_DEBUG_REPLY))
-		leapioraid_scsihost_scsi_ioc_info(ioc, scmd, mpi_reply, smid, scsi_status,
-					error_response_count);
+		leapioraid_scsihost_scsi_ioc_info(
+			ioc, scmd, mpi_reply, smid, scsi_status,
+			error_response_count);
 out:
 	scsi_dma_unmap(scmd);
 	leapioraid_base_free_smid(ioc, smid);
@@ -4161,7 +4284,8 @@ out:
 }
 
 static void
-leapioraid_scsihost_update_vphys_after_reset(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_update_vphys_after_reset(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	u16 sz, ioc_status;
 	int i;
@@ -4183,10 +4307,9 @@ leapioraid_scsihost_update_vphys_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 			vphy->flags |= LEAPIORAID_VPHY_FLAG_DIRTY_PHY;
 		}
 	}
-	sz = offsetof(struct LeapioraidSasIOUnitP0_t, PhyData) + (ioc->sas_hba.num_phys
-							   *
-							   sizeof
-							   (struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
+	sz = offsetof(struct LeapioraidSasIOUnitP0_t, PhyData) \
+		+ (ioc->sas_hba.num_phys \
+		* sizeof(struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
 	sas_iounit_pg0 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg0) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -4205,7 +4328,8 @@ leapioraid_scsihost_update_vphys_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 			continue;
 		if (!
 		    (le32_to_cpu
-		     (sas_iounit_pg0->PhyData[i].ControllerPhyDeviceInfo) & LEAPIORAID_SAS_DEVICE_INFO_SEP))
+		     (sas_iounit_pg0->PhyData[i].ControllerPhyDeviceInfo) \
+			 & LEAPIORAID_SAS_DEVICE_INFO_SEP))
 			continue;
 		if ((leapioraid_config_get_phy_pg0(ioc, &mpi_reply, &phy_pg0,
 						   i))) {
@@ -4256,10 +4380,11 @@ leapioraid_scsihost_update_vphys_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 						break;
 					}
 					mport->port_id = port_id;
-					pr_err(
-					       "%s %s: hba_port entry: %p, port: %d is added to hba_port list\n",
-					       ioc->name, __func__, mport,
-					       mport->port_id);
+					pr_err("%s %s: \
+						hba_port entry: %p, \
+						port: %d is added to hba_port list\n",
+					    ioc->name, __func__, mport,
+					    mport->port_id);
 					list_add_tail(&mport->list,
 						      &ioc->port_table_list);
 				}
@@ -4296,8 +4421,9 @@ out:
 }
 
 static u8
-leapioraid_scsihost_get_port_table_after_reset(struct LEAPIORAID_ADAPTER *ioc,
-				     struct leapioraid_hba_port *port_table)
+leapioraid_scsihost_get_port_table_after_reset(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_hba_port *port_table)
 {
 	u16 sz, ioc_status;
 	int i, j;
@@ -4307,10 +4433,9 @@ leapioraid_scsihost_get_port_table_after_reset(struct LEAPIORAID_ADAPTER *ioc,
 	u64 attached_sas_addr;
 	u8 found = 0, port_count = 0, port_id;
 
-	sz = offsetof(struct LeapioraidSasIOUnitP0_t, PhyData) + (ioc->sas_hba.num_phys
-							   *
-							   sizeof
-							   (struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
+	sz = offsetof(struct LeapioraidSasIOUnitP0_t, PhyData) \
+		+ (ioc->sas_hba.num_phys \
+		* sizeof(struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
 	sas_iounit_pg0 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg0) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -4320,7 +4445,8 @@ leapioraid_scsihost_get_port_table_after_reset(struct LEAPIORAID_ADAPTER *ioc,
 	if ((leapioraid_config_get_sas_iounit_pg0(ioc, &mpi_reply,
 						  sas_iounit_pg0, sz)) != 0)
 		goto out;
-	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
+	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) \
+		& LEAPIORAID_IOCSTATUS_MASK;
 	if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS)
 		goto out;
 	for (i = 0; i < ioc->sas_hba.num_phys; i++) {
@@ -4367,10 +4493,11 @@ enum hba_port_matched_codes {
 	MATCHED_WITH_ADDR,
 };
 static int
-leapioraid_scsihost_look_and_get_matched_port_entry(struct LEAPIORAID_ADAPTER *ioc,
-					  struct leapioraid_hba_port *port_entry,
-					  struct leapioraid_hba_port **matched_port_entry,
-					  int *count)
+leapioraid_scsihost_look_and_get_matched_port_entry(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_hba_port *port_entry,
+	struct leapioraid_hba_port **matched_port_entry,
+	int *count)
 {
 	struct leapioraid_hba_port *port_table_entry, *matched_port = NULL;
 	enum hba_port_matched_codes matched_code = NOT_MATCHED;
@@ -4420,9 +4547,10 @@ leapioraid_scsihost_look_and_get_matched_port_entry(struct LEAPIORAID_ADAPTER *i
 }
 
 static void
-leapioraid_scsihost_del_phy_part_of_anther_port(struct LEAPIORAID_ADAPTER *ioc,
-				      struct leapioraid_hba_port *port_table,
-				      int index, u8 port_count, int offset)
+leapioraid_scsihost_del_phy_part_of_anther_port(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_hba_port *port_table,
+	int index, u8 port_count, int offset)
 {
 	struct leapioraid_raid_sas_node *sas_node = &ioc->sas_hba;
 	u32 i, found = 0;
@@ -4431,10 +4559,11 @@ leapioraid_scsihost_del_phy_part_of_anther_port(struct LEAPIORAID_ADAPTER *ioc,
 		if (i == index)
 			continue;
 		if (port_table[i].phy_mask & (1 << offset)) {
-			leapioraid_transport_del_phy_from_an_existing_port(ioc,
-									   sas_node,
-									   &sas_node->phy
-									   [offset]);
+			leapioraid_transport_del_phy_from_an_existing_port(
+				ioc,
+				sas_node,
+				&sas_node->phy
+				[offset]);
 			found = 1;
 			break;
 		}
@@ -4444,10 +4573,11 @@ leapioraid_scsihost_del_phy_part_of_anther_port(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_add_or_del_phys_from_existing_port(struct LEAPIORAID_ADAPTER *ioc,
-					     struct leapioraid_hba_port *hba_port_entry,
-					     struct leapioraid_hba_port *port_table,
-					     int index, u8 port_count)
+leapioraid_scsihost_add_or_del_phys_from_existing_port(
+		struct LEAPIORAID_ADAPTER *ioc,
+		struct leapioraid_hba_port *hba_port_entry,
+		struct leapioraid_hba_port *port_table,
+		int index, u8 port_count)
 {
 	u32 phy_mask, offset = 0;
 	struct leapioraid_raid_sas_node *sas_node = &ioc->sas_hba;
@@ -4456,11 +4586,12 @@ leapioraid_scsihost_add_or_del_phys_from_existing_port(struct LEAPIORAID_ADAPTER
 	for (offset = 0; offset < ioc->sas_hba.num_phys; offset++) {
 		if (phy_mask & (1 << offset)) {
 			if (!(port_table[index].phy_mask & (1 << offset))) {
-				leapioraid_scsihost_del_phy_part_of_anther_port(ioc,
-								      port_table,
-								      index,
-								      port_count,
-								      offset);
+				leapioraid_scsihost_del_phy_part_of_anther_port(
+					ioc,
+					port_table,
+					index,
+					port_count,
+					offset);
 			} else {
 #if defined(LEAPIORAID_WIDE_PORT_API)
 				if (sas_node->phy[offset].phy_belongs_to_port)
@@ -4490,11 +4621,11 @@ leapioraid_scsihost_del_dirty_vphy(struct LEAPIORAID_ADAPTER *ioc)
 					 list) {
 			if (vphy->flags & LEAPIORAID_VPHY_FLAG_DIRTY_PHY) {
 				drsprintk(ioc, pr_err(
-						      "%s Deleting vphy %p entry from port id: %d\t, \
-								Phy_mask 0x%08x\n",
-						      	ioc->name, vphy,
-						      	port->port_id,
-						      	vphy->phy_mask));
+					"%s Deleting vphy %p entry from port id: %d\t, \
+					Phy_mask 0x%08x\n",
+					ioc->name, vphy,
+					port->port_id,
+					vphy->phy_mask));
 				port->vphys_mask &= ~vphy->phy_mask;
 				list_del(&vphy->list);
 				kfree(vphy);
@@ -4506,7 +4637,8 @@ leapioraid_scsihost_del_dirty_vphy(struct LEAPIORAID_ADAPTER *ioc)
 }
 
 static void
-leapioraid_scsihost_del_dirty_port_entries(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_del_dirty_port_entries(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct leapioraid_hba_port *port, *port_next;
 
@@ -4515,10 +4647,10 @@ leapioraid_scsihost_del_dirty_port_entries(struct LEAPIORAID_ADAPTER *ioc)
 		    port->flags & LEAPIORAID_HBA_PORT_FLAG_NEW_PORT)
 			continue;
 		drsprintk(ioc, pr_err(
-				      "%s Deleting port table entry %p having Port id: %d\t, \
-					  Phy_mask 0x%08x\n",
-				      ioc->name, port, port->port_id,
-				      port->phy_mask));
+			"%s Deleting port table entry %p having Port id: %d\t, \
+			Phy_mask 0x%08x\n",
+			ioc->name, port, port->port_id,
+			port->phy_mask));
 		list_del(&port->list);
 		kfree(port);
 	}
@@ -4536,9 +4668,9 @@ leapioraid_scsihost_sas_port_refresh(struct LEAPIORAID_ADAPTER *ioc)
 	u8 num_phys;
 
 	drsprintk(ioc, pr_err(
-			      "%s updating ports for sas_host(0x%016llx)\n",
-			      ioc->name,
-			      (unsigned long long)ioc->sas_hba.sas_address));
+		"%s updating ports for sas_host(0x%016llx)\n",
+		ioc->name,
+		(unsigned long long)ioc->sas_hba.sas_address));
 	leapioraid_config_get_number_hba_phys(ioc, &num_phys);
 	if (!num_phys) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -4555,17 +4687,18 @@ leapioraid_scsihost_sas_port_refresh(struct LEAPIORAID_ADAPTER *ioc)
 			     sizeof(struct leapioraid_hba_port), GFP_KERNEL);
 	if (!port_table)
 		return;
-	port_count = leapioraid_scsihost_get_port_table_after_reset(ioc, port_table);
+	port_count = leapioraid_scsihost_get_port_table_after_reset(
+		ioc, port_table);
 	if (!port_count)
 		return;
 	drsprintk(ioc,
 		  pr_info("%s New Port table\n", ioc->name));
 	for (j = 0; j < port_count; j++)
 		drsprintk(ioc, pr_err(
-				      "%s Port: %d\t Phy_mask 0x%08x\t sas_addr(0x%016llx)\n",
-				      ioc->name, port_table[j].port_id,
-				      port_table[j].phy_mask,
-				      port_table[j].sas_address));
+			"%s Port: %d\t Phy_mask 0x%08x\t sas_addr(0x%016llx)\n",
+			ioc->name, port_table[j].port_id,
+			port_table[j].phy_mask,
+			port_table[j].sas_address));
 	list_for_each_entry(port_table_entry, &ioc->port_table_list, list) {
 		port_table_entry->flags |= LEAPIORAID_HBA_PORT_FLAG_DIRTY_PORT;
 	}
@@ -4574,32 +4707,32 @@ leapioraid_scsihost_sas_port_refresh(struct LEAPIORAID_ADAPTER *ioc)
 	port_table_entry = NULL;
 	list_for_each_entry(port_table_entry, &ioc->port_table_list, list) {
 		drsprintk(ioc, pr_err(
-				      "%s Port: %d\t Phy_mask 0x%08x\t sas_addr(0x%016llx)\n",
-				      ioc->name, port_table_entry->port_id,
-				      port_table_entry->phy_mask,
-				      port_table_entry->sas_address));
+			"%s Port: %d\t Phy_mask 0x%08x\t sas_addr(0x%016llx)\n",
+			ioc->name, port_table_entry->port_id,
+			port_table_entry->phy_mask,
+			port_table_entry->sas_address));
 	}
 	for (j = 0; j < port_count; j++) {
 		ret = leapioraid_scsihost_look_and_get_matched_port_entry(ioc,
-								&port_table[j],
-								&port_entry,
-								&count);
+			&port_table[j],
+			&port_entry,
+			&count);
 		if (!port_entry) {
 			drsprintk(ioc, pr_err(
-					      "%s No Matched entry for sas_addr(0x%16llx), Port:%d\n",
-					      ioc->name,
-					      port_table[j].sas_address,
-					      port_table[j].port_id));
+				"%s No Matched entry for sas_addr(0x%16llx), Port:%d\n",
+				ioc->name,
+				port_table[j].sas_address,
+				port_table[j].port_id));
 			continue;
 		}
 		switch (ret) {
 		case MATCHED_WITH_ADDR_SUBPHYMASK_AND_PORT:
 		case MATCHED_WITH_ADDR_AND_SUBPHYMASK:
 			leapioraid_scsihost_add_or_del_phys_from_existing_port(ioc,
-								     port_entry,
-								     port_table,
-								     j,
-								     port_count);
+				port_entry,
+				port_table,
+				j,
+				port_count);
 			break;
 		case MATCHED_WITH_ADDR:
 			sas_addr = port_table[j].sas_address;
@@ -4648,8 +4781,9 @@ struct leapioraid_virtual_phy *leapioraid_scsihost_alloc_vphy(
 		port->vphys_mask |= (1 << phy_num);
 		vphy->phy_mask |= (1 << phy_num);
 		list_add_tail(&vphy->list, &port->vphys_list);
-		pr_info("%s vphy entry: %p, port id: %d, phy:%d is added to port's vphys_list\n",
-		       ioc->name, vphy, port->port_id, phy_num);
+		pr_info("%s vphy entry: %p, port id: %d, \
+			phy:%d is added to port's vphys_list\n",
+		    ioc->name, vphy, port->port_id, phy_num);
 	}
 	return vphy;
 }
@@ -4668,12 +4802,13 @@ leapioraid_scsihost_sas_host_refresh(struct LEAPIORAID_ADAPTER *ioc)
 	struct LeapioraidSasPhyP0_t phy_pg0;
 
 	dtmprintk(ioc, pr_err(
-			      "%s updating handles for sas_host(0x%016llx)\n",
-			      ioc->name,
-			      (unsigned long long)ioc->sas_hba.sas_address));
+		"%s updating handles for sas_host(0x%016llx)\n",
+		ioc->name,
+		(unsigned long long)ioc->sas_hba.sas_address));
 	sz = offsetof(struct LeapioraidSasIOUnitP0_t,
 		      PhyData) +
-	    (ioc->sas_hba.num_phys * sizeof(struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
+	    (ioc->sas_hba.num_phys \
+		* sizeof(struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
 	sas_iounit_pg0 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg0) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -4683,7 +4818,8 @@ leapioraid_scsihost_sas_host_refresh(struct LEAPIORAID_ADAPTER *ioc)
 	if ((leapioraid_config_get_sas_iounit_pg0(ioc, &mpi_reply,
 						  sas_iounit_pg0, sz)) != 0)
 		goto out;
-	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
+	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) \
+		& LEAPIORAID_IOCSTATUS_MASK;
 	if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS)
 		goto out;
 	for (i = 0; i < ioc->sas_hba.num_phys; i++) {
@@ -4701,14 +4837,16 @@ leapioraid_scsihost_sas_host_refresh(struct LEAPIORAID_ADAPTER *ioc)
 				goto out;
 			}
 			port->port_id = port_id;
-			pr_info("%s hba_port entry: %p, port: %d is added to hba_port list\n",
-			       ioc->name, port, port->port_id);
+			pr_info("%s hba_port entry: %p, \
+				port: %d is added to hba_port list\n",
+			    ioc->name, port, port->port_id);
 			if (ioc->shost_recovery)
 				port->flags = LEAPIORAID_HBA_PORT_FLAG_NEW_PORT;
 			list_add_tail(&port->list, &ioc->port_table_list);
 		}
 		if (le32_to_cpu
-		    (sas_iounit_pg0->PhyData[i].ControllerPhyDeviceInfo) & LEAPIORAID_SAS_DEVICE_INFO_SEP
+		    (sas_iounit_pg0->PhyData[i].ControllerPhyDeviceInfo) \
+			& LEAPIORAID_SAS_DEVICE_INFO_SEP
 		    && (link_rate >= LEAPIORAID_SAS_NEG_LINK_RATE_1_5)) {
 			if ((leapioraid_config_get_phy_pg0
 			     (ioc, &mpi_reply, &phy_pg0, i))) {
@@ -4789,7 +4927,8 @@ leapioraid_scsihost_sas_host_add(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->sas_hba.nr_phys_allocated =
 	    max_t(u8, LEAPIORAID_MAX_HBA_NUM_PHYS, num_phys);
 	ioc->sas_hba.phy =
-	    kcalloc(ioc->sas_hba.nr_phys_allocated, sizeof(struct leapioraid_sas_phy),
+	    kcalloc(ioc->sas_hba.nr_phys_allocated, 
+			sizeof(struct leapioraid_sas_phy),
 		    GFP_KERNEL);
 	if (!ioc->sas_hba.phy) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -4799,7 +4938,8 @@ leapioraid_scsihost_sas_host_add(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->sas_hba.num_phys = num_phys;
 	sz = offsetof(struct LeapioraidSasIOUnitP0_t,
 		      PhyData) +
-	    (ioc->sas_hba.num_phys * sizeof(struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
+	    (ioc->sas_hba.num_phys \
+		* sizeof(struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA));
 	sas_iounit_pg0 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg0) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -4812,7 +4952,8 @@ leapioraid_scsihost_sas_host_add(struct LEAPIORAID_ADAPTER *ioc)
 		       ioc->name, __FILE__, __LINE__, __func__);
 		goto out;
 	}
-	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
+	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) \
+		& LEAPIORAID_IOCSTATUS_MASK;
 	if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -4820,7 +4961,8 @@ leapioraid_scsihost_sas_host_add(struct LEAPIORAID_ADAPTER *ioc)
 	}
 	sz = offsetof(struct LeapioraidSasIOUnitP1_t,
 		      PhyData) +
-	    (ioc->sas_hba.num_phys * sizeof(struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA));
+	    (ioc->sas_hba.num_phys \
+		* sizeof(struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA));
 	sas_iounit_pg1 = kzalloc(sz, GFP_KERNEL);
 	if (!sas_iounit_pg1) {
 		pr_err("%s failure at %s:%d/%s()!\n",
@@ -4876,8 +5018,9 @@ leapioraid_scsihost_sas_host_add(struct LEAPIORAID_ADAPTER *ioc)
 				goto out;
 			}
 			port->port_id = port_id;
-			pr_info("%s hba_port entry: %p, port: %d is added to hba_port list\n",
-			       ioc->name, port, port->port_id);
+			pr_info("%s hba_port entry: %p, \
+				port: %d is added to hba_port list\n",
+			    ioc->name, port, port->port_id);
 			list_add_tail(&port->list, &ioc->port_table_list);
 		}
 		if ((le32_to_cpu(phy_pg0.PhyInfo) &
@@ -4906,10 +5049,11 @@ leapioraid_scsihost_sas_host_add(struct LEAPIORAID_ADAPTER *ioc)
 	ioc->sas_hba.enclosure_handle =
 	    le16_to_cpu(sas_device_pg0.EnclosureHandle);
 	ioc->sas_hba.sas_address = le64_to_cpu(sas_device_pg0.SASAddress);
-	pr_info("%s host_add: handle(0x%04x), sas_addr(0x%016llx), phys(%d)\n", ioc->name,
-	       ioc->sas_hba.handle,
-	       (unsigned long long)ioc->sas_hba.sas_address,
-	       ioc->sas_hba.num_phys);
+	pr_info("%s host_add: handle(0x%04x), \
+		sas_addr(0x%016llx), phys(%d)\n", ioc->name,
+		ioc->sas_hba.handle,
+		(unsigned long long)ioc->sas_hba.sas_address,
+		ioc->sas_hba.num_phys);
 	if (ioc->sas_hba.enclosure_handle) {
 		if (!(leapioraid_config_get_enclosure_pg0(ioc, &mpi_reply,
 							  &enclosure_pg0,
@@ -4924,7 +5068,8 @@ out:
 }
 
 static int
-leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_expander_add(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct leapioraid_raid_sas_node *sas_expander;
 	struct leapioraid_enclosure_node *enclosure_dev;
@@ -4944,21 +5089,24 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 		return -1;
 	if (ioc->shost_recovery || ioc->pci_error_recovery)
 		return -1;
-	if ((leapioraid_config_get_expander_pg0(ioc, &mpi_reply, &expander_pg0,
-						LEAPIORAID_SAS_EXPAND_PGAD_FORM_HNDL,
-						handle))) {
+	if ((leapioraid_config_get_expander_pg0(
+			ioc, &mpi_reply, &expander_pg0,
+			LEAPIORAID_SAS_EXPAND_PGAD_FORM_HNDL,
+			handle))) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
 		return -1;
 	}
-	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
+	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) \
+		& LEAPIORAID_IOCSTATUS_MASK;
 	if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
 		return -1;
 	}
 	parent_handle = le16_to_cpu(expander_pg0.ParentDevHandle);
-	if (leapioraid_scsihost_get_sas_address(ioc, parent_handle, &sas_address_parent)
+	if (leapioraid_scsihost_get_sas_address(
+		ioc, parent_handle, &sas_address_parent)
 	    != 0) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -4968,12 +5116,10 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 	if (sas_address_parent != ioc->sas_hba.sas_address) {
 		spin_lock_irqsave(&ioc->sas_node_lock, flags);
 		sas_expander =
-		    leapioraid_scsihost_expander_find_by_sas_address(ioc,
-								     sas_address_parent,
-								     leapioraid_get_port_by_id
-								     (ioc,
-								      port_id,
-								      0));
+		    leapioraid_scsihost_expander_find_by_sas_address(
+				ioc,
+				sas_address_parent,
+				leapioraid_get_port_by_id(ioc, port_id, 0));
 		spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 		if (!sas_expander) {
 			rc = leapioraid_scsihost_expander_add(ioc, parent_handle);
@@ -4983,16 +5129,15 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 	}
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
 	sas_address = le64_to_cpu(expander_pg0.SASAddress);
-	sas_expander = leapioraid_scsihost_expander_find_by_sas_address(ioc,
-									sas_address,
-									leapioraid_get_port_by_id
-									(ioc,
-									 port_id,
-									 0));
+	sas_expander = leapioraid_scsihost_expander_find_by_sas_address(
+		ioc,
+		sas_address,
+		leapioraid_get_port_by_id(ioc, port_id, 0));
 	spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 	if (sas_expander)
 		return 0;
-	sas_expander = kzalloc(sizeof(struct leapioraid_raid_sas_node), GFP_KERNEL);
+	sas_expander = kzalloc(sizeof(struct leapioraid_raid_sas_node), 
+		GFP_KERNEL);
 	if (!sas_expander) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5009,9 +5154,11 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 		rc = -1;
 		goto out_fail;
 	}
-	pr_info("%s expander_add: handle(0x%04x), parent(0x%04x), sas_addr(0x%016llx), phys(%d)\n", ioc->name,
-	       handle, parent_handle, (unsigned long long)
-	       sas_expander->sas_address, sas_expander->num_phys);
+	pr_info("%s expander_add: handle(0x%04x), \
+		parent(0x%04x), sas_addr(0x%016llx), phys(%d)\n", 
+		ioc->name,
+	    handle, parent_handle, (unsigned long long)
+	    sas_expander->sas_address, sas_expander->num_phys);
 	if (!sas_expander->num_phys) {
 		rc = -1;
 		goto out_fail;
@@ -5025,9 +5172,10 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 		goto out_fail;
 	}
 	INIT_LIST_HEAD(&sas_expander->sas_port_list);
-	leapioraid_port = leapioraid_transport_port_add(ioc, handle,
-							sas_address_parent,
-							sas_expander->port);
+	leapioraid_port = leapioraid_transport_port_add(
+		ioc, handle,
+		sas_address_parent,
+		sas_expander->port);
 	if (!leapioraid_port) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5037,9 +5185,10 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 	sas_expander->parent_dev = &leapioraid_port->rphy->dev;
 	sas_expander->rphy = leapioraid_port->rphy;
 	for (i = 0; i < sas_expander->num_phys; i++) {
-		if ((leapioraid_config_get_expander_pg1(ioc, &mpi_reply,
-							&expander_pg1, i,
-							handle))) {
+		if ((leapioraid_config_get_expander_pg1(
+				ioc, &mpi_reply,
+				&expander_pg1, i,
+				handle))) {
 			pr_err("%s failure at %s:%d/%s()!\n",
 			       ioc->name, __FILE__, __LINE__, __func__);
 			rc = -1;
@@ -5060,8 +5209,9 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 	}
 	if (sas_expander->enclosure_handle) {
 		enclosure_dev =
-		    leapioraid_scsihost_enclosure_find_by_handle(ioc,
-								 sas_expander->enclosure_handle);
+		    leapioraid_scsihost_enclosure_find_by_handle(
+				ioc,
+				sas_expander->enclosure_handle);
 		if (enclosure_dev)
 			sas_expander->enclosure_logical_id =
 			    le64_to_cpu(enclosure_dev->pg0.EnclosureLogicalID);
@@ -5071,16 +5221,17 @@ leapioraid_scsihost_expander_add(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 out_fail:
 	if (leapioraid_port)
 		leapioraid_transport_port_remove(ioc,
-						 sas_expander->sas_address,
-						 sas_address_parent,
-						 sas_expander->port);
+			sas_expander->sas_address,
+			sas_address_parent,
+			sas_expander->port);
 	kfree(sas_expander);
 	return rc;
 }
 
 void
-leapioraid_expander_remove(struct LEAPIORAID_ADAPTER *ioc,
-			   u64 sas_address, struct leapioraid_hba_port *port)
+leapioraid_expander_remove(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u64 sas_address, struct leapioraid_hba_port *port)
 {
 	struct leapioraid_raid_sas_node *sas_expander;
 	unsigned long flags;
@@ -5090,17 +5241,18 @@ leapioraid_expander_remove(struct LEAPIORAID_ADAPTER *ioc,
 	if (!port)
 		return;
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
-	sas_expander = leapioraid_scsihost_expander_find_by_sas_address(ioc,
-									sas_address,
-									port);
+	sas_expander = leapioraid_scsihost_expander_find_by_sas_address(
+		ioc, sas_address, port);
 	spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 	if (sas_expander)
-		leapioraid_scsihost_expander_node_remove(ioc, sas_expander);
+		leapioraid_scsihost_expander_node_remove(
+			ioc, sas_expander);
 }
 
 static u8
-leapioraid_scsihost_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
-	       u32 reply)
+leapioraid_scsihost_done(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index,
+	u32 reply)
 {
 	struct LeapioraidDefaultRep_t *mpi_reply;
 
@@ -5121,9 +5273,10 @@ leapioraid_scsihost_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid, u8 msix_index
 }
 
 static int
-leapioraid_scsi_send_scsi_io(struct LEAPIORAID_ADAPTER *ioc,
-			      struct leapioraid_scsi_io_transfer *transfer_packet, 
-				  u8 tr_timeout, u8 tr_method)
+leapioraid_scsi_send_scsi_io(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_scsi_io_transfer *transfer_packet, 
+	u8 tr_timeout, u8 tr_method)
 {
 	struct LeapioraidSCSIIORep_t *mpi_reply;
 	struct LeapioSCSIIOReq_t *mpi_request;
@@ -5143,9 +5296,8 @@ leapioraid_scsi_send_scsi_io(struct LEAPIORAID_ADAPTER *ioc,
 	int tm_return_code;
 
 	if (ioc->pci_error_recovery) {
-		pr_err(
-		       "%s %s: pci error recovery in progress!\n", ioc->name,
-		       __func__);
+		pr_err("%s %s: pci error recovery in progress!\n", 
+			ioc->name, __func__);
 		return -EFAULT;
 	}
 	if (ioc->shost_recovery) {
@@ -5177,7 +5329,8 @@ retry_loop:
 	rc = leapioraid_wait_for_ioc_to_operational(ioc, 10);
 	if (rc)
 		goto out;
-	smid = ioc->shost->can_queue + LEAPIORAID_INTERNAL_SCSIIO_FOR_DISCOVERY;
+	smid = ioc->shost->can_queue \
+		+ LEAPIORAID_INTERNAL_SCSIIO_FOR_DISCOVERY;
 	rc = 0;
 	mpi_request = leapioraid_base_get_msg_frame(ioc, smid);
 	ioc->scsih_cmds.smid = smid;
@@ -5209,8 +5362,10 @@ retry_loop:
 		break;
 	}
 	psge = &mpi_request->SGL;
-	ioc->build_sg(ioc, psge, data_out_dma, data_out_sz, data_in_dma,
-		      data_in_sz);
+	ioc->build_sg(
+		ioc, psge, data_out_dma, 
+		data_out_sz, data_in_dma,
+		data_in_sz);
 	mpi_request->Control = cpu_to_le32(mpi_control |
 					   LEAPIORAID_SCSIIO_CONTROL_SIMPLEQ);
 	mpi_request->DataLength = cpu_to_le32(transfer_packet->data_length);
@@ -5275,12 +5430,13 @@ issue_target_reset:
 			     && retry_count++ < 3)
 			    || ((ioc->scsih_cmds.status & LEAPIORAID_CMD_RESET)
 				&& host_reset_count++ == 0)) {
-				pr_info("%s issue retry: handle (0x%04x)\n", ioc->name, handle);
+				pr_info("%s issue retry: handle (0x%04x)\n", 
+					ioc->name, handle);
 				goto retry_loop;
 			}
 		} else
-			pr_err(
-			       "%s target reset didn't complete: handle(0x%04x)\n", ioc->name, handle);
+			pr_err("%s target reset didn't complete: handle(0x%04x)\n", 
+				ioc->name, handle);
 		rc = -EFAULT;
 	} else
 		rc = -EAGAIN;
@@ -5291,8 +5447,9 @@ out:
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_determine_disposition(struct LEAPIORAID_ADAPTER *ioc,
-				struct leapioraid_scsi_io_transfer *transfer_packet)
+leapioraid_scsihost_determine_disposition(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_scsi_io_transfer *transfer_packet)
 {
 	static enum device_responsive_state rc;
 	struct sense_info sense_info = { 0, 0, 0 };
@@ -5358,7 +5515,8 @@ leapioraid_scsihost_determine_disposition(struct LEAPIORAID_ADAPTER *ioc,
 		break;
 	}
 	if (check_sense) {
-		leapioraid_scsihost_normalize_sense(transfer_packet->sense, &sense_info);
+		leapioraid_scsihost_normalize_sense(
+			transfer_packet->sense, &sense_info);
 		if (sense_info.skey == UNIT_ATTENTION)
 			rc = DEVICE_RETRY_UA;
 		else if (sense_info.skey == NOT_READY) {
@@ -5411,16 +5569,18 @@ leapioraid_scsihost_determine_disposition(struct LEAPIORAID_ADAPTER *ioc,
 		       transfer_packet->log_info, transfer_packet->scsi_status,
 		       transfer_packet->scsi_state, desc);
 		if (check_sense)
-			pr_info("%s \t[sense_key,asc,ascq]: [0x%02x,0x%02x,0x%02x]\n", ioc->name,
-			       sense_info.skey, sense_info.asc,
-			       sense_info.ascq);
+			pr_info("%s \t[sense_key,asc,ascq]: [0x%02x,0x%02x,0x%02x]\n", 
+				ioc->name,
+				sense_info.skey, sense_info.asc,
+				sense_info.ascq);
 	}
 	return rc;
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_inquiry_vpd_sn(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-			 u8 **serial_number)
+leapioraid_scsihost_inquiry_vpd_sn(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+	u8 **serial_number)
 {
 	struct leapioraid_scsi_io_transfer *transfer_packet;
 	enum device_responsive_state rc;
@@ -5432,7 +5592,8 @@ leapioraid_scsihost_inquiry_vpd_sn(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 	u8 tr_method = 0;
 
 	inq_data = NULL;
-	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), GFP_KERNEL);
+	transfer_packet \
+		= kzalloc(sizeof(struct leapioraid_scsi_io_transfer), GFP_KERNEL);
 	if (!transfer_packet) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5461,15 +5622,18 @@ leapioraid_scsihost_inquiry_vpd_sn(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 	transfer_packet->timeout = 30;
 	tr_method = LEAPIORAID_SCSITASKMGMT_MSGFLAGS_LINK_RESET;
 	return_code =
-	    leapioraid_scsi_send_scsi_io(ioc, transfer_packet, tr_timeout, tr_method);
+	    leapioraid_scsi_send_scsi_io(
+			ioc, transfer_packet, tr_timeout, tr_method);
 	switch (return_code) {
 	case 0:
-		rc = leapioraid_scsihost_determine_disposition(ioc, transfer_packet);
+		rc = leapioraid_scsihost_determine_disposition(
+			ioc, transfer_packet);
 		if (rc == DEVICE_READY) {
 			len = strlen(&inq_data[4]) + 1;
 			*serial_number = kmalloc(len, GFP_KERNEL);
 			if (*serial_number)
-				strscpy(*serial_number, &inq_data[4], sizeof(*serial_number));
+				strscpy(*serial_number, &inq_data[4], \
+					sizeof(*serial_number));
 		}
 		break;
 	case -EAGAIN:
@@ -5491,9 +5655,10 @@ out:
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_inquiry_vpd_supported_pages(struct LEAPIORAID_ADAPTER *ioc,
-				      u16 handle, u32 lun, void *data,
-				      u32 data_length)
+leapioraid_scsihost_inquiry_vpd_supported_pages(
+			struct LEAPIORAID_ADAPTER *ioc,
+			u16 handle, u32 lun, void *data,
+			u32 data_length)
 {
 	struct leapioraid_scsi_io_transfer *transfer_packet;
 	enum device_responsive_state rc;
@@ -5501,7 +5666,8 @@ leapioraid_scsihost_inquiry_vpd_supported_pages(struct LEAPIORAID_ADAPTER *ioc,
 	int return_code;
 
 	inq_data = NULL;
-	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), GFP_KERNEL);
+	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), 
+		GFP_KERNEL);
 	if (!transfer_packet) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5527,10 +5693,12 @@ leapioraid_scsihost_inquiry_vpd_supported_pages(struct LEAPIORAID_ADAPTER *ioc,
 	transfer_packet->cdb[1] = 1;
 	transfer_packet->cdb[4] = data_length;
 	transfer_packet->timeout = 30;
-	return_code = leapioraid_scsi_send_scsi_io(ioc, transfer_packet, 30, 0);
+	return_code = leapioraid_scsi_send_scsi_io(
+		ioc, transfer_packet, 30, 0);
 	switch (return_code) {
 	case 0:
-		rc = leapioraid_scsihost_determine_disposition(ioc, transfer_packet);
+		rc = leapioraid_scsihost_determine_disposition(
+			ioc, transfer_packet);
 		if (rc == DEVICE_READY)
 			memcpy(data, inq_data, data_length);
 		break;
@@ -5553,9 +5721,10 @@ out:
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_report_luns(struct LEAPIORAID_ADAPTER *ioc, u16 handle, void *data,
-		      u32 data_length, u8 retry_count, u8 is_pd, u8 tr_timeout,
-		      u8 tr_method)
+leapioraid_scsihost_report_luns(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle, void *data,
+	u32 data_length, u8 retry_count, u8 is_pd, u8 tr_timeout,
+	u8 tr_method)
 {
 	struct leapioraid_scsi_io_transfer *transfer_packet;
 	enum device_responsive_state rc;
@@ -5564,7 +5733,8 @@ leapioraid_scsihost_report_luns(struct LEAPIORAID_ADAPTER *ioc, u16 handle, void
 	int retries;
 
 	lun_data = NULL;
-	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), GFP_KERNEL);
+	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), 
+		GFP_KERNEL);
 	if (!transfer_packet) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5630,14 +5800,16 @@ out:
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_start_unit(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u32 lun,
-		     u8 is_pd, u8 tr_timeout, u8 tr_method)
+leapioraid_scsihost_start_unit(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle, u32 lun,
+	u8 is_pd, u8 tr_timeout, u8 tr_method)
 {
 	struct leapioraid_scsi_io_transfer *transfer_packet;
 	enum device_responsive_state rc;
 	int return_code;
 
-	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), GFP_KERNEL);
+	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), 
+		GFP_KERNEL);
 	if (!transfer_packet) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5654,12 +5826,15 @@ leapioraid_scsihost_start_unit(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u32 l
 	transfer_packet->cdb[4] = 1;
 	transfer_packet->timeout = 30;
 	transfer_packet->is_raid = is_pd;
-	pr_info("%s START_UNIT: handle(0x%04x), lun(%d)\n", ioc->name, handle, lun);
+	pr_info("%s START_UNIT: handle(0x%04x), lun(%d)\n", 
+		ioc->name, handle, lun);
 	return_code =
-	    leapioraid_scsi_send_scsi_io(ioc, transfer_packet, tr_timeout, tr_method);
+	    leapioraid_scsi_send_scsi_io(
+			ioc, transfer_packet, tr_timeout, tr_method);
 	switch (return_code) {
 	case 0:
-		rc = leapioraid_scsihost_determine_disposition(ioc, transfer_packet);
+		rc = leapioraid_scsihost_determine_disposition(
+			ioc, transfer_packet);
 		break;
 	case -EAGAIN:
 		rc = DEVICE_RETRY;
@@ -5677,15 +5852,17 @@ out:
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_test_unit_ready(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u32 lun,
-			  u8 is_pd, u8 tr_timeout, u8 tr_method)
+leapioraid_scsihost_test_unit_ready(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle, u32 lun,
+	u8 is_pd, u8 tr_timeout, u8 tr_method)
 {
 	struct leapioraid_scsi_io_transfer *transfer_packet;
 	enum device_responsive_state rc;
 	int return_code;
 	int sata_init_failure = 0;
 
-	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), GFP_KERNEL);
+	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), 
+		GFP_KERNEL);
 	if (!transfer_packet) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5701,24 +5878,27 @@ leapioraid_scsihost_test_unit_ready(struct LEAPIORAID_ADAPTER *ioc, u16 handle, 
 	transfer_packet->timeout = 30;
 	transfer_packet->is_raid = is_pd;
 sata_init_retry:
-	pr_info("%s TEST_UNIT_READY: handle(0x%04x), lun(%d)\n", ioc->name, handle, lun);
+	pr_info("%s TEST_UNIT_READY: handle(0x%04x), lun(%d)\n", 
+		ioc->name, handle, lun);
 	return_code =
-	    leapioraid_scsi_send_scsi_io(ioc, transfer_packet, tr_timeout, tr_method);
+	    leapioraid_scsi_send_scsi_io(
+			ioc, transfer_packet, tr_timeout, tr_method);
 	switch (return_code) {
 	case 0:
-		rc = leapioraid_scsihost_determine_disposition(ioc, transfer_packet);
+		rc = leapioraid_scsihost_determine_disposition(
+			ioc, transfer_packet);
 		if (rc == DEVICE_RETRY &&
 		    transfer_packet->log_info == 0x31111000) {
 			if (!sata_init_failure++) {
 				pr_err(
-				       "%s SATA Initialization Timeout,sending a retry\n", 
-					   ioc->name);
+					"%s SATA Initialization Timeout,sending a retry\n", 
+					ioc->name);
 				rc = DEVICE_READY;
 				goto sata_init_retry;
 			} else {
 				pr_err(
-				       "%s SATA Initialization Failed\n",
-				       ioc->name);
+					"%s SATA Initialization Failed\n",
+					ioc->name);
 				rc = DEVICE_ERROR;
 			}
 		}
@@ -5739,8 +5919,9 @@ out:
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_ata_pass_thru_idd(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-			    u8 *is_ssd_device, u8 tr_timeout, u8 tr_method)
+leapioraid_scsihost_ata_pass_thru_idd(
+		struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+		u8 *is_ssd_device, u8 tr_timeout, u8 tr_method)
 {
 	struct leapioraid_scsi_io_transfer *transfer_packet;
 	enum device_responsive_state rc;
@@ -5749,7 +5930,8 @@ leapioraid_scsihost_ata_pass_thru_idd(struct LEAPIORAID_ADAPTER *ioc, u16 handle
 	u32 data_length;
 
 	idd_data = NULL;
-	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), GFP_KERNEL);
+	transfer_packet = kzalloc(sizeof(struct leapioraid_scsi_io_transfer), 
+		GFP_KERNEL);
 	if (!transfer_packet) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -5777,10 +5959,12 @@ leapioraid_scsihost_ata_pass_thru_idd(struct LEAPIORAID_ADAPTER *ioc, u16 handle
 	transfer_packet->cdb[3] = 0x1;
 	transfer_packet->cdb[9] = 0xec;
 	transfer_packet->timeout = 30;
-	return_code = leapioraid_scsi_send_scsi_io(ioc, transfer_packet, 30, 0);
+	return_code = leapioraid_scsi_send_scsi_io(
+		ioc, transfer_packet, 30, 0);
 	switch (return_code) {
 	case 0:
-		rc = leapioraid_scsihost_determine_disposition(ioc, transfer_packet);
+		rc = leapioraid_scsihost_determine_disposition(
+			ioc, transfer_packet);
 		if (rc == DEVICE_READY) {
 			if (le16_to_cpu(idd_data[217]) == 1)
 				*is_ssd_device = 1;
@@ -5806,9 +5990,10 @@ out:
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_wait_for_device_to_become_ready(struct LEAPIORAID_ADAPTER *ioc,
-					  u16 handle, u8 retry_count, u8 is_pd,
-					  int lun, u8 tr_timeout, u8 tr_method)
+leapioraid_scsihost_wait_for_device_to_become_ready(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u16 handle, u8 retry_count, u8 is_pd,
+	int lun, u8 tr_timeout, u8 tr_method)
 {
 	enum device_responsive_state rc;
 
@@ -5816,17 +6001,20 @@ leapioraid_scsihost_wait_for_device_to_become_ready(struct LEAPIORAID_ADAPTER *i
 		return DEVICE_ERROR;
 	if (ioc->shost_recovery)
 		return DEVICE_RETRY;
-	rc = leapioraid_scsihost_test_unit_ready(ioc, handle, lun, is_pd, tr_timeout,
-				       tr_method);
+	rc = leapioraid_scsihost_test_unit_ready(
+		ioc, handle, lun, is_pd, tr_timeout,
+		tr_method);
 	if (rc == DEVICE_READY || rc == DEVICE_ERROR)
 		return rc;
 	else if (rc == DEVICE_START_UNIT) {
-		rc = leapioraid_scsihost_start_unit(ioc, handle, lun, is_pd, tr_timeout,
-					  tr_method);
+		rc = leapioraid_scsihost_start_unit(
+			ioc, handle, lun, is_pd, tr_timeout,
+			tr_method);
 		if (rc == DEVICE_ERROR)
 			return rc;
-		rc = leapioraid_scsihost_test_unit_ready(ioc, handle, lun, is_pd,
-					       tr_timeout, tr_method);
+		rc = leapioraid_scsihost_test_unit_ready(
+			ioc, handle, lun, is_pd,
+			tr_timeout, tr_method);
 	}
 	if ((rc == DEVICE_RETRY || rc == DEVICE_START_UNIT ||
 	     rc == DEVICE_RETRY_UA) && retry_count >= 144)
@@ -5835,9 +6023,10 @@ leapioraid_scsihost_wait_for_device_to_become_ready(struct LEAPIORAID_ADAPTER *i
 }
 
 static enum device_responsive_state
-leapioraid_scsihost_wait_for_target_to_become_ready(struct LEAPIORAID_ADAPTER *ioc,
-					  u16 handle, u8 retry_count, u8 is_pd,
-					  u8 tr_timeout, u8 tr_method)
+leapioraid_scsihost_wait_for_target_to_become_ready(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u16 handle, u8 retry_count, u8 is_pd,
+	u8 tr_timeout, u8 tr_method)
 {
 	enum device_responsive_state rc;
 	struct scsi_lun *lun_data;
@@ -5864,9 +6053,10 @@ leapioraid_scsihost_wait_for_target_to_become_ready(struct LEAPIORAID_ADAPTER *i
 	num_luns = (length / sizeof(struct scsi_lun));
 	lunp = &lun_data[1];
 	lun = (num_luns) ? scsilun_to_int(&lun_data[1]) : 0;
-	rc = leapioraid_scsihost_wait_for_device_to_become_ready(ioc, handle, retry_count,
-						       is_pd, lun, tr_timeout,
-						       tr_method);
+	rc = leapioraid_scsihost_wait_for_device_to_become_ready(
+		ioc, handle, retry_count,
+		is_pd, lun, tr_timeout,
+		tr_method);
 	if (rc == DEVICE_ERROR) {
 		struct scsi_lun *lunq;
 
@@ -5889,8 +6079,9 @@ out:
 }
 
 static u8
-leapioraid_scsihost_check_access_status(struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
-			      u16 handle, u8 access_status)
+leapioraid_scsihost_check_access_status(
+	struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
+	u16 handle, u8 access_status)
 {
 	u8 rc = 1;
 	char *desc = NULL;
@@ -5936,7 +6127,8 @@ leapioraid_scsihost_check_access_status(struct LEAPIORAID_ADAPTER *ioc, u64 sas_
 	if (!rc)
 		return 0;
 	pr_err(
-	       "%s discovery errors(%s): sas_address(0x%016llx), handle(0x%04x)\n", ioc->name, desc,
+	       "%s discovery errors(%s): sas_address(0x%016llx), \
+		   handle(0x%04x)\n", ioc->name, desc,
 	       (unsigned long long)sas_address, handle);
 	return rc;
 }
@@ -5965,7 +6157,8 @@ leapioraid_scsihost_check_device(struct LEAPIORAID_ADAPTER *ioc,
 	     (ioc, &mpi_reply, &sas_device_pg0,
 	      LEAPIORAID_SAS_DEVICE_PGAD_FORM_HANDLE, handle)))
 		return;
-	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
+	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) \
+		& LEAPIORAID_IOCSTATUS_MASK;
 	if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS)
 		return;
 	if (phy_number != sas_device_pg0.PhyNum)
@@ -5985,7 +6178,8 @@ leapioraid_scsihost_check_device(struct LEAPIORAID_ADAPTER *ioc,
 		starget = sas_device->starget;
 		sas_target_priv_data = starget->hostdata;
 		starget_printk(KERN_INFO, starget, 
-			"handle changed from(0x%04x) to (0x%04x)!!!\n", sas_device->handle, handle);
+			"handle changed from(0x%04x) to (0x%04x)!!!\n", 
+			sas_device->handle, handle);
 		sas_target_priv_data->handle = handle;
 		sas_device->handle = handle;
 		if (le16_to_cpu(sas_device_pg0.Flags) &
@@ -6018,7 +6212,8 @@ leapioraid_scsihost_check_device(struct LEAPIORAID_ADAPTER *ioc,
 	}
 	if (!(le16_to_cpu(sas_device_pg0.Flags) &
 	      LEAPIORAID_SAS_DEVICE0_FLAGS_DEVICE_PRESENT)) {
-		pr_err("%s device is not present handle(0x%04x), flags!!!\n", ioc->name, handle);
+		pr_err("%s device is not present handle(0x%04x), flags!!!\n", 
+			ioc->name, handle);
 		goto out_unlock;
 	}
 	if (leapioraid_scsihost_check_access_status(ioc, sas_address, handle,
@@ -6050,8 +6245,9 @@ out:
 }
 
 static int
-leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 retry_count,
-		     u8 is_pd)
+leapioraid_scsihost_add_device(
+		struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 retry_count,
+		u8 is_pd)
 {
 	struct LeapioraidCfgRep_t mpi_reply;
 	struct LeapioraidSasDevP0_t sas_device_pg0;
@@ -6070,7 +6266,8 @@ leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 re
 		       ioc->name, __FILE__, __LINE__, __func__);
 		return 0;
 	}
-	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
+	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) \
+		& LEAPIORAID_IOCSTATUS_MASK;
 	if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -6083,18 +6280,18 @@ leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 re
 	sas_address = le64_to_cpu(sas_device_pg0.SASAddress);
 	if (!(le16_to_cpu(sas_device_pg0.Flags) &
 	      LEAPIORAID_SAS_DEVICE0_FLAGS_DEVICE_PRESENT)) {
-		pr_err("%s device is not present handle(0x04%x)!!!\n", ioc->name, handle);
+		pr_err("%s device is not present handle(0x04%x)!!!\n", 
+			ioc->name, handle);
 		return 0;
 	}
-	if (leapioraid_scsihost_check_access_status(ioc, sas_address, handle,
-					  sas_device_pg0.AccessStatus))
+	if (leapioraid_scsihost_check_access_status(
+		ioc, sas_address, handle,
+		sas_device_pg0.AccessStatus))
 		return 0;
 	port_id = sas_device_pg0.PhysicalPort;
 	sas_device = leapioraid_get_sdev_by_addr(ioc,
-						 sas_address,
-						 leapioraid_get_port_by_id(ioc,
-									   port_id,
-									   0));
+		sas_address,
+		leapioraid_get_port_by_id(ioc, port_id, 0));
 	if (sas_device) {
 		clear_bit(handle, ioc->pend_os_device_add);
 		leapioraid_sas_device_put(sas_device);
@@ -6106,16 +6303,19 @@ leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 re
 								 le16_to_cpu
 								 (sas_device_pg0.EnclosureHandle));
 		if (enclosure_dev == NULL)
-			pr_info("%s Enclosure handle(0x%04x)doesn't match with enclosure device!\n",
-			       ioc->name,
-			       le16_to_cpu(sas_device_pg0.EnclosureHandle));
+			pr_info("%s Enclosure handle(0x%04x)doesn't \
+				match with enclosure device!\n",
+				ioc->name,
+				le16_to_cpu(sas_device_pg0.EnclosureHandle));
 	}
 	if (!ioc->wait_for_discovery_to_complete) {
-		pr_info("%s detecting: handle(0x%04x), sas_address(0x%016llx), phy(%d)\n", ioc->name, handle,
-		       (unsigned long long)sas_address, sas_device_pg0.PhyNum);
-		rc = leapioraid_scsihost_wait_for_target_to_become_ready(ioc, handle,
-							       retry_count,
-							       is_pd, 30, 0);
+		pr_info("%s detecting: handle(0x%04x), \
+			sas_address(0x%016llx), phy(%d)\n", ioc->name, handle,
+			(unsigned long long)sas_address, sas_device_pg0.PhyNum);
+		rc = leapioraid_scsihost_wait_for_target_to_become_ready(
+			ioc, handle,
+			retry_count,
+			is_pd, 30, 0);
 		if (rc != DEVICE_READY) {
 			if (le16_to_cpu(sas_device_pg0.EnclosureHandle) != 0)
 				dewtprintk(ioc,
@@ -6128,10 +6328,11 @@ leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 re
 				       sas_device_pg0.ConnectorName, 4);
 				connector_name[4] = '\0';
 				dewtprintk(ioc,
-					   pr_info("%s %s: device not ready: enclosure level(0x%04x), connector name( %s)\n",
-						  ioc->name, __func__,
-						  sas_device_pg0.EnclosureLevel,
-						  connector_name));
+					   pr_info("%s %s: device not ready: \
+					   	enclosure level(0x%04x), connector name( %s)\n",
+						ioc->name, __func__,
+						sas_device_pg0.EnclosureLevel,
+						connector_name));
 			}
 			if ((enclosure_dev)
 			    && (le16_to_cpu(enclosure_dev->pg0.Flags) &
@@ -6146,7 +6347,8 @@ leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 re
 				return 0;
 		}
 	}
-	sas_device = kzalloc(sizeof(struct leapioraid_sas_device), GFP_KERNEL);
+	sas_device = kzalloc(sizeof(struct leapioraid_sas_device), 
+		GFP_KERNEL);
 	if (!sas_device) {
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
@@ -6155,8 +6357,8 @@ leapioraid_scsihost_add_device(struct LEAPIORAID_ADAPTER *ioc, u16 handle, u8 re
 	kref_init(&sas_device->refcount);
 	sas_device->handle = handle;
 	if (leapioraid_scsihost_get_sas_address(ioc,
-				      le16_to_cpu(sas_device_pg0.ParentDevHandle),
-				      &sas_device->sas_address_parent) != 0)
+			le16_to_cpu(sas_device_pg0.ParentDevHandle),
+			&sas_device->sas_address_parent) != 0)
 		pr_err("%s failure at %s:%d/%s()!\n",
 		       ioc->name, __FILE__, __LINE__, __func__);
 	sas_device->enclosure_handle =
@@ -6224,40 +6426,45 @@ leapioraid_scsihost_remove_device(struct LEAPIORAID_ADAPTER *ioc,
 		leapioraid_scsihost_turn_off_pfa_led(ioc, sas_device);
 		sas_device->pfa_led_on = 0;
 	}
-	dewtprintk(ioc, pr_info("%s %s: enter: handle(0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, __func__, sas_device->handle,
-			       (unsigned long long)sas_device->sas_address));
+	dewtprintk(ioc, pr_info(
+		"%s %s: enter: handle(0x%04x), sas_addr(0x%016llx)\n",
+		ioc->name, __func__, sas_device->handle,
+		(unsigned long long)sas_device->sas_address));
 	dewtprintk(ioc,
-		   leapioraid_scsihost_display_enclosure_chassis_info(ioc, sas_device,
-							    NULL, NULL));
+		   leapioraid_scsihost_display_enclosure_chassis_info(
+				ioc, sas_device, NULL, NULL));
 	if (sas_device->starget && sas_device->starget->hostdata) {
 		sas_target_priv_data = sas_device->starget->hostdata;
 		sas_target_priv_data->deleted = 1;
-		leapioraid_scsihost_ublock_io_device(ioc, sas_device->sas_address,
-					   sas_device->port);
+		leapioraid_scsihost_ublock_io_device(
+			ioc, sas_device->sas_address,
+			sas_device->port);
 		sas_target_priv_data->handle =
 		    LEAPIORAID_INVALID_DEVICE_HANDLE;
 	}
 	if (!ioc->hide_drives)
 		leapioraid_transport_port_remove(ioc,
-						 sas_device->sas_address,
-						 sas_device->sas_address_parent,
-						 sas_device->port);
-	pr_info("%s removing handle(0x%04x), sas_addr(0x%016llx)\n", ioc->name, sas_device->handle,
-	       (unsigned long long)sas_device->sas_address);
+			sas_device->sas_address,
+			sas_device->sas_address_parent,
+			sas_device->port);
+	pr_info("%s removing handle(0x%04x), sas_addr(0x%016llx)\n", 
+		ioc->name, sas_device->handle,
+	    (unsigned long long)sas_device->sas_address);
 	leapioraid_scsihost_display_enclosure_chassis_info(ioc, sas_device, NULL, NULL);
-	dewtprintk(ioc, pr_info("%s %s: exit: handle(0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, __func__, sas_device->handle,
-			       (unsigned long long)
-			       sas_device->sas_address));
+	dewtprintk(ioc, pr_info(
+		"%s %s: exit: handle(0x%04x), sas_addr(0x%016llx)\n",
+		ioc->name, __func__, sas_device->handle,
+		(unsigned long long)
+		sas_device->sas_address));
 	dewtprintk(ioc,
-		   leapioraid_scsihost_display_enclosure_chassis_info(ioc, sas_device,
-							    NULL, NULL));
+		   leapioraid_scsihost_display_enclosure_chassis_info(
+				ioc, sas_device, NULL, NULL));
 	kfree(sas_device->serial_number);
 }
 
 static void
-leapioraid_scsihost_sas_topology_change_event_debug(struct LEAPIORAID_ADAPTER *ioc,
+leapioraid_scsihost_sas_topology_change_event_debug(
+	struct LEAPIORAID_ADAPTER *ioc,
 	struct LeapioraidEventDataSasTopoChangeList_t *event_data)
 {
 	int i;
@@ -6287,10 +6494,11 @@ leapioraid_scsihost_sas_topology_change_event_debug(struct LEAPIORAID_ADAPTER *i
 	}
 	pr_info("%s sas topology change: (%s)\n",
 	       ioc->name, status_str);
-	pr_info("\thandle(0x%04x), enclosure_handle(0x%04x) start_phy(%02d), count(%d)\n",
-	       le16_to_cpu(event_data->ExpanderDevHandle),
-	       le16_to_cpu(event_data->EnclosureHandle),
-	       event_data->StartPhyNum, event_data->NumEntries);
+	pr_info("\thandle(0x%04x), enclosure_handle(0x%04x) \
+		start_phy(%02d), count(%d)\n",
+		le16_to_cpu(event_data->ExpanderDevHandle),
+		le16_to_cpu(event_data->EnclosureHandle),
+		event_data->StartPhyNum, event_data->NumEntries);
 	for (i = 0; i < event_data->NumEntries; i++) {
 		handle = le16_to_cpu(event_data->PHY[i].AttachedDevHandle);
 		if (!handle)
@@ -6327,8 +6535,9 @@ leapioraid_scsihost_sas_topology_change_event_debug(struct LEAPIORAID_ADAPTER *i
 }
 
 static int
-leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
-				    struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_topology_change_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event)
 {
 	int i;
 	u16 parent_handle, handle;
@@ -6346,8 +6555,11 @@ leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
 	    fw_event->event_data;
 
 	if (ioc->logging_level & LEAPIORAID_DEBUG_EVENT_WORK_TASK)
-		leapioraid_scsihost_sas_topology_change_event_debug(ioc, event_data);
-	if (ioc->shost_recovery || ioc->remove_host || ioc->pci_error_recovery)
+		leapioraid_scsihost_sas_topology_change_event_debug(
+			ioc, event_data);
+	if (ioc->shost_recovery \
+		|| ioc->remove_host \
+		|| ioc->pci_error_recovery)
 		return 0;
 	if (!ioc->sas_hba.num_phys)
 		leapioraid_scsihost_sas_host_add(ioc);
@@ -6355,7 +6567,8 @@ leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
 		leapioraid_scsihost_sas_host_refresh(ioc);
 	if (fw_event->ignore) {
 		dewtprintk(ioc,
-			   pr_info("%s ignoring expander event\n", ioc->name));
+			   pr_info("%s ignoring expander event\n", 
+			   	ioc->name));
 		return 0;
 	}
 	parent_handle = le16_to_cpu(event_data->ExpanderDevHandle);
@@ -6364,8 +6577,8 @@ leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
 		if (leapioraid_scsihost_expander_add(ioc, parent_handle) != 0)
 			return 0;
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
-	sas_expander = leapioraid_scsihost_expander_find_by_handle(ioc,
-								   parent_handle);
+	sas_expander = leapioraid_scsihost_expander_find_by_handle(
+		ioc, parent_handle);
 	if (sas_expander) {
 		sas_address = sas_expander->sas_address;
 		max_phys = sas_expander->num_phys;
@@ -6380,7 +6593,9 @@ leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
 	spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 	for (i = 0, requeue_event = 0; i < event_data->NumEntries; i++) {
 		if (fw_event->ignore) {
-			dewtprintk(ioc, pr_info("%s ignoring expander event\n", ioc->name));
+			dewtprintk(ioc, pr_info(
+				"%s ignoring expander event\n", 
+				ioc->name));
 			return 0;
 		}
 		if (ioc->remove_host || ioc->pci_error_recovery)
@@ -6397,8 +6612,8 @@ leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
 		if (fw_event->delayed_work_active && (reason_code ==
 			LEAPIORAID_EVENT_SAS_TOPO_RC_TARG_NOT_RESPONDING)) {
 			dewtprintk(ioc,
-				   pr_info("%s ignoring Targ not responding \
-				   event phy in re-queued event processing\n", ioc->name));
+				pr_info("%s ignoring Targ not responding \
+				event phy in re-queued event processing\n", ioc->name));
 			continue;
 		}
 		handle = le16_to_cpu(event_data->PHY[i].AttachedDevHandle);
@@ -6430,8 +6645,9 @@ leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
 			if (!test_bit(handle, ioc->pend_os_device_add))
 				break;
 			dewtprintk(ioc, pr_err(
-					       "%s handle(0x%04x) device not found: convert event to a device add\n",
-					       ioc->name, handle));
+				"%s handle(0x%04x) device not found: \
+				convert event to a device add\n",
+				ioc->name, handle));
 			event_data->PHY[i].PhyStatus &= 0xF0;
 			event_data->PHY[i].PhyStatus |=
 			    LEAPIORAID_EVENT_SAS_TOPO_RC_TARG_ADDED;
@@ -6459,15 +6675,16 @@ leapioraid_scsihost_sas_topology_change_event(struct LEAPIORAID_ADAPTER *ioc,
 			break;
 		}
 	}
-	if (event_data->ExpStatus == LEAPIORAID_EVENT_SAS_TOPO_ES_NOT_RESPONDING &&
-	    sas_expander)
+	if (event_data->ExpStatus == LEAPIORAID_EVENT_SAS_TOPO_ES_NOT_RESPONDING \
+		&& sas_expander)
 		leapioraid_expander_remove(ioc, sas_address, port);
 	return requeue_event;
 }
 
 static void
-leapioraid_scsihost_sas_device_status_change_event_debug(struct LEAPIORAID_ADAPTER *ioc,
-		struct LeapioraidEventDataSasDeviceStatusChange_t *event_data)
+leapioraid_scsihost_sas_device_status_change_event_debug(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataSasDeviceStatusChange_t *event_data)
 {
 	char *reason_str = NULL;
 
@@ -6527,8 +6744,9 @@ leapioraid_scsihost_sas_device_status_change_event_debug(struct LEAPIORAID_ADAPT
 }
 
 static void
-leapioraid_scsihost_sas_device_status_change_event(struct LEAPIORAID_ADAPTER *ioc,
-					 struct LeapioraidEventDataSasDeviceStatusChange_t *event_data)
+leapioraid_scsihost_sas_device_status_change_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataSasDeviceStatusChange_t *event_data)
 {
 	struct LEAPIORAID_TARGET *target_priv_data;
 	struct leapioraid_sas_device *sas_device;
@@ -6544,11 +6762,9 @@ leapioraid_scsihost_sas_device_status_change_event(struct LEAPIORAID_ADAPTER *io
 		return;
 	spin_lock_irqsave(&ioc->sas_device_lock, flags);
 	sas_address = le64_to_cpu(event_data->SASAddress);
-	sas_device = __leapioraid_get_sdev_by_addr(ioc, sas_address,
-						   leapioraid_get_port_by_id
-						   (ioc,
-						    event_data->PhysicalPort,
-						    0));
+	sas_device = __leapioraid_get_sdev_by_addr(
+		ioc, sas_address,
+		leapioraid_get_port_by_id(ioc, event_data->PhysicalPort, 0));
 	if (!sas_device || !sas_device->starget)
 		goto out;
 	target_priv_data = sas_device->starget->hostdata;
@@ -6561,9 +6777,9 @@ leapioraid_scsihost_sas_device_status_change_event(struct LEAPIORAID_ADAPTER *io
 		target_priv_data->tm_busy = 0;
 	if (ioc->logging_level & LEAPIORAID_DEBUG_EVENT_WORK_TASK)
 		pr_err(
-		       "%s %s tm_busy flag for handle(0x%04x)\n", ioc->name,
-		       (target_priv_data->tm_busy == 1) ? "Enable" : "Disable",
-		       target_priv_data->handle);
+			"%s %s tm_busy flag for handle(0x%04x)\n", ioc->name,
+			(target_priv_data->tm_busy == 1) ? "Enable" : "Disable",
+			target_priv_data->handle);
 out:
 	if (sas_device)
 		leapioraid_sas_device_put(sas_device);
@@ -6572,7 +6788,8 @@ out:
 
 static void
 leapioraid_scsihost_sas_enclosure_dev_status_change_event_debug(
-	struct LEAPIORAID_ADAPTER *ioc, struct LeapioraidEventDataSasEnclDevStatusChange_t *event_data)
+	struct LEAPIORAID_ADAPTER *ioc, 
+	struct LeapioraidEventDataSasEnclDevStatusChange_t *event_data)
 {
 	char *reason_str = NULL;
 
@@ -6587,16 +6804,18 @@ leapioraid_scsihost_sas_enclosure_dev_status_change_event_debug(
 		reason_str = "unknown reason";
 		break;
 	}
-	pr_info("%s enclosure status change: (%s)\n\thandle(0x%04x), enclosure logical id(0x%016llx) number slots(%d)\n",
-	       ioc->name, reason_str,
-	       le16_to_cpu(event_data->EnclosureHandle),
-	       (unsigned long long)le64_to_cpu(event_data->EnclosureLogicalID),
-	       le16_to_cpu(event_data->StartSlot));
+	pr_info("%s enclosure status change: (%s)\n\thandle(0x%04x), \
+		enclosure logical id(0x%016llx) number slots(%d)\n",
+		ioc->name, reason_str,
+		le16_to_cpu(event_data->EnclosureHandle),
+		(unsigned long long)le64_to_cpu(event_data->EnclosureLogicalID),
+		le16_to_cpu(event_data->StartSlot));
 }
 
 static void
-leapioraid_scsihost_sas_enclosure_dev_status_change_event(struct LEAPIORAID_ADAPTER *ioc,
-						struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_enclosure_dev_status_change_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event)
 {
 	struct LeapioraidCfgRep_t mpi_reply;
 	struct leapioraid_enclosure_node *enclosure_dev = NULL;
@@ -6605,8 +6824,8 @@ leapioraid_scsihost_sas_enclosure_dev_status_change_event(struct LEAPIORAID_ADAP
 	int rc;
 
 	if (ioc->logging_level & LEAPIORAID_DEBUG_EVENT_WORK_TASK)
-		leapioraid_scsihost_sas_enclosure_dev_status_change_event_debug(ioc,
-								      fw_event->event_data);
+		leapioraid_scsihost_sas_enclosure_dev_status_change_event_debug(
+			ioc, fw_event->event_data);
 	if (ioc->shost_recovery)
 		return;
 	event_data->EnclosureHandle = le16_to_cpu(event_data->EnclosureHandle);
@@ -6651,8 +6870,9 @@ leapioraid_scsihost_sas_enclosure_dev_status_change_event(struct LEAPIORAID_ADAP
 }
 
 static void
-leapioraid_scsihost_sas_broadcast_primitive_event(struct LEAPIORAID_ADAPTER *ioc,
-					struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_broadcast_primitive_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event)
 {
 	struct scsi_cmnd *scmd;
 	struct scsi_device *sdev;
@@ -6673,8 +6893,9 @@ leapioraid_scsihost_sas_broadcast_primitive_event(struct LEAPIORAID_ADAPTER *ioc
 
 	mutex_lock(&ioc->tm_cmds.mutex);
 	dewtprintk(ioc,
-		   pr_info("%s %s: enter: phy number(%d), width(%d)\n", ioc->name, __func__,
-			  event_data->PhyNum, event_data->PortWidth));
+		   pr_info("%s %s: enter: phy number(%d), width(%d)\n", 
+		   	ioc->name, __func__,
+			event_data->PhyNum, event_data->PortWidth));
 	leapioraid_scsihost_block_io_all_device(ioc);
 	spin_lock_irqsave(&ioc->scsi_lookup_lock, flags);
 	mpi_reply = ioc->tm_cmds.reply;
@@ -6762,14 +6983,16 @@ tm_retry:
 		}
 		if (task_abort_retries > 1)
 			sdev_printk(KERN_WARNING, sdev,
-				    "leapioraid_scsihost_issue_tm: ABORT_TASK: RETRIES (%d): scmd(%p)\n",
-				    task_abort_retries - 1, scmd);
+				"leapioraid_scsihost_issue_tm: \
+				ABORT_TASK: RETRIES (%d): scmd(%p)\n",
+				task_abort_retries - 1, scmd);
 		termination_count += le32_to_cpu(mpi_reply->TerminationCount);
 		spin_lock_irqsave(&ioc->scsi_lookup_lock, flags);
 	}
 	if (ioc->broadcast_aen_pending) {
 		dewtprintk(ioc,
-			   pr_info("%s %s: loop back due to pending AEN\n", ioc->name, __func__));
+			   pr_info("%s %s: loop back due to pending AEN\n", 
+			   		ioc->name, __func__));
 		ioc->broadcast_aen_pending = 0;
 		goto broadcast_aen_retry;
 	}
@@ -6777,9 +7000,9 @@ out:
 	spin_unlock_irqrestore(&ioc->scsi_lookup_lock, flags);
 out_no_lock:
 	dewtprintk(ioc, pr_err(
-			       "%s %s - exit, query_count = %d termination_count = %d\n",
-			       ioc->name, __func__, query_count,
-			       termination_count));
+		"%s %s - exit, query_count = %d termination_count = %d\n",
+		ioc->name, __func__, query_count,
+		termination_count));
 	ioc->broadcast_aen_busy = 0;
 	if (!ioc->shost_recovery)
 		leapioraid_scsihost_ublock_io_all_device(ioc, 1);
@@ -6787,10 +7010,12 @@ out_no_lock:
 }
 
 static void
-leapioraid_scsihost_sas_discovery_event(struct LEAPIORAID_ADAPTER *ioc,
-			      struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_discovery_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event)
 {
-	struct LeapioraidEventDataSasDiscovery_t *event_data = fw_event->event_data;
+	struct LeapioraidEventDataSasDiscovery_t *event_data \
+		= fw_event->event_data;
 
 	if (ioc->logging_level & LEAPIORAID_DEBUG_EVENT_WORK_TASK) {
 		pr_info("%s sas discovery event: (%s)",
@@ -6813,24 +7038,27 @@ leapioraid_scsihost_sas_discovery_event(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_sas_device_discovery_error_event(struct LEAPIORAID_ADAPTER *ioc,
-					   struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_device_discovery_error_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event)
 {
 	struct LeapioraidEventDataSasDeviceDiscoveryError_t *event_data =
 	    fw_event->event_data;
 
 	switch (event_data->ReasonCode) {
 	case LEAPIORAID_EVENT_SAS_DISC_ERR_SMP_FAILED:
-		pr_warn("%s SMP command sent to the expander(handle:0x%04x, sas_address:0x%016llx,physical_port:0x%02x) has failed\n",
-		       ioc->name, le16_to_cpu(event_data->DevHandle),
-		       (unsigned long long)le64_to_cpu(event_data->SASAddress),
-		       event_data->PhysicalPort);
+		pr_warn("%s SMP command sent to the expander(handle:0x%04x, \
+			sas_address:0x%016llx,physical_port:0x%02x) has failed\n",
+			ioc->name, le16_to_cpu(event_data->DevHandle),
+			(unsigned long long)le64_to_cpu(event_data->SASAddress),
+			event_data->PhysicalPort);
 		break;
 	case LEAPIORAID_EVENT_SAS_DISC_ERR_SMP_TIMEOUT:
-		pr_warn("%s SMP command sent to the expander(handle:0x%04x, sas_address:0x%016llx,physical_port:0x%02x) has timed out\n",
-		       ioc->name, le16_to_cpu(event_data->DevHandle),
-		       (unsigned long long)le64_to_cpu(event_data->SASAddress),
-		       event_data->PhysicalPort);
+		pr_warn("%s SMP command sent to the expander(handle:0x%04x, \
+			sas_address:0x%016llx,physical_port:0x%02x) has timed out\n",
+			ioc->name, le16_to_cpu(event_data->DevHandle),
+			(unsigned long long)le64_to_cpu(event_data->SASAddress),
+			event_data->PhysicalPort);
 		break;
 	default:
 		break;
@@ -6838,8 +7066,9 @@ leapioraid_scsihost_sas_device_discovery_error_event(struct LEAPIORAID_ADAPTER *
 }
 
 static int
-leapioraid_scsihost_ir_fastpath(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-		      u8 phys_disk_num)
+leapioraid_scsihost_ir_fastpath(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+	u8 phys_disk_num)
 {
 	struct LeapioraidRaidActionReq_t *mpi_request;
 	struct LeapioraidRaidActionRep_t *mpi_reply;
@@ -6871,18 +7100,18 @@ leapioraid_scsihost_ir_fastpath(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 	mpi_request->Function = LEAPIORAID_FUNC_RAID_ACTION;
 	mpi_request->Action = 0x24;
 	mpi_request->PhysDiskNum = phys_disk_num;
-	dewtprintk(ioc,
-		   pr_info("%s IR RAID_ACTION: turning fast path on for handle(0x%04x), phys_disk_num (0x%02x)\n",
-			  ioc->name, handle, phys_disk_num));
+	dewtprintk(ioc, pr_info("%s IR RAID_ACTION: \
+		turning fast path on for handle(0x%04x), phys_disk_num (0x%02x)\n",
+		ioc->name, handle, phys_disk_num));
 	init_completion(&ioc->scsih_cmds.done);
 	ioc->put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->scsih_cmds.done, 10 * HZ);
 	if (!(ioc->scsih_cmds.status & LEAPIORAID_CMD_COMPLETE)) {
 		leapioraid_check_cmd_timeout(ioc,
-					     ioc->scsih_cmds.status,
-					     mpi_request,
-					     sizeof(struct LeapioraidRaidActionReq_t)
-					     / 4, issue_reset);
+			ioc->scsih_cmds.status,
+			mpi_request,
+			sizeof(struct LeapioraidRaidActionReq_t)
+			/ 4, issue_reset);
 		rc = -EFAULT;
 		goto out;
 	}
@@ -6896,14 +7125,15 @@ leapioraid_scsihost_ir_fastpath(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 		ioc_status &= LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
 			dewtprintk(ioc, pr_err(
-					       "%s IR RAID_ACTION: failed: ioc_status(0x%04x), loginfo(0x%08x)!!!\n",
-					       ioc->name, ioc_status,
-					       log_info));
+				"%s IR RAID_ACTION: failed: \
+				ioc_status(0x%04x), loginfo(0x%08x)!!!\n",
+				ioc->name, ioc_status,
+				log_info));
 			rc = -EFAULT;
 		} else
 			dewtprintk(ioc, pr_err(
-					       "%s IR RAID_ACTION: completed successfully\n",
-					       ioc->name));
+				"%s IR RAID_ACTION: completed successfully\n",
+				ioc->name));
 	}
 out:
 	ioc->scsih_cmds.status = LEAPIORAID_CMD_NOT_USED;
@@ -6914,7 +7144,8 @@ out:
 }
 
 static void
-leapioraid_scsihost_reprobe_lun(struct scsi_device *sdev, void *no_uld_attach)
+leapioraid_scsihost_reprobe_lun(
+	struct scsi_device *sdev, void *no_uld_attach)
 {
 	int rc;
 
@@ -6941,11 +7172,13 @@ leapioraid_scsihost_sas_volume_add(struct LEAPIORAID_ADAPTER *ioc,
 		return;
 	}
 	spin_lock_irqsave(&ioc->raid_device_lock, flags);
-	raid_device = leapioraid_scsihost_raid_device_find_by_wwid(ioc, wwid);
+	raid_device = leapioraid_scsihost_raid_device_find_by_wwid(
+		ioc, wwid);
 	spin_unlock_irqrestore(&ioc->raid_device_lock, flags);
 	if (raid_device)
 		return;
-	raid_device = kzalloc(sizeof(struct leapioraid_raid_device), GFP_KERNEL);
+	raid_device = kzalloc(sizeof(struct leapioraid_raid_device), 
+		GFP_KERNEL);
 	if (!raid_device) {
 		pr_err("%s failure at %s:%d/%s()!\n", ioc->name,
 		       __FILE__, __LINE__, __func__);
@@ -6963,13 +7196,15 @@ leapioraid_scsihost_sas_volume_add(struct LEAPIORAID_ADAPTER *ioc,
 			leapioraid_scsihost_raid_device_remove(ioc, raid_device);
 	} else {
 		spin_lock_irqsave(&ioc->raid_device_lock, flags);
-		leapioraid_scsihost_determine_boot_device(ioc, raid_device, RAID_CHANNEL);
+		leapioraid_scsihost_determine_boot_device(
+			ioc, raid_device, RAID_CHANNEL);
 		spin_unlock_irqrestore(&ioc->raid_device_lock, flags);
 	}
 }
 
 static void
-leapioraid_scsihost_sas_volume_delete(struct LEAPIORAID_ADAPTER *ioc, u16 handle)
+leapioraid_scsihost_sas_volume_delete(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle)
 {
 	struct leapioraid_raid_device *raid_device;
 	unsigned long flags;
@@ -6996,8 +7231,9 @@ leapioraid_scsihost_sas_volume_delete(struct LEAPIORAID_ADAPTER *ioc, u16 handle
 }
 
 static void
-leapioraid_scsihost_sas_pd_expose(struct LEAPIORAID_ADAPTER *ioc,
-			struct LeapioraidEventIrCfgEle_t *element)
+leapioraid_scsihost_sas_pd_expose(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventIrCfgEle_t *element)
 {
 	struct leapioraid_sas_device *sas_device;
 	struct scsi_target *starget = NULL;
@@ -7028,8 +7264,9 @@ leapioraid_scsihost_sas_pd_expose(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_sas_pd_hide(struct LEAPIORAID_ADAPTER *ioc,
-		      struct LeapioraidEventIrCfgEle_t *element)
+leapioraid_scsihost_sas_pd_hide(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventIrCfgEle_t *element)
 {
 	struct leapioraid_sas_device *sas_device;
 	struct scsi_target *starget = NULL;
@@ -7120,8 +7357,9 @@ leapioraid_scsihost_sas_pd_add(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_sas_ir_config_change_event_debug(struct LEAPIORAID_ADAPTER *ioc,
-					   struct LeapioraidEventDataIrCfgChangeList_t *event_data)
+leapioraid_scsihost_sas_ir_config_change_event_debug(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataIrCfgChangeList_t *event_data)
 {
 	struct LeapioraidEventIrCfgEle_t *element;
 	u8 element_type;
@@ -7184,22 +7422,25 @@ leapioraid_scsihost_sas_ir_config_change_event_debug(struct LEAPIORAID_ADAPTER *
 			element_str = "unknown element";
 			break;
 		}
-		pr_info("\t(%s:%s), vol handle(0x%04x), pd handle(0x%04x), pd num(0x%02x)\n",
-		       element_str,
-		       reason_str, le16_to_cpu(element->VolDevHandle),
-		       le16_to_cpu(element->PhysDiskDevHandle),
-		       element->PhysDiskNum);
+		pr_info("\t(%s:%s), vol handle(0x%04x), \
+			pd handle(0x%04x), pd num(0x%02x)\n",
+			element_str,
+			reason_str, le16_to_cpu(element->VolDevHandle),
+			le16_to_cpu(element->PhysDiskDevHandle),
+			element->PhysDiskNum);
 	}
 }
 
 static void
-leapioraid_scsihost_sas_ir_config_change_event(struct LEAPIORAID_ADAPTER *ioc,
-				     struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_ir_config_change_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event)
 {
 	struct LeapioraidEventIrCfgEle_t *element;
 	int i;
 	u8 foreign_config;
-	struct LeapioraidEventDataIrCfgChangeList_t *event_data = fw_event->event_data;
+	struct LeapioraidEventDataIrCfgChangeList_t *event_data \
+		= fw_event->event_data;
 
 	if ((ioc->logging_level & LEAPIORAID_DEBUG_EVENT_WORK_TASK)
 	    && !ioc->warpdrive_msg)
@@ -7249,8 +7490,9 @@ leapioraid_scsihost_sas_ir_config_change_event(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_sas_ir_volume_event(struct LEAPIORAID_ADAPTER *ioc,
-			      struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_ir_volume_event(
+		struct LEAPIORAID_ADAPTER *ioc,
+		struct leapioraid_fw_event_work *fw_event)
 {
 	u64 wwid;
 	unsigned long flags;
@@ -7258,7 +7500,8 @@ leapioraid_scsihost_sas_ir_volume_event(struct LEAPIORAID_ADAPTER *ioc,
 	u16 handle;
 	u32 state;
 	int rc;
-	struct LeapioraidEventDataIrVol_t *event_data = fw_event->event_data;
+	struct LeapioraidEventDataIrVol_t *event_data \
+		= fw_event->event_data;
 
 	if (ioc->shost_recovery)
 		return;
@@ -7268,10 +7511,11 @@ leapioraid_scsihost_sas_ir_volume_event(struct LEAPIORAID_ADAPTER *ioc,
 	state = le32_to_cpu(event_data->NewValue);
 	if (!ioc->warpdrive_msg)
 		dewtprintk(ioc,
-			   pr_info("%s %s: handle(0x%04x), old(0x%08x), new(0x%08x)\n", ioc->name,
-				  __func__, handle,
-				  le32_to_cpu(event_data->PreviousValue),
-				  state));
+			pr_info("%s %s: handle(0x%04x), old(0x%08x), new(0x%08x)\n", 
+				ioc->name,
+				__func__, handle,
+				le32_to_cpu(event_data->PreviousValue),
+				state));
 	switch (state) {
 	case LEAPIORAID_RAID_VOL_STATE_MISSING:
 	case LEAPIORAID_RAID_VOL_STATE_FAILED:
@@ -7293,7 +7537,8 @@ leapioraid_scsihost_sas_ir_volume_event(struct LEAPIORAID_ADAPTER *ioc,
 			       __FILE__, __LINE__, __func__);
 			break;
 		}
-		raid_device = kzalloc(sizeof(struct leapioraid_raid_device), GFP_KERNEL);
+		raid_device = kzalloc(sizeof(struct leapioraid_raid_device), 
+			GFP_KERNEL);
 		if (!raid_device) {
 			pr_err(
 			       "%s failure at %s:%d/%s()!\n", ioc->name,
@@ -7317,8 +7562,9 @@ leapioraid_scsihost_sas_ir_volume_event(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_sas_ir_physical_disk_event(struct LEAPIORAID_ADAPTER *ioc,
-				     struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_ir_physical_disk_event(
+		struct LEAPIORAID_ADAPTER *ioc,
+		struct leapioraid_fw_event_work *fw_event)
 {
 	u16 handle, parent_handle;
 	u32 state;
@@ -7326,7 +7572,8 @@ leapioraid_scsihost_sas_ir_physical_disk_event(struct LEAPIORAID_ADAPTER *ioc,
 	struct LeapioraidCfgRep_t mpi_reply;
 	struct LeapioraidSasDevP0_t sas_device_pg0;
 	u32 ioc_status;
-	struct LeapioraidEventDataIrPhyDisk_t *event_data = fw_event->event_data;
+	struct LeapioraidEventDataIrPhyDisk_t *event_data \
+		= fw_event->event_data;
 	u64 sas_address;
 
 	if (ioc->shost_recovery)
@@ -7338,11 +7585,11 @@ leapioraid_scsihost_sas_ir_physical_disk_event(struct LEAPIORAID_ADAPTER *ioc,
 	state = le32_to_cpu(event_data->NewValue);
 	if (!ioc->warpdrive_msg)
 		dewtprintk(ioc,
-			   pr_info("%s %s: handle(0x%04x), old(0x%08x), new(0x%08x)\n",
-				  ioc->name,
-				  __func__, handle,
-				  le32_to_cpu(event_data->PreviousValue),
-				  state));
+			pr_info("%s %s: handle(0x%04x), old(0x%08x), new(0x%08x)\n",
+				ioc->name,
+				__func__, handle,
+				le32_to_cpu(event_data->PreviousValue),
+				state));
 	switch (state) {
 	case LEAPIORAID_RAID_PD_STATE_ONLINE:
 	case LEAPIORAID_RAID_PD_STATE_DEGRADED:
@@ -7355,10 +7602,11 @@ leapioraid_scsihost_sas_ir_physical_disk_event(struct LEAPIORAID_ADAPTER *ioc,
 			leapioraid_sas_device_put(sas_device);
 			return;
 		}
-		if ((leapioraid_config_get_sas_device_pg0(ioc, &mpi_reply,
-							  &sas_device_pg0,
-							  LEAPIORAID_SAS_DEVICE_PGAD_FORM_HANDLE,
-							  handle))) {
+		if ((leapioraid_config_get_sas_device_pg0(
+				ioc, &mpi_reply,
+				&sas_device_pg0,
+				LEAPIORAID_SAS_DEVICE_PGAD_FORM_HANDLE,
+				handle))) {
 			pr_err("%s failure at %s:%d/%s()!\n",
 			       ioc->name, __FILE__, __LINE__, __func__);
 			return;
@@ -7391,8 +7639,9 @@ leapioraid_scsihost_sas_ir_physical_disk_event(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_sas_ir_operation_status_event_debug(struct LEAPIORAID_ADAPTER *ioc,
-					      struct LeapioraidEventDataIrOpStatus_t *event_data)
+leapioraid_scsihost_sas_ir_operation_status_event_debug(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidEventDataIrOpStatus_t *event_data)
 {
 	char *reason_str = NULL;
 
@@ -7415,24 +7664,28 @@ leapioraid_scsihost_sas_ir_operation_status_event_debug(struct LEAPIORAID_ADAPTE
 	}
 	if (!reason_str)
 		return;
-	pr_info("%s raid operational status: (%s)\thandle(0x%04x), percent complete(%d)\n",
-	       ioc->name, reason_str,
-	       le16_to_cpu(event_data->VolDevHandle),
-	       event_data->PercentComplete);
+	pr_info("%s raid operational status: (%s)\thandle(0x%04x), \
+		percent complete(%d)\n",
+		ioc->name, reason_str,
+		le16_to_cpu(event_data->VolDevHandle),
+		event_data->PercentComplete);
 }
 
 static void
-leapioraid_scsihost_sas_ir_operation_status_event(struct LEAPIORAID_ADAPTER *ioc,
-					struct leapioraid_fw_event_work *fw_event)
+leapioraid_scsihost_sas_ir_operation_status_event(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_fw_event_work *fw_event)
 {
-	struct LeapioraidEventDataIrOpStatus_t *event_data = fw_event->event_data;
+	struct LeapioraidEventDataIrOpStatus_t *event_data \
+		= fw_event->event_data;
 	static struct leapioraid_raid_device *raid_device;
 	unsigned long flags;
 	u16 handle;
 
 	if ((ioc->logging_level & LEAPIORAID_DEBUG_EVENT_WORK_TASK)
 	    && !ioc->warpdrive_msg)
-		leapioraid_scsihost_sas_ir_operation_status_event_debug(ioc, event_data);
+		leapioraid_scsihost_sas_ir_operation_status_event_debug(
+			ioc, event_data);
 	if (event_data->RAIDOperation == LEAPIORAID_EVENT_IR_RAIDOP_RESYNC) {
 		spin_lock_irqsave(&ioc->raid_device_lock, flags);
 		handle = le16_to_cpu(event_data->VolDevHandle);
@@ -7491,8 +7744,9 @@ leapioraid_scsihost_update_device_qdepth(struct LEAPIORAID_ADAPTER *ioc)
 }
 
 static void
-leapioraid_scsihost_mark_responding_sas_device(struct LEAPIORAID_ADAPTER *ioc,
-				     struct LeapioraidSasDevP0_t *sas_device_pg0)
+leapioraid_scsihost_mark_responding_sas_device(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidSasDevP0_t *sas_device_pg0)
 {
 	struct LEAPIORAID_TARGET *sas_target_priv_data = NULL;
 	struct scsi_target *starget;
@@ -7508,8 +7762,9 @@ leapioraid_scsihost_mark_responding_sas_device(struct LEAPIORAID_ADAPTER *ioc,
 								 le16_to_cpu
 								 (sas_device_pg0->EnclosureHandle));
 		if (enclosure_dev == NULL)
-			pr_info("%s Enclosure handle(0x%04x)doesn't match with enclosure device!\n",
-			       ioc->name, sas_device_pg0->EnclosureHandle);
+			pr_info("%s Enclosure handle(0x%04x)doesn't \
+				match with enclosure device!\n",
+			    ioc->name, sas_device_pg0->EnclosureHandle);
 	}
 	spin_lock_irqsave(&ioc->sas_device_lock, flags);
 	list_for_each_entry(sas_device, &ioc->sas_device_list, list) {
@@ -7527,16 +7782,16 @@ leapioraid_scsihost_mark_responding_sas_device(struct LEAPIORAID_ADAPTER *ioc,
 				sas_target_priv_data = NULL;
 			if (starget) {
 				starget_printk(KERN_INFO, starget,
-					       "handle(0x%04x), sas_address(0x%016llx), port: %d\n",
-					       sas_device->handle,
-					       (unsigned long long)sas_device->sas_address,
-					       sas_device->port->port_id);
+					"handle(0x%04x), sas_address(0x%016llx), port: %d\n",
+					sas_device->handle,
+					(unsigned long long)sas_device->sas_address,
+					sas_device->port->port_id);
 				if (sas_device->enclosure_handle != 0)
 					starget_printk(KERN_INFO, starget,
-						       "enclosure logical id(0x%016llx), slot(%d)\n",
-						       (unsigned long long)
-						       sas_device->enclosure_logical_id,
-						       sas_device->slot);
+						"enclosure logical id(0x%016llx), slot(%d)\n",
+						(unsigned long long)
+						sas_device->enclosure_logical_id,
+						sas_device->slot);
 			}
 			if (le16_to_cpu(sas_device_pg0->Flags) &
 			    LEAPIORAID_SAS_DEVICE0_FLAGS_ENCL_LEVEL_VALID) {
@@ -7580,7 +7835,8 @@ out:
 }
 
 static void
-leapioraid_scsihost_create_enclosure_list_after_reset(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_create_enclosure_list_after_reset(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct leapioraid_enclosure_node *enclosure_dev;
 	struct LeapioraidCfgRep_t mpi_reply;
@@ -7613,7 +7869,8 @@ leapioraid_scsihost_create_enclosure_list_after_reset(struct LEAPIORAID_ADAPTER 
 }
 
 static void
-leapioraid_scsihost_search_responding_sas_devices(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_search_responding_sas_devices(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct LeapioraidSasDevP0_t sas_device_pg0;
 	struct LeapioraidCfgRep_t mpi_reply;
@@ -7633,16 +7890,18 @@ leapioraid_scsihost_search_responding_sas_devices(struct LEAPIORAID_ADAPTER *ioc
 		ioc_status =
 		    le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_info("%s \tbreak from %s: ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, __func__, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_info("%s \tbreak from %s: \
+				ioc_status(0x%04x), loginfo(0x%08x)\n",
+			    ioc->name, __func__, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		handle = le16_to_cpu(sas_device_pg0.DevHandle);
 		device_info = le32_to_cpu(sas_device_pg0.DeviceInfo);
 		if (!(leapioraid_scsihost_is_sas_end_device(device_info)))
 			continue;
-		leapioraid_scsihost_mark_responding_sas_device(ioc, &sas_device_pg0);
+		leapioraid_scsihost_mark_responding_sas_device(
+			ioc, &sas_device_pg0);
 	}
 out:
 	pr_info("%s search for end-devices: complete\n",
@@ -7650,8 +7909,8 @@ out:
 }
 
 static void
-leapioraid_scsihost_mark_responding_raid_device(struct LEAPIORAID_ADAPTER *ioc, u64 wwid,
-				      u16 handle)
+leapioraid_scsihost_mark_responding_raid_device(
+	struct LEAPIORAID_ADAPTER *ioc, u64 wwid, u16 handle)
 {
 	struct LEAPIORAID_TARGET *sas_target_priv_data;
 	struct scsi_target *starget;
@@ -7692,7 +7951,8 @@ leapioraid_scsihost_mark_responding_raid_device(struct LEAPIORAID_ADAPTER *ioc, 
 }
 
 static void
-leapioraid_scsihost_search_responding_raid_devices(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_search_responding_raid_devices(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct LeapioraidRaidVolP1_t volume_pg1;
 	struct LeapioraidRaidVolP0_t volume_pg0;
@@ -7710,9 +7970,9 @@ leapioraid_scsihost_search_responding_raid_devices(struct LEAPIORAID_ADAPTER *io
 		goto out;
 	handle = 0xFFFF;
 	while (!(leapioraid_config_get_raid_volume_pg1(ioc, &mpi_reply,
-				&volume_pg1,
-				LEAPIORAID_RAID_VOLUME_PGAD_FORM_GET_NEXT_HANDLE,
-				handle))) {
+			&volume_pg1,
+			LEAPIORAID_RAID_VOLUME_PGAD_FORM_GET_NEXT_HANDLE,
+			handle))) {
 		ioc_status =
 		    le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
@@ -7723,11 +7983,11 @@ leapioraid_scsihost_search_responding_raid_devices(struct LEAPIORAID_ADAPTER *io
 		}
 		handle = le16_to_cpu(volume_pg1.DevHandle);
 		if (leapioraid_config_get_raid_volume_pg0(ioc, &mpi_reply,
-							  &volume_pg0,
-							  LEAPIORAID_RAID_VOLUME_PGAD_FORM_HANDLE,
-							  handle,
-							  sizeof
-							  (struct LeapioraidRaidVolP0_t)))
+				&volume_pg0,
+				LEAPIORAID_RAID_VOLUME_PGAD_FORM_HANDLE,
+				handle,
+				sizeof
+				(struct LeapioraidRaidVolP0_t)))
 			continue;
 		if (volume_pg0.VolumeState == LEAPIORAID_RAID_VOL_STATE_OPTIMAL ||
 		    volume_pg0.VolumeState == LEAPIORAID_RAID_VOL_STATE_ONLINE ||
@@ -7756,18 +8016,21 @@ leapioraid_scsihost_search_responding_raid_devices(struct LEAPIORAID_ADAPTER *io
 		set_bit(handle, ioc->pd_handles);
 	}
 out:
-	pr_info("%s search for responding raid volumes: complete\n", ioc->name);
+	pr_info("%s search for responding raid volumes: complete\n", 
+		ioc->name);
 }
 
 static void
-leapioraid_scsihost_mark_responding_expander(struct LEAPIORAID_ADAPTER *ioc,
-				   struct LeapioraidExpanderP0_t *expander_pg0)
+leapioraid_scsihost_mark_responding_expander(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct LeapioraidExpanderP0_t *expander_pg0)
 {
 	struct leapioraid_raid_sas_node *sas_expander;
 	unsigned long flags;
 	int i;
 	u8 port_id = expander_pg0->PhysicalPort;
-	struct leapioraid_hba_port *port = leapioraid_get_port_by_id(ioc, port_id, 0);
+	struct leapioraid_hba_port *port = leapioraid_get_port_by_id(
+		ioc, port_id, 0);
 	struct leapioraid_enclosure_node *enclosure_dev = NULL;
 	u16 handle = le16_to_cpu(expander_pg0->DevHandle);
 	u16 enclosure_handle = le16_to_cpu(expander_pg0->EnclosureHandle);
@@ -7791,9 +8054,10 @@ leapioraid_scsihost_mark_responding_expander(struct LEAPIORAID_ADAPTER *ioc,
 		}
 		if (sas_expander->handle == handle)
 			goto out;
-		pr_info("\texpander(0x%016llx): handle changed from(0x%04x) to (0x%04x)!!!\n",
-		       (unsigned long long)sas_expander->sas_address,
-		       sas_expander->handle, handle);
+		pr_info("\texpander(0x%016llx): \
+			handle changed from(0x%04x) to (0x%04x)!!!\n",
+			(unsigned long long)sas_expander->sas_address,
+			sas_expander->handle, handle);
 		sas_expander->handle = handle;
 		for (i = 0; i < sas_expander->num_phys; i++)
 			sas_expander->phy[i].handle = handle;
@@ -7804,7 +8068,8 @@ out:
 }
 
 static void
-leapioraid_scsihost_search_responding_expanders(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_search_responding_expanders(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct LeapioraidExpanderP0_t expander_pg0;
 	struct LeapioraidCfgRep_t mpi_reply;
@@ -7825,19 +8090,22 @@ leapioraid_scsihost_search_responding_expanders(struct LEAPIORAID_ADAPTER *ioc)
 		ioc_status =
 		    le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_info("%s \tbreak from %s: ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, __func__, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_info("%s \tbreak from %s: \
+				ioc_status(0x%04x), loginfo(0x%08x)\n",
+			    ioc->name, __func__, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		handle = le16_to_cpu(expander_pg0.DevHandle);
 		sas_address = le64_to_cpu(expander_pg0.SASAddress);
 		port = expander_pg0.PhysicalPort;
-		pr_info("\texpander present: handle(0x%04x), sas_addr(0x%016llx), port:%d\n", handle,
-		       (unsigned long long)sas_address,
-		       ((ioc->multipath_on_hba) ?
+		pr_info("\texpander present: handle(0x%04x), \
+			sas_addr(0x%016llx), port:%d\n", handle,
+		    (unsigned long long)sas_address,
+		    ((ioc->multipath_on_hba) ?
 			(port) : (LEAPIORAID_MULTIPATH_DISABLED_PORT_ID)));
-		leapioraid_scsihost_mark_responding_expander(ioc, &expander_pg0);
+		leapioraid_scsihost_mark_responding_expander(
+			ioc, &expander_pg0);
 	}
 out:
 	pr_info("%s search for expanders: complete\n",
@@ -7845,7 +8113,8 @@ out:
 }
 
 static void
-leapioraid_scsihost_remove_unresponding_devices(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_remove_unresponding_devices(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct leapioraid_sas_device *sas_device, *sas_device_next;
 	struct leapioraid_raid_sas_node *sas_expander, *sas_expander_next;
@@ -7856,7 +8125,8 @@ leapioraid_scsihost_remove_unresponding_devices(struct LEAPIORAID_ADAPTER *ioc)
 
 	pr_info("%s removing unresponding devices: start\n",
 	       ioc->name);
-	pr_err("%s removing unresponding devices: sas end-devices\n", ioc->name);
+	pr_err("%s removing unresponding devices: sas end-devices\n", 
+		ioc->name);
 	spin_lock_irqsave(&ioc->sas_device_lock, flags);
 	list_for_each_entry_safe(sas_device, sas_device_next,
 				 &ioc->sas_device_init_list, list) {
@@ -7877,7 +8147,8 @@ leapioraid_scsihost_remove_unresponding_devices(struct LEAPIORAID_ADAPTER *ioc)
 		leapioraid_sas_device_put(sas_device);
 	}
 	if (ioc->ir_firmware) {
-		pr_info("%s removing unresponding devices: volumes\n", ioc->name);
+		pr_info("%s removing unresponding devices: volumes\n", 
+			ioc->name);
 		list_for_each_entry_safe(raid_device, raid_device_next,
 					 &ioc->raid_device_list, list) {
 			if (!raid_device->responding)
@@ -7887,7 +8158,8 @@ leapioraid_scsihost_remove_unresponding_devices(struct LEAPIORAID_ADAPTER *ioc)
 				raid_device->responding = 0;
 		}
 	}
-	pr_err("%s removing unresponding devices: expanders\n", ioc->name);
+	pr_err("%s removing unresponding devices: expanders\n", 
+		ioc->name);
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
 	INIT_LIST_HEAD(&tmp_list);
 	list_for_each_entry_safe(sas_expander, sas_expander_next,
@@ -7898,8 +8170,8 @@ leapioraid_scsihost_remove_unresponding_devices(struct LEAPIORAID_ADAPTER *ioc)
 			sas_expander->responding = 0;
 	}
 	spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
-	list_for_each_entry_safe(sas_expander, sas_expander_next, &tmp_list,
-				 list) {
+	list_for_each_entry_safe(
+		sas_expander, sas_expander_next, &tmp_list, list) {
 		leapioraid_scsihost_expander_node_remove(ioc, sas_expander);
 	}
 	pr_err("%s removing unresponding devices: complete\n", ioc->name);
@@ -7907,8 +8179,9 @@ leapioraid_scsihost_remove_unresponding_devices(struct LEAPIORAID_ADAPTER *ioc)
 }
 
 static void
-leapioraid_scsihost_refresh_expander_links(struct LEAPIORAID_ADAPTER *ioc,
-				 struct leapioraid_raid_sas_node *sas_expander, u16 handle)
+leapioraid_scsihost_refresh_expander_links(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_raid_sas_node *sas_expander, u16 handle)
 {
 	struct LeapioraidExpanderP1_t expander_pg1;
 	struct LeapioraidCfgRep_t mpi_reply;
@@ -7923,16 +8196,17 @@ leapioraid_scsihost_refresh_expander_links(struct LEAPIORAID_ADAPTER *ioc,
 			return;
 		}
 		leapioraid_transport_update_links(ioc,
-						  sas_expander->sas_address,
-						  le16_to_cpu(expander_pg1.AttachedDevHandle),
-						  i,
-						  expander_pg1.NegotiatedLinkRate >> 4,
-						  sas_expander->port);
+			sas_expander->sas_address,
+			le16_to_cpu(expander_pg1.AttachedDevHandle),
+			i,
+			expander_pg1.NegotiatedLinkRate >> 4,
+			sas_expander->port);
 	}
 }
 
 static void
-leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
+leapioraid_scsihost_scan_for_devices_after_reset(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct LeapioraidExpanderP0_t expander_pg0;
 	struct LeapioraidSasDevP0_t sas_device_pg0;
@@ -7976,36 +8250,38 @@ leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 		ioc_status =
 		    le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_err(
-			       "%s \tbreak from expander scan: ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_err("%s \tbreak from expander scan: ioc_status(0x%04x), \
+				loginfo(0x%08x)\n",
+			    ioc->name, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		handle = le16_to_cpu(expander_pg0.DevHandle);
 		spin_lock_irqsave(&ioc->sas_node_lock, flags);
 		port_id = expander_pg0.PhysicalPort;
 		expander_device =
-		    leapioraid_scsihost_expander_find_by_sas_address(ioc,
-								     le64_to_cpu
-								     (expander_pg0.SASAddress),
-								     leapioraid_get_port_by_id
-								     (ioc,
-								      port_id,
-								      0));
+		    leapioraid_scsihost_expander_find_by_sas_address(
+				ioc,
+				le64_to_cpu
+				(expander_pg0.SASAddress),
+				leapioraid_get_port_by_id
+				(ioc,
+				port_id,
+				0));
 		spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 		if (expander_device)
-			leapioraid_scsihost_refresh_expander_links(ioc, expander_device,
-							 handle);
+			leapioraid_scsihost_refresh_expander_links(
+				ioc, expander_device, handle);
 		else {
-			pr_err(
-			       "%s \tBEFORE adding expander: handle (0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, handle, (unsigned long long)
-			       le64_to_cpu(expander_pg0.SASAddress));
+			pr_err("%s \tBEFORE adding expander: \
+				handle (0x%04x), sas_addr(0x%016llx)\n",
+				ioc->name, handle, (unsigned long long)
+				le64_to_cpu(expander_pg0.SASAddress));
 			leapioraid_scsihost_expander_add(ioc, handle);
-			pr_info("%s \tAFTER adding expander: handle (0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, handle, (unsigned long long)
-			       le64_to_cpu(expander_pg0.SASAddress));
+			pr_info("%s \tAFTER adding expander: \
+				handle (0x%04x), sas_addr(0x%016llx)\n",
+				ioc->name, handle, (unsigned long long)
+				le64_to_cpu(expander_pg0.SASAddress));
 		}
 	}
 	pr_info("%s \tscan devices: expanders complete\n",
@@ -8016,16 +8292,16 @@ leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 	       ioc->name);
 	phys_disk_num = 0xFF;
 	while (!(leapioraid_config_get_phys_disk_pg0(ioc, &mpi_reply,
-						     &pd_pg0,
-						     LEAPIORAID_PHYSDISK_PGAD_FORM_GET_NEXT_PHYSDISKNUM,
-						     phys_disk_num))) {
+			&pd_pg0,
+			LEAPIORAID_PHYSDISK_PGAD_FORM_GET_NEXT_PHYSDISKNUM,
+			phys_disk_num))) {
 		ioc_status =
 		    le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_err(
-			       "%s \tbreak from phys disk scan: ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_err("%s \tbreak from phys disk scan: \
+				ioc_status(0x%04x), loginfo(0x%08x)\n",
+			    ioc->name, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		phys_disk_num = pd_pg0.PhysDiskNum;
@@ -8043,19 +8319,19 @@ leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 		ioc_status = le16_to_cpu(mpi_reply.IOCStatus) &
 		    LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_err(
-			       "%s \tbreak from phys disk scan ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_err("%s \tbreak from phys disk scan ioc_status(0x%04x), \
+				loginfo(0x%08x)\n",
+			    ioc->name, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		parent_handle = le16_to_cpu(sas_device_pg0.ParentDevHandle);
 		if (!leapioraid_scsihost_get_sas_address(ioc, parent_handle,
 					       &sas_address)) {
-			pr_err(
-			       "%s \tBEFORE adding phys disk:  handle (0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, handle, (unsigned long long)
-			       le64_to_cpu(sas_device_pg0.SASAddress));
+			pr_err("%s \tBEFORE adding phys disk: \
+					handle (0x%04x), sas_addr(0x%016llx)\n",
+			       	ioc->name, handle, (unsigned long long)
+			       	le64_to_cpu(sas_device_pg0.SASAddress));
 			port_id = sas_device_pg0.PhysicalPort;
 			leapioraid_transport_update_links(ioc, sas_address,
 							  handle,
@@ -8069,10 +8345,10 @@ leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 			       (ioc, handle, retry_count++, 1)) {
 				ssleep(1);
 			}
-			pr_err(
-			       "%s \tAFTER adding phys disk:  handle (0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, handle, (unsigned long long)
-			       le64_to_cpu(sas_device_pg0.SASAddress));
+			pr_err("%s \tAFTER adding phys disk: \
+				handle (0x%04x), sas_addr(0x%016llx)\n",
+			    ioc->name, handle, (unsigned long long)
+			    le64_to_cpu(sas_device_pg0.SASAddress));
 		}
 	}
 	pr_info("%s \tscan devices: phys disk complete\n",
@@ -8087,17 +8363,16 @@ leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 		ioc_status =
 		    le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_err(
-			       "%s \tbreak from volume scan: ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_err("%s \tbreak from volume scan: ioc_status(0x%04x), \
+				loginfo(0x%08x)\n",
+			    ioc->name, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		handle = le16_to_cpu(volume_pg1->DevHandle);
 		spin_lock_irqsave(&ioc->raid_device_lock, flags);
-		raid_device = leapioraid_scsihost_raid_device_find_by_wwid(ioc,
-								 le64_to_cpu
-								 (volume_pg1->WWID));
+		raid_device = leapioraid_scsihost_raid_device_find_by_wwid(
+			ioc, le64_to_cpu(volume_pg1->WWID));
 		spin_unlock_irqrestore(&ioc->raid_device_lock, flags);
 		if (raid_device)
 			continue;
@@ -8111,10 +8386,10 @@ leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 		ioc_status = le16_to_cpu(mpi_reply.IOCStatus) &
 		    LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_err(
-			       "%s \tbreak from volume scan: ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_err("%s \tbreak from volume scan: ioc_status(0x%04x), \
+				loginfo(0x%08x)\n",
+			    ioc->name, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		if (volume_pg0->VolumeState == LEAPIORAID_RAID_VOL_STATE_OPTIMAL ||
@@ -8125,11 +8400,11 @@ leapioraid_scsihost_scan_for_devices_after_reset(struct LEAPIORAID_ADAPTER *ioc)
 			       sizeof(struct LeapioraidEventIrCfgEle_t));
 			element.ReasonCode = LEAPIORAID_EVENT_IR_CHANGE_RC_ADDED;
 			element.VolDevHandle = volume_pg1->DevHandle;
-			pr_info("%s \tBEFORE adding volume:  handle (0x%04x)\n", ioc->name,
-			       volume_pg1->DevHandle);
+			pr_info("%s \tBEFORE adding volume:  handle (0x%04x)\n", 
+				ioc->name, volume_pg1->DevHandle);
 			leapioraid_scsihost_sas_volume_add(ioc, &element);
-			pr_info("%s \tAFTER adding volume:  handle (0x%04x)\n", ioc->name,
-			       volume_pg1->DevHandle);
+			pr_info("%s \tAFTER adding volume:  handle (0x%04x)\n", 
+				ioc->name, volume_pg1->DevHandle);
 		}
 	}
 	pr_info("%s \tscan devices: volumes complete\n",
@@ -8145,10 +8420,10 @@ skip_to_sas:
 		ioc_status =
 		    le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 		if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
-			pr_err(
-			       "%s \tbreak from sas end device scan: ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, ioc_status,
-			       le32_to_cpu(mpi_reply.IOCLogInfo));
+			pr_err("%s \tbreak from sas end device scan: ioc_status(0x%04x), \
+				loginfo(0x%08x)\n",
+			    ioc->name, ioc_status,
+			    le32_to_cpu(mpi_reply.IOCLogInfo));
 			break;
 		}
 		handle = le16_to_cpu(sas_device_pg0.DevHandle);
@@ -8169,10 +8444,10 @@ skip_to_sas:
 		parent_handle = le16_to_cpu(sas_device_pg0.ParentDevHandle);
 		if (!leapioraid_scsihost_get_sas_address
 		    (ioc, parent_handle, &sas_address)) {
-			pr_err(
-			       "%s \tBEFORE adding sas end device: handle (0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, handle, (unsigned long long)
-			       le64_to_cpu(sas_device_pg0.SASAddress));
+			pr_err("%s \tBEFORE adding sas end device: \
+				handle (0x%04x), sas_addr(0x%016llx)\n",
+			    ioc->name, handle, (unsigned long long)
+			    le64_to_cpu(sas_device_pg0.SASAddress));
 			leapioraid_transport_update_links(ioc, sas_address,
 							  handle,
 							  sas_device_pg0.PhyNum,
@@ -8184,10 +8459,10 @@ skip_to_sas:
 			       (ioc, handle, retry_count++, 0)) {
 				ssleep(1);
 			}
-			pr_err(
-			       "%s \tAFTER adding sas end device: handle (0x%04x), sas_addr(0x%016llx)\n",
-			       ioc->name, handle, (unsigned long long)
-			       le64_to_cpu(sas_device_pg0.SASAddress));
+			pr_err("%s \tAFTER adding sas end device: \
+				handle (0x%04x), sas_addr(0x%016llx)\n",
+			    ioc->name, handle, (unsigned long long)
+			    le64_to_cpu(sas_device_pg0.SASAddress));
 		}
 	}
 	pr_err("%s \tscan devices: sas end devices complete\n", ioc->name);
@@ -8234,17 +8509,20 @@ leapioraid_scsihost_reset_handler(struct LEAPIORAID_ADAPTER *ioc,
 {
 	switch (reset_phase) {
 	case LEAPIORAID_IOC_PRE_RESET_PHASE:
-		dtmprintk(ioc, pr_info("%s %s: LEAPIORAID_IOC_PRE_RESET_PHASE\n", ioc->name,
-				      __func__));
+		dtmprintk(ioc, pr_info(
+			"%s %s: LEAPIORAID_IOC_PRE_RESET_PHASE\n", 
+				ioc->name, __func__));
 		break;
 	case LEAPIORAID_IOC_AFTER_RESET_PHASE:
-		dtmprintk(ioc, pr_info("%s %s: LEAPIORAID_IOC_AFTER_RESET_PHASE\n", ioc->name,
-				      __func__));
+		dtmprintk(ioc, pr_info(
+			"%s %s: LEAPIORAID_IOC_AFTER_RESET_PHASE\n", 
+				ioc->name, __func__));
 		leapioraid_scsihost_clear_outstanding_scsi_tm_commands(ioc);
 		break;
 	case LEAPIORAID_IOC_DONE_RESET_PHASE:
-		dtmprintk(ioc, pr_info("%s %s: LEAPIORAID_IOC_DONE_RESET_PHASE\n", ioc->name,
-				      __func__));
+		dtmprintk(ioc, pr_info(
+			"%s %s: LEAPIORAID_IOC_DONE_RESET_PHASE\n", 
+				ioc->name, __func__));
 		if (!(disable_discovery > 0 && !ioc->sas_hba.num_phys)) {
 			if (ioc->multipath_on_hba) {
 				leapioraid_scsihost_sas_port_refresh(ioc);
@@ -8289,8 +8567,9 @@ leapioraid_fw_work(struct LEAPIORAID_ADAPTER *ioc,
 		break;
 	case LEAPIORAID_PORT_ENABLE_COMPLETE:
 		ioc->start_scan = 0;
-		dewtprintk(ioc,
-			   pr_info("%s port enable: complete from worker thread\n", ioc->name));
+		dewtprintk(ioc, pr_info(
+			"%s port enable: complete from worker thread\n", 
+			ioc->name));
 		break;
 	case LEAPIORAID_TURN_ON_PFA_LED:
 		leapioraid_scsihost_turn_on_pfa_led(ioc, fw_event->device_handle);
@@ -8304,34 +8583,42 @@ leapioraid_fw_work(struct LEAPIORAID_ADAPTER *ioc,
 		break;
 	case LEAPIORAID_EVENT_SAS_DEVICE_STATUS_CHANGE:
 		if (ioc->logging_level & LEAPIORAID_DEBUG_EVENT_WORK_TASK)
-			leapioraid_scsihost_sas_device_status_change_event_debug(ioc,
-					(struct LeapioraidEventDataSasDeviceStatusChange_t
-				*)
+			leapioraid_scsihost_sas_device_status_change_event_debug(
+				ioc,
+				(struct LeapioraidEventDataSasDeviceStatusChange_t*)
 					fw_event->event_data);
 		break;
 	case LEAPIORAID_EVENT_SAS_DISCOVERY:
-		leapioraid_scsihost_sas_discovery_event(ioc, fw_event);
+		leapioraid_scsihost_sas_discovery_event(
+			ioc, fw_event);
 		break;
 	case LEAPIORAID_EVENT_SAS_DEVICE_DISCOVERY_ERROR:
-		leapioraid_scsihost_sas_device_discovery_error_event(ioc, fw_event);
+		leapioraid_scsihost_sas_device_discovery_error_event(
+			ioc, fw_event);
 		break;
 	case LEAPIORAID_EVENT_SAS_BROADCAST_PRIMITIVE:
-		leapioraid_scsihost_sas_broadcast_primitive_event(ioc, fw_event);
+		leapioraid_scsihost_sas_broadcast_primitive_event(
+			ioc, fw_event);
 		break;
 	case LEAPIORAID_EVENT_SAS_ENCL_DEVICE_STATUS_CHANGE:
-		leapioraid_scsihost_sas_enclosure_dev_status_change_event(ioc, fw_event);
+		leapioraid_scsihost_sas_enclosure_dev_status_change_event(
+			ioc, fw_event);
 		break;
 	case LEAPIORAID_EVENT_IR_CONFIGURATION_CHANGE_LIST:
-		leapioraid_scsihost_sas_ir_config_change_event(ioc, fw_event);
+		leapioraid_scsihost_sas_ir_config_change_event(
+			ioc, fw_event);
 		break;
 	case LEAPIORAID_EVENT_IR_VOLUME:
-		leapioraid_scsihost_sas_ir_volume_event(ioc, fw_event);
+		leapioraid_scsihost_sas_ir_volume_event(
+			ioc, fw_event);
 		break;
 	case LEAPIORAID_EVENT_IR_PHYSICAL_DISK:
-		leapioraid_scsihost_sas_ir_physical_disk_event(ioc, fw_event);
+		leapioraid_scsihost_sas_ir_physical_disk_event(
+			ioc, fw_event);
 		break;
 	case LEAPIORAID_EVENT_IR_OPERATION_STATUS:
-		leapioraid_scsihost_sas_ir_operation_status_event(ioc, fw_event);
+		leapioraid_scsihost_sas_ir_operation_status_event(
+			ioc, fw_event);
 		break;
 	default:
 		break;
@@ -8397,32 +8684,32 @@ leapioraid_scsihost_event_callback(struct LEAPIORAID_ADAPTER *ioc,
 		break;
 	}
 	case LEAPIORAID_EVENT_SAS_TOPOLOGY_CHANGE_LIST:
-		leapioraid_scsihost_check_topo_delete_events(ioc,
-						   (struct LeapioraidEventDataSasTopoChangeList_t
-						    *)
-						   mpi_reply->EventData);
+		leapioraid_scsihost_check_topo_delete_events(
+			ioc,
+			(struct LeapioraidEventDataSasTopoChangeList_t *)
+			mpi_reply->EventData);
 		if (ioc->shost_recovery)
 			return 1;
 		break;
 	case LEAPIORAID_EVENT_IR_CONFIGURATION_CHANGE_LIST:
-		leapioraid_scsihost_check_ir_config_unhide_events(ioc,
-							(struct LeapioraidEventDataIrCfgChangeList_t
-							 *)
-							mpi_reply->EventData);
+		leapioraid_scsihost_check_ir_config_unhide_events(
+			ioc,
+			(struct LeapioraidEventDataIrCfgChangeList_t *)
+			mpi_reply->EventData);
 		break;
 	case LEAPIORAID_EVENT_IR_VOLUME:
-		leapioraid_scsihost_check_volume_delete_events(ioc,
-						     (struct LeapioraidEventDataIrVol_t
-						      *)
-						     mpi_reply->EventData);
+		leapioraid_scsihost_check_volume_delete_events(
+			ioc,
+			(struct LeapioraidEventDataIrVol_t *)
+			mpi_reply->EventData);
 		break;
 	case LEAPIORAID_EVENT_LOG_ENTRY_ADDED:
 		fallthrough;
 	case LEAPIORAID_EVENT_SAS_DEVICE_STATUS_CHANGE:
-		leapioraid_scsihost_sas_device_status_change_event(ioc,
-							 (struct LeapioraidEventDataSasDeviceStatusChange_t
-							  *)
-							 mpi_reply->EventData);
+		leapioraid_scsihost_sas_device_status_change_event(
+			ioc,
+			(struct LeapioraidEventDataSasDeviceStatusChange_t *)
+			mpi_reply->EventData);
 		break;
 	case LEAPIORAID_EVENT_IR_OPERATION_STATUS:
 	case LEAPIORAID_EVENT_SAS_DISCOVERY:
@@ -8472,8 +8759,9 @@ leapioraid_scsihost_event_callback(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 static void
-leapioraid_scsihost_expander_node_remove(struct LEAPIORAID_ADAPTER *ioc,
-			       struct leapioraid_raid_sas_node *sas_expander)
+leapioraid_scsihost_expander_node_remove(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct leapioraid_raid_sas_node *sas_expander)
 {
 	struct leapioraid_sas_port *leapioraid_port, *next;
 	unsigned long flags;
@@ -8500,9 +8788,11 @@ leapioraid_scsihost_expander_node_remove(struct LEAPIORAID_ADAPTER *ioc,
 	leapioraid_transport_port_remove(ioc, sas_expander->sas_address,
 					 sas_expander->sas_address_parent,
 					 sas_expander->port);
-	pr_info("%s expander_remove: handle(0x%04x), sas_addr(0x%016llx), port:%d\n", ioc->name,
-	       sas_expander->handle, (unsigned long long)
-	       sas_expander->sas_address, port_id);
+	pr_info("%s expander_remove: handle(0x%04x), \
+		sas_addr(0x%016llx), port:%d\n", ioc->name,
+		sas_expander->handle, 
+		(unsigned long long)sas_expander->sas_address, 
+		port_id);
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
 	list_del(&sas_expander->list);
 	spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
@@ -8557,9 +8847,10 @@ leapioraid_scsihost_ir_shutdown(struct LEAPIORAID_ADAPTER *ioc)
 	if (ioc->scsih_cmds.status & LEAPIORAID_CMD_REPLY_VALID) {
 		mpi_reply = ioc->scsih_cmds.reply;
 		if (!ioc->warpdrive_msg)
-			pr_info("%s IR shutdown (complete): ioc_status(0x%04x), loginfo(0x%08x)\n",
-			       ioc->name, le16_to_cpu(mpi_reply->IOCStatus),
-			       le32_to_cpu(mpi_reply->IOCLogInfo));
+			pr_info("%s IR shutdown (complete): ioc_status(0x%04x), \
+				loginfo(0x%08x)\n",
+			    ioc->name, le16_to_cpu(mpi_reply->IOCStatus),
+			    le32_to_cpu(mpi_reply->IOCLogInfo));
 	}
 out:
 	ioc->scsih_cmds.status = LEAPIORAID_CMD_NOT_USED;
@@ -8633,8 +8924,9 @@ leapioraid_scsihost_remove(struct pci_dev *pdev)
 			sas_target_priv_data->deleted = 1;
 			scsi_remove_target(&raid_device->starget->dev);
 		}
-		pr_info("%s removing handle(0x%04x), wwid(0x%016llx)\n", ioc->name, raid_device->handle,
-		       (unsigned long long)raid_device->wwid);
+		pr_info("%s removing handle(0x%04x), wwid(0x%016llx)\n", 
+			ioc->name, raid_device->handle,
+		    (unsigned long long)raid_device->wwid);
 		leapioraid_scsihost_raid_device_remove(ioc, raid_device);
 	}
 	list_for_each_entry_safe(leapioraid_port, next_port,
@@ -8642,15 +8934,15 @@ leapioraid_scsihost_remove(struct pci_dev *pdev)
 		if (leapioraid_port->remote_identify.device_type ==
 		    SAS_END_DEVICE)
 			leapioraid_device_remove_by_sas_address(ioc,
-								leapioraid_port->remote_identify.sas_address,
-								leapioraid_port->hba_port);
+				leapioraid_port->remote_identify.sas_address,
+				leapioraid_port->hba_port);
 		else if (leapioraid_port->remote_identify.device_type ==
 			 SAS_EDGE_EXPANDER_DEVICE
 			 || leapioraid_port->remote_identify.device_type ==
 			 SAS_FANOUT_EXPANDER_DEVICE)
 			leapioraid_expander_remove(ioc,
-						   leapioraid_port->remote_identify.sas_address,
-						   leapioraid_port->hba_port);
+				leapioraid_port->remote_identify.sas_address,
+				leapioraid_port->hba_port);
 	}
 	list_for_each_entry_safe(port, port_next, &ioc->port_table_list, list) {
 		if (port->vphys_mask) {
@@ -8748,8 +9040,9 @@ leapioraid_scsihost_probe_boot_devices(struct LEAPIORAID_ADAPTER *ioc)
 			if (protection_mask & SHOST_DIX_TYPE0_PROTECTION) {
 				scsi_host_set_prot(ioc->shost,
 						   protection_mask & 0x77);
-				pr_err("%s : Disabling DIX0 prot capability because HBA does not support DIX0 operation on volumes\n",
-				       ioc->name);
+				pr_err("%s : Disabling DIX0 prot capability \
+					because HBA does not support DIX0 operation on volumes\n",
+				    ioc->name);
 			}
 		}
 		rc = scsi_add_device(ioc->shost, RAID_CHANNEL,
@@ -8806,7 +9099,9 @@ leapioraid_scsihost_probe_raid(struct LEAPIORAID_ADAPTER *ioc)
 	}
 }
 
-static struct leapioraid_sas_device *leapioraid_get_next_sas_device(struct LEAPIORAID_ADAPTER *ioc)
+static 
+struct leapioraid_sas_device *leapioraid_get_next_sas_device(
+	struct LEAPIORAID_ADAPTER *ioc)
 {
 	struct leapioraid_sas_device *sas_device = NULL;
 	unsigned long flags;
@@ -8876,7 +9171,8 @@ leapioraid_scsihost_probe_devices(struct LEAPIORAID_ADAPTER *ioc)
 	u16 volume_mapping_flags;
 
 	if (!
-	    (ioc->facts.ProtocolFlags & LEAPIORAID_IOCFACTS_PROTOCOL_SCSI_INITIATOR))
+	    (ioc->facts.ProtocolFlags \
+		& LEAPIORAID_IOCFACTS_PROTOCOL_SCSI_INITIATOR))
 		return;
 	leapioraid_scsihost_probe_boot_devices(ioc);
 
@@ -8924,7 +9220,8 @@ leapioraid_scsihost_complete_devices_scanning(struct LEAPIORAID_ADAPTER *ioc)
 }
 
 static int
-leapioraid_scsihost_scan_finished(struct Scsi_Host *shost, unsigned long time)
+leapioraid_scsihost_scan_finished(
+	struct Scsi_Host *shost, unsigned long time)
 {
 	struct LEAPIORAID_ADAPTER *ioc = shost_priv(shost);
 	u32 ioc_state;
@@ -8937,7 +9234,8 @@ leapioraid_scsihost_scan_finished(struct Scsi_Host *shost, unsigned long time)
 	}
 	if (time >= (300 * HZ)) {
 		ioc->port_enable_cmds.status = LEAPIORAID_CMD_NOT_USED;
-		pr_info("%s port enable: FAILED with timeout (timeout=300s)\n", ioc->name);
+		pr_info("%s port enable: FAILED with timeout (timeout=300s)\n", 
+			ioc->name);
 		ioc->is_driver_loading = 0;
 		goto out;
 	}
@@ -8963,13 +9261,14 @@ leapioraid_scsihost_scan_finished(struct Scsi_Host *shost, unsigned long time)
 		return 0;
 	}
 	if (ioc->port_enable_cmds.status & LEAPIORAID_CMD_RESET) {
-		pr_err("%s port enable: aborted due to diag reset\n", ioc->name);
+		pr_err("%s port enable: aborted due to diag reset\n", 
+			ioc->name);
 		ioc->port_enable_cmds.status = LEAPIORAID_CMD_NOT_USED;
 		goto out;
 	}
 	if (ioc->start_scan_failed) {
-		pr_info("%s port enable: FAILED with (ioc_status=0x%08x)\n", ioc->name,
-		       ioc->start_scan_failed);
+		pr_info("%s port enable: FAILED with (ioc_status=0x%08x)\n", 
+			ioc->name, ioc->start_scan_failed);
 		ioc->is_driver_loading = 0;
 		ioc->wait_for_discovery_to_complete = 0;
 		ioc->remove_host = 1;
@@ -9060,7 +9359,8 @@ static struct raid_function_template leapioraid_raid_functions = {
 };
 
 static int
-leapioraid_scsihost_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+leapioraid_scsihost_probe(
+	struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	struct LEAPIORAID_ADAPTER *ioc;
 	struct Scsi_Host *shost = NULL;
@@ -9212,12 +9512,12 @@ leapioraid_scsihost_suspend(struct pci_dev *pdev, pm_message_t state)
 	}
 	leapioraid_base_stop_watchdog(ioc);
 	leapioraid_base_stop_hba_unplug_watchdog(ioc);
-	//flush_scheduled_work();
 	scsi_block_requests(shost);
 	device_state = pci_choose_state(pdev, state);
 	leapioraid_scsihost_ir_shutdown(ioc);
-	pr_info("%s pdev=0x%p, slot=%s, entering operating state [D%d]\n", ioc->name, pdev,
-	       pci_name(pdev), device_state);
+	pr_info("%s pdev=0x%p, slot=%s, entering operating state [D%d]\n", 
+		ioc->name, pdev,
+	    pci_name(pdev), device_state);
 	pci_save_state(pdev);
 	leapioraid_base_free_resources(ioc);
 	pci_set_power_state(pdev, device_state);
@@ -9237,8 +9537,9 @@ leapioraid_scsihost_resume(struct pci_dev *pdev)
 		dev_err(&pdev->dev, "unable to resume device\n");
 		return r;
 	}
-	pr_info("%s pdev=0x%p, slot=%s, previous operating state [D%d]\n", ioc->name, pdev,
-	       pci_name(pdev), device_state);
+	pr_info("%s pdev=0x%p, slot=%s, previous operating state [D%d]\n", 
+		ioc->name, pdev,
+	    pci_name(pdev), device_state);
 	pci_set_power_state(pdev, PCI_D0);
 	pci_enable_wake(pdev, PCI_D0, 0);
 	pci_restore_state(pdev);
@@ -9246,7 +9547,8 @@ leapioraid_scsihost_resume(struct pci_dev *pdev)
 	r = leapioraid_base_map_resources(ioc);
 	if (r)
 		return r;
-	pr_err("%s issuing hard reset as part of OS resume\n", ioc->name);
+	pr_err("%s issuing hard reset as part of OS resume\n", 
+		ioc->name);
 	leapioraid_base_hard_reset_handler(ioc, SOFT_RESET);
 	scsi_unblock_requests(shost);
 	leapioraid_base_start_watchdog(ioc);
@@ -9256,7 +9558,8 @@ leapioraid_scsihost_resume(struct pci_dev *pdev)
 #endif
 
 static pci_ers_result_t
-leapioraid_scsihost_pci_error_detected(struct pci_dev *pdev, pci_channel_state_t state)
+leapioraid_scsihost_pci_error_detected(
+	struct pci_dev *pdev, pci_channel_state_t state)
 {
 	struct Scsi_Host *shost = NULL;
 	struct LEAPIORAID_ADAPTER *ioc = NULL;
@@ -9265,7 +9568,8 @@ leapioraid_scsihost_pci_error_detected(struct pci_dev *pdev, pci_channel_state_t
 		dev_err(&pdev->dev, "device unavailable\n");
 		return PCI_ERS_RESULT_DISCONNECT;
 	}
-	pr_err("%s PCI error: detected callback, state(%d)!!\n", ioc->name, state);
+	pr_err("%s PCI error: detected callback, state(%d)!!\n", 
+		ioc->name, state);
 	switch (state) {
 	case pci_channel_io_normal:
 		return PCI_ERS_RESULT_CAN_RECOVER;
@@ -9306,9 +9610,11 @@ leapioraid_scsihost_pci_slot_reset(struct pci_dev *pdev)
 	rc = leapioraid_base_map_resources(ioc);
 	if (rc)
 		return PCI_ERS_RESULT_DISCONNECT;
-	pr_info("%s issuing hard reset as part of PCI slot reset\n", ioc->name);
+	pr_info("%s issuing hard reset as part of PCI slot reset\n", 
+		ioc->name);
 	rc = leapioraid_base_hard_reset_handler(ioc, FORCE_BIG_HAMMER);
-	pr_info("%s hard reset: %s\n", ioc->name, (rc == 0) ? "success" : "failed");
+	pr_info("%s hard reset: %s\n", 
+		ioc->name, (rc == 0) ? "success" : "failed");
 	if (!rc)
 		return PCI_ERS_RESULT_RECOVERED;
 	else
@@ -9402,31 +9708,44 @@ leapioraid_scsihost_init(void)
 	leapioraid_base_initialize_callback_handler();
 
 	scsi_io_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_scsihost_io_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_scsihost_io_done);
 	tm_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_scsihost_tm_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_scsihost_tm_done);
 	base_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_base_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_base_done);
 	port_enable_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_port_enable_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_port_enable_done);
 	transport_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_transport_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_transport_done);
 	scsih_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_scsihost_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_scsihost_done);
 	config_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_config_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_config_done);
 	ctl_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_ctl_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_ctl_done);
 	ctl_tm_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_ctl_tm_done);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_ctl_tm_done);
 	tm_tr_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_scsihost_tm_tr_complete);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_scsihost_tm_tr_complete);
 	tm_tr_volume_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_scsihost_tm_volume_tr_complete);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_scsihost_tm_volume_tr_complete);
 	tm_tr_internal_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_scsihost_tm_internal_tr_complete);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_scsihost_tm_internal_tr_complete);
 	tm_sas_control_cb_idx =
-	    leapioraid_base_register_callback_handler(leapioraid_scsihost_sas_control_complete);
+	    leapioraid_base_register_callback_handler(
+			leapioraid_scsihost_sas_control_complete);
 
 	return 0;
 }
