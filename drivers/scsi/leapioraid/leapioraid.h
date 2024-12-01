@@ -497,7 +497,7 @@ struct LeapioraidIOUnitP8_t {
 	U8 NumSensors;
 	U8 PollingInterval;
 	U16 Reserved3;
-	struct LEAPIORAID_IOUNIT8_SENSOR Sensor[1];
+	struct LEAPIORAID_IOUNIT8_SENSOR Sensor[];
 };
 
 struct LeapioraidIOCP1_t {
@@ -648,7 +648,7 @@ struct LeapioraidRaidVolP0_t {
 	U8 Reserved2;
 	U8 Reserved3;
 	U8 InactiveStatus;
-	struct LEAPIORAID_RAIDVOL0_PHYS_DISK PhysDisk[1];
+	struct LEAPIORAID_RAIDVOL0_PHYS_DISK PhysDisk[];
 };
 
 #define LEAPIORAID_RAID_VOL_STATE_MISSING                         (0x00)
@@ -755,7 +755,7 @@ struct LeapioraidSasIOUnitP0_t {
 	U8 NumPhys;
 	U8 Reserved2;
 	U16 Reserved3;
-	struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA PhyData[1];
+	struct LEAPIORAID_SAS_IO_UNIT0_PHY_DATA PhyData[];
 };
 
 #define LEAPIORAID_SASIOUNIT0_PORTFLAGS_DISCOVERY_IN_PROGRESS (0x08)
@@ -783,7 +783,7 @@ struct LeapioraidSasIOUnitP1_t {
 	U8 SATAMaxQDepth;
 	U8 ReportDeviceMissingDelay;
 	U8 IODeviceMissingDelay;
-	struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA PhyData[1];
+	struct LEAPIORAID_SAS_IO_UNIT1_PHY_DATA PhyData[];
 };
 
 #define LEAPIORAID_SASIOUNIT1_REPORT_MISSING_TIMEOUT_MASK (0x7F)
@@ -967,7 +967,7 @@ struct LeapioraidRaidCfgP0_t {
 	U8 NumElements;
 	U8 Reserved2;
 	U16 Reserved3;
-	struct LEAPIORAID_RAIDCONFIG0_CONFIG_ELEMENT ConfigElement[1];
+	struct LEAPIORAID_RAIDCONFIG0_CONFIG_ELEMENT ConfigElement[];
 };
 
 struct LeapioraidFWImgHeader_t {
@@ -1538,7 +1538,7 @@ struct LeapioraidEventNotificationRep_t {
 	U16 Event;
 	U16 Reserved4;
 	U32 EventContext;
-	U32 EventData[1];
+	U32 EventData[];
 };
 
 #define LEAPIORAID_EVENT_NOTIFICATION_ACK_REQUIRED        (0x01)
@@ -1654,7 +1654,7 @@ struct LeapioraidEventDataIrCfgChangeList_t {
 	U8 Reserved2;
 	U8 ConfigNum;
 	U32 Flags;
-	struct LeapioraidEventIrCfgEle_t ConfigElement[1];
+	struct LeapioraidEventIrCfgEle_t ConfigElement[];
 };
 
 #define LEAPIORAID_EVENT_IR_CHANGE_FLAGS_FOREIGN_CONFIG   (0x00000001)
@@ -1693,7 +1693,7 @@ struct LeapioraidEventDataSasTopoChangeList_t {
 	U8 StartPhyNum;
 	U8 ExpStatus;
 	U8 PhysicalPort;
-	struct LEAPIORAID_EVENT_SAS_TOPO_PHY_ENTRY PHY[1];
+	struct LEAPIORAID_EVENT_SAS_TOPO_PHY_ENTRY PHY[];
 };
 
 #define LEAPIORAID_EVENT_SAS_TOPO_ES_ADDED                        (0x01)

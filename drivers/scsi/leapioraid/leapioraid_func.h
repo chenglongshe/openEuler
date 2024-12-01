@@ -137,19 +137,6 @@
 #define LEAPIORAID_GEN35_MAX_MSIX_QUEUES		(128)
 #define LEAPIORAID_RDPQ_MAX_INDEX_IN_ONE_CHUNK	(16)
 
-
-struct leapioraid_scsi_unmap_blk_desc {
-	__be64 slba;
-	__be32 nlb;
-	u32 resv;
-};
-
-struct leapioraidscsi_unmap_parm_list {
-	__be16 unmap_data_len;
-	__be16 unmap_blk_desc_data_len;
-	u32 resv;
-	struct leapioraid_scsi_unmap_blk_desc desc[0];
-};
 #define LEAPIORAID_IFAULT_IOP_OVER_TEMP_THRESHOLD_EXCEEDED	(0x2810)
 
 #ifndef DID_TRANSPORT_DISRUPTED
