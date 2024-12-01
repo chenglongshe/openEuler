@@ -322,17 +322,20 @@ struct leapioraid_sas_device {
 	struct sas_rphy *rphy;
 };
 
-static inline void leapioraid_sas_device_get(struct leapioraid_sas_device *s)
+static inline 
+void leapioraid_sas_device_get(struct leapioraid_sas_device *s)
 {
 	kref_get(&s->refcount);
 }
 
-static inline void leapioraid_sas_device_free(struct kref *r)
+static inline 
+void leapioraid_sas_device_free(struct kref *r)
 {
 	kfree(container_of(r, struct leapioraid_sas_device, refcount));
 }
 
-static inline void leapioraid_sas_device_put(struct leapioraid_sas_device *s)
+static inline 
+void leapioraid_sas_device_put(struct leapioraid_sas_device *s)
 {
 	kref_put(&s->refcount, leapioraid_sas_device_free);
 }
@@ -951,8 +954,7 @@ leapioraid_debug_dump_config(void *mpi_request, int sz)
 typedef u8(*LEAPIORAID_CALLBACK) (struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 				u8 msix_index, u32 reply);
 
-
-#define SCSIH_MAP_QUEUE(shost)          static void leapioraid_scsihost_map_queues(shost)
+#define SCSIH_MAP_QUEUE(shost)	static void leapioraid_scsihost_map_queues(shost)
 
 extern struct list_head leapioraid_ioc_list;
 extern spinlock_t leapioraid_gioc_lock;
@@ -1013,11 +1015,12 @@ int leapioraid_base_scsi_enclosure_processor(struct LEAPIORAID_ADAPTER *ioc,
 void leapioraid_base_validate_event_type(struct LEAPIORAID_ADAPTER *ioc,
 					 u32 *event_type);
 void leapioraid_halt_firmware(struct LEAPIORAID_ADAPTER *ioc, u8 set_fault);
-struct leapioraid_scsiio_tracker *leapioraid_get_st_from_smid(struct LEAPIORAID_ADAPTER
-						   *ioc, u16 smid);
+struct leapioraid_scsiio_tracker *leapioraid_get_st_from_smid(
+	struct LEAPIORAID_ADAPTER *ioc, u16 smid);
 void leapioraid_base_clear_st(struct LEAPIORAID_ADAPTER *ioc,
 			      struct leapioraid_scsiio_tracker *st);
-struct leapioraid_scsiio_tracker *leapioraid_base_scsi_cmd_priv(struct scsi_cmnd *scmd);
+struct leapioraid_scsiio_tracker *leapioraid_base_scsi_cmd_priv(
+	struct scsi_cmnd *scmd);
 int
 leapioraid_base_check_for_fault_and_issue_reset(struct LEAPIORAID_ADAPTER *ioc);
 int leapioraid_port_enable(struct LEAPIORAID_ADAPTER *ioc);
@@ -1065,49 +1068,42 @@ void leapioraid_scsihost_set_tm_flag(struct LEAPIORAID_ADAPTER *ioc,
 				     u16 handle);
 void leapioraid_scsihost_clear_tm_flag(struct LEAPIORAID_ADAPTER *ioc,
 				       u16 handle);
-void leapioraid_expander_remove(struct LEAPIORAID_ADAPTER *ioc, u64 sas_address,
-				struct leapioraid_hba_port *port);
+void leapioraid_expander_remove(
+	struct LEAPIORAID_ADAPTER *ioc, u64 sas_address, 
+	struct leapioraid_hba_port *port);
 void leapioraid_device_remove_by_sas_address(struct LEAPIORAID_ADAPTER *ioc,
 					     u64 sas_address,
 					     struct leapioraid_hba_port *port);
 u8 leapioraid_check_for_pending_internal_cmds(struct LEAPIORAID_ADAPTER *ioc,
 					      u16 smid);
-struct leapioraid_hba_port *leapioraid_get_port_by_id(struct LEAPIORAID_ADAPTER *ioc,
-					   u8 port, u8 skip_dirty_flag);
-struct leapioraid_virtual_phy *leapioraid_get_vphy_by_phy(struct LEAPIORAID_ADAPTER *ioc,
-					       struct leapioraid_hba_port *port, u32 phy);
-struct leapioraid_raid_sas_node *leapioraid_scsihost_expander_find_by_handle(struct
-							      LEAPIORAID_ADAPTER
-							      *ioc, u16 handle);
-struct leapioraid_raid_sas_node *leapioraid_scsihost_expander_find_by_sas_address(struct
-								   LEAPIORAID_ADAPTER
-								   *ioc,
-								   u64
-								   sas_address,
-								   struct
-								   leapioraid_hba_port
-								   *port);
-struct leapioraid_sas_device *__leapioraid_get_sdev_by_addr_and_rphy(struct
-							   LEAPIORAID_ADAPTER
-							   *ioc,
-							   u64 sas_address,
-							   struct sas_rphy
-							   *rphy);
-struct leapioraid_sas_device *leapioraid_get_sdev_by_addr(struct LEAPIORAID_ADAPTER *ioc,
-						u64 sas_address,
-						struct leapioraid_hba_port *port);
-struct leapioraid_sas_device *leapioraid_get_sdev_by_handle(struct LEAPIORAID_ADAPTER
-						  *ioc, u16 handle);
+struct leapioraid_hba_port *leapioraid_get_port_by_id(
+	struct LEAPIORAID_ADAPTER *ioc, u8 port, u8 skip_dirty_flag);
+struct leapioraid_virtual_phy *leapioraid_get_vphy_by_phy(
+	struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_hba_port *port, u32 phy);
+struct leapioraid_raid_sas_node *leapioraid_scsihost_expander_find_by_handle(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle);
+struct leapioraid_raid_sas_node *leapioraid_scsihost_expander_find_by_sas_address(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u64 sas_address,
+	struct leapioraid_hba_port *port);
+struct leapioraid_sas_device *__leapioraid_get_sdev_by_addr_and_rphy(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u64 sas_address,
+	struct sas_rphy *rphy);
+struct leapioraid_sas_device *leapioraid_get_sdev_by_addr(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u64 sas_address,
+	struct leapioraid_hba_port *port);
+struct leapioraid_sas_device *leapioraid_get_sdev_by_handle(
+	struct LEAPIORAID_ADAPTER*ioc, u16 handle);
 void leapioraid_scsihost_flush_running_cmds(struct LEAPIORAID_ADAPTER *ioc);
 void leapioraid_port_enable_complete(struct LEAPIORAID_ADAPTER *ioc);
-struct leapioraid_raid_device *leapioraid_raid_device_find_by_handle(struct
-							   LEAPIORAID_ADAPTER
-							   *ioc, u16 handle);
+struct leapioraid_raid_device *leapioraid_raid_device_find_by_handle(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle);
 void leapioraid_scsihost_sas_device_remove(struct LEAPIORAID_ADAPTER *ioc,
 				 struct leapioraid_sas_device *sas_device);
-void leapioraid_scsihost_clear_outstanding_scsi_tm_commands(struct
-							    LEAPIORAID_ADAPTER
-							    *ioc);
+void leapioraid_scsihost_clear_outstanding_scsi_tm_commands(
+	struct LEAPIORAID_ADAPTER *ioc);
 u32 leapioraid_base_mod64(u64 dividend, u32 divisor);
 void
 leapioraid__scsihost_change_queue_depth(struct scsi_device *sdev, int qdepth);
@@ -1238,16 +1234,18 @@ void ctl_init(void);
 void ctl_exit(void);
 u8 leapioraid_transport_done(struct LEAPIORAID_ADAPTER *ioc, u16 smid,
 			     u8 msix_index, u32 reply);
-struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAPTER *ioc,
-						u16 handle, u64 sas_address,
-						struct leapioraid_hba_port *port);
+struct leapioraid_sas_port *leapioraid_transport_port_add(
+				struct LEAPIORAID_ADAPTER *ioc,
+				u16 handle, u64 sas_address,
+				struct leapioraid_hba_port *port);
 void leapioraid_transport_port_remove(struct LEAPIORAID_ADAPTER *ioc,
 				      u64 sas_address, u64 sas_address_parent,
 				      struct leapioraid_hba_port *port);
-int leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy
-				      *leapioraid_phy,
-				      struct LeapioraidSasPhyP0_t phy_pg0,
-				      struct device *parent_dev);
+int leapioraid_transport_add_host_phy(
+			struct LEAPIORAID_ADAPTER *ioc, 
+			struct leapioraid_sas_phy *leapioraid_phy,
+			struct LeapioraidSasPhyP0_t phy_pg0,
+			struct device *parent_dev);
 int leapioraid_transport_add_expander_phy(struct LEAPIORAID_ADAPTER *ioc,
 					  struct leapioraid_sas_phy *leapioraid_phy,
 					  struct LeapioraidExpanderP1_t expander_pg1,
@@ -1266,11 +1264,12 @@ leapioraid_transport_del_phy_from_an_existing_port(struct LEAPIORAID_ADAPTER
 						   *leapioraid_phy);
 #if defined(LEAPIORAID_WIDE_PORT_API)
 void
-leapioraid_transport_add_phy_to_an_existing_port(struct LEAPIORAID_ADAPTER *ioc,
-						 struct leapioraid_raid_sas_node *sas_node,
-						 struct leapioraid_sas_phy
-						 *leapioraid_phy,
-						 u64 sas_address,
-						 struct leapioraid_hba_port *port);
+leapioraid_transport_add_phy_to_an_existing_port(
+					struct LEAPIORAID_ADAPTER *ioc,
+					struct leapioraid_raid_sas_node *sas_node,
+					struct leapioraid_sas_phy
+					*leapioraid_phy,
+					u64 sas_address,
+					struct leapioraid_hba_port *port);
 #endif
 #endif

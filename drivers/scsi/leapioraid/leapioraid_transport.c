@@ -83,7 +83,8 @@ leapioraid_transport_get_port_id_by_sas_phy(struct sas_phy *phy)
 }
 
 static int
-leapioraid_transport_find_parent_node(struct LEAPIORAID_ADAPTER *ioc, struct sas_phy *phy)
+leapioraid_transport_find_parent_node(
+	struct LEAPIORAID_ADAPTER *ioc, struct sas_phy *phy)
 {
 	unsigned long flags;
 	struct leapioraid_hba_port *port = phy->hostdata;
@@ -171,8 +172,9 @@ leapioraid_transport_convert_phy_link_rate(u8 link_rate)
 }
 
 static int
-leapioraid_transport_set_identify(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
-			struct sas_identify *identify)
+leapioraid_transport_set_identify(
+	struct LEAPIORAID_ADAPTER *ioc, u16 handle,
+	struct sas_identify *identify)
 {
 	struct LeapioraidSasDevP0_t sas_device_pg0;
 	struct LeapioraidCfgRep_t mpi_reply;
@@ -195,8 +197,8 @@ leapioraid_transport_set_identify(struct LEAPIORAID_ADAPTER *ioc, u16 handle,
 	ioc_status = le16_to_cpu(mpi_reply.IOCStatus) & LEAPIORAID_IOCSTATUS_MASK;
 	if (ioc_status != LEAPIORAID_IOCSTATUS_SUCCESS) {
 		pr_err("%s handle(0x%04x), ioc_status(0x%04x)\nfailure at %s:%d/%s()!\n",
-				ioc->name, handle,
-				ioc_status, __FILE__, __LINE__, __func__);
+			ioc->name, handle,
+			ioc_status, __FILE__, __LINE__, __func__);
 		return -EIO;
 	}
 	memset(identify, 0, sizeof(struct sas_identify));
@@ -286,10 +288,11 @@ struct leapioraid_rep_manu_reply {
 };
 
 static int
-leapioraid_transport_expander_report_manufacture(struct LEAPIORAID_ADAPTER *ioc,
-				       u64 sas_address,
-				       struct sas_expander_device *edev,
-				       u8 port_id)
+leapioraid_transport_expander_report_manufacture(
+		struct LEAPIORAID_ADAPTER *ioc,
+		u64 sas_address,
+		struct sas_expander_device *edev,
+		u8 port_id)
 {
 	struct LeapioraidSmpPassthroughReq_t *mpi_request;
 	struct LeapioraidSmpPassthroughRep_t *mpi_reply;
@@ -477,12 +480,12 @@ leapioraid_transport_add_phy(struct LEAPIORAID_ADAPTER *ioc,
 }
 
 void
-leapioraid_transport_add_phy_to_an_existing_port(struct LEAPIORAID_ADAPTER *ioc,
-						 struct leapioraid_raid_sas_node *sas_node,
-						 struct leapioraid_sas_phy
-						 *leapioraid_phy,
-						 u64 sas_address,
-						 struct leapioraid_hba_port *port)
+leapioraid_transport_add_phy_to_an_existing_port(
+			struct LEAPIORAID_ADAPTER *ioc,
+			struct leapioraid_raid_sas_node *sas_node,
+			struct leapioraid_sas_phy *leapioraid_phy,
+			u64 sas_address,
+			struct leapioraid_hba_port *port)
 {
 	struct leapioraid_sas_port *leapioraid_port;
 	struct leapioraid_sas_phy *phy_srch;
@@ -509,11 +512,10 @@ leapioraid_transport_add_phy_to_an_existing_port(struct LEAPIORAID_ADAPTER *ioc,
 #endif
 
 void
-leapioraid_transport_del_phy_from_an_existing_port(struct LEAPIORAID_ADAPTER
-						   *ioc,
-						   struct leapioraid_raid_sas_node *sas_node,
-						   struct leapioraid_sas_phy
-						   *leapioraid_phy)
+leapioraid_transport_del_phy_from_an_existing_port(
+			struct LEAPIORAID_ADAPTER *ioc,
+			struct leapioraid_raid_sas_node *sas_node,
+			struct leapioraid_sas_phy *leapioraid_phy)
 {
 	struct leapioraid_sas_port *leapioraid_port, *next;
 	struct leapioraid_sas_phy *phy_srch;
@@ -542,9 +544,10 @@ leapioraid_transport_del_phy_from_an_existing_port(struct LEAPIORAID_ADAPTER
 }
 
 static void
-leapioraid_transport_sanity_check(struct LEAPIORAID_ADAPTER *ioc,
-			struct leapioraid_raid_sas_node *sas_node, u64 sas_address,
-			struct leapioraid_hba_port *port)
+leapioraid_transport_sanity_check(
+		struct LEAPIORAID_ADAPTER *ioc,
+		struct leapioraid_raid_sas_node *sas_node, u64 sas_address,
+		struct leapioraid_hba_port *port)
 {
 	int i;
 
@@ -560,9 +563,10 @@ leapioraid_transport_sanity_check(struct LEAPIORAID_ADAPTER *ioc,
 	}
 }
 
-struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAPTER *ioc,
-						u16 handle, u64 sas_address,
-						struct leapioraid_hba_port *hba_port)
+struct leapioraid_sas_port *leapioraid_transport_port_add(
+	struct LEAPIORAID_ADAPTER *ioc,
+	u16 handle, u64 sas_address,
+	struct leapioraid_hba_port *hba_port)
 {
 	struct leapioraid_sas_phy *leapioraid_phy, *next;
 	struct leapioraid_sas_port *leapioraid_port;
@@ -590,9 +594,10 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAP
 	INIT_LIST_HEAD(&leapioraid_port->port_list);
 	INIT_LIST_HEAD(&leapioraid_port->phy_list);
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
-	sas_node = leapioraid_transport_sas_node_find_by_sas_address(ioc,
-							   sas_address,
-							   hba_port);
+	sas_node = leapioraid_transport_sas_node_find_by_sas_address(
+		ioc,
+		sas_address,
+		hba_port);
 	spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 	if (!sas_node) {
 		pr_err("%s %s: Could not find parent sas_address(0x%016llx)!\n",
@@ -643,8 +648,8 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAP
 	}
 	if (leapioraid_port->remote_identify.device_type == SAS_END_DEVICE) {
 		sas_device = leapioraid_get_sdev_by_addr(ioc,
-							 leapioraid_port->remote_identify.sas_address,
-							 leapioraid_port->hba_port);
+			leapioraid_port->remote_identify.sas_address,
+			leapioraid_port->hba_port);
 		if (!sas_device) {
 			pr_err("%s failure at %s:%d/%s()!\n",
 			       ioc->name, __FILE__, __LINE__, __func__);
@@ -667,11 +672,12 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAP
 	list_for_each_entry(leapioraid_phy, &leapioraid_port->phy_list,
 			    port_siblings) {
 		if ((ioc->logging_level & LEAPIORAID_DEBUG_TRANSPORT))
-			dev_info(&port->dev, "add: handle(0x%04x), sas_addr(0x%016llx), phy(%d)\n",
-					handle,
-					(unsigned long long)
-					leapioraid_port->remote_identify.sas_address,
-					leapioraid_phy->phy_id);
+			dev_info(&port->dev, 
+				"add: handle(0x%04x), sas_addr(0x%016llx), phy(%d)\n",
+				handle,
+				(unsigned long long)
+				leapioraid_port->remote_identify.sas_address,
+				leapioraid_phy->phy_id);
 		sas_port_add_phy(port, leapioraid_phy->phy);
 		leapioraid_phy->phy_belongs_to_port = 1;
 		leapioraid_phy->port = hba_port;
@@ -727,10 +733,10 @@ struct leapioraid_sas_port *leapioraid_transport_port_add(struct LEAPIORAID_ADAP
 	    leapioraid_port->remote_identify.device_type ==
 	    LEAPIORAID_SAS_DEVICE_INFO_FANOUT_EXPANDER)
 		leapioraid_transport_expander_report_manufacture(ioc,
-						       leapioraid_port->remote_identify.sas_address,
-						       rphy_to_expander_device
-						       (rphy),
-						       hba_port->port_id);
+			leapioraid_port->remote_identify.sas_address,
+			rphy_to_expander_device
+			(rphy),
+			hba_port->port_id);
 #endif
 	return leapioraid_port;
 out_fail:
@@ -760,9 +766,10 @@ leapioraid_transport_port_remove(struct LEAPIORAID_ADAPTER *ioc,
 	if (!port)
 		return;
 	spin_lock_irqsave(&ioc->sas_node_lock, flags);
-	sas_node = leapioraid_transport_sas_node_find_by_sas_address(ioc,
-							   sas_address_parent,
-							   port);
+	sas_node = leapioraid_transport_sas_node_find_by_sas_address(
+										ioc,
+										sas_address_parent,
+										port);
 	if (!sas_node) {
 		spin_unlock_irqrestore(&ioc->sas_node_lock, flags);
 		return;
@@ -789,19 +796,19 @@ out:
 						 &port->vphys_list, list) {
 				if (vphy->sas_address != sas_address)
 					continue;
-				pr_err(
-				       "%s remove vphy entry: %p of port:%p,from %d port's vphys list\n",
-					   ioc->name,
-				       vphy, port, port->port_id);
+				pr_err("%s remove vphy entry: %p of port:%p, \
+					from %d port's vphys list\n",
+					ioc->name,
+					vphy, port, port->port_id);
 				port->vphys_mask &= ~vphy->phy_mask;
 				list_del(&vphy->list);
 				kfree(vphy);
 			}
 			if (!port->vphys_mask && !port->sas_address) {
-				pr_err(
-				       "%s remove hba_port entry: %p port: %d from hba_port list\n",
-					   ioc->name,
-				       port, port->port_id);
+				pr_err("%s remove hba_port entry: %p port: %d \
+					from hba_port list\n",
+					ioc->name,
+				    port, port->port_id);
 				list_del(&port->list);
 				kfree(port);
 			}
@@ -814,14 +821,16 @@ out:
 				continue;
 			if (!port->vphys_mask) {
 				pr_err(
-				       "%s remove hba_port entry: %p port: %d from hba_port list\n",
+				       "%s remove hba_port entry: %p port: %d \
+					   from hba_port list\n",
 					   ioc->name,
 				       hba_port, hba_port->port_id);
 				list_del(&hba_port->list);
 				kfree(hba_port);
 			} else {
 				pr_err(
-				       "%s clearing sas_address from hba_port entry: %p port: %d from hba_port list\n",
+				       "%s clearing sas_address from hba_port entry: %p \
+					   port: %d from hba_port list\n",
 				       ioc->name, hba_port, hba_port->port_id);
 				port->sas_address = 0;
 			}
@@ -869,10 +878,11 @@ out:
 }
 
 int
-leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy
-				      *leapioraid_phy,
-				      struct LeapioraidSasPhyP0_t phy_pg0,
-				      struct device *parent_dev)
+leapioraid_transport_add_host_phy(
+	struct LEAPIORAID_ADAPTER *ioc, 
+	struct leapioraid_sas_phy *leapioraid_phy,
+	struct LeapioraidSasPhyP0_t phy_pg0,
+	struct device *parent_dev)
 {
 	struct sas_phy *phy;
 	int phy_index = leapioraid_phy->phy_id;
@@ -895,22 +905,28 @@ leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapior
 	leapioraid_phy->attached_handle =
 	    le16_to_cpu(phy_pg0.AttachedDevHandle);
 	if (leapioraid_phy->attached_handle)
-		leapioraid_transport_set_identify(ioc, leapioraid_phy->attached_handle,
-					&leapioraid_phy->remote_identify);
+		leapioraid_transport_set_identify(
+				ioc, leapioraid_phy->attached_handle,
+				&leapioraid_phy->remote_identify);
 	phy->identify.phy_identifier = leapioraid_phy->phy_id;
 	phy->negotiated_linkrate =
-	    leapioraid_transport_convert_phy_link_rate(phy_pg0.NegotiatedLinkRate &
+	    leapioraid_transport_convert_phy_link_rate(
+			phy_pg0.NegotiatedLinkRate &
 					     LEAPIORAID_SAS_NEG_LINK_RATE_MASK_PHYSICAL);
 	phy->minimum_linkrate_hw =
-	    leapioraid_transport_convert_phy_link_rate(phy_pg0.HwLinkRate &
+	    leapioraid_transport_convert_phy_link_rate(
+			phy_pg0.HwLinkRate &
 					     LEAPIORAID_SAS_HWRATE_MIN_RATE_MASK);
 	phy->maximum_linkrate_hw =
-	    leapioraid_transport_convert_phy_link_rate(phy_pg0.HwLinkRate >> 4);
+	    leapioraid_transport_convert_phy_link_rate(
+			phy_pg0.HwLinkRate >> 4);
 	phy->minimum_linkrate =
-	    leapioraid_transport_convert_phy_link_rate(phy_pg0.ProgrammedLinkRate &
+	    leapioraid_transport_convert_phy_link_rate(
+			phy_pg0.ProgrammedLinkRate &
 					     LEAPIORAID_SAS_PRATE_MIN_RATE_MASK);
 	phy->maximum_linkrate =
-	    leapioraid_transport_convert_phy_link_rate(phy_pg0.ProgrammedLinkRate >> 4);
+	    leapioraid_transport_convert_phy_link_rate(
+			phy_pg0.ProgrammedLinkRate >> 4);
 	phy->hostdata = leapioraid_phy->port;
 #if !defined(LEAPIORAID_WIDE_PORT_API_PLUS)
 	phy->local_attached = 1;
@@ -938,7 +954,8 @@ leapioraid_transport_add_host_phy(struct LEAPIORAID_ADAPTER *ioc, struct leapior
 
 int
 leapioraid_transport_add_expander_phy(
-		struct LEAPIORAID_ADAPTER *ioc, struct leapioraid_sas_phy *leapioraid_phy,
+		struct LEAPIORAID_ADAPTER *ioc, 
+		struct leapioraid_sas_phy *leapioraid_phy,
 		struct LeapioraidExpanderP1_t expander_pg1,
 		struct device *parent_dev)
 {
@@ -963,22 +980,28 @@ leapioraid_transport_add_expander_phy(
 	leapioraid_phy->attached_handle =
 	    le16_to_cpu(expander_pg1.AttachedDevHandle);
 	if (leapioraid_phy->attached_handle)
-		leapioraid_transport_set_identify(ioc, leapioraid_phy->attached_handle,
+		leapioraid_transport_set_identify(
+			ioc, leapioraid_phy->attached_handle,
 					&leapioraid_phy->remote_identify);
 	phy->identify.phy_identifier = leapioraid_phy->phy_id;
 	phy->negotiated_linkrate =
-	    leapioraid_transport_convert_phy_link_rate(expander_pg1.NegotiatedLinkRate &
+	    leapioraid_transport_convert_phy_link_rate(
+			expander_pg1.NegotiatedLinkRate &
 					     LEAPIORAID_SAS_NEG_LINK_RATE_MASK_PHYSICAL);
 	phy->minimum_linkrate_hw =
-	    leapioraid_transport_convert_phy_link_rate(expander_pg1.HwLinkRate &
+	    leapioraid_transport_convert_phy_link_rate(
+			expander_pg1.HwLinkRate &
 					     LEAPIORAID_SAS_HWRATE_MIN_RATE_MASK);
 	phy->maximum_linkrate_hw =
-	    leapioraid_transport_convert_phy_link_rate(expander_pg1.HwLinkRate >> 4);
+	    leapioraid_transport_convert_phy_link_rate(
+			expander_pg1.HwLinkRate >> 4);
 	phy->minimum_linkrate =
-	    leapioraid_transport_convert_phy_link_rate(expander_pg1.ProgrammedLinkRate &
+	    leapioraid_transport_convert_phy_link_rate(
+			expander_pg1.ProgrammedLinkRate &
 					     LEAPIORAID_SAS_PRATE_MIN_RATE_MASK);
 	phy->maximum_linkrate =
-	    leapioraid_transport_convert_phy_link_rate(expander_pg1.ProgrammedLinkRate >> 4);
+	    leapioraid_transport_convert_phy_link_rate(
+			expander_pg1.ProgrammedLinkRate >> 4);
 	phy->hostdata = leapioraid_phy->port;
 #if !defined(LEAPIORAID_WIDE_PORT_API)
 	phy->port_identifier = phy_index;
@@ -1098,8 +1121,8 @@ struct leapioraid_phy_error_log_reply {
 };
 
 static int
-leapioraid_transport_get_expander_phy_error_log(struct LEAPIORAID_ADAPTER *ioc,
-				      struct sas_phy *phy)
+leapioraid_transport_get_expander_phy_error_log(
+	struct LEAPIORAID_ADAPTER *ioc, struct sas_phy *phy)
 {
 	struct LeapioraidSmpPassthroughReq_t *mpi_request;
 	struct LeapioraidSmpPassthroughRep_t *mpi_reply;
@@ -1141,7 +1164,8 @@ leapioraid_transport_get_expander_phy_error_log(struct LEAPIORAID_ADAPTER *ioc,
 	sz = sizeof(struct leapioraid_phy_error_log_request) +
 	    sizeof(struct leapioraid_phy_error_log_reply);
 	data_out =
-	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma, GFP_ATOMIC);
+	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma, 
+			GFP_ATOMIC);
 	if (!data_out) {
 		pr_err("failure at %s:%d/%s()!\n", __FILE__,
 		       __LINE__, __func__);
@@ -1170,11 +1194,11 @@ leapioraid_transport_get_expander_phy_error_log(struct LEAPIORAID_ADAPTER *ioc,
 		      sizeof(struct leapioraid_phy_error_log_request),
 		      data_out_dma + sizeof(struct leapioraid_phy_error_log_request),
 		      sizeof(struct leapioraid_phy_error_log_reply));
-	dtransportprintk(ioc,
-			 pr_info("%s phy_error_log - send to sas_addr(0x%016llx), phy(%d)\n",
-				ioc->name,
-				(unsigned long long)phy->identify.sas_address,
-				phy->number));
+	dtransportprintk(ioc, pr_info(
+		"%s phy_error_log - send to sas_addr(0x%016llx), phy(%d)\n",
+		ioc->name,
+		(unsigned long long)phy->identify.sas_address,
+		phy->number));
 	init_completion(&ioc->transport_cmds.done);
 	ioc->put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->transport_cmds.done, 10 * HZ);
@@ -1263,7 +1287,8 @@ leapioraid_transport_get_linkerrors(struct sas_phy *phy)
 }
 
 static int
-leapioraid_transport_get_enclosure_identifier(struct sas_rphy *rphy, u64 *identifier)
+leapioraid_transport_get_enclosure_identifier(
+	struct sas_rphy *rphy, u64 *identifier)
 {
 	struct LEAPIORAID_ADAPTER *ioc = rphy_to_ioc(rphy);
 	struct leapioraid_sas_device *sas_device;
@@ -1333,8 +1358,9 @@ struct leapioraid_phy_control_reply {
 #define LEAPIORAID_SMP_PHY_CONTROL_HARD_RESET	(0x02)
 #define LEAPIORAID_SMP_PHY_CONTROL_DISABLE		(0x03)
 static int
-leapioraid_transport_expander_phy_control(struct LEAPIORAID_ADAPTER *ioc,
-				struct sas_phy *phy, u8 phy_operation)
+leapioraid_transport_expander_phy_control(
+	struct LEAPIORAID_ADAPTER *ioc,
+	struct sas_phy *phy, u8 phy_operation)
 {
 	struct LeapioraidSmpPassthroughReq_t *mpi_request;
 	struct LeapioraidSmpPassthroughRep_t *mpi_reply;
@@ -1376,7 +1402,8 @@ leapioraid_transport_expander_phy_control(struct LEAPIORAID_ADAPTER *ioc,
 	sz = sizeof(struct leapioraid_phy_control_request) +
 	    sizeof(struct leapioraid_phy_control_reply);
 	data_out =
-	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma, GFP_ATOMIC);
+	    dma_alloc_coherent(&ioc->pdev->dev, sz, &data_out_dma, 
+			GFP_ATOMIC);
 	if (!data_out) {
 		pr_err("failure at %s:%d/%s()!\n", __FILE__,
 		       __LINE__, __func__);
@@ -1410,11 +1437,11 @@ leapioraid_transport_expander_phy_control(struct LEAPIORAID_ADAPTER *ioc,
 		      sizeof(struct leapioraid_phy_control_request),
 		      data_out_dma + sizeof(struct leapioraid_phy_control_request),
 		      sizeof(struct leapioraid_phy_control_reply));
-	dtransportprintk(ioc,
-			 pr_info("%s phy_control - send to sas_addr(0x%016llx), phy(%d), opcode(%d)\n",
-				ioc->name,
-				(unsigned long long)phy->identify.sas_address,
-				phy->number, phy_operation));
+	dtransportprintk(ioc, pr_info(
+		"%s phy_control - send to sas_addr(0x%016llx), phy(%d), opcode(%d)\n",
+		ioc->name,
+		(unsigned long long)phy->identify.sas_address,
+		phy->number, phy_operation));
 	init_completion(&ioc->transport_cmds.done);
 	ioc->put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->transport_cmds.done, 10 * HZ);
@@ -1427,27 +1454,28 @@ leapioraid_transport_expander_phy_control(struct LEAPIORAID_ADAPTER *ioc,
 			issue_reset = 1;
 		goto issue_host_reset;
 	}
-	dtransportprintk(ioc, pr_info("%s phy_control - complete\n", ioc->name));
+	dtransportprintk(ioc, pr_info(
+		"%s phy_control - complete\n", ioc->name));
 	if (ioc->transport_cmds.status & LEAPIORAID_CMD_REPLY_VALID) {
 		mpi_reply = ioc->transport_cmds.reply;
 		dtransportprintk(ioc, pr_err(
-					     "%s phy_control - reply data transfer size(%d)\n",
-					     ioc->name,
-					     le16_to_cpu(mpi_reply->ResponseDataLength)));
+					"%s phy_control - reply data transfer size(%d)\n",
+					ioc->name,
+					le16_to_cpu(mpi_reply->ResponseDataLength)));
 		if (le16_to_cpu(mpi_reply->ResponseDataLength) !=
 		    sizeof(struct leapioraid_phy_control_reply))
 			goto out;
 		phy_control_reply = data_out +
 		    sizeof(struct leapioraid_phy_control_request);
 		dtransportprintk(ioc, pr_err(
-					     "%s phy_control - function_result(%d)\n",
-					     ioc->name,
-					     phy_control_reply->function_result));
+					"%s phy_control - function_result(%d)\n",
+					ioc->name,
+					phy_control_reply->function_result));
 		rc = 0;
 	} else
 		dtransportprintk(ioc, pr_err(
-					     "%s phy_control - no reply\n",
-					     ioc->name));
+					"%s phy_control - no reply\n",
+					ioc->name));
 issue_host_reset:
 	if (issue_reset)
 		leapioraid_base_hard_reset_handler(ioc, FORCE_BIG_HAMMER);
@@ -1545,7 +1573,8 @@ leapioraid_transport_phy_enable(struct sas_phy *phy, int enable)
 	for (i = 0, discovery_active = 0; i < ioc->sas_hba.num_phys; i++) {
 		if (sas_iounit_pg0->PhyData[i].PortFlags &
 		    LEAPIORAID_SASIOUNIT0_PORTFLAGS_DISCOVERY_IN_PROGRESS) {
-			pr_err("%s discovery is active on port = %d, phy = %d: unable to enable/disable phys, try again later!\n",
+			pr_err("%s discovery is active on port = %d, phy = %d: \
+				unable to enable/disable phys, try again later!\n",
 				ioc->name,
 				sas_iounit_pg0->PhyData[i].Port,
 				i);
@@ -1608,7 +1637,8 @@ out:
 }
 
 static int
-leapioraid_transport_phy_speed(struct sas_phy *phy, struct sas_phy_linkrates *rates)
+leapioraid_transport_phy_speed(
+	struct sas_phy *phy, struct sas_phy_linkrates *rates)
 {
 	struct LEAPIORAID_ADAPTER *ioc = phy_to_ioc(phy);
 	struct LeapioraidSasIOUnitP1_t *sas_iounit_pg1 = NULL;
@@ -1682,12 +1712,15 @@ leapioraid_transport_phy_speed(struct sas_phy *phy, struct sas_phy_linkrates *ra
 	if (!leapioraid_config_get_phy_pg0(ioc, &mpi_reply, &phy_pg0,
 					   phy->number)) {
 		phy->minimum_linkrate =
-		    leapioraid_transport_convert_phy_link_rate(phy_pg0.ProgrammedLinkRate &
+		    leapioraid_transport_convert_phy_link_rate(
+				phy_pg0.ProgrammedLinkRate &
 						     LEAPIORAID_SAS_PRATE_MIN_RATE_MASK);
 		phy->maximum_linkrate =
-		    leapioraid_transport_convert_phy_link_rate(phy_pg0.ProgrammedLinkRate >> 4);
+		    leapioraid_transport_convert_phy_link_rate(
+				phy_pg0.ProgrammedLinkRate >> 4);
 		phy->negotiated_linkrate =
-		    leapioraid_transport_convert_phy_link_rate(phy_pg0.NegotiatedLinkRate &
+		    leapioraid_transport_convert_phy_link_rate(
+				phy_pg0.NegotiatedLinkRate &
 						     LEAPIORAID_SAS_NEG_LINK_RATE_MASK_PHYSICAL);
 	}
 out:
@@ -1696,8 +1729,9 @@ out:
 }
 
 static int
-leapioraid_transport_map_smp_buffer(struct device *dev, struct bsg_buffer *buf,
-			  dma_addr_t *dma_addr, size_t *dma_len, void **p)
+leapioraid_transport_map_smp_buffer(
+	struct device *dev, struct bsg_buffer *buf,
+	dma_addr_t *dma_addr, size_t *dma_len, void **p)
 {
 	if (buf->sg_cnt > 1) {
 		*p = dma_alloc_coherent(dev, buf->payload_len, dma_addr,
@@ -1716,8 +1750,9 @@ leapioraid_transport_map_smp_buffer(struct device *dev, struct bsg_buffer *buf,
 }
 
 static void
-leapioraid_transport_unmap_smp_buffer(struct device *dev, struct bsg_buffer *buf,
-			    dma_addr_t dma_addr, void *p)
+leapioraid_transport_unmap_smp_buffer(
+	struct device *dev, struct bsg_buffer *buf,
+	dma_addr_t dma_addr, void *p)
 {
 	if (p)
 		dma_free_coherent(dev, buf->payload_len, p, dma_addr);
@@ -1726,8 +1761,9 @@ leapioraid_transport_unmap_smp_buffer(struct device *dev, struct bsg_buffer *buf
 }
 
 static void
-leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
-		       struct sas_rphy *rphy)
+leapioraid_transport_smp_handler(
+	struct bsg_job *job, struct Scsi_Host *shost,
+	struct sas_rphy *rphy)
 {
 	struct LEAPIORAID_ADAPTER *ioc = shost_priv(shost);
 	struct LeapioraidSmpPassthroughReq_t *mpi_request;
@@ -1762,8 +1798,9 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 		goto job_done;
 	}
 	ioc->transport_cmds.status = LEAPIORAID_CMD_PENDING;
-	rc = leapioraid_transport_map_smp_buffer(&ioc->pdev->dev, &job->request_payload,
-				       &dma_addr_out, &dma_len_out, &addr_out);
+	rc = leapioraid_transport_map_smp_buffer(
+		&ioc->pdev->dev, &job->request_payload,
+		&dma_addr_out, &dma_len_out, &addr_out);
 	if (rc)
 		goto out;
 	if (addr_out) {
@@ -1771,8 +1808,9 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 				  job->request_payload.sg_cnt, addr_out,
 				  job->request_payload.payload_len);
 	}
-	rc = leapioraid_transport_map_smp_buffer(&ioc->pdev->dev, &job->reply_payload,
-				       &dma_addr_in, &dma_len_in, &addr_in);
+	rc = leapioraid_transport_map_smp_buffer(
+		&ioc->pdev->dev, &job->reply_payload,
+		&dma_addr_in, &dma_len_in, &addr_in);
 	if (rc)
 		goto unmap_out;
 	wait_state_count = 0;
@@ -1806,7 +1844,8 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 	ioc->transport_cmds.smid = smid;
 	memset(mpi_request, 0, sizeof(struct LeapioraidSmpPassthroughReq_t));
 	mpi_request->Function = LEAPIORAID_FUNC_SMP_PASSTHROUGH;
-	mpi_request->PhysicalPort = leapioraid_transport_get_port_id_by_rphy(ioc, rphy);
+	mpi_request->PhysicalPort = leapioraid_transport_get_port_id_by_rphy(
+		ioc, rphy);
 	mpi_request->SASAddress = (rphy) ?
 	    cpu_to_le64(rphy->identify.sas_address) :
 	    cpu_to_le64(ioc->sas_hba.sas_address);
@@ -1815,8 +1854,8 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 	ioc->build_sg(ioc, psge, dma_addr_out, dma_len_out - 4, dma_addr_in,
 		      dma_len_in - 4);
 	dtransportprintk(ioc, pr_info(
-				      "%s %s - sending smp request\n", ioc->name,
-				      __func__));
+				"%s %s - sending smp request\n", ioc->name,
+				__func__));
 	init_completion(&ioc->transport_cmds.done);
 	ioc->put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->transport_cmds.done, 10 * HZ);
@@ -1856,10 +1895,12 @@ leapioraid_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 	}
 	rc = 0;
 unmap_in:
-	leapioraid_transport_unmap_smp_buffer(&ioc->pdev->dev, &job->reply_payload,
+	leapioraid_transport_unmap_smp_buffer(
+		&ioc->pdev->dev, &job->reply_payload,
 				    dma_addr_in, addr_in);
 unmap_out:
-	leapioraid_transport_unmap_smp_buffer(&ioc->pdev->dev, &job->request_payload,
+	leapioraid_transport_unmap_smp_buffer(
+		&ioc->pdev->dev, &job->request_payload,
 				    dma_addr_out, addr_out);
 out:
 	ioc->transport_cmds.status = LEAPIORAID_CMD_NOT_USED;
