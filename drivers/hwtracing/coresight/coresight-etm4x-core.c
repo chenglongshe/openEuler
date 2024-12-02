@@ -63,9 +63,12 @@ static u64 etm4_get_access_type(struct etmv4_config *config);
 static enum cpuhp_state hp_online;
 
 struct etm4_init_arg {
-	struct etmv4_drvdata	*drvdata;
+	struct device		*dev;
 	struct csdev_access	*csa;
 };
+
+static DEFINE_PER_CPU(struct etm4_init_arg *, delayed_probe);
+static int etm4_probe_cpu(unsigned int cpu);
 
 u64 etm4x_sysreg_read(u32 offset, bool _relaxed, bool _64bit)
 {
@@ -262,6 +265,7 @@ static void etm4x_allow_trace(struct etmv4_drvdata *drvdata)
 #ifdef CONFIG_ETM4X_IMPDEF_FEATURE
 
 #define HISI_HIP08_AMBA_ID		0x000b6d01
+#define HISI_HIP09_AMBA_ID		0x000b6d02
 #define ETM4_AMBA_MASK			0xfffff
 #define HISI_HIP08_CORE_COMMIT_MASK	0x3000
 #define HISI_HIP08_CORE_COMMIT_SHIFT	12
@@ -278,6 +282,11 @@ struct etm4_arch_features {
 static bool etm4_hisi_match_pid(unsigned int id)
 {
 	return (id & ETM4_AMBA_MASK) == HISI_HIP08_AMBA_ID;
+}
+
+static bool etm4_hisi_hip09_match_pid(unsigned int id)
+{
+	return (id & ETM4_AMBA_MASK) == HISI_HIP09_AMBA_ID;
 }
 
 static void etm4_hisi_config_core_commit(void *info)
@@ -302,9 +311,12 @@ static void etm4_hisi_config_core_commit(void *info)
 static void etm4_hisi_config_set_auxctrlr(void *info)
 {
 	struct csdev_access *csa = info;
+	u32 trcauxctlr;
 
 	/* Switch the ETM to idle state */
-	etm4x_relaxed_write32(csa, HISI_HIP08_AUXCTRL_CHICKEN_BIT, TRCAUXCTLR);
+	trcauxctlr = etm4x_read32(csa, TRCAUXCTLR);
+	trcauxctlr |= HISI_HIP08_AUXCTRL_CHICKEN_BIT;
+	etm4x_relaxed_write32(csa, trcauxctlr, TRCAUXCTLR);
 }
 
 static struct etm4_arch_features etm4_features[] = {
@@ -349,12 +361,23 @@ static void etm4_disable_arch_specific(struct etmv4_drvdata *drvdata)
 }
 
 static void etm4_check_arch_features(struct etmv4_drvdata *drvdata,
-				      unsigned int id)
+				     struct csdev_access *csa)
 {
-	if (etm4_hisi_match_pid(id)) {
+	/*
+	 * TRCPIDR* registers are not required for ETMs with system
+	 * instructions. They must be identified by the MIDR+REVIDRs.
+	 * Skip the TRCPID checks for now.
+	 */
+	if (!csa->io_mem)
+		return;
+
+	if (etm4_hisi_match_pid(coresight_get_pid(csa))) {
 		set_bit(ETM4_IMPDEF_HISI_CORE_COMMIT, drvdata->arch_features);
 		set_bit(ETM4_IMPDEF_HISI_SET_AUXCTRLR, drvdata->arch_features);
 	}
+
+	if (etm4_hisi_hip09_match_pid(coresight_get_pid(csa)))
+		set_bit(ETM4_IMPDEF_HISI_SET_AUXCTRLR, drvdata->arch_features);
 }
 #else
 static void etm4_enable_arch_specific(struct etmv4_drvdata *drvdata)
@@ -369,7 +392,7 @@ static void etm4_disable_arch_specific(struct etmv4_drvdata *drvdata)
 }
 
 static void etm4_check_arch_features(struct etmv4_drvdata *drvdata,
-				     unsigned int id)
+				     struct csdev_access *csa)
 {
 }
 #endif /* CONFIG_ETM4X_IMPDEF_FEATURE */
@@ -1032,7 +1055,7 @@ static void etm4_init_arch_data(void *info)
 	struct csdev_access *csa;
 	int i;
 
-	drvdata = init_arg->drvdata;
+	drvdata = dev_get_drvdata(init_arg->dev);
 	csa = init_arg->csa;
 
 	/*
@@ -1087,6 +1110,8 @@ static void etm4_init_arch_data(void *info)
 	drvdata->nr_event = BMVAL(etmidr0, 10, 11);
 	/* QSUPP, bits[16:15] Q element support field */
 	drvdata->q_support = BMVAL(etmidr0, 15, 16);
+	if (drvdata->q_support)
+		drvdata->q_filt = BMVAL(etmidr0, 14, 14);
 	/* TSSIZE, bits[28:24] Global timestamp size field */
 	drvdata->ts_size = BMVAL(etmidr0, 24, 28);
 
@@ -1521,7 +1546,7 @@ void etm4_config_trace_mode(struct etmv4_config *config)
 static int etm4_online_cpu(unsigned int cpu)
 {
 	if (!etmdrvdata[cpu])
-		return 0;
+		return etm4_probe_cpu(cpu);
 
 	if (etmdrvdata[cpu]->boot_enable && !etmdrvdata[cpu]->sticky_enable)
 		coresight_enable(etmdrvdata[cpu]->csdev);
@@ -1610,16 +1635,14 @@ static int __etm4_cpu_save(struct etmv4_drvdata *drvdata)
 	state->trcccctlr = etm4x_read32(csa, TRCCCCTLR);
 	state->trcbbctlr = etm4x_read32(csa, TRCBBCTLR);
 	state->trctraceidr = etm4x_read32(csa, TRCTRACEIDR);
-	state->trcqctlr = etm4x_read32(csa, TRCQCTLR);
+	if (drvdata->q_filt)
+		state->trcqctlr = etm4x_read32(csa, TRCQCTLR);
 
 	state->trcvictlr = etm4x_read32(csa, TRCVICTLR);
 	state->trcviiectlr = etm4x_read32(csa, TRCVIIECTLR);
 	state->trcvissctlr = etm4x_read32(csa, TRCVISSCTLR);
 	if (drvdata->nr_pe_cmp)
 		state->trcvipcssctlr = etm4x_read32(csa, TRCVIPCSSCTLR);
-	state->trcvdctlr = etm4x_read32(csa, TRCVDCTLR);
-	state->trcvdsacctlr = etm4x_read32(csa, TRCVDSACCTLR);
-	state->trcvdarcctlr = etm4x_read32(csa, TRCVDARCCTLR);
 
 	for (i = 0; i < drvdata->nrseqstate - 1; i++)
 		state->trcseqevr[i] = etm4x_read32(csa, TRCSEQEVRn(i));
@@ -1636,7 +1659,8 @@ static int __etm4_cpu_save(struct etmv4_drvdata *drvdata)
 		state->trccntvr[i] = etm4x_read32(csa, TRCCNTVRn(i));
 	}
 
-	for (i = 0; i < drvdata->nr_resource * 2; i++)
+	/* Resource selector pair 0 is reserved */
+	for (i = 2; i < drvdata->nr_resource * 2; i++)
 		state->trcrsctlr[i] = etm4x_read32(csa, TRCRSCTLRn(i));
 
 	for (i = 0; i < drvdata->nr_ss_cmp; i++) {
@@ -1720,8 +1744,10 @@ static void __etm4_cpu_restore(struct etmv4_drvdata *drvdata)
 {
 	int i;
 	struct etmv4_save_state *state = drvdata->save_state;
-	struct csdev_access tmp_csa = CSDEV_ACCESS_IOMEM(drvdata->base);
-	struct csdev_access *csa = &tmp_csa;
+	struct csdev_access *csa = &drvdata->csdev->access;
+
+	if (WARN_ON(!drvdata->csdev))
+		return;
 
 	etm4_cs_unlock(drvdata, csa);
 	etm4x_relaxed_write32(csa, state->trcclaimset, TRCCLAIMSET);
@@ -1740,16 +1766,14 @@ static void __etm4_cpu_restore(struct etmv4_drvdata *drvdata)
 	etm4x_relaxed_write32(csa, state->trcccctlr, TRCCCCTLR);
 	etm4x_relaxed_write32(csa, state->trcbbctlr, TRCBBCTLR);
 	etm4x_relaxed_write32(csa, state->trctraceidr, TRCTRACEIDR);
-	etm4x_relaxed_write32(csa, state->trcqctlr, TRCQCTLR);
+	if (drvdata->q_filt)
+		etm4x_relaxed_write32(csa, state->trcqctlr, TRCQCTLR);
 
 	etm4x_relaxed_write32(csa, state->trcvictlr, TRCVICTLR);
 	etm4x_relaxed_write32(csa, state->trcviiectlr, TRCVIIECTLR);
 	etm4x_relaxed_write32(csa, state->trcvissctlr, TRCVISSCTLR);
 	if (drvdata->nr_pe_cmp)
 		etm4x_relaxed_write32(csa, state->trcvipcssctlr, TRCVIPCSSCTLR);
-	etm4x_relaxed_write32(csa, state->trcvdctlr, TRCVDCTLR);
-	etm4x_relaxed_write32(csa, state->trcvdsacctlr, TRCVDSACCTLR);
-	etm4x_relaxed_write32(csa, state->trcvdarcctlr, TRCVDARCCTLR);
 
 	for (i = 0; i < drvdata->nrseqstate - 1; i++)
 		etm4x_relaxed_write32(csa, state->trcseqevr[i], TRCSEQEVRn(i));
@@ -1766,7 +1790,8 @@ static void __etm4_cpu_restore(struct etmv4_drvdata *drvdata)
 		etm4x_relaxed_write32(csa, state->trccntvr[i], TRCCNTVRn(i));
 	}
 
-	for (i = 0; i < drvdata->nr_resource * 2; i++)
+	/* Resource selector pair 0 is reserved */
+	for (i = 2; i < drvdata->nr_resource * 2; i++)
 		etm4x_relaxed_write32(csa, state->trcrsctlr[i], TRCRSCTLRn(i));
 
 	for (i = 0; i < drvdata->nr_ss_cmp; i++) {
@@ -1899,47 +1924,20 @@ static void etm4_pm_clear(void)
 	}
 }
 
-static int etm4_probe(struct device *dev, void __iomem *base, u32 etm_pid)
+static int etm4_add_coresight_dev(struct etm4_init_arg *init_arg)
 {
 	int ret;
 	struct coresight_platform_data *pdata = NULL;
-	struct etmv4_drvdata *drvdata;
+	struct device *dev = init_arg->dev;
+	struct etmv4_drvdata *drvdata = dev_get_drvdata(dev);
 	struct coresight_desc desc = { 0 };
-	struct etm4_init_arg init_arg = { 0 };
 	u8 major, minor;
 	char *type_name;
 
-	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
 	if (!drvdata)
-		return -ENOMEM;
+		return -EINVAL;
 
-	dev_set_drvdata(dev, drvdata);
-
-	if (pm_save_enable == PARAM_PM_SAVE_FIRMWARE)
-		pm_save_enable = coresight_loses_context_with_cpu(dev) ?
-			       PARAM_PM_SAVE_SELF_HOSTED : PARAM_PM_SAVE_NEVER;
-
-	if (pm_save_enable != PARAM_PM_SAVE_NEVER) {
-		drvdata->save_state = devm_kmalloc(dev,
-				sizeof(struct etmv4_save_state), GFP_KERNEL);
-		if (!drvdata->save_state)
-			return -ENOMEM;
-	}
-
-	drvdata->base = base;
-
-	spin_lock_init(&drvdata->spinlock);
-
-	drvdata->cpu = coresight_get_cpu(dev);
-	if (drvdata->cpu < 0)
-		return drvdata->cpu;
-
-	init_arg.drvdata = drvdata;
-	init_arg.csa = &desc.access;
-
-	if (smp_call_function_single(drvdata->cpu,
-				etm4_init_arch_data,  &init_arg, 1))
-		dev_err(dev, "ETM arch init failed\n");
+	desc.access = *init_arg->csa;
 
 	if (!drvdata->arch)
 		return -EINVAL;
@@ -2000,13 +1998,67 @@ static int etm4_probe(struct device *dev, void __iomem *base, u32 etm_pid)
 		drvdata->boot_enable = true;
 	}
 
-	etm4_check_arch_features(drvdata, etm_pid);
+	etm4_check_arch_features(drvdata, &desc.access);
 
 	return 0;
 }
 
+static int etm4_probe(struct device *dev)
+{
+	struct etmv4_drvdata *drvdata = dev_get_drvdata(dev);
+	struct csdev_access access = { 0 };
+	struct etm4_init_arg init_arg = { 0 };
+	struct etm4_init_arg *delayed;
+
+	if (pm_save_enable == PARAM_PM_SAVE_FIRMWARE)
+		pm_save_enable = coresight_loses_context_with_cpu(dev) ?
+			       PARAM_PM_SAVE_SELF_HOSTED : PARAM_PM_SAVE_NEVER;
+
+	if (pm_save_enable != PARAM_PM_SAVE_NEVER) {
+		drvdata->save_state = devm_kmalloc(dev,
+				sizeof(struct etmv4_save_state), GFP_KERNEL);
+		if (!drvdata->save_state)
+			return -ENOMEM;
+	}
+
+	spin_lock_init(&drvdata->spinlock);
+
+	drvdata->cpu = coresight_get_cpu(dev);
+	if (drvdata->cpu < 0)
+		return drvdata->cpu;
+
+	init_arg.dev = dev;
+	init_arg.csa = &access;
+
+	/*
+	 * Serialize against CPUHP callbacks to avoid race condition
+	 * between the smp call and saving the delayed probe.
+	 */
+	cpus_read_lock();
+	if (smp_call_function_single(drvdata->cpu,
+				etm4_init_arch_data,  &init_arg, 1)) {
+		/* The CPU was offline, try again once it comes online. */
+		delayed = devm_kmalloc(dev, sizeof(*delayed), GFP_KERNEL);
+		if (!delayed) {
+			cpus_read_unlock();
+			return -ENOMEM;
+		}
+
+		*delayed = init_arg;
+
+		per_cpu(delayed_probe, drvdata->cpu) = delayed;
+
+		cpus_read_unlock();
+		return 0;
+	}
+	cpus_read_unlock();
+
+	return etm4_add_coresight_dev(&init_arg);
+}
+
 static int etm4_probe_amba(struct amba_device *adev, const struct amba_id *id)
 {
+	struct etmv4_drvdata *drvdata;
 	void __iomem *base;
 	struct device *dev = &adev->dev;
 	struct resource *res = &adev->res;
@@ -2017,7 +2069,13 @@ static int etm4_probe_amba(struct amba_device *adev, const struct amba_id *id)
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
-	ret = etm4_probe(dev, base, id->id);
+	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
+	if (!drvdata)
+		return -ENOMEM;
+
+	drvdata->base = base;
+	dev_set_drvdata(dev, drvdata);
+	ret = etm4_probe(dev);
 	if (!ret)
 		pm_runtime_put(&adev->dev);
 
@@ -2026,21 +2084,55 @@ static int etm4_probe_amba(struct amba_device *adev, const struct amba_id *id)
 
 static int etm4_probe_platform_dev(struct platform_device *pdev)
 {
+	struct etmv4_drvdata *drvdata;
 	int ret;
 
+	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
+	if (!drvdata)
+		return -ENOMEM;
+
+	drvdata->base = NULL;
+	dev_set_drvdata(&pdev->dev, drvdata);
 	pm_runtime_get_noresume(&pdev->dev);
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
-	/*
-	 * System register based devices could match the
-	 * HW by reading appropriate registers on the HW
-	 * and thus we could skip the PID.
-	 */
-	ret = etm4_probe(&pdev->dev, NULL, 0);
+	ret = etm4_probe(&pdev->dev);
 
 	pm_runtime_put(&pdev->dev);
+	if (ret)
+		pm_runtime_disable(&pdev->dev);
+
 	return ret;
+}
+
+static int etm4_probe_cpu(unsigned int cpu)
+{
+	int ret;
+	struct etm4_init_arg init_arg;
+	struct csdev_access access = { 0 };
+	struct etm4_init_arg *iap = *this_cpu_ptr(&delayed_probe);
+
+	if (!iap)
+		return 0;
+
+	init_arg = *iap;
+	devm_kfree(init_arg.dev, iap);
+	*this_cpu_ptr(&delayed_probe) = NULL;
+
+	ret = pm_runtime_resume_and_get(init_arg.dev);
+	if (ret < 0) {
+		dev_err(init_arg.dev, "Failed to get PM runtime!\n");
+		return 0;
+	}
+
+	init_arg.csa = &access;
+	etm4_init_arch_data(&init_arg);
+
+	etm4_add_coresight_dev(&init_arg);
+
+	pm_runtime_put(init_arg.dev);
+	return 0;
 }
 
 static struct amba_cs_uci_id uci_id_etm4[] = {
@@ -2057,16 +2149,20 @@ static void clear_etmdrvdata(void *info)
 	int cpu = *(int *)info;
 
 	etmdrvdata[cpu] = NULL;
+	per_cpu(delayed_probe, cpu) = NULL;
 }
 
 static int __exit etm4_remove_dev(struct etmv4_drvdata *drvdata)
 {
-	etm_perf_symlink(drvdata->csdev, false);
+	bool had_delayed_probe;
 	/*
 	 * Taking hotplug lock here to avoid racing between etm4_remove_dev()
 	 * and CPU hotplug call backs.
 	 */
 	cpus_read_lock();
+
+	had_delayed_probe = per_cpu(delayed_probe, drvdata->cpu);
+
 	/*
 	 * The readers for etmdrvdata[] are CPU hotplug call backs
 	 * and PM notification call backs. Change etmdrvdata[i] on
@@ -2074,11 +2170,14 @@ static int __exit etm4_remove_dev(struct etmv4_drvdata *drvdata)
 	 * inside one call back function.
 	 */
 	if (smp_call_function_single(drvdata->cpu, clear_etmdrvdata, &drvdata->cpu, 1))
-		etmdrvdata[drvdata->cpu] = NULL;
+		clear_etmdrvdata(&drvdata->cpu);
 
 	cpus_read_unlock();
 
-	coresight_unregister(drvdata->csdev);
+	if (!had_delayed_probe) {
+		etm_perf_symlink(drvdata->csdev, false);
+		coresight_unregister(drvdata->csdev);
+	}
 
 	return 0;
 }
