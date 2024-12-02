@@ -1623,6 +1623,7 @@ struct tcp_fastopen_request {
 	struct msghdr			*data;  /* data in MSG_FASTOPEN */
 	size_t				size;
 	int				copied;	/* queued in tcp_connect() */
+	struct ubuf_info		*uarg;
 };
 void tcp_free_fastopen_req(struct tcp_sock *tp);
 void tcp_fastopen_destroy_cipher(struct sock *sk);
@@ -2202,7 +2203,7 @@ static inline u32 tcp_timeout_init(struct sock *sk)
 
 	if (timeout <= 0)
 		timeout = TCP_TIMEOUT_INIT;
-	return timeout;
+	return min_t(int, timeout, TCP_RTO_MAX);
 }
 
 static inline u32 tcp_rwnd_init_bpf(struct sock *sk)
