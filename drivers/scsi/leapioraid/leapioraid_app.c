@@ -610,8 +610,6 @@ leapioraid_ctl_do_command(struct LEAPIORAID_ADAPTER *ioc,
 		goto out;
 	mpi_request = kzalloc(ioc->request_sz, GFP_KERNEL);
 	if (!mpi_request) {
-		pr_err("%s %s: failed obtaining a memory for mpi_request\n",
-			ioc->name, __func__);
 		ret = -ENOMEM;
 		goto out;
 	}

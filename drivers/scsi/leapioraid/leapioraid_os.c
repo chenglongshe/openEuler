@@ -6959,7 +6959,8 @@ tm_retry:
 		if (r == FAILED) {
 			sdev_printk(
 				KERN_WARNING, sdev,
-				"leapioraid_scsihost_issue_tm: ABORT_TASK: FAILED : scmd(%p)\n", scmd);
+				"leapioraid_scsihost_issue_tm: ABORT_TASK: \
+					FAILED : scmd(%p)\n", scmd);
 			goto tm_retry;
 		}
 		if (task_abort_retries > 1)
