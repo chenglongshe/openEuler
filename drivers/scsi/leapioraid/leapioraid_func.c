@@ -5720,7 +5720,7 @@ leapioraid_base_hard_reset_handler(
 	}
 	if (!leapioraid_base_pci_device_is_available(ioc)) {
 		pr_err(
-			"%s %s: pci error recovery reset or pci device unplug occured\n",
+			"%s %s: pci error recovery reset or pci device unplug occurred\n",
 			ioc->name, __func__);
 		if (leapioraid_base_pci_device_is_unplugged(ioc)) {
 			leapioraid_base_pause_mq_polling(ioc);
