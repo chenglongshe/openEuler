@@ -43,6 +43,16 @@
 #define DDRC_V2_EVENT_TYPE	0xe74
 #define DDRC_V2_PERF_CTRL	0xeA0
 
+/*
+ * HIP10C platform v2 PMU DDRC interrupt registers definition
+ * On HIP10C platform, the DDRC PMU interrupt register offset is
+ * modified, causing the interrupt handler to fail to properly
+ * handle counter overflows.
+ */
+#define DDRC_V2_HIP10C_INT_MASK		0x534
+#define DDRC_V2_HIP10C_INT_STATUS	0x538
+#define DDRC_V2_HIP10C_INT_CLEAR	0x53C
+
 /* DDRC has 8-counters */
 #define DDRC_NR_COUNTERS	0x8
 #define DDRC_V1_PERF_CTRL_EN	0x2
@@ -58,10 +68,38 @@
  */
 #define GET_DDRC_EVENTID(hwc)	(hwc->config_base & 0x7)
 
+#define HISI_DDRC_PMU_NORMAL_PMU		0x0    /* HiSilicon normal PMU */
+#define HISI_DDRC_PMU_INCORRECT_INT_REGS	BIT(0) /* HiSilicon HIP10C PMU */
+
 static const u32 ddrc_reg_off[] = {
 	DDRC_FLUX_WR, DDRC_FLUX_RD, DDRC_FLUX_WCMD, DDRC_FLUX_RCMD,
 	DDRC_PRE_CMD, DDRC_ACT_CMD, DDRC_RNK_CHG, DDRC_RW_CHG
 };
+
+static struct acpi_platform_list hisi_uncore_plat_info[] = {
+	/* HiSilicon Hip10C Platform */
+	{"HISI  ", "HIP10C  ", 0, ACPI_SIG_DSDT, greater_than_or_equal,
+	 "Erratum #162400501", HISI_DDRC_PMU_INCORRECT_INT_REGS},
+	{ }
+};
+
+static void hisi_ddrc_pmu_check_errata(struct platform_device *pdev, struct hisi_pmu *ddrc_pmu)
+{
+	int idx;
+
+	idx = acpi_match_platform_list(hisi_uncore_plat_info);
+	if (idx >= 0)
+		ddrc_pmu->errata = hisi_uncore_plat_info[idx].data;
+	else
+		ddrc_pmu->errata = HISI_DDRC_PMU_NORMAL_PMU;
+
+	dev_dbg(ddrc_pmu->dev, "errata mask %#x\n", ddrc_pmu->errata);
+}
+
+static bool hisi_ddrc_pmu_has_erratum(struct hisi_pmu *ddrc_pmu, u32 erratum)
+{
+	return !!(ddrc_pmu->errata & erratum);
+}
 
 /*
  * Select the counter register offset using the counter index.
@@ -248,21 +286,29 @@ static void hisi_ddrc_pmu_v1_disable_counter_int(struct hisi_pmu *ddrc_pmu,
 static void hisi_ddrc_pmu_v2_enable_counter_int(struct hisi_pmu *ddrc_pmu,
 						struct hw_perf_event *hwc)
 {
+	u32 int_mask = DDRC_V2_INT_MASK;
 	u32 val;
 
-	val = readl(ddrc_pmu->base + DDRC_V2_INT_MASK);
+	if (hisi_ddrc_pmu_has_erratum(ddrc_pmu, HISI_DDRC_PMU_INCORRECT_INT_REGS))
+		int_mask = DDRC_V2_HIP10C_INT_MASK;
+
+	val = readl(ddrc_pmu->base + int_mask);
 	val &= ~(1 << hwc->idx);
-	writel(val, ddrc_pmu->base + DDRC_V2_INT_MASK);
+	writel(val, ddrc_pmu->base + int_mask);
 }
 
 static void hisi_ddrc_pmu_v2_disable_counter_int(struct hisi_pmu *ddrc_pmu,
 						struct hw_perf_event *hwc)
 {
+	u32 int_mask = DDRC_V2_INT_MASK;
 	u32 val;
 
-	val = readl(ddrc_pmu->base + DDRC_V2_INT_MASK);
+	if (hisi_ddrc_pmu_has_erratum(ddrc_pmu, HISI_DDRC_PMU_INCORRECT_INT_REGS))
+		int_mask = DDRC_V2_HIP10C_INT_MASK;
+
+	val = readl(ddrc_pmu->base + int_mask);
 	val |= 1 << hwc->idx;
-	writel(val, ddrc_pmu->base + DDRC_V2_INT_MASK);
+	writel(val, ddrc_pmu->base + int_mask);
 }
 
 static u32 hisi_ddrc_pmu_v1_get_int_status(struct hisi_pmu *ddrc_pmu)
@@ -278,13 +324,23 @@ static void hisi_ddrc_pmu_v1_clear_int_status(struct hisi_pmu *ddrc_pmu,
 
 static u32 hisi_ddrc_pmu_v2_get_int_status(struct hisi_pmu *ddrc_pmu)
 {
-	return readl(ddrc_pmu->base + DDRC_V2_INT_STATUS);
+	u32 int_status = DDRC_V2_INT_STATUS;
+
+	if (hisi_ddrc_pmu_has_erratum(ddrc_pmu, HISI_DDRC_PMU_INCORRECT_INT_REGS))
+		int_status = DDRC_V2_HIP10C_INT_STATUS;
+
+	return readl(ddrc_pmu->base + int_status);
 }
 
 static void hisi_ddrc_pmu_v2_clear_int_status(struct hisi_pmu *ddrc_pmu,
 					      int idx)
 {
-	writel(1 << idx, ddrc_pmu->base + DDRC_V2_INT_CLEAR);
+	u32 int_clear = DDRC_V2_INT_CLEAR;
+
+	if (hisi_ddrc_pmu_has_erratum(ddrc_pmu, HISI_DDRC_PMU_INCORRECT_INT_REGS))
+		int_clear = DDRC_V2_HIP10C_INT_CLEAR;
+
+	writel(1 << idx, ddrc_pmu->base + int_clear);
 }
 
 static const struct acpi_device_id hisi_ddrc_pmu_acpi_match[] = {
@@ -463,6 +519,8 @@ static int hisi_ddrc_pmu_dev_probe(struct platform_device *pdev,
 	ret = hisi_uncore_pmu_init_irq(ddrc_pmu, pdev);
 	if (ret)
 		return ret;
+
+	hisi_ddrc_pmu_check_errata(pdev, ddrc_pmu);
 
 	if (ddrc_pmu->identifier >= HISI_PMU_V2) {
 		ddrc_pmu->counter_bits = 48;
