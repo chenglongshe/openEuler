@@ -294,7 +294,7 @@ static int central_timerfn(void *map, int *key, struct bpf_timer *timer)
 		scx_bpf_kick_cpu(cpu, SCX_KICK_PREEMPT);
 	}
 
-	bpf_timer_start(timer, TIMER_INTERVAL_NS, BPF_F_TIMER_CPU_PIN);
+	bpf_timer_start(timer, TIMER_INTERVAL_NS, 0 /*BPF_F_TIMER_CPU_PIN*/);
 	__sync_fetch_and_add(&nr_timers, 1);
 	return 0;
 }
@@ -321,7 +321,7 @@ int BPF_STRUCT_OPS_SLEEPABLE(central_init)
 	bpf_timer_init(timer, &central_timer, CLOCK_MONOTONIC);
 	bpf_timer_set_callback(timer, central_timerfn);
 
-	ret = bpf_timer_start(timer, TIMER_INTERVAL_NS, BPF_F_TIMER_CPU_PIN);
+	ret = bpf_timer_start(timer, TIMER_INTERVAL_NS, 0 /*BPF_F_TIMER_CPU_PIN*/);
 	/*
 	 * BPF_F_TIMER_CPU_PIN is pretty new (>=6.7). If we're running in a
 	 * kernel which doesn't have it, bpf_timer_start() will return -EINVAL.
