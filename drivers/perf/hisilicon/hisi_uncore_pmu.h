@@ -107,6 +107,7 @@ struct hisi_pmu {
 	/* check event code range */
 	int check_event;
 	u32 identifier;
+	u32 errata;
 };
 
 int hisi_uncore_pmu_get_event_idx(struct perf_event *event);
