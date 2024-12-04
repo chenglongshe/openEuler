@@ -111,7 +111,7 @@ static __be16 ubl_header_parse_protocol(const struct sk_buff *skb)
 	return ubl_type_to_proto(skb->data[0]);
 }
 
-const static struct header_ops ubl_header_ops ____cacheline_aligned = {
+static const struct header_ops ubl_header_ops ____cacheline_aligned = {
 	.create		= ubl_create_header,
 	.parse_protocol	= ubl_header_parse_protocol,
 };
