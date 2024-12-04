@@ -68,6 +68,10 @@ EXPORT_SYMBOL(__stack_chk_guard);
 void (*pm_power_off)(void);
 EXPORT_SYMBOL_GPL(pm_power_off);
 
+#if defined(CONFIG_HALTPOLL_CPUIDLE_MODULE)
+EXPORT_SYMBOL(arch_cpu_idle);
+#endif
+
 #ifdef CONFIG_HOTPLUG_CPU
 void __noreturn arch_cpu_idle_dead(void)
 {

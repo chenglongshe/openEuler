@@ -5,6 +5,7 @@
 #include <uapi/asm-generic/kvm_para.h>
 
 
+#define KVM_HINTS_REALTIME      0
 /*
  * This function is used by architectures that support kvm to avoid issuing
  * false soft lockup messages.

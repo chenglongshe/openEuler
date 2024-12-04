@@ -220,6 +220,7 @@ extern void bust_spinlocks(int yes);
 extern int root_mountflags;
 
 extern bool early_boot_irqs_disabled;
+extern unsigned long poll_threshold_ns;
 
 /*
  * Values used for system_state. Ordering of the states must not be changed
