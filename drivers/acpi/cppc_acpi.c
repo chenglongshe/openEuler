@@ -1303,6 +1303,13 @@ static int cppc_set_reg(int cpu, enum cppc_regs reg_idx, u64 val)
 	return cpc_write(cpu, reg, val);
 }
 
+/**
+ * cppc_get_epp_perf() - Read energy perf register.
+ * @cpunum: CPU from which to read energy perf.
+ * @epp_perf: address of a variable to store the returned energy perf.
+ *
+ * Return: 0 for success, -ERRNO otherwise.
+ */
 int cppc_get_epp_perf(int cpunum, u64 *epp_perf)
 {
 	return cppc_get_reg(cpunum, ENERGY_PERF, epp_perf);
@@ -1524,7 +1531,7 @@ EXPORT_SYMBOL_GPL(cppc_get_perf_ctrs);
 /**
  * cppc_set_auto_act_window - Write autonomous act window register.
  * @cpu    : CPU to which to write register.
- * @enable : the desired value of autonomous act window register to be updated.
+ * @auto_act_window : Value to write to the autonomous activity window register.
  */
 int cppc_set_auto_act_window(int cpu, u64 auto_act_window)
 {
@@ -1535,7 +1542,7 @@ EXPORT_SYMBOL_GPL(cppc_set_auto_act_window);
 /**
  * cppc_get_auto_act_window - Read autonomous act window register.
  * @cpu    : CPU to which to write register.
- * @enable : the desired value of autonomous act window register to be updated.
+ * @auto_act_window : Return address.
  */
 int cppc_get_auto_act_window(int cpunum, u64 *auto_act_window)
 {
@@ -1546,7 +1553,7 @@ EXPORT_SYMBOL_GPL(cppc_get_auto_act_window);
 /**
  * cppc_get_auto_sel - Read autonomous selection register.
  * @cpunum : CPU to which to write register.
- * @enable : the desired value of autonomous selection resiter to be updated.
+ * @auto_sel : Return address.
  */
 int cppc_get_auto_sel(int cpunum, u64 *auto_sel)
 {
@@ -1569,7 +1576,7 @@ EXPORT_SYMBOL_GPL(cppc_set_auto_sel);
 /**
  * cppc_set_epp - Write energe perf register.
  * @cpu    : CPU to which to write register.
- * @enable : the desired value of energe perf register to be updated.
+ * @epp_val : the desired value of energe perf register to be updated.
  */
 int cppc_set_epp(int cpu, u64 epp_val)
 {
