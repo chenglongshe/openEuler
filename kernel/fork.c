@@ -731,9 +731,14 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 		if (retval)
 			goto fail_nomem_policy;
 		tmp->vm_mm = mm;
-		retval = dup_userfaultfd(tmp, &uf);
-		if (retval)
-			goto fail_nomem_anon_vma_fork;
+
+#ifdef CONFIG_USERFAULTFD
+		if (unlikely(tmp->vm_userfaultfd_ctx.ctx)) {
+			retval = dup_userfaultfd(tmp, &uf);
+			if (retval)
+				goto fail_nomem_anon_vma_fork;
+		}
+#endif
 		if (tmp->vm_flags & VM_WIPEONFORK) {
 			/*
 			 * VM_WIPEONFORK gets a clean slate in the child.
