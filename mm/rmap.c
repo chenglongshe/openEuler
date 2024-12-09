@@ -337,10 +337,6 @@ int anon_vma_fork(struct vm_area_struct *vma, struct vm_area_struct *pvma)
 	struct anon_vma *anon_vma;
 	int error;
 
-	/* Don't bother if the parent process has no anon_vma here. */
-	if (!pvma->anon_vma)
-		return 0;
-
 	/* Drop inherited anon_vma, we'll reuse existing or allocate new. */
 	vma->anon_vma = NULL;
 
