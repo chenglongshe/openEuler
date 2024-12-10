@@ -820,8 +820,10 @@ struct kvm {
 	struct mmu_notifier mmu_notifier;
 	unsigned long mmu_invalidate_seq;
 	long mmu_invalidate_in_progress;
-	unsigned long mmu_invalidate_range_start;
-	unsigned long mmu_invalidate_range_end;
+	_KABI_DEPRECATE(unsigned long, mmu_invalidate_range_start);
+	_KABI_DEPRECATE(unsigned long, mmu_invalidate_range_end);
+	KABI_EXTEND(gfn_t mmu_invalidate_range_start)
+	KABI_EXTEND(gfn_t mmu_invalidate_range_end)
 #endif
 	struct list_head devices;
 	u64 manual_dirty_log_protect;
@@ -1179,9 +1181,9 @@ enum kvm_mr_change {
 };
 
 int kvm_set_memory_region(struct kvm *kvm,
-			  const struct kvm_userspace_memory_region *mem);
+			  const struct kvm_userspace_memory_region2 *mem);
 int __kvm_set_memory_region(struct kvm *kvm,
-			    const struct kvm_userspace_memory_region *mem);
+			    const struct kvm_userspace_memory_region2 *mem);
 void kvm_arch_free_memslot(struct kvm *kvm, struct kvm_memory_slot *slot);
 void kvm_arch_memslots_updated(struct kvm *kvm, u64 gen);
 int kvm_arch_prepare_memory_region(struct kvm *kvm,
@@ -2417,5 +2419,16 @@ static inline void kvm_account_pgtable_pages(void *virt, int nr)
 
 /* Max number of entries allowed for each kvm dirty ring */
 #define  KVM_DIRTY_RING_MAX_ENTRIES  65536
+
+static inline void kvm_prepare_memory_fault_exit(struct kvm_vcpu *vcpu,
+						 gpa_t gpa, gpa_t size)
+{
+	vcpu->run->exit_reason = KVM_EXIT_MEMORY_FAULT;
+	vcpu->run->memory_fault.gpa = gpa;
+	vcpu->run->memory_fault.size = size;
+
+	/* Flags are not (yet) defined or communicated to userspace. */
+	vcpu->run->memory_fault.flags = 0;
+}
 
 #endif

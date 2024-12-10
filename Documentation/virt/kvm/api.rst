@@ -6128,6 +6128,78 @@ writes to the CNTVCT_EL0 and CNTPCT_EL0 registers using the SET_ONE_REG
 interface. No error will be returned, but the resulting offset will not be
 applied.
 
+.. _KVM_ARM_GET_REG_WRITABLE_MASKS:
+
+4.139 KVM_ARM_GET_REG_WRITABLE_MASKS
+-------------------------------------------
+
+:Capability: KVM_CAP_ARM_SUPPORTED_REG_MASK_RANGES
+:Architectures: arm64
+:Type: vm ioctl
+:Parameters: struct reg_mask_range (in/out)
+:Returns: 0 on success, < 0 on error
+
+
+::
+
+        #define KVM_ARM_FEATURE_ID_RANGE	0
+        #define KVM_ARM_FEATURE_ID_RANGE_SIZE	(3 * 8 * 8)
+
+        struct reg_mask_range {
+                __u64 addr;             /* Pointer to mask array */
+                __u32 range;            /* Requested range */
+                __u32 reserved[13];
+        };
+
+This ioctl copies the writable masks for a selected range of registers to
+userspace.
+
+The ``addr`` field is a pointer to the destination array where KVM copies
+the writable masks.
+
+The ``range`` field indicates the requested range of registers.
+``KVM_CHECK_EXTENSION`` for the ``KVM_CAP_ARM_SUPPORTED_REG_MASK_RANGES``
+capability returns the supported ranges, expressed as a set of flags. Each
+flag's bit index represents a possible value for the ``range`` field.
+All other values are reserved for future use and KVM may return an error.
+
+The ``reserved[13]`` array is reserved for future use and should be 0, or
+KVM may return an error.
+
+KVM_ARM_FEATURE_ID_RANGE (0)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The Feature ID range is defined as the AArch64 System register space with
+op0==3, op1=={0, 1, 3}, CRn==0, CRm=={0-7}, op2=={0-7}.
+
+The mask returned array pointed to by ``addr`` is indexed by the macro
+``ARM64_FEATURE_ID_RANGE_IDX(op0, op1, crn, crm, op2)``, allowing userspace
+to know what fields can be changed for the system register described by
+``op0, op1, crn, crm, op2``. KVM rejects ID register values that describe a
+superset of the features supported by the system.
+
+4.140 KVM_SET_USER_MEMORY_REGION2
+---------------------------------
+
+:Capability: KVM_CAP_USER_MEMORY2
+:Architectures: all
+:Type: vm ioctl
+:Parameters: struct kvm_userspace_memory_region2 (in)
+:Returns: 0 on success, -1 on error
+
+::
+
+  struct kvm_userspace_memory_region2 {
+	__u32 slot;
+	__u32 flags;
+	__u64 guest_phys_addr;
+	__u64 memory_size; /* bytes */
+	__u64 userspace_addr; /* start of the userspace allocated memory */
+	__u64 pad[16];
+  };
+
+See KVM_SET_USER_MEMORY_REGION.
+
 5. The kvm_run structure
 ========================
 
@@ -6759,6 +6831,26 @@ array field of 'riscv_sbi' represents parameters for the SBI call and 'ret'
 array field represents return values. The userspace should update the return
 values of SBI call before resuming the VCPU. For more details on RISC-V SBI
 spec refer, https://github.com/riscv/riscv-sbi-doc.
+
+::
+
+		/* KVM_EXIT_MEMORY_FAULT */
+		struct {
+			__u64 flags;
+			__u64 gpa;
+			__u64 size;
+		} memory_fault;
+
+KVM_EXIT_MEMORY_FAULT indicates the vCPU has encountered a memory fault that
+could not be resolved by KVM.  The 'gpa' and 'size' (in bytes) describe the
+guest physical address range [gpa, gpa + size) of the fault.  The 'flags' field
+describes properties of the faulting access that are likely pertinent.
+Currently, no flags are defined.
+
+Note!  KVM_EXIT_MEMORY_FAULT is unique among all KVM exit reasons in that it
+accompanies a return code of '-1', not '0'!  errno will always be set to EFAULT
+or EHWPOISON when KVM exits with KVM_EXIT_MEMORY_FAULT, userspace should assume
+kvm_run.exit_reason is stale/undefined for all other error numbers.
 
 ::
 
@@ -7793,6 +7885,27 @@ KVM would exit to userspace for handling.
 This capability is aimed to mitigate the threat that malicious VMs can
 cause CPU stuck (due to event windows don't open up) and make the CPU
 unavailable to host or other VMs.
+
+7.34 KVM_CAP_MEMORY_FAULT_INFO
+------------------------------
+
+:Architectures: x86
+:Returns: Informational only, -EINVAL on direct KVM_ENABLE_CAP.
+
+The presence of this capability indicates that KVM_RUN will fill
+kvm_run.memory_fault if KVM cannot resolve a guest page fault VM-Exit, e.g. if
+there is a valid memslot but no backing VMA for the corresponding host virtual
+address.
+
+The information in kvm_run.memory_fault is valid if and only if KVM_RUN returns
+an error with errno=EFAULT or errno=EHWPOISON *and* kvm_run.exit_reason is set
+to KVM_EXIT_MEMORY_FAULT.
+
+Note: Userspaces which attempt to resolve memory faults so that they can retry
+KVM_RUN are encouraged to guard against repeatedly receiving the same
+error/annotated fault.
+
+See KVM_EXIT_MEMORY_FAULT for more information.
 
 8. Other capabilities.
 ======================
