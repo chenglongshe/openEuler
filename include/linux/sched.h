@@ -888,6 +888,10 @@ struct task_struct {
 #ifdef CONFIG_IOMMU_SVA
 	KABI_FILL_HOLE(unsigned		pasid_activated:1)
 #endif
+#ifdef CONFIG_PAGE_OWNER
+	/* Used by page_owner=on to detect recursion in page tracking. */
+	unsigned			in_page_owner:1;
+#endif
 
 	unsigned long			atomic_flags; /* Flags requiring atomic access. */
 
