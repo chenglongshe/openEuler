@@ -139,6 +139,7 @@ KVM_X86_OP_OPTIONAL(get_untagged_addr)
 KVM_X86_OP_OPTIONAL(vm_attestation)
 KVM_X86_OP_OPTIONAL(control_pre_system_reset)
 KVM_X86_OP_OPTIONAL(control_post_system_reset)
+KVM_X86_OP_OPTIONAL(alloc_apic_backing_page)
 
 #undef KVM_X86_OP
 #undef KVM_X86_OP_OPTIONAL
