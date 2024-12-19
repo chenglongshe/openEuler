@@ -714,7 +714,7 @@ void nvme_mpath_shutdown_disk(struct nvme_ns_head *head)
 	if (!head->disk)
 		return;
 	kblockd_schedule_work(&head->requeue_work);
-	if (head->disk->flags & GENHD_FL_UP)
+	if (test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags))
 		del_gendisk(head->disk);
 }
 
