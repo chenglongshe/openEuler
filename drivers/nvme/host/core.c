@@ -477,12 +477,14 @@ static void nvme_free_ns_head(struct kref *ref)
 {
 	struct nvme_ns_head *head =
 		container_of(ref, struct nvme_ns_head, ref);
+	struct nvme_ns_head_wrapper *head_wrapper =
+		container_of(head, struct nvme_ns_head_wrapper, head);
 
 	nvme_mpath_remove_disk(head);
 	ida_simple_remove(&head->subsys->ns_ida, head->instance);
 	cleanup_srcu_struct(&head->srcu);
 	nvme_put_subsystem(head->subsys);
-	kfree(head);
+	kfree(head_wrapper);
 }
 
 static bool nvme_tryget_ns_head(struct nvme_ns_head *head)
@@ -3737,17 +3739,19 @@ static int nvme_subsys_check_duplicate_ids(struct nvme_subsystem *subsys,
 static struct nvme_ns_head *nvme_alloc_ns_head(struct nvme_ctrl *ctrl,
 		unsigned nsid, struct nvme_ns_ids *ids)
 {
+	struct nvme_ns_head_wrapper *head_wrapper;
 	struct nvme_ns_head *head;
-	size_t size = sizeof(*head);
+	size_t size = sizeof(*head_wrapper);
 	int ret = -ENOMEM;
 
 #ifdef CONFIG_NVME_MULTIPATH
 	size += num_possible_nodes() * sizeof(struct nvme_ns *);
 #endif
 
-	head = kzalloc(size, GFP_KERNEL);
-	if (!head)
+	head_wrapper = kzalloc(size, GFP_KERNEL);
+	if (!head_wrapper)
 		goto out;
+	head = &head_wrapper->head;
 	ret = ida_simple_get(&ctrl->subsys->ns_ida, 1, 0, GFP_KERNEL);
 	if (ret < 0)
 		goto out_free_head;
@@ -3789,7 +3793,7 @@ out_cleanup_srcu:
 out_ida_remove:
 	ida_simple_remove(&ctrl->subsys->ns_ida, head->instance);
 out_free_head:
-	kfree(head);
+	kfree(head_wrapper);
 out:
 	if (ret > 0)
 		ret = blk_status_to_errno(nvme_error_status(ret));
