@@ -40,6 +40,9 @@
 #include <linux/fs_parser.h>
 #include <linux/swapfile.h>
 #include <linux/iversion.h>
+#ifdef CONFIG_VKERNEL
+#include <linux/vkernel.h>
+#endif
 #include "swap.h"
 
 static struct vfsmount *shm_mnt;
@@ -1685,8 +1688,18 @@ unsigned long shmem_allowable_huge_orders(struct inode *inode,
 	bool global_huge;
 	loff_t i_size;
 	int order;
+#ifdef CONFIG_VKERNEL
+	unsigned long flags = transparent_hugepage_flags;
+	struct vkernel *vk;
 
+	vk = vkernel_find_vk_by_task(current);
+	if (vk)
+		flags = vk->mem_pref.thp_flags;
+
+	if (vk_thp_disabled_by_hw(flags) || (vma && vma_thp_disabled(vma, vm_flags)))
+#else
 	if (thp_disabled_by_hw() || (vma && vma_thp_disabled(vma, vm_flags)))
+#endif
 		return 0;
 
 	global_huge = shmem_huge_global_enabled(inode, index, write_end,
