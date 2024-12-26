@@ -1,0 +1,95 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+#ifndef __PS3_DEV_TYPE_H__
+#define __PS3_DEV_TYPE_H__
+
+enum DriverType {
+	DRIVER_TYPE_UNKNOWN = 0,
+	DRIVER_TYPE_SAS,
+	DRIVER_TYPE_SATA,
+	DRIVER_TYPE_SES,
+	DRIVER_TYPE_NVME,
+	DRIVER_TYPE_EXP_SAS,
+	DRIVER_TYPE_VEP,
+	DRIVER_TYPE_CHASSIS,
+	DRIVER_TYPE_BACKPLANE,
+	DRIVER_TYPE_MAX,
+};
+
+static inline const char *getDriverTypeName(enum DriverType driverType)
+{
+	static const char * const driverTypeName[] = {
+		[DRIVER_TYPE_UNKNOWN] = "DRIVER_TYPE_UNKNOWN",
+		[DRIVER_TYPE_SAS] = "DRIVER_TYPE_SAS",
+		[DRIVER_TYPE_SATA] = "DRIVER_TYPE_SATA",
+		[DRIVER_TYPE_SES] = "DRIVER_TYPE_SES",
+		[DRIVER_TYPE_NVME] = "DRIVER_TYPE_NVME",
+		[DRIVER_TYPE_EXP_SAS] = "DRIVER_TYPE_EXP_SAS",
+		[DRIVER_TYPE_VEP] = "DRIVER_TYPE_VEP",
+		[DRIVER_TYPE_CHASSIS] = "DRIVER_TYPE_CHASSIS",
+		[DRIVER_TYPE_BACKPLANE] = "DRIVER_TYPE_BACKPLANE",
+		[DRIVER_TYPE_MAX] = "DRIVER_TYPE_MAX",
+	};
+
+	return driverTypeName[driverType];
+}
+
+enum MediumType {
+	DEVICE_TYPE_UNKNOWN = 0,
+	DEVICE_TYPE_HDD,
+	DEVICE_TYPE_SSD,
+	DEVICE_TYPE_ENCLOSURE,
+	DEVICE_TYPE_MAX,
+};
+
+static inline const char *getMediumTypeName(enum MediumType mediumType)
+{
+	static const char * const mediumTypeName[] = {
+		[DEVICE_TYPE_UNKNOWN] = "DEVICE_TYPE_UNKNOWN",
+		[DEVICE_TYPE_HDD] = "DEVICE_TYPE_HDD",
+		[DEVICE_TYPE_SSD] = "DEVICE_TYPE_SSD",
+		[DEVICE_TYPE_ENCLOSURE] = "DEVICE_TYPE_ENCLOSURE",
+		[DEVICE_TYPE_MAX] = "DEVICE_TYPE_MAX",
+	};
+
+	return mediumTypeName[mediumType];
+}
+
+enum DiskSpinUpState {
+	DISK_SPIN_INVALID = 0,
+	DISK_SPIN_UP = 1,
+	DISK_SPIN_TRANS = 2,
+	DISK_SPIN_DOWN = 3,
+};
+
+enum DeviceState {
+	DEVICE_STATE_FREE = 0x0,
+	DEVICE_STATE_INSERTING,
+	DEVICE_STATE_ONLINE,
+	DEVICE_STATE_WAIT,
+	DEVICE_STATE_RECOVER,
+	DEVICE_STATE_PREONLINE,
+	DEVICE_STATE_OUTING,
+	DEVICE_STATE_MAX,
+};
+
+static inline const char *getDeviceStateName(enum DeviceState pdState)
+{
+	static const char * const pdStateName[] = {
+		[DEVICE_STATE_FREE] = "DEVICE_STATE_FREE",
+		[DEVICE_STATE_INSERTING] = "DEVICE_STATE_INSERTING",
+		[DEVICE_STATE_ONLINE] = "DEVICE_STATE_ONLINE",
+		[DEVICE_STATE_WAIT] = "DEVICE_STATE_WAIT",
+		[DEVICE_STATE_RECOVER] = "DEVICE_STATE_RECOVER",
+		[DEVICE_STATE_PREONLINE] = "DEVICE_STATE_PREONLINE",
+		[DEVICE_STATE_OUTING] = "DEVICE_STATE_OUTING",
+		[DEVICE_STATE_MAX] = "DEVICE_STATE_MAX",
+	};
+
+	return pdStateName[pdState];
+}
+
+#define DEVICE_NOT_RUNNING(state)                                              \
+	((state != DEVICE_STATE_ONLINE) && (state != DEVICE_STATE_WAIT) &&     \
+	 (state != DEVICE_STATE_RECOVER) && (state != DEVICE_STATE_PREONLINE))
+
+#endif
