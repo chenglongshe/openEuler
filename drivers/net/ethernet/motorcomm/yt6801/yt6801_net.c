@@ -14,6 +14,89 @@
 const struct net_device_ops *fxgmac_get_netdev_ops(void);
 static void fxgmac_napi_enable(struct fxgmac_pdata *pdata);
 
+unsigned int fxgmac_get_netdev_ip4addr(struct fxgmac_pdata *pdata)
+{
+	unsigned int ipval = 0xc0a801ca; /* 192.168.1.202 */
+	struct net_device *netdev = pdata->netdev;
+	struct in_ifaddr *ifa;
+
+	rcu_read_lock();
+
+	/* We only get the first IPv4 addr. */
+	ifa = rcu_dereference(netdev->ip_ptr->ifa_list);
+	if (ifa) {
+		ipval = (unsigned int)ifa->ifa_address;
+		yt_dbg(pdata, "%s, netdev %s IPv4 address %pI4, mask: %pI4\n",
+		       __func__, ifa->ifa_label, &ifa->ifa_address,
+		       &ifa->ifa_mask);
+	}
+
+	rcu_read_unlock();
+
+	return ipval;
+}
+
+unsigned char *fxgmac_get_netdev_ip6addr(struct fxgmac_pdata *pdata,
+					 unsigned char *ipval,
+					 unsigned char *ip6addr_solicited,
+					 unsigned int ifa_flag)
+{
+	struct net_device *netdev = pdata->netdev;
+	unsigned char solicited_ipval[16] = { 0 };
+	unsigned char local_ipval[16] = { 0 };
+	struct in6_addr *addr_ip6_solicited;
+	struct in6_addr *addr_ip6;
+	struct inet6_ifaddr *ifp;
+	int err = -EADDRNOTAVAIL;
+	struct inet6_dev *i6dev;
+
+	if (!(ifa_flag &
+	      (FXGMAC_NS_IFA_GLOBAL_UNICAST | FXGMAC_NS_IFA_LOCAL_LINK))) {
+		yt_err(pdata, "%s, ifa_flag :%d is err.\n", __func__, ifa_flag);
+		return NULL;
+	}
+
+	addr_ip6 = (struct in6_addr *)local_ipval;
+	addr_ip6_solicited = (struct in6_addr *)solicited_ipval;
+
+	if (ipval)
+		addr_ip6 = (struct in6_addr *)ipval;
+
+	if (ip6addr_solicited)
+		addr_ip6_solicited = (struct in6_addr *)ip6addr_solicited;
+
+	in6_pton("fe80::4808:8ffb:d93e:d753", -1, (u8 *)addr_ip6, -1, NULL);
+
+	rcu_read_lock();
+	i6dev = __in6_dev_get(netdev);
+	if (!i6dev)
+		goto err;
+
+	read_lock_bh(&i6dev->lock);
+	list_for_each_entry(ifp, &i6dev->addr_list, if_list) {
+		if (((ifa_flag & FXGMAC_NS_IFA_GLOBAL_UNICAST) &&
+		     ifp->scope != IFA_LINK) ||
+		    ((ifa_flag & FXGMAC_NS_IFA_LOCAL_LINK) &&
+		     ifp->scope == IFA_LINK)) {
+			memcpy(addr_ip6, &ifp->addr, 16);
+			addrconf_addr_solict_mult(addr_ip6, addr_ip6_solicited);
+			err = 0;
+			break;
+		}
+	}
+	read_unlock_bh(&i6dev->lock);
+
+	if (err)
+		goto err;
+
+	rcu_read_unlock();
+	return ipval;
+err:
+	rcu_read_unlock();
+	yt_err(pdata, "%s, get ipv6 addr err, use default.\n", __func__);
+	return NULL;
+}
+
 static unsigned int fxgmac_desc_tx_avail(struct fxgmac_ring *ring)
 {
 	unsigned int avail;
@@ -901,6 +984,41 @@ static void fxgmac_restart_work(struct work_struct *work)
 	rtnl_lock();
 	fxgmac_restart(pdata);
 	rtnl_unlock();
+}
+
+int fxgmac_config_wol(struct fxgmac_pdata *pdata, bool en)
+{
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+
+	if (!pdata->hw_feat.rwk) {
+		yt_err(pdata, "error configuring WOL - not supported.\n");
+		return -EOPNOTSUPP;
+	}
+
+	hw_ops->disable_wake_magic_pattern(pdata);
+	hw_ops->disable_wake_pattern(pdata);
+	hw_ops->disable_wake_link_change(pdata);
+
+	if (en) {
+		/* Config mac address for rx of magic or ucast */
+		hw_ops->set_mac_address(pdata, (u8 *)(pdata->netdev->dev_addr));
+
+		/* Enable Magic packet */
+		if (pdata->wol & WAKE_MAGIC)
+			hw_ops->enable_wake_magic_pattern(pdata);
+
+		/* Enable global unicast packet */
+		if (pdata->wol &
+		    (WAKE_UCAST | WAKE_MCAST | WAKE_BCAST | WAKE_ARP))
+			hw_ops->enable_wake_pattern(pdata);
+
+		/* Enable ephy link change */
+		if (pdata->wol & WAKE_PHY)
+			hw_ops->enable_wake_link_change(pdata);
+	}
+	device_set_wakeup_enable((pdata->dev), en);
+
+	return 0;
 }
 
 int fxgmac_net_powerdown(struct fxgmac_pdata *pdata, bool wake_en)
