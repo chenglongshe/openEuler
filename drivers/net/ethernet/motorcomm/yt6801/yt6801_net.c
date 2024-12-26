@@ -11,6 +11,8 @@
 #include "yt6801_desc.h"
 #include "yt6801_net.h"
 
+static void fxgmac_napi_enable(struct fxgmac_pdata *pdata);
+
 static int fxgmac_calc_rx_buf_size(struct fxgmac_pdata *pdata, unsigned int mtu)
 {
 	u32 rx_buf_size, max_mtu;
@@ -29,6 +31,26 @@ static int fxgmac_calc_rx_buf_size(struct fxgmac_pdata *pdata, unsigned int mtu)
 		      ~(FXGMAC_RX_BUF_ALIGN - 1);
 
 	return rx_buf_size;
+}
+
+static void fxgmac_enable_rx_tx_ints(struct fxgmac_pdata *pdata)
+{
+	struct fxgmac_channel *channel = pdata->channel_head;
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+	enum fxgmac_int int_id;
+
+	for (u32 i = 0; i < pdata->channel_count; i++, channel++) {
+		if (channel->tx_ring && channel->rx_ring)
+			int_id = FXGMAC_INT_DMA_CH_SR_TI_RI;
+		else if (channel->tx_ring)
+			int_id = FXGMAC_INT_DMA_CH_SR_TI;
+		else if (channel->rx_ring)
+			int_id = FXGMAC_INT_DMA_CH_SR_RI;
+		else
+			continue;
+
+		hw_ops->enable_channel_irq(channel, int_id);
+	}
 }
 
 #define FXGMAC_NAPI_ENABLE			0x1
@@ -178,6 +200,160 @@ void fxgmac_free_rx_data(struct fxgmac_pdata *pdata)
 			fxgmac_desc_data_unmap(pdata, desc_data);
 		}
 	}
+}
+
+static  void fxgmac_phylink_handler(struct net_device *ndev)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(ndev);
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+
+	pdata->phy_link = pdata->phydev->link;
+	pdata->phy_speed = pdata->phydev->speed;
+	pdata->phy_duplex = pdata->phydev->duplex;
+
+	yt_dbg(pdata, "EPHY_CTRL:%x, link:%d, speed:%d,  duplex:%x.\n",
+	       rd32_mem(pdata, EPHY_CTRL), pdata->phy_link, pdata->phy_speed,
+	       pdata->phy_duplex);
+
+	if (pdata->phy_link) {
+		hw_ops->config_mac_speed(pdata);
+		hw_ops->enable_rx(pdata);
+		hw_ops->enable_tx(pdata);
+		netif_carrier_on(pdata->netdev);
+		if (netif_running(pdata->netdev)) {
+			netif_tx_wake_all_queues(pdata->netdev);
+			yt_dbg(pdata, "%s now is link up, mac_speed=%d.\n",
+			       netdev_name(pdata->netdev), pdata->phy_speed);
+		}
+	} else {
+		netif_carrier_off(pdata->netdev);
+		netif_tx_stop_all_queues(pdata->netdev);
+		hw_ops->disable_rx(pdata);
+		hw_ops->disable_tx(pdata);
+		yt_dbg(pdata, "%s now is link down\n",
+		       netdev_name(pdata->netdev));
+	}
+
+	phy_print_status(pdata->phydev);
+}
+
+static int fxgmac_phy_connect(struct fxgmac_pdata *pdata)
+{
+	struct phy_device *phydev = pdata->phydev;
+	int ret;
+
+	ret = phy_connect_direct(pdata->netdev, phydev, fxgmac_phylink_handler,
+				 PHY_INTERFACE_MODE_RGMII);
+	if (ret)
+		return ret;
+
+	phy_attached_info(phydev);
+	return 0;
+}
+
+static void fxgmac_enable_msix_irqs(struct fxgmac_pdata *pdata)
+{
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+
+	for (u32 intid = 0; intid < MSIX_TBL_MAX_NUM; intid++)
+		hw_ops->enable_msix_one_irq(pdata, intid);
+}
+
+int fxgmac_phy_irq_enable(struct fxgmac_pdata *pdata, bool clear_phy_interrupt)
+{
+	struct phy_device *phydev = pdata->phydev;
+
+	if (clear_phy_interrupt &&
+	    phy_read(phydev, PHY_INT_STATUS) < 0)
+		return -ETIMEDOUT;
+
+	return phy_modify(phydev, PHY_INT_MASK,
+				     PHY_INT_MASK_LINK_UP |
+					     PHY_INT_MASK_LINK_DOWN,
+				     PHY_INT_MASK_LINK_UP |
+					     PHY_INT_MASK_LINK_DOWN);
+}
+
+int fxgmac_start(struct fxgmac_pdata *pdata)
+{
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+	u32 val;
+	int ret;
+
+	if (pdata->dev_state != FXGMAC_DEV_OPEN &&
+	    pdata->dev_state != FXGMAC_DEV_STOP &&
+	    pdata->dev_state != FXGMAC_DEV_RESUME) {
+		yt_dbg(pdata, " dev_state err:%x\n", pdata->dev_state);
+		return 0;
+	}
+
+	if (pdata->dev_state != FXGMAC_DEV_STOP) {
+		hw_ops->reset_phy(pdata);
+		hw_ops->release_phy(pdata);
+		yt_dbg(pdata, "reset phy.\n");
+	}
+
+	if (pdata->dev_state == FXGMAC_DEV_OPEN) {
+		ret = fxgmac_phy_connect(pdata);
+		if (ret < 0)
+			return ret;
+
+		yt_dbg(pdata, "fxgmac_phy_connect.\n");
+	}
+
+	phy_init_hw(pdata->phydev);
+	phy_resume(pdata->phydev);
+
+	hw_ops->pcie_init(pdata);
+	if (test_bit(FXGMAC_POWER_STATE_DOWN, &pdata->powerstate)) {
+		yt_err(pdata,
+		       "fxgmac powerstate is %lu when config power up.\n",
+		       pdata->powerstate);
+	}
+
+	hw_ops->config_power_up(pdata);
+	hw_ops->dismiss_all_int(pdata);
+	ret = hw_ops->init(pdata);
+	if (ret < 0) {
+		yt_err(pdata, "fxgmac hw init error.\n");
+		return ret;
+	}
+
+	fxgmac_napi_enable(pdata);
+	ret = fxgmac_request_irqs(pdata);
+	if (ret < 0)
+		return ret;
+
+	/* Config interrupt to level signal */
+	val = rd32_mac(pdata, DMA_MR);
+	fxgmac_set_bits(&val, DMA_MR_INTM_POS, DMA_MR_INTM_LEN, 2);
+	fxgmac_set_bits(&val, DMA_MR_QUREAD_POS, DMA_MR_QUREAD_LEN, 1);
+	wr32_mac(pdata, val, DMA_MR);
+
+	hw_ops->enable_mgm_irq(pdata);
+	hw_ops->set_interrupt_moderation(pdata);
+
+	if (pdata->per_channel_irq) {
+		fxgmac_enable_msix_irqs(pdata);
+		ret = fxgmac_phy_irq_enable(pdata, true);
+		if (ret < 0)
+			goto dis_napi;
+	}
+
+	fxgmac_enable_rx_tx_ints(pdata);
+	phy_speed_up(pdata->phydev);
+	genphy_soft_reset(pdata->phydev);
+
+	pdata->dev_state = FXGMAC_DEV_START;
+	phy_start(pdata->phydev);
+
+	return 0;
+
+dis_napi:
+	fxgmac_napi_disable(pdata);
+	hw_ops->exit(pdata);
+	yt_err(pdata, "%s irq err.\n", __func__);
+	return ret;
 }
 
 static void fxgmac_disable_msix_irqs(struct fxgmac_pdata *pdata)
@@ -540,4 +716,70 @@ static const struct net_device_ops fxgmac_netdev_ops = {
 const struct net_device_ops *fxgmac_get_netdev_ops(void)
 {
 	return &fxgmac_netdev_ops;
+
+static void fxgmac_napi_enable(struct fxgmac_pdata *pdata)
+{
+	u32 i, *flags = &pdata->int_flags;
+	struct fxgmac_channel *channel;
+	u32 misc_napi, tx, rx;
+
+	misc_napi = FIELD_GET(BIT(FXGMAC_FLAG_MISC_NAPI_POS), *flags);
+	tx = FXGMAC_GET_BITS(*flags, FXGMAC_FLAG_TX_NAPI_POS,
+			     FXGMAC_FLAG_TX_NAPI_LEN);
+	rx = FXGMAC_GET_BITS(*flags, FXGMAC_FLAG_RX_NAPI_POS,
+			     FXGMAC_FLAG_RX_NAPI_LEN);
+
+	if (!pdata->per_channel_irq) {
+		i = FIELD_GET(BIT(FXGMAC_FLAG_LEGACY_NAPI_POS), *flags);
+		if (i)
+			return;
+
+		netif_napi_add_weight(pdata->netdev, &pdata->napi,
+				      fxgmac_all_poll,
+				      NAPI_POLL_WEIGHT);
+
+		napi_enable(&pdata->napi);
+		fxgmac_set_bits(flags, FXGMAC_FLAG_LEGACY_NAPI_POS,
+				FXGMAC_FLAG_LEGACY_NAPI_LEN,
+				FXGMAC_NAPI_ENABLE);
+		return;
+	}
+
+	channel = pdata->channel_head;
+
+	for (i = 0; i < pdata->channel_count; i++, channel++) {
+		if (!FXGMAC_GET_BITS(rx, i, FXGMAC_FLAG_PER_RX_NAPI_LEN)) {
+			netif_napi_add_weight(pdata->netdev,
+					      &channel->napi_rx,
+					      fxgmac_one_poll_rx,
+					      NAPI_POLL_WEIGHT);
+
+			napi_enable(&channel->napi_rx);
+			fxgmac_set_bits(flags, FXGMAC_FLAG_RX_NAPI_POS + i,
+					FXGMAC_FLAG_PER_RX_NAPI_LEN,
+					FXGMAC_NAPI_ENABLE);
+		}
+
+		if (FXGMAC_IS_CHANNEL_WITH_TX_IRQ(i) && !tx) {
+			netif_napi_add_weight(pdata->netdev, &channel->napi_tx,
+					      fxgmac_one_poll_tx,
+					      NAPI_POLL_WEIGHT);
+			napi_enable(&channel->napi_tx);
+			fxgmac_set_bits(flags, FXGMAC_FLAG_TX_NAPI_POS,
+					FXGMAC_FLAG_TX_NAPI_LEN,
+					FXGMAC_NAPI_ENABLE);
+		}
+		if (netif_msg_drv(pdata))
+			yt_dbg(pdata, "msix ch%d napi enabled done.\n", i);
+	}
+
+	/* Misc */
+	if (!misc_napi) {
+		netif_napi_add_weight(pdata->netdev, &pdata->napi_misc,
+				      fxgmac_misc_poll, NAPI_POLL_WEIGHT);
+
+		napi_enable(&pdata->napi_misc);
+		fxgmac_set_bits(flags, FXGMAC_FLAG_MISC_NAPI_POS,
+				FXGMAC_FLAG_MISC_NAPI_LEN, FXGMAC_NAPI_ENABLE);
+	}
 }
