@@ -2156,6 +2156,408 @@ static void fxgmac_clear_misc_int_status(struct fxgmac_pdata *pdata)
 		wr32_mac(pdata, val, DMA_ECC_INT_SR);
 }
 
+static void fxgmac_dev_xmit(struct fxgmac_channel *channel)
+{
+	struct fxgmac_pdata *pdata = channel->pdata;
+	struct fxgmac_ring *ring = channel->tx_ring;
+	unsigned int tso_context, vlan_context;
+	unsigned int csum, tso, vlan, attr;
+	struct fxgmac_desc_data *desc_data;
+	struct fxgmac_dma_desc *dma_desc;
+	struct fxgmac_pkt_info *pkt_info;
+	int start_index = ring->cur;
+	int cur_index = ring->cur;
+	int i;
+
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata, "%s, desc cur=%d\n", __func__, cur_index);
+
+	pkt_info = &ring->pkt_info;
+	attr = pkt_info->attributes;
+	csum = FXGMAC_GET_BITS(attr, TX_PKT_ATTR_CSUM_ENABLE_POS,
+			       TX_PKT_ATTR_CSUM_ENABLE_LEN);
+	tso = FXGMAC_GET_BITS(attr, TX_PKT_ATTR_TSO_ENABLE_POS,
+			      TX_PKT_ATTR_TSO_ENABLE_LEN);
+	vlan = FXGMAC_GET_BITS(attr, TX_PKT_ATTR_VLAN_CTAG_POS,
+			       TX_PKT_ATTR_VLAN_CTAG_LEN);
+
+	if (tso && pkt_info->mss != ring->tx.cur_mss)
+		tso_context = 1;
+	else
+		tso_context = 0;
+
+	if ((tso_context) && (netif_msg_tx_done(pdata))) {
+		yt_dbg(pdata, "%s, tso_%s tso=0x%x,pkt_mss=%d,cur_mss=%d\n",
+		       __func__, (pkt_info->mss) ? "start" : "stop", tso,
+		       pkt_info->mss, ring->tx.cur_mss);
+	}
+
+	if (vlan && pkt_info->vlan_ctag != ring->tx.cur_vlan_ctag)
+		vlan_context = 1;
+	else
+		vlan_context = 0;
+
+	if (vlan && (netif_msg_tx_done(pdata)))
+		yt_dbg(pdata,
+		       "%s, pkt vlan=%d, ring vlan=%d, vlan_context=%d\n",
+		       __func__, pkt_info->vlan_ctag, ring->tx.cur_vlan_ctag,
+		       vlan_context);
+
+	desc_data = FXGMAC_GET_DESC_DATA(ring, cur_index);
+	dma_desc = desc_data->dma_desc;
+
+	/* Create a context descriptor if this is a TSO pkt_info */
+	if (tso_context) {
+		if (netif_msg_tx_done(pdata))
+			yt_dbg(pdata, "tso context descriptor,mss=%u\n",
+			       pkt_info->mss);
+
+		/* Set the MSS size */
+		fxgmac_set_bits_le(&dma_desc->desc2, TX_CONTEXT_DESC2_MSS_POS,
+				   TX_CONTEXT_DESC2_MSS_LEN, pkt_info->mss);
+
+		/* Mark it as a CONTEXT descriptor */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_CONTEXT_DESC3_CTXT_POS,
+				   TX_CONTEXT_DESC3_CTXT_LEN, 1);
+
+		/* Indicate this descriptor contains the MSS */
+		fxgmac_set_bits_le(&dma_desc->desc3,
+				   TX_CONTEXT_DESC3_TCMSSV_POS,
+				   TX_CONTEXT_DESC3_TCMSSV_LEN, 1);
+
+		ring->tx.cur_mss = pkt_info->mss;
+	}
+
+	if (vlan_context) {
+		yt_dbg(pdata, "VLAN context descriptor, ctag=%u\n",
+		       pkt_info->vlan_ctag);
+
+		/* Mark it as a CONTEXT descriptor */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_CONTEXT_DESC3_CTXT_POS,
+				   TX_CONTEXT_DESC3_CTXT_LEN, 1);
+
+		/* Set the VLAN tag */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_CONTEXT_DESC3_VT_POS,
+				   TX_CONTEXT_DESC3_VT_LEN,
+				   pkt_info->vlan_ctag);
+
+		/* Indicate this descriptor contains the VLAN tag */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_CONTEXT_DESC3_VLTV_POS,
+				   TX_CONTEXT_DESC3_VLTV_LEN, 1);
+
+		ring->tx.cur_vlan_ctag = pkt_info->vlan_ctag;
+	}
+	if (tso_context || vlan_context) {
+		cur_index = FXGMAC_GET_ENTRY(cur_index, ring->dma_desc_count);
+		desc_data = FXGMAC_GET_DESC_DATA(ring, cur_index);
+		dma_desc = desc_data->dma_desc;
+	}
+
+	/* Update buffer address (for TSO this is the header) */
+	dma_desc->desc0 = cpu_to_le32(lower_32_bits(desc_data->skb_dma));
+	dma_desc->desc1 = cpu_to_le32(upper_32_bits(desc_data->skb_dma));
+
+	/* Update the buffer length */
+	fxgmac_set_bits_le(&dma_desc->desc2, TX_NORMAL_DESC2_HL_B1L_POS,
+			   TX_NORMAL_DESC2_HL_B1L_LEN, desc_data->skb_dma_len);
+
+	/* VLAN tag insertion check */
+	if (vlan) {
+		fxgmac_set_bits_le(&dma_desc->desc2, TX_NORMAL_DESC2_VTIR_POS,
+				   TX_NORMAL_DESC2_VTIR_LEN,
+				   TX_NORMAL_DESC2_VLAN_INSERT);
+		pdata->stats.tx_vlan_packets++;
+	}
+
+	/* Timestamp enablement check */
+	if (FXGMAC_GET_BITS(attr, TX_PKT_ATTR_PTP_POS, TX_PKT_ATTR_PTP_LEN))
+		fxgmac_set_bits_le(&dma_desc->desc2, TX_NORMAL_DESC2_TTSE_POS,
+				   TX_NORMAL_DESC2_TTSE_LEN, 1);
+
+	/* Mark it as First Descriptor */
+	fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_FD_POS,
+			   TX_NORMAL_DESC3_FD_LEN, 1);
+
+	/* Mark it as a NORMAL descriptor */
+	fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_CTXT_POS,
+			   TX_NORMAL_DESC3_CTXT_LEN, 0);
+
+	/* Set OWN bit if not the first descriptor */
+	if (cur_index != start_index)
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_OWN_POS,
+				   TX_NORMAL_DESC3_OWN_LEN, 1);
+
+	if (tso) {
+		/* Enable TSO */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_TSE_POS,
+				   TX_NORMAL_DESC3_TSE_LEN, 1);
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_TCPPL_POS,
+				   TX_NORMAL_DESC3_TCPPL_LEN,
+				   pkt_info->tcp_payload_len);
+		fxgmac_set_bits_le(&dma_desc->desc3,
+				   TX_NORMAL_DESC3_TCPHDRLEN_POS,
+				   TX_NORMAL_DESC3_TCPHDRLEN_LEN,
+				   pkt_info->tcp_header_len / 4);
+
+		pdata->stats.tx_tso_packets++;
+	} else {
+		/* Enable CRC and Pad Insertion */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_CPC_POS,
+				   TX_NORMAL_DESC3_CPC_LEN, 0);
+
+		/* Enable HW CSUM */
+		if (csum)
+			fxgmac_set_bits_le(&dma_desc->desc3,
+					   TX_NORMAL_DESC3_CIC_POS,
+					   TX_NORMAL_DESC3_CIC_LEN, 0x3);
+
+		/* Set the total length to be transmitted */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_FL_POS,
+				   TX_NORMAL_DESC3_FL_LEN, pkt_info->length);
+	}
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata,
+		       "%s, before more descs, desc cur=%d, start=%d, desc=%#x,%#x,%#x,%#x\n",
+		       __func__, cur_index, start_index, dma_desc->desc0,
+		       dma_desc->desc1, dma_desc->desc2, dma_desc->desc3);
+
+	if (start_index <= cur_index)
+		i = cur_index - start_index + 1;
+	else
+		i = ring->dma_desc_count - start_index + cur_index;
+
+	for (; i < pkt_info->desc_count; i++) {
+		cur_index = FXGMAC_GET_ENTRY(cur_index, ring->dma_desc_count);
+		desc_data = FXGMAC_GET_DESC_DATA(ring, cur_index);
+		dma_desc = desc_data->dma_desc;
+
+		/* Update buffer address */
+		dma_desc->desc0 =
+			cpu_to_le32(lower_32_bits(desc_data->skb_dma));
+		dma_desc->desc1 =
+			cpu_to_le32(upper_32_bits(desc_data->skb_dma));
+
+		/* Update the buffer length */
+		fxgmac_set_bits_le(&dma_desc->desc2, TX_NORMAL_DESC2_HL_B1L_POS,
+				   TX_NORMAL_DESC2_HL_B1L_LEN,
+				   desc_data->skb_dma_len);
+
+		/* Set OWN bit */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_OWN_POS,
+				   TX_NORMAL_DESC3_OWN_LEN, 1);
+
+		/* Mark it as NORMAL descriptor */
+		fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_CTXT_POS,
+				   TX_NORMAL_DESC3_CTXT_LEN, 0);
+
+		/* Enable HW CSUM */
+		if (csum)
+			fxgmac_set_bits_le(&dma_desc->desc3,
+					   TX_NORMAL_DESC3_CIC_POS,
+					   TX_NORMAL_DESC3_CIC_LEN, 0x3);
+	}
+
+	/* Set LAST bit for the last descriptor */
+	fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_LD_POS,
+			   TX_NORMAL_DESC3_LD_LEN, 1);
+
+	fxgmac_set_bits_le(&dma_desc->desc2, TX_NORMAL_DESC2_IC_POS,
+			   TX_NORMAL_DESC2_IC_LEN, 1);
+
+	/* Save the Tx info to report back during cleanup */
+	desc_data->tx.packets = pkt_info->tx_packets;
+	desc_data->tx.bytes = pkt_info->tx_bytes;
+
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata,
+		       "%s, last descs, desc cur=%d, desc=%#x,%#x,%#x,%#x\n",
+		       __func__, cur_index, dma_desc->desc0, dma_desc->desc1,
+		       dma_desc->desc2, dma_desc->desc3);
+
+	/* In case the Tx DMA engine is running, make sure everything
+	 * is written to the descriptor(s) before setting the OWN bit
+	 * for the first descriptor
+	 */
+	dma_wmb();
+
+	/* Set OWN bit for the first descriptor */
+	desc_data = FXGMAC_GET_DESC_DATA(ring, start_index);
+	dma_desc = desc_data->dma_desc;
+	fxgmac_set_bits_le(&dma_desc->desc3, TX_NORMAL_DESC3_OWN_POS,
+			   TX_NORMAL_DESC3_OWN_LEN, 1);
+
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata,
+		       "%s, first descs, start=%d, desc=%#x,%#x,%#x,%#x\n",
+		       __func__, start_index, dma_desc->desc0, dma_desc->desc1,
+		       dma_desc->desc2, dma_desc->desc3);
+
+	if (netif_msg_tx_queued(pdata))
+		fxgmac_dump_tx_desc(pdata, ring, start_index,
+				    pkt_info->desc_count, 1);
+
+	/* Make sure ownership is written to the descriptor */
+	smp_wmb();
+
+	ring->cur = FXGMAC_GET_ENTRY(cur_index, ring->dma_desc_count);
+	fxgmac_tx_start_xmit(channel, ring);
+
+	if (netif_msg_tx_done(pdata)) {
+		yt_dbg(pdata, "%s, %s: descriptors %u to %u written\n",
+		       __func__, channel->name,
+		       start_index & (ring->dma_desc_count - 1),
+		       (ring->cur - 1) & (ring->dma_desc_count - 1));
+	}
+}
+
+static void fxgmac_get_rx_tstamp(struct fxgmac_pkt_info *pkt_info,
+				 struct fxgmac_dma_desc *dma_desc)
+{
+	u64 nsec;
+
+	nsec = le32_to_cpu(dma_desc->desc1);
+	nsec <<= 32;
+	nsec |= le32_to_cpu(dma_desc->desc0);
+	if (nsec != 0xffffffffffffffffULL) {
+		pkt_info->rx_tstamp = nsec;
+		fxgmac_set_bits(&pkt_info->attributes,
+				RX_PKT_ATTR_RX_TSTAMP_POS,
+				RX_PKT_ATTR_RX_TSTAMP_LEN, 1);
+	}
+}
+
+static int fxgmac_dev_read(struct fxgmac_channel *channel)
+{
+	struct fxgmac_pdata *pdata = channel->pdata;
+	struct fxgmac_ring *ring = channel->rx_ring;
+	struct net_device *netdev = pdata->netdev;
+	static unsigned int cnt_incomplete;
+	struct fxgmac_desc_data *desc_data;
+	struct fxgmac_dma_desc *dma_desc;
+	struct fxgmac_pkt_info *pkt_info;
+	u32 ipce, iphe, rxparser;
+	unsigned int err, etlt;
+	unsigned int *attr;
+
+	desc_data = FXGMAC_GET_DESC_DATA(ring, ring->cur);
+	dma_desc = desc_data->dma_desc;
+	pkt_info = &ring->pkt_info;
+	attr = &pkt_info->attributes;
+
+	/* Check for data availability */
+	if (FXGMAC_GET_BITS_LE(dma_desc->desc3, RX_NORMAL_DESC3_OWN_POS,
+			       RX_NORMAL_DESC3_OWN_LEN))
+		return 1;
+
+	/* Make sure descriptor fields are read after reading the OWN bit */
+	dma_rmb();
+
+	if (netif_msg_rx_status(pdata))
+		fxgmac_dump_rx_desc(pdata, ring, ring->cur);
+
+	if (FXGMAC_GET_BITS_LE(dma_desc->desc3, RX_NORMAL_DESC3_CTXT_POS,
+			       RX_NORMAL_DESC3_CTXT_LEN)) {
+		/* Timestamp Context Descriptor */
+		fxgmac_get_rx_tstamp(pkt_info, dma_desc);
+
+		fxgmac_set_bits(attr, RX_PKT_ATTR_CONTEXT_POS,
+				RX_PKT_ATTR_CONTEXT_LEN, 1);
+		fxgmac_set_bits(attr, RX_PKT_ATTR_CONTEXT_NEXT_POS,
+				RX_PKT_ATTR_CONTEXT_NEXT_LEN, 0);
+		if (netif_msg_rx_status(pdata))
+			yt_dbg(pdata, "%s, context desc ch=%s\n", __func__,
+			       channel->name);
+		return 0;
+	}
+
+	/* Normal Descriptor, be sure Context Descriptor bit is off */
+	fxgmac_set_bits(attr, RX_PKT_ATTR_CONTEXT_POS, RX_PKT_ATTR_CONTEXT_LEN,
+			0);
+
+	/* Indicate if a Context Descriptor is next */
+	/* Get the header length */
+	if (FXGMAC_GET_BITS_LE(dma_desc->desc3, RX_NORMAL_DESC3_FD_POS,
+			       RX_NORMAL_DESC3_FD_LEN)) {
+		desc_data->rx.hdr_len =
+			FXGMAC_GET_BITS_LE(dma_desc->desc2,
+					   RX_NORMAL_DESC2_HL_POS,
+					   RX_NORMAL_DESC2_HL_LEN);
+		if (desc_data->rx.hdr_len)
+			pdata->stats.rx_split_header_packets++;
+	}
+
+	/* Get the pkt_info length */
+	desc_data->rx.len = FXGMAC_GET_BITS_LE(dma_desc->desc3,
+					       RX_NORMAL_DESC3_PL_POS,
+					       RX_NORMAL_DESC3_PL_LEN);
+
+	if (!FXGMAC_GET_BITS_LE(dma_desc->desc3, RX_NORMAL_DESC3_LD_POS,
+				RX_NORMAL_DESC3_LD_LEN)) {
+		/* Not all the data has been transferred for this pkt_info */
+		fxgmac_set_bits(attr, RX_PKT_ATTR_INCOMPLETE_POS,
+				RX_PKT_ATTR_INCOMPLETE_LEN, 1);
+		cnt_incomplete++;
+		if (cnt_incomplete < 2 && netif_msg_rx_status(pdata))
+			yt_dbg(pdata,
+			       "%s, not last desc,pkt incomplete yet,%u\n",
+			       __func__, cnt_incomplete);
+
+		return 0;
+	}
+	if ((cnt_incomplete) && netif_msg_rx_status(pdata))
+		yt_dbg(pdata, "%s, rx back to normal and incomplete cnt=%u\n",
+		       __func__, cnt_incomplete);
+	cnt_incomplete = 0;
+
+	/* This is the last of the data for this pkt_info */
+	fxgmac_set_bits(attr, RX_PKT_ATTR_INCOMPLETE_POS,
+			RX_PKT_ATTR_INCOMPLETE_LEN, 0);
+
+	/* Set checksum done indicator as appropriate */
+	if (netdev->features & NETIF_F_RXCSUM) {
+		ipce = FXGMAC_GET_BITS_LE(dma_desc->desc1,
+					  RX_NORMAL_DESC1_WB_IPCE_POS,
+					  RX_NORMAL_DESC1_WB_IPCE_LEN);
+		iphe = FXGMAC_GET_BITS_LE(dma_desc->desc1,
+					  RX_NORMAL_DESC1_WB_IPHE_POS,
+					  RX_NORMAL_DESC1_WB_IPHE_LEN);
+		if (!ipce && !iphe)
+			fxgmac_set_bits(attr, RX_PKT_ATTR_CSUM_DONE_POS,
+					RX_PKT_ATTR_CSUM_DONE_LEN, 1);
+		else
+			return 0;
+	}
+
+	/* Check for errors (only valid in last descriptor) */
+	err = FXGMAC_GET_BITS_LE(dma_desc->desc3, RX_NORMAL_DESC3_ES_POS,
+				 RX_NORMAL_DESC3_ES_LEN);
+
+	/* b111: Incomplete parsing due to ECC error */
+	rxparser = FXGMAC_GET_BITS_LE(dma_desc->desc2,
+				      RX_NORMAL_DESC2_WB_RAPARSER_POS,
+				      RX_NORMAL_DESC2_WB_RAPARSER_LEN);
+	if (err || rxparser == 0x7) {
+		fxgmac_set_bits(&pkt_info->errors, RX_PACKET_ERRORS_FRAME_POS,
+				RX_PACKET_ERRORS_FRAME_LEN, 1);
+		return 0;
+	}
+
+	etlt = FXGMAC_GET_BITS_LE(dma_desc->desc3, RX_NORMAL_DESC3_ETLT_POS,
+				  RX_NORMAL_DESC3_ETLT_LEN);
+
+	if (etlt == 0x4 && (netdev->features & NETIF_F_HW_VLAN_CTAG_RX)) {
+		fxgmac_set_bits(attr, RX_PKT_ATTR_VLAN_CTAG_POS,
+				RX_PKT_ATTR_VLAN_CTAG_LEN, 1);
+		pkt_info->vlan_ctag =
+			FXGMAC_GET_BITS_LE(dma_desc->desc0,
+					   RX_NORMAL_DESC0_OVT_POS,
+					   RX_NORMAL_DESC0_OVT_LEN);
+		yt_dbg(pdata, "vlan-ctag=%#06x\n", pkt_info->vlan_ctag);
+	}
+
+	return 0;
+}
+
 void fxgmac_hw_ops_init(struct fxgmac_hw_ops *hw_ops)
 {
 	hw_ops->pcie_init = fxgmac_pcie_init;
@@ -2168,6 +2570,8 @@ void fxgmac_hw_ops_init(struct fxgmac_hw_ops *hw_ops)
 	hw_ops->disable_tx = fxgmac_disable_tx;
 	hw_ops->enable_rx = fxgmac_enable_rx;
 	hw_ops->disable_rx = fxgmac_disable_rx;
+	hw_ops->dev_read = fxgmac_dev_read;
+	hw_ops->dev_xmit = fxgmac_dev_xmit;
 
 	hw_ops->enable_channel_irq = fxgmac_enable_channel_irq;
 	hw_ops->disable_channel_irq = fxgmac_disable_channel_irq;

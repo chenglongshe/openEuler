@@ -455,6 +455,139 @@ void fxgmac_desc_rx_reset(struct fxgmac_desc_data *desc_data)
 	dma_wmb();
 }
 
+int fxgmac_tx_skb_map(struct fxgmac_channel *channel, struct sk_buff *skb)
+{
+	struct fxgmac_pdata *pdata = channel->pdata;
+	struct fxgmac_ring *ring = channel->tx_ring;
+	unsigned int start_index, cur_index;
+	struct fxgmac_desc_data *desc_data;
+	unsigned int offset, datalen, len;
+	struct fxgmac_pkt_info *pkt_info;
+	unsigned int tso, vlan;
+	dma_addr_t skb_dma;
+	skb_frag_t *frag;
+
+	offset = 0;
+	start_index = ring->cur;
+	cur_index = ring->cur;
+	pkt_info = &ring->pkt_info;
+	pkt_info->desc_count = 0;
+	pkt_info->length = 0;
+
+	tso = FXGMAC_GET_BITS(pkt_info->attributes, TX_PKT_ATTR_TSO_ENABLE_POS,
+			      TX_PKT_ATTR_TSO_ENABLE_LEN);
+	vlan = FXGMAC_GET_BITS(pkt_info->attributes, TX_PKT_ATTR_VLAN_CTAG_POS,
+			       TX_PKT_ATTR_VLAN_CTAG_LEN);
+
+	/* Save space for a context descriptor if needed */
+	if ((tso && pkt_info->mss != ring->tx.cur_mss) ||
+	    (vlan && pkt_info->vlan_ctag != ring->tx.cur_vlan_ctag))
+		cur_index = FXGMAC_GET_ENTRY(cur_index, ring->dma_desc_count);
+
+	desc_data = FXGMAC_GET_DESC_DATA(ring, cur_index);
+
+	if (tso) {
+		/* Map the TSO header */
+		skb_dma = dma_map_single(pdata->dev, skb->data,
+					 pkt_info->header_len, DMA_TO_DEVICE);
+		if (dma_mapping_error(pdata->dev, skb_dma)) {
+			yt_err(pdata, "dma_map_single err\n");
+			goto err_out;
+		}
+		desc_data->skb_dma = skb_dma;
+		desc_data->skb_dma_len = pkt_info->header_len;
+		yt_dbg(pdata, "skb header: index=%u, dma=%pad, len=%u\n",
+		       cur_index, &skb_dma, pkt_info->header_len);
+
+		offset = pkt_info->header_len;
+		pkt_info->length += pkt_info->header_len;
+
+		cur_index = FXGMAC_GET_ENTRY(cur_index, ring->dma_desc_count);
+		desc_data = FXGMAC_GET_DESC_DATA(ring, cur_index);
+	}
+
+	/* Map the (remainder of the) packet */
+	for (datalen = skb_headlen(skb) - offset; datalen;) {
+		len = min_t(unsigned int, datalen, FXGMAC_TX_MAX_BUF_SIZE);
+		skb_dma = dma_map_single(pdata->dev, skb->data + offset, len,
+					 DMA_TO_DEVICE);
+		if (dma_mapping_error(pdata->dev, skb_dma)) {
+			yt_err(pdata, "dma_map_single err\n");
+			goto err_out;
+		}
+		desc_data->skb_dma = skb_dma;
+		desc_data->skb_dma_len = len;
+		yt_dbg(pdata, "skb data: index=%u, dma=%pad, len=%u\n",
+		       cur_index, &skb_dma, len);
+
+		datalen -= len;
+		offset += len;
+		pkt_info->length += len;
+
+		cur_index = FXGMAC_GET_ENTRY(cur_index, ring->dma_desc_count);
+		desc_data = FXGMAC_GET_DESC_DATA(ring, cur_index);
+	}
+
+	for (u32 i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		yt_dbg(pdata, "mapping frag %u\n", i);
+
+		frag = &skb_shinfo(skb)->frags[i];
+		offset = 0;
+
+		for (datalen = skb_frag_size(frag); datalen;) {
+			len = min_t(unsigned int, datalen,
+				    FXGMAC_TX_MAX_BUF_SIZE);
+			skb_dma = skb_frag_dma_map(pdata->dev, frag, offset,
+						   len, DMA_TO_DEVICE);
+			if (dma_mapping_error(pdata->dev, skb_dma)) {
+				yt_err(pdata, "skb_frag_dma_map err\n");
+				goto err_out;
+			}
+			desc_data->skb_dma = skb_dma;
+			desc_data->skb_dma_len = len;
+			desc_data->mapped_as_page = 1;
+
+			yt_dbg(pdata, "skb frag: index=%u, dma=%pad, len=%u\n",
+			       cur_index, &skb_dma, len);
+
+			datalen -= len;
+			offset += len;
+			pkt_info->length += len;
+
+			cur_index = FXGMAC_GET_ENTRY(cur_index,
+						     ring->dma_desc_count);
+			desc_data = FXGMAC_GET_DESC_DATA(ring, cur_index);
+		}
+	}
+
+	/* Save the skb address in the last entry. We always have some data
+	 * that has been mapped so desc_data is always advanced past the last
+	 * piece of mapped data - use the entry pointed to by cur_index - 1.
+	 */
+	desc_data = FXGMAC_GET_DESC_DATA(ring, (cur_index - 1) &
+					 (ring->dma_desc_count - 1));
+	desc_data->skb = skb;
+
+	/* Save the number of descriptor entries used */
+	if (start_index <= cur_index)
+		pkt_info->desc_count = cur_index - start_index;
+	else
+		pkt_info->desc_count =
+			ring->dma_desc_count - start_index + cur_index;
+
+	return pkt_info->desc_count;
+
+err_out:
+	while (start_index < cur_index) {
+		desc_data = FXGMAC_GET_DESC_DATA(ring, start_index);
+		start_index =
+			FXGMAC_GET_ENTRY(start_index, ring->dma_desc_count);
+		fxgmac_desc_data_unmap(pdata, desc_data);
+	}
+
+	return 0;
+}
+
 void fxgmac_dump_rx_desc(struct fxgmac_pdata *pdata, struct fxgmac_ring *ring,
 			 unsigned int idx)
 {
