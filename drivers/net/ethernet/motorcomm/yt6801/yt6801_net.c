@@ -996,6 +996,25 @@ unlock:
 	return ret;
 }
 
+static int fxgmac_close(struct net_device *netdev)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+
+	mutex_lock(&pdata->mutex);
+	fxgmac_stop(pdata);		/* Stop the device */
+	pdata->dev_state = FXGMAC_DEV_CLOSE;
+	fxgmac_channels_rings_free(pdata); /* Free the channels and rings */
+	hw_ops->reset_phy(pdata);
+	phy_disconnect(pdata->phydev);
+	mutex_unlock(&pdata->mutex);
+
+	if (netif_msg_drv(pdata))
+		yt_dbg(pdata, "%s ok\n", __func__);
+
+	return 0;
+}
+
 #define EFUSE_FISRT_UPDATE_ADDR				255
 #define EFUSE_SECOND_UPDATE_ADDR			209
 #define EFUSE_MAX_ENTRY					39
@@ -1981,9 +2000,186 @@ static netdev_tx_t fxgmac_xmit(struct sk_buff *skb, struct net_device *netdev)
 
 	return NETDEV_TX_OK;
 }
+
+static void fxgmac_get_stats64(struct net_device *netdev,
+			       struct rtnl_link_stats64 *s)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_stats *pstats = &pdata->stats;
+
+	if (test_bit(FXGMAC_POWER_STATE_DOWN, &pdata->powerstate))
+		return;
+
+	pdata->hw_ops.read_mmc_stats(pdata);
+
+	s->rx_packets = pstats->rxframecount_gb;
+	s->rx_bytes = pstats->rxoctetcount_gb;
+	s->rx_errors = pstats->rxframecount_gb - pstats->rxbroadcastframes_g -
+		       pstats->rxmulticastframes_g - pstats->rxunicastframes_g;
+
+	s->rx_length_errors = pstats->rxlengtherror;
+	s->rx_crc_errors = pstats->rxcrcerror;
+	s->rx_fifo_errors = pstats->rxfifooverflow;
+
+	s->tx_packets = pstats->txframecount_gb;
+	s->tx_bytes = pstats->txoctetcount_gb;
+	s->tx_errors = pstats->txframecount_gb - pstats->txframecount_g;
+	s->tx_dropped = netdev->stats.tx_dropped;
+}
+
+static int fxgmac_set_mac_address(struct net_device *netdev, void *addr)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+	struct sockaddr *saddr = addr;
+
+	if (!is_valid_ether_addr(saddr->sa_data))
+		return -EADDRNOTAVAIL;
+
+	eth_hw_addr_set(netdev, saddr->sa_data);
+	memcpy(pdata->mac_addr, saddr->sa_data, netdev->addr_len);
+	hw_ops->set_mac_address(pdata, saddr->sa_data);
+	hw_ops->set_mac_hash(pdata);
+
+	yt_dbg(pdata, "fxgmac,set mac addr to %pM\n", netdev->dev_addr);
+
+	return 0;
+}
+
+static int fxgmac_vlan_rx_add_vid(struct net_device *netdev, __be16 proto,
+				  u16 vid)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+
+	set_bit(vid, pdata->active_vlans);
+	hw_ops->update_vlan_hash_table(pdata);
+
+	yt_dbg(pdata, "fxgmac,add rx vlan %d\n", vid);
+
+	return 0;
+}
+
+static int fxgmac_vlan_rx_kill_vid(struct net_device *netdev, __be16 proto,
+				   u16 vid)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+
+	clear_bit(vid, pdata->active_vlans);
+	hw_ops->update_vlan_hash_table(pdata);
+
+	yt_dbg(pdata, "fxgmac,del rx vlan %d\n", vid);
+
+	return 0;
+}
+
+#ifdef CONFIG_NET_POLL_CONTROLLER
+static void fxgmac_poll_controller(struct net_device *netdev)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_channel *channel;
+
+	if (pdata->per_channel_irq) {
+		channel = pdata->channel_head;
+		for (u32 i = 0; i < pdata->channel_count; i++, channel++)
+			fxgmac_dma_isr(channel->dma_irq_rx, channel);
+	} else {
+		disable_irq(pdata->dev_irq);
+		fxgmac_isr(pdata->dev_irq, pdata);
+		enable_irq(pdata->dev_irq);
+	}
+}
+#endif /* CONFIG_NET_POLL_CONTROLLER */
+
+static netdev_features_t fxgmac_fix_features(struct net_device *netdev,
+					     netdev_features_t features)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	u32 fifo_size;
+
+	fifo_size = pdata->hw_ops.calculate_max_checksum_size(pdata);
+	if (netdev->mtu > fifo_size) {
+		features &= ~NETIF_F_IP_CSUM;
+		features &= ~NETIF_F_IPV6_CSUM;
+	}
+
+	return features;
+}
+
+static int fxgmac_set_features(struct net_device *netdev,
+			       netdev_features_t features)
+{
+	netdev_features_t rxhash, rxcsum, rxvlan, rxvlan_filter, tso;
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_hw_ops *hw_ops;
+
+	hw_ops = &pdata->hw_ops;
+	rxhash = pdata->netdev_features & NETIF_F_RXHASH;
+	rxcsum = pdata->netdev_features & NETIF_F_RXCSUM;
+	rxvlan = pdata->netdev_features & NETIF_F_HW_VLAN_CTAG_RX;
+	rxvlan_filter = pdata->netdev_features & NETIF_F_HW_VLAN_CTAG_FILTER;
+	tso = pdata->netdev_features & (NETIF_F_TSO | NETIF_F_TSO6);
+
+	if ((features & (NETIF_F_TSO | NETIF_F_TSO6)) && !tso) {
+		yt_dbg(pdata, "enable tso.\n");
+		pdata->hw_feat.tso = 1;
+		hw_ops->config_tso(pdata);
+	} else if (!(features & (NETIF_F_TSO | NETIF_F_TSO6)) && tso) {
+		yt_dbg(pdata, "disable tso.\n");
+		pdata->hw_feat.tso = 0;
+		hw_ops->config_tso(pdata);
+	}
+
+	if ((features & NETIF_F_RXHASH) && !rxhash)
+		hw_ops->enable_rss(pdata);
+	else if (!(features & NETIF_F_RXHASH) && rxhash)
+		hw_ops->disable_rss(pdata);
+
+	if ((features & NETIF_F_RXCSUM) && !rxcsum)
+		hw_ops->enable_rx_csum(pdata);
+	else if (!(features & NETIF_F_RXCSUM) && rxcsum)
+		hw_ops->disable_rx_csum(pdata);
+
+	if ((features & NETIF_F_HW_VLAN_CTAG_RX) && !rxvlan)
+		hw_ops->enable_rx_vlan_stripping(pdata);
+	else if (!(features & NETIF_F_HW_VLAN_CTAG_RX) && rxvlan)
+		hw_ops->disable_rx_vlan_stripping(pdata);
+
+	if ((features & NETIF_F_HW_VLAN_CTAG_FILTER) && !rxvlan_filter)
+		hw_ops->enable_rx_vlan_filtering(pdata);
+	else if (!(features & NETIF_F_HW_VLAN_CTAG_FILTER) && rxvlan_filter)
+		hw_ops->disable_rx_vlan_filtering(pdata);
+
+	pdata->netdev_features = features;
+
+	yt_dbg(pdata, "fxgmac,set features done,%llx\n", (u64)features);
+	return 0;
+}
+
+static void fxgmac_set_rx_mode(struct net_device *netdev)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+
+	hw_ops->config_rx_mode(pdata);
+}
+
 static const struct net_device_ops fxgmac_netdev_ops = {
 	.ndo_open		= fxgmac_open,
+	.ndo_stop		= fxgmac_close,
 	.ndo_start_xmit		= fxgmac_xmit,
+	.ndo_get_stats64	= fxgmac_get_stats64,
+	.ndo_set_mac_address	= fxgmac_set_mac_address,
+	.ndo_validate_addr	= eth_validate_addr,
+	.ndo_vlan_rx_add_vid	= fxgmac_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid	= fxgmac_vlan_rx_kill_vid,
+#ifdef CONFIG_NET_POLL_CONTROLLER
+	.ndo_poll_controller	= fxgmac_poll_controller,
+#endif
+	.ndo_set_features	= fxgmac_set_features,
+	.ndo_fix_features	= fxgmac_fix_features,
+	.ndo_set_rx_mode	= fxgmac_set_rx_mode,
 };
 
 const struct net_device_ops *fxgmac_get_netdev_ops(void)
