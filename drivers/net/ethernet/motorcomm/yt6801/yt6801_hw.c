@@ -2424,6 +2424,56 @@ static void fxgmac_config_dma_bus(struct fxgmac_pdata *pdata)
 	wr32_mac(pdata, val, DMA_SBMR);
 }
 
+static int fxgmac_pre_powerdown(struct fxgmac_pdata *pdata)
+{
+	u32 val = 0;
+	int ret;
+
+	fxgmac_disable_rx(pdata);
+
+	yt_dbg(pdata, "%s, phy and mac status update\n", __func__);
+
+	if (device_may_wakeup(pdata->dev)) {
+		val = rd32_mem(pdata, EPHY_CTRL);
+		if (val & EPHY_CTRL_STA_LINKUP) {
+			ret = phy_speed_down(pdata->phydev, true);
+			if (ret < 0) {
+				yt_err(pdata, "%s, phy_speed_down err:%d\n", __func__, ret);
+				return ret;
+			}
+
+			ret = phy_read_status(pdata->phydev);
+			if (ret < 0) {
+				yt_err(pdata, "%s, phy_read_status err:%d\n",
+				       __func__, ret);
+				return ret;
+			}
+
+			pdata->phy_speed = pdata->phydev->speed;
+			pdata->phy_duplex = pdata->phydev->duplex;
+			yt_dbg(pdata, "%s, speed :%d, duplex :%d\n", __func__,
+			       pdata->phy_speed, pdata->phy_duplex);
+
+			fxgmac_config_mac_speed(pdata);
+		} else {
+			yt_dbg(pdata, "%s link down, do nothing\n", __func__);
+		}
+	}
+
+	/* After enable OOB_WOL from efuse, mac will loopcheck phy status,
+	 * and lead to panic sometimes. So we should disable it from powerup,
+	 * enable it from power down.
+	 */
+	val = rd32_mem(pdata, OOB_WOL_CTRL);
+	fxgmac_set_bits(&val, OOB_WOL_CTRL_DIS_POS, OOB_WOL_CTRL_DIS_LEN, 0);
+	wr32_mem(pdata, val, OOB_WOL_CTRL);
+	fsleep(2000);
+
+	fxgmac_set_mac_address(pdata, pdata->mac_addr);
+
+	return 0;
+}
+
 static int fxgmac_phy_clear_interrupt(struct fxgmac_pdata *pdata)
 {
 	u32 stats_pre, stats;
@@ -2456,6 +2506,70 @@ unlock:
 	phy_unlock_mdio_bus(pdata->phydev);
 	yt_err(pdata, "fxgmac_phy_read_reg err!\n");
 	return  -ETIMEDOUT;
+}
+
+static void fxgmac_config_powerdown(struct fxgmac_pdata *pdata,
+				    bool wol)
+{
+	u32 val = 0;
+
+	/* Use default arp offloading feature */
+	fxgmac_update_aoe_ipv4addr(pdata, (u8 *)NULL);
+	fxgmac_enable_arp_offload(pdata);
+	fxgmac_update_ns_offload_ipv6addr(pdata, FXGMAC_NS_IFA_GLOBAL_UNICAST);
+	fxgmac_update_ns_offload_ipv6addr(pdata, FXGMAC_NS_IFA_LOCAL_LINK);
+	fxgmac_enable_ns_offload(pdata);
+	fxgmac_enable_wake_packet_indication(pdata, 1);
+
+	/* Enable MAC Rx TX */
+	val = rd32_mac(pdata, MAC_CR);
+	fxgmac_set_bits(&val, MAC_CR_RE_POS, MAC_CR_RE_LEN, 1);
+	fxgmac_set_bits(&val, MAC_CR_TE_POS, MAC_CR_TE_LEN, 1);
+	wr32_mac(pdata, val, MAC_CR);
+
+	val = rd32_mem(pdata, LPW_CTRL);
+	fxgmac_set_bits(&val, LPW_CTRL_ASPM_LPW_EN_POS,
+			LPW_CTRL_ASPM_LPW_EN_LEN, 1);
+	wr32_mem(pdata, val, LPW_CTRL);
+
+	/* Set gmac power down */
+	val = rd32_mac(pdata, MAC_PMT_STA);
+	fxgmac_set_bits(&val, MAC_PMT_STA_PWRDWN_POS, MAC_PMT_STA_PWRDWN_LEN,
+			1);
+	wr32_mac(pdata, val, MAC_PMT_STA);
+
+	val = rd32_mem(pdata, MGMT_SIGDET);
+	fxgmac_set_bits(&val, MGMT_SIGDET_POS, MGMT_SIGDET_LEN,
+			MGMT_SIGDET_55MV);
+	wr32_mem(pdata, val, MGMT_SIGDET);
+	fxgmac_phy_clear_interrupt(pdata);
+}
+
+static void fxgmac_config_powerup(struct fxgmac_pdata *pdata)
+{
+	u32 val = 0;
+
+	/* After enable OOB_WOL from efuse, mac will loopcheck phy status,
+	 * and lead to panic sometimes.
+	 * So we should disable it from powerup, enable it from power down.
+	 */
+	val = rd32_mem(pdata, OOB_WOL_CTRL);
+	fxgmac_set_bits(&val, OOB_WOL_CTRL_DIS_POS, OOB_WOL_CTRL_DIS_LEN, 1);
+	wr32_mem(pdata, val, OOB_WOL_CTRL);
+
+	/* Clear wpi mode whether or not waked by WOL, write reset value */
+	val = rd32_mem(pdata, MGMT_WPI_CTRL0);
+	fxgmac_set_bits(&val, MGMT_WPI_CTRL0_WPI_MODE_POS,
+			MGMT_WPI_CTRL0_WPI_MODE_LEN, 0);
+	wr32_mem(pdata, val, MGMT_WPI_CTRL0);
+
+	/* Read pmt_status register to De-assert the pmt_intr_o */
+	val = rd32_mac(pdata, MAC_PMT_STA);
+	/* whether or not waked up by WOL, write reset value */
+	fxgmac_set_bits(&val, MAC_PMT_STA_PWRDWN_POS, MAC_PMT_STA_PWRDWN_LEN,
+			0);
+	/* Write register to synchronized always-on block */
+	wr32_mac(pdata, val, MAC_PMT_STA);
 }
 
 #define FXGMAC_WOL_WAIT_2_MS 2
@@ -3262,4 +3376,8 @@ void fxgmac_hw_ops_init(struct fxgmac_hw_ops *hw_ops)
 	hw_ops->enable_wake_pattern = fxgmac_enable_wake_pattern;
 	hw_ops->disable_wake_pattern = fxgmac_disable_wake_pattern;
 
+	/* Power Management */
+	hw_ops->pre_power_down = fxgmac_pre_powerdown;
+	hw_ops->config_power_down = fxgmac_config_powerdown;
+	hw_ops->config_power_up = fxgmac_config_powerup;
 }

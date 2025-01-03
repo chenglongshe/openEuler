@@ -986,6 +986,34 @@ static void fxgmac_restart_work(struct work_struct *work)
 	rtnl_unlock();
 }
 
+int fxgmac_net_powerup(struct fxgmac_pdata *pdata)
+{
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+	int ret;
+
+	/* Signal that we are up now */
+	pdata->powerstate = 0;
+	if (__test_and_set_bit(FXGMAC_POWER_STATE_UP, &pdata->powerstate))
+		return 0; /* do nothing if already up */
+
+	ret = fxgmac_start(pdata);
+	if (ret < 0) {
+		yt_err(pdata, "%s: fxgmac_start err: %d\n", __func__, ret);
+		return ret;
+	}
+
+	/* Must call it after fxgmac_start,because it will be
+	 * enable in fxgmac_start
+	 */
+	hw_ops->disable_arp_offload(pdata);
+
+	if (netif_msg_drv(pdata))
+		yt_dbg(pdata, "%s, powerstate :%d.\n", __func__,
+		       pdata->powerstate);
+
+	return 0;
+}
+
 int fxgmac_config_wol(struct fxgmac_pdata *pdata, bool en)
 {
 	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
