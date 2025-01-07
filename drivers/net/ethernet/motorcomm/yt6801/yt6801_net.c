@@ -11,6 +11,26 @@
 #include "yt6801_desc.h"
 #include "yt6801_net.h"
 
+static int fxgmac_calc_rx_buf_size(struct fxgmac_pdata *pdata, unsigned int mtu)
+{
+	u32 rx_buf_size, max_mtu;
+
+	max_mtu = FXGMAC_JUMBO_PACKET_MTU - ETH_HLEN;
+	if (mtu > max_mtu) {
+		yt_err(pdata, "MTU exceeds maximum supported value\n");
+		return -EINVAL;
+	}
+
+	rx_buf_size = mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN;
+	rx_buf_size =
+		clamp_val(rx_buf_size, FXGMAC_RX_MIN_BUF_SIZE, PAGE_SIZE * 4);
+
+	rx_buf_size = (rx_buf_size + FXGMAC_RX_BUF_ALIGN - 1) &
+		      ~(FXGMAC_RX_BUF_ALIGN - 1);
+
+	return rx_buf_size;
+}
+
 #define FXGMAC_NAPI_ENABLE			0x1
 #define FXGMAC_NAPI_DISABLE			0x0
 static void fxgmac_napi_disable(struct fxgmac_pdata *pdata)
@@ -197,6 +217,36 @@ void fxgmac_stop(struct fxgmac_pdata *pdata)
 	netdev_tx_reset_queue(txq);
 }
 
+void fxgmac_restart(struct fxgmac_pdata *pdata)
+{
+	int ret;
+
+	/* If not running, "restart" will happen on open */
+	if (!netif_running(pdata->netdev) &&
+	    pdata->dev_state != FXGMAC_DEV_START)
+		return;
+
+	mutex_lock(&pdata->mutex);
+	fxgmac_stop(pdata);
+	fxgmac_free_tx_data(pdata);
+	fxgmac_free_rx_data(pdata);
+	ret = fxgmac_start(pdata);
+	if (ret < 0)
+		yt_err(pdata, "%s err.\n", __func__);
+
+	mutex_unlock(&pdata->mutex);
+}
+
+static void fxgmac_restart_work(struct work_struct *work)
+{
+	struct fxgmac_pdata *pdata =
+		container_of(work, struct fxgmac_pdata, restart_work);
+
+	rtnl_lock();
+	fxgmac_restart(pdata);
+	rtnl_unlock();
+}
+
 int fxgmac_net_powerdown(struct fxgmac_pdata *pdata, bool wake_en)
 {
 	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
@@ -248,6 +298,46 @@ int fxgmac_net_powerdown(struct fxgmac_pdata *pdata, bool wake_en)
 		       pdata->powerstate);
 
 	return 0;
+}
+
+static int fxgmac_open(struct net_device *netdev)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	int ret;
+
+	mutex_lock(&pdata->mutex);
+	pdata->dev_state = FXGMAC_DEV_OPEN;
+
+	/* Calculate the Rx buffer size before allocating rings */
+	ret = fxgmac_calc_rx_buf_size(pdata, netdev->mtu);
+	if (ret < 0)
+		goto unlock;
+	pdata->rx_buf_size = ret;
+
+	/* Allocate the channels and rings */
+	ret = fxgmac_channels_rings_alloc(pdata);
+	if (ret < 0)
+		goto unlock;
+
+	INIT_WORK(&pdata->restart_work, fxgmac_restart_work);
+
+	ret = fxgmac_start(pdata);
+	if (ret < 0)
+		goto err_channels_and_rings;
+
+	mutex_unlock(&pdata->mutex);
+
+	if (netif_msg_drv(pdata))
+		yt_dbg(pdata, "%s ok\n", __func__);
+
+	return 0;
+
+err_channels_and_rings:
+	fxgmac_channels_rings_free(pdata);
+	yt_dbg(pdata, "%s, channel alloc err\n", __func__);
+unlock:
+	mutex_unlock(&pdata->mutex);
+	return ret;
 }
 
 #ifdef CONFIG_PCI_MSI
@@ -441,4 +531,13 @@ int fxgmac_drv_probe(struct device *dev, struct fxgmac_resources *res)
 err_free_netdev:
 	free_netdev(netdev);
 	return ret;
+}
+
+static const struct net_device_ops fxgmac_netdev_ops = {
+	.ndo_open		= fxgmac_open,
+};
+
+const struct net_device_ops *fxgmac_get_netdev_ops(void)
+{
+	return &fxgmac_netdev_ops;
 }
