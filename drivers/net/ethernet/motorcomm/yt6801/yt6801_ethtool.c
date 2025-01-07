@@ -498,6 +498,173 @@ unlock:
 	return ret;
 }
 
+static void fxgmac_get_wol(struct net_device *netdev,
+			   struct ethtool_wolinfo *wol)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+
+	wol->supported = WAKE_UCAST | WAKE_MCAST | WAKE_BCAST | WAKE_MAGIC |
+			 WAKE_ARP | WAKE_PHY;
+
+	wol->wolopts = 0;
+	if (!(pdata->hw_feat.rwk) || !device_can_wakeup(pdata->dev)) {
+		yt_err(pdata, "%s, pci does not support wakeup.\n", __func__);
+		return;
+	}
+
+	wol->wolopts = pdata->wol;
+}
+
+#pragma pack(1)
+/* it's better to make this struct's size to 128byte. */
+struct pattern_packet {
+	u8 ether_daddr[ETH_ALEN];
+	u8 ether_saddr[ETH_ALEN];
+	u16 ether_type;
+
+	__be16 ar_hrd;		/* format of hardware address  */
+	__be16 ar_pro;		/* format of protocol          */
+	u8 ar_hln;		/* length of hardware address  */
+	u8 ar_pln;		/* length of protocol address  */
+	__be16 ar_op;		/* ARP opcode (command)        */
+	u8 ar_sha[ETH_ALEN];	/* sender hardware address     */
+	u8 ar_sip[4];		/* sender IP address           */
+	u8 ar_tha[ETH_ALEN];	/* target hardware address     */
+	u8 ar_tip[4];		/* target IP address           */
+
+	u8 reverse[86];
+};
+
+#pragma pack()
+
+static int fxgmac_set_pattern_data(struct fxgmac_pdata *pdata)
+{
+	struct fxgmac_hw_ops *hw_ops = &pdata->hw_ops;
+	u8 type_offset, tip_offset, op_offset;
+	struct wol_bitmap_pattern pattern[4];
+	struct pattern_packet packet;
+	u32 ip_addr, i = 0;
+
+	memset(pattern, 0, sizeof(struct wol_bitmap_pattern) * 4);
+
+	/* Config ucast */
+	if (pdata->wol & WAKE_UCAST) {
+		pattern[i].mask_info[0] = 0x3F;
+		pattern[i].mask_size = sizeof(pattern[0].mask_info);
+		memcpy(pattern[i].pattern_info, pdata->mac_addr, ETH_ALEN);
+		pattern[i].pattern_offset = 0;
+		i++;
+	}
+
+	/* Config bcast */
+	if (pdata->wol & WAKE_BCAST) {
+		pattern[i].mask_info[0] = 0x3F;
+		pattern[i].mask_size = sizeof(pattern[0].mask_info);
+		memset(pattern[i].pattern_info, 0xFF, ETH_ALEN);
+		pattern[i].pattern_offset = 0;
+		i++;
+	}
+
+	/* Config mcast */
+	if (pdata->wol & WAKE_MCAST) {
+		pattern[i].mask_info[0] = 0x7;
+		pattern[i].mask_size = sizeof(pattern[0].mask_info);
+		pattern[i].pattern_info[0] = 0x1;
+		pattern[i].pattern_info[1] = 0x0;
+		pattern[i].pattern_info[2] = 0x5E;
+		pattern[i].pattern_offset = 0;
+		i++;
+	}
+
+	/* Config arp */
+	if (pdata->wol & WAKE_ARP) {
+		memset(pattern[i].mask_info, 0, sizeof(pattern[0].mask_info));
+		type_offset = offsetof(struct pattern_packet, ar_pro);
+		pattern[i].mask_info[type_offset / 8] |= 1 << type_offset % 8;
+		type_offset++;
+		pattern[i].mask_info[type_offset / 8] |= 1 << type_offset % 8;
+		op_offset = offsetof(struct pattern_packet, ar_op);
+		pattern[i].mask_info[op_offset / 8] |= 1 << op_offset % 8;
+		op_offset++;
+		pattern[i].mask_info[op_offset / 8] |= 1 << op_offset % 8;
+		tip_offset = offsetof(struct pattern_packet, ar_tip);
+		pattern[i].mask_info[tip_offset / 8] |= 1 << tip_offset % 8;
+		tip_offset++;
+		pattern[i].mask_info[tip_offset / 8] |= 1 << type_offset % 8;
+		tip_offset++;
+		pattern[i].mask_info[tip_offset / 8] |= 1 << type_offset % 8;
+		tip_offset++;
+		pattern[i].mask_info[tip_offset / 8] |= 1 << type_offset % 8;
+
+		packet.ar_pro = 0x0 << 8 | 0x08;
+		/* ARP type is 0x0800, notice that ar_pro and ar_op is
+		 * big endian
+		 */
+		packet.ar_op = 0x1 << 8;
+		/* 1 is arp request,2 is arp replay, 3 is rarp request,
+		 * 4 is rarp replay
+		 */
+		ip_addr = fxgmac_get_netdev_ip4addr(pdata);
+		packet.ar_tip[0] = ip_addr & 0xFF;
+		packet.ar_tip[1] = (ip_addr >> 8) & 0xFF;
+		packet.ar_tip[2] = (ip_addr >> 16) & 0xFF;
+		packet.ar_tip[3] = (ip_addr >> 24) & 0xFF;
+		memcpy(pattern[i].pattern_info, &packet, MAX_PATTERN_SIZE);
+		pattern[i].mask_size = sizeof(pattern[0].mask_info);
+		pattern[i].pattern_offset = 0;
+		i++;
+	}
+
+	return hw_ops->set_wake_pattern(pdata, pattern, i);
+}
+
+static int fxgmac_set_wol(struct net_device *netdev,
+			  struct ethtool_wolinfo *wol)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	int ret;
+
+	if (wol->wolopts & (WAKE_MAGICSECURE | WAKE_FILTER)) {
+		yt_err(pdata, "%s, not supported wol options, 0x%x\n", __func__,
+		       wol->wolopts);
+		return -EOPNOTSUPP;
+	}
+
+	if (!(pdata->hw_feat.rwk)) {
+		yt_err(pdata, "%s, hw wol feature is n/a\n", __func__);
+		return wol->wolopts ? -EOPNOTSUPP : 0;
+	}
+
+	pdata->wol = 0;
+	if (wol->wolopts & WAKE_UCAST)
+		pdata->wol |= WAKE_UCAST;
+
+	if (wol->wolopts & WAKE_MCAST)
+		pdata->wol |= WAKE_MCAST;
+
+	if (wol->wolopts & WAKE_BCAST)
+		pdata->wol |= WAKE_BCAST;
+
+	if (wol->wolopts & WAKE_MAGIC)
+		pdata->wol |= WAKE_MAGIC;
+
+	if (wol->wolopts & WAKE_PHY)
+		pdata->wol |= WAKE_PHY;
+
+	if (wol->wolopts & WAKE_ARP)
+		pdata->wol |= WAKE_ARP;
+
+	ret = fxgmac_set_pattern_data(pdata);
+	if (ret < 0)
+		return ret;
+
+	ret = fxgmac_config_wol(pdata, (!!(pdata->wol)));
+	yt_dbg(pdata, "%s, opt=0x%x, wol=0x%x\n", __func__, wol->wolopts,
+	       pdata->wol);
+
+	return ret;
+}
+
 static int fxgmac_get_regs_len(struct net_device __always_unused *netdev)
 {
 	return FXGMAC_PHY_REG_CNT * sizeof(u32);
@@ -656,6 +823,8 @@ static const struct ethtool_ops fxgmac_ethtool_ops = {
 	.set_rxnfc			= fxgmac_set_rxnfc,
 	.get_rxfh_indir_size		= fxgmac_rss_indir_size,
 	.get_rxfh_key_size		= fxgmac_get_rxfh_key_size,
+	.get_wol			= fxgmac_get_wol,
+	.set_wol			= fxgmac_set_wol,
 	.nway_reset			= phy_ethtool_nway_reset,
 	.get_link_ksettings		= phy_ethtool_get_link_ksettings,
 	.set_link_ksettings		= phy_ethtool_set_link_ksettings,
