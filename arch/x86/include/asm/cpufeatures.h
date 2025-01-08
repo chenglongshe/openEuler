@@ -13,9 +13,9 @@
 /*
  * Defines x86 CPU feature bits
  */
-#define NCAPINTS			19     /* N 32-bit words worth of info */
+#define NCAPINTS			19	   /* N 32-bit words worth of info */
 #define NBUGINTS			1	   /* N 32-bit bug flags */
-
+#define NEXTBUGINTS			1	   /* N 32-bit extended bug flags */
 /*
  * Note: If the comment begins with a quoted string, that string is used
  * in /proc/cpuinfo instead of the macro name.  If the string is "",
@@ -323,6 +323,10 @@
 #define X86_FEATURE_USE_IBPB_FW	       (11*32+16) /* "" Use IBPB during runtime firmware calls */
 #define X86_FEATURE_RSB_VMEXIT_LITE		(11*32+17) /* "" Fill RSB on VM exit when EIBRS is enabled */
 
+#define X86_FEATURE_SRSO		(11*32+24) /* "" AMD BTB untrain RETs */
+#define X86_FEATURE_SRSO_ALIAS		(11*32+25) /* "" AMD BTB untrain RETs through aliasing */
+#define X86_FEATURE_IBPB_ON_VMEXIT	(11*32+26) /* "" Issue an IBPB only on VMEXIT */
+
 /* Intel-defined CPU features, CPUID level 0x00000007:1 (EAX), word 12 */
 #define X86_FEATURE_AVX_VNNI		(12*32+ 4) /* AVX VNNI instructions */
 #define X86_FEATURE_AVX512_BF16		(12*32+ 5) /* AVX512 BFLOAT16 instructions */
@@ -400,6 +404,11 @@
 #define X86_FEATURE_SUCCOR		(17*32+ 1) /* Uncorrectable error containment and recovery */
 #define X86_FEATURE_SMCA		(17*32+ 3) /* Scalable MCA */
 
+/* AMD-defined SRSO vulnerability features, CPUID level 0x80000021 (EAX), word 20 */
+#define X86_FEATURE_SBPB		(17*32+24)
+#define X86_FEATURE_IBPB_BRTYPE		(17*32+25)
+#define X86_FEATURE_SRSO_NO		(17*32+26)
+
 /* AMD-defined memory encryption features, CPUID level 0x8000001f (EAX), word 19 */
 #define X86_FEATURE_SME			(17*32+ 27) /* AMD Secure Memory Encryption */
 #define X86_FEATURE_SEV			(17*32+ 28) /* AMD Secure Encrypted Virtualization */
@@ -475,4 +484,6 @@
 #define X86_BUG_GDS			X86_BUG(30) /* CPU is affected by Gather Data Sampling */
 #define X86_BUG_DIV0			X86_BUG(31) /* AMD DIV0 speculation bug */
 
+/* BUG word 2 */
+#define X86_BUG_SRSO			X86_BUG(1*32 + 0) /* AMD SRSO bug */
 #endif /* _ASM_X86_CPUFEATURES_H */
