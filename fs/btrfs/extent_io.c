@@ -4757,6 +4757,7 @@ int extent_fiemap(struct btrfs_inode *inode, struct fiemap_extent_info *fieinfo,
 		last_for_get_extent = isize;
 	}
 
+	inode_lock_shared(&inode->vfs_inode);
 	lock_extent_bits(&inode->io_tree, start, start + len - 1,
 			 &cached_state);
 
@@ -4872,6 +4873,7 @@ out_free:
 out:
 	unlock_extent_cached(&inode->io_tree, start, start + len - 1,
 			     &cached_state);
+	inode_unlock_shared(&inode->vfs_inode);
 
 out_free_ulist:
 	btrfs_free_path(path);
