@@ -241,6 +241,30 @@ static struct mfd_cell bxt_wc_dev[] = {
 		.resources = thermal_resources,
 	},
 	{
+		.name = "bxt_wcove_bcu",
+		.num_resources = ARRAY_SIZE(bcu_resources),
+		.resources = bcu_resources,
+	},
+	{
+		.name = "bxt_wcove_gpio",
+		.num_resources = ARRAY_SIZE(gpio_resources),
+		.resources = gpio_resources,
+	},
+	{
+		.name = "bxt_wcove_region",
+	},
+};
+
+static const struct mfd_cell bxt_wc_tmu_dev[] = {
+	{
+		.name = "bxt_wcove_tmu",
+		.num_resources = ARRAY_SIZE(tmu_resources),
+		.resources = tmu_resources,
+	},
+};
+
+static struct mfd_cell bxt_wc_chgr_dev[] = {
+	{
 		.name = "bxt_wcove_usbc",
 		.num_resources = ARRAY_SIZE(usbc_resources),
 		.resources = usbc_resources,
@@ -249,25 +273,6 @@ static struct mfd_cell bxt_wc_dev[] = {
 		.name = "bxt_wcove_ext_charger",
 		.num_resources = ARRAY_SIZE(charger_resources),
 		.resources = charger_resources,
-	},
-	{
-		.name = "bxt_wcove_bcu",
-		.num_resources = ARRAY_SIZE(bcu_resources),
-		.resources = bcu_resources,
-	},
-	{
-		.name = "bxt_wcove_tmu",
-		.num_resources = ARRAY_SIZE(tmu_resources),
-		.resources = tmu_resources,
-	},
-
-	{
-		.name = "bxt_wcove_gpio",
-		.num_resources = ARRAY_SIZE(gpio_resources),
-		.resources = gpio_resources,
-	},
-	{
-		.name = "bxt_wcove_region",
 	},
 };
 
@@ -421,6 +426,26 @@ static int bxtwc_add_chained_irq_chip(struct intel_soc_pmic *pmic,
 					0, chip, data);
 }
 
+static int bxtwc_add_chained_devices(struct intel_soc_pmic *pmic,
+				    const struct mfd_cell *cells, int n_devs,
+				    struct regmap_irq_chip_data *pdata,
+				    int pirq, int irq_flags,
+				    const struct regmap_irq_chip *chip,
+				    struct regmap_irq_chip_data **data)
+{
+	struct device *dev = pmic->dev;
+	struct irq_domain *domain;
+	int ret;
+
+	ret = bxtwc_add_chained_irq_chip(pmic, pdata, pirq, irq_flags, chip, data);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to add %s IRQ chip\n", chip->name);
+
+	domain = regmap_irq_get_domain(*data);
+
+	return devm_mfd_add_devices(dev, PLATFORM_DEVID_NONE, cells, n_devs, NULL, 0, domain);
+}
+
 static int bxtwc_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -474,6 +499,15 @@ static int bxtwc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	ret = bxtwc_add_chained_devices(pmic, bxt_wc_tmu_dev, ARRAY_SIZE(bxt_wc_tmu_dev),
+					pmic->irq_chip_data,
+					BXTWC_TMU_LVL1_IRQ,
+					IRQF_ONESHOT,
+					&bxtwc_regmap_irq_chip_tmu,
+					&pmic->irq_chip_data_tmu);
+	if (ret)
+		return ret;
+
 	ret = bxtwc_add_chained_irq_chip(pmic, pmic->irq_chip_data,
 					 BXTWC_PWRBTN_LVL1_IRQ,
 					 IRQF_ONESHOT,
@@ -481,16 +515,6 @@ static int bxtwc_probe(struct platform_device *pdev)
 					 &pmic->irq_chip_data_pwrbtn);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add PWRBTN IRQ chip\n");
-		return ret;
-	}
-
-	ret = bxtwc_add_chained_irq_chip(pmic, pmic->irq_chip_data,
-					 BXTWC_TMU_LVL1_IRQ,
-					 IRQF_ONESHOT,
-					 &bxtwc_regmap_irq_chip_tmu,
-					 &pmic->irq_chip_data_tmu);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to add TMU IRQ chip\n");
 		return ret;
 	}
 
@@ -520,16 +544,13 @@ static int bxtwc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	/* Add chained IRQ handler for CHGR IRQs */
-	ret = bxtwc_add_chained_irq_chip(pmic, pmic->irq_chip_data,
-					 BXTWC_CHGR_LVL1_IRQ,
-					 IRQF_ONESHOT,
-					 &bxtwc_regmap_irq_chip_chgr,
-					 &pmic->irq_chip_data_chgr);
-
-
+	ret = bxtwc_add_chained_devices(pmic, bxt_wc_chgr_dev, ARRAY_SIZE(bxt_wc_chgr_dev),
+					pmic->irq_chip_data,
+					BXTWC_CHGR_LVL1_IRQ,
+					IRQF_ONESHOT,
+					&bxtwc_regmap_irq_chip_chgr,
+					&pmic->irq_chip_data_chgr);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to add CHGR IRQ chip\n");
 		return ret;
 	}
 
