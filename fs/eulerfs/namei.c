@@ -114,9 +114,11 @@ static struct dentry *eufs_lookup(struct inode *dir, struct dentry *dentry,
 		goto not_found;
 
 	inode = eufs_iget(dir->i_sb, s2p(dir->i_sb, de->inode));
-	if (inode == ERR_PTR(-ESTALE)) {
-		eufs_err(dir->i_sb, "deleted inode referenced: 0x%lx",
-			 inode->i_ino);
+	if (IS_ERR(inode)) {
+		eufs_err(dir->i_sb, "eufs_iget failed ino 0x%llx err %ld\n",
+			le64_to_cpu(de->inode), PTR_ERR(inode));
+		if (inode == ERR_PTR(-ENOMEM))
+			return ERR_PTR(-ENOMEM);
 		return ERR_PTR(-EIO);
 	}
 not_found:
