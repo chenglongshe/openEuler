@@ -12,7 +12,8 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
-#include <linux/greybus.h>
+
+#include "greybus.h"
 
 /* Greybus HID device's structure */
 struct gb_hid {
@@ -48,8 +49,8 @@ static int gb_hid_get_report_desc(struct gb_hid *ghid, char *rdesc)
 		return ret;
 
 	ret = gb_operation_sync(ghid->connection, GB_HID_TYPE_GET_REPORT_DESC,
-				NULL, 0, rdesc,
-				le16_to_cpu(ghid->hdesc.wReportDescLength));
+				 NULL, 0, rdesc,
+				 le16_to_cpu(ghid->hdesc.wReportDescLength));
 
 	gb_pm_runtime_put_autosuspend(ghid->bundle);
 
@@ -72,7 +73,7 @@ static int gb_hid_set_power(struct gb_hid *ghid, int type)
 }
 
 static int gb_hid_get_report(struct gb_hid *ghid, u8 report_type, u8 report_id,
-			     unsigned char *buf, int len)
+		unsigned char *buf, int len)
 {
 	struct gb_hid_get_report_request request;
 	int ret;
@@ -85,7 +86,7 @@ static int gb_hid_get_report(struct gb_hid *ghid, u8 report_type, u8 report_id,
 	request.report_id = report_id;
 
 	ret = gb_operation_sync(ghid->connection, GB_HID_TYPE_GET_REPORT,
-				&request, sizeof(request), buf, len);
+				 &request, sizeof(request), buf, len);
 
 	gb_pm_runtime_put_autosuspend(ghid->bundle);
 
@@ -93,7 +94,7 @@ static int gb_hid_get_report(struct gb_hid *ghid, u8 report_type, u8 report_id,
 }
 
 static int gb_hid_set_report(struct gb_hid *ghid, u8 report_type, u8 report_id,
-			     unsigned char *buf, int len)
+			     \unsigned char *buf, int len)
 {
 	struct gb_hid_set_report_request *request;
 	struct gb_operation *operation;
@@ -149,7 +150,7 @@ static int gb_hid_request_handler(struct gb_operation *op)
 	return 0;
 }
 
-static int gb_hid_report_len(struct hid_report *report)
+static unsigned int gb_hid_report_len(struct hid_report *report)
 {
 	return ((report->size - 1) >> 3) + 1 +
 		report->device->report_enum[report->type].numbered;
@@ -210,13 +211,11 @@ static void gb_hid_init_reports(struct gb_hid *ghid)
 	struct hid_report *report;
 
 	list_for_each_entry(report,
-			    &hid->report_enum[HID_INPUT_REPORT].report_list,
-			    list)
+		&hid->report_enum[HID_INPUT_REPORT].report_list, list)
 		gb_hid_init_report(ghid, report);
 
 	list_for_each_entry(report,
-			    &hid->report_enum[HID_FEATURE_REPORT].report_list,
-			    list)
+		&hid->report_enum[HID_FEATURE_REPORT].report_list, list)
 		gb_hid_init_report(ghid, report);
 }
 
@@ -254,14 +253,14 @@ static int __gb_hid_output_raw_report(struct hid_device *hid, __u8 *buf,
 
 	ret = gb_hid_set_report(ghid, report_type, report_id, buf, len);
 	if (report_id && ret >= 0)
-		ret++; /* add report_id to the number of transfered bytes */
+		ret++; /* add report_id to the number of transferred bytes */
 
 	return 0;
 }
 
 static int gb_hid_raw_request(struct hid_device *hid, unsigned char reportnum,
-			      __u8 *buf, size_t len, unsigned char rtype,
-			      int reqtype)
+			       __u8 *buf, size_t len, unsigned char rtype,
+			       int reqtype)
 {
 	switch (reqtype) {
 	case HID_REQ_GET_REPORT:
@@ -290,8 +289,10 @@ static int gb_hid_parse(struct hid_device *hid)
 	}
 
 	rdesc = kzalloc(rsize, GFP_KERNEL);
-	if (!rdesc)
+	if (!rdesc) {
+		dbg_hid("couldn't allocate rdesc memory\n");
 		return -ENOMEM;
+	}
 
 	ret = gb_hid_get_report_desc(ghid, rdesc);
 	if (ret) {
@@ -408,7 +409,8 @@ static int gb_hid_init(struct gb_hid *ghid)
 	hid->driver_data = ghid;
 	hid->ll_driver = &gb_hid_ll_driver;
 	hid->dev.parent = &ghid->connection->bundle->dev;
-//	hid->bus = BUS_GREYBUS; /* Need a bustype for GREYBUS in <linux/input.h> */
+/* Need a bustype for GREYBUS in <linux/input.h> */
+//	hid->bus = BUS_GREYBUS;
 
 	/* Set HID device's name */
 	snprintf(hid->name, sizeof(hid->name), "%s %04X:%04X",
@@ -439,7 +441,7 @@ static int gb_hid_probe(struct gb_bundle *bundle,
 		return -ENOMEM;
 
 	connection = gb_connection_create(bundle, le16_to_cpu(cport_desc->id),
-					  gb_hid_request_handler);
+						gb_hid_request_handler);
 	if (IS_ERR(connection)) {
 		ret = PTR_ERR(connection);
 		goto err_free_ghid;
