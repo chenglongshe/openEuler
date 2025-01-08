@@ -1204,6 +1204,71 @@ static void fxgmac_rx_mmc_int(struct fxgmac_pdata *yt)
 		stats->rxcontrolframe_g += rd32_mac(yt, MMC_RXCONTROLFRAME_G);
 }
 
+static void fxgmac_read_mmc_stats(struct fxgmac_pdata *yt)
+{
+	struct fxgmac_stats *stats = &yt->stats;
+
+	stats->txoctetcount_gb += rd32_mac(yt, MMC_TXOCTETCOUNT_GB_LO);
+	stats->txframecount_gb += rd32_mac(yt, MMC_TXFRAMECOUNT_GB_LO);
+	stats->txbroadcastframes_g += rd32_mac(yt, MMC_TXBROADCASTFRAMES_G_LO);
+	stats->txmulticastframes_g += rd32_mac(yt, MMC_TXMULTICASTFRAMES_G_LO);
+	stats->tx64octets_gb += rd32_mac(yt, MMC_TX64OCTETS_GB_LO);
+	stats->tx65to127octets_gb += rd32_mac(yt, MMC_TX65TO127OCTETS_GB_LO);
+	stats->tx128to255octets_gb += rd32_mac(yt, MMC_TX128TO255OCTETS_GB_LO);
+	stats->tx256to511octets_gb += rd32_mac(yt, MMC_TX256TO511OCTETS_GB_LO);
+	stats->tx512to1023octets_gb +=
+		rd32_mac(yt, MMC_TX512TO1023OCTETS_GB_LO);
+	stats->tx1024tomaxoctets_gb +=
+		rd32_mac(yt, MMC_TX1024TOMAXOCTETS_GB_LO);
+	stats->txunicastframes_gb += rd32_mac(yt, MMC_TXUNICASTFRAMES_GB_LO);
+	stats->txmulticastframes_gb +=
+		rd32_mac(yt, MMC_TXMULTICASTFRAMES_GB_LO);
+	stats->txbroadcastframes_g += rd32_mac(yt, MMC_TXBROADCASTFRAMES_GB_LO);
+	stats->txunderflowerror += rd32_mac(yt, MMC_TXUNDERFLOWERROR_LO);
+	stats->txsinglecollision_g += rd32_mac(yt, MMC_TXSINGLECOLLISION_G);
+	stats->txmultiplecollision_g += rd32_mac(yt, MMC_TXMULTIPLECOLLISION_G);
+	stats->txdeferredframes += rd32_mac(yt, MMC_TXDEFERREDFRAMES);
+	stats->txlatecollisionframes += rd32_mac(yt, MMC_TXLATECOLLISIONFRAMES);
+	stats->txexcessivecollisionframes +=
+		rd32_mac(yt, MMC_TXEXCESSIVECOLLSIONFRAMES);
+	stats->txcarriererrorframes += rd32_mac(yt, MMC_TXCARRIERERRORFRAMES);
+	stats->txoctetcount_g += rd32_mac(yt, MMC_TXOCTETCOUNT_G_LO);
+	stats->txframecount_g += rd32_mac(yt, MMC_TXFRAMECOUNT_G_LO);
+	stats->txexcessivedeferralerror +=
+		rd32_mac(yt, MMC_TXEXCESSIVEDEFERRALERROR);
+	stats->txpauseframes += rd32_mac(yt, MMC_TXPAUSEFRAMES_LO);
+	stats->txvlanframes_g += rd32_mac(yt, MMC_TXVLANFRAMES_G_LO);
+	stats->txoversize_g += rd32_mac(yt, MMC_TXOVERSIZEFRAMES);
+	stats->rxframecount_gb += rd32_mac(yt, MMC_RXFRAMECOUNT_GB_LO);
+	stats->rxoctetcount_gb += rd32_mac(yt, MMC_RXOCTETCOUNT_GB_LO);
+	stats->rxoctetcount_g += rd32_mac(yt, MMC_RXOCTETCOUNT_G_LO);
+	stats->rxbroadcastframes_g += rd32_mac(yt, MMC_RXBROADCASTFRAMES_G_LO);
+	stats->rxmulticastframes_g += rd32_mac(yt, MMC_RXMULTICASTFRAMES_G_LO);
+	stats->rxcrcerror += rd32_mac(yt, MMC_RXCRCERROR_LO);
+	stats->rxalignerror += rd32_mac(yt, MMC_RXALIGNERROR);
+	stats->rxrunterror += rd32_mac(yt, MMC_RXRUNTERROR);
+	stats->rxjabbererror += rd32_mac(yt, MMC_RXJABBERERROR);
+	stats->rxundersize_g += rd32_mac(yt, MMC_RXUNDERSIZE_G);
+	stats->rxoversize_g += rd32_mac(yt, MMC_RXOVERSIZE_G);
+	stats->rx64octets_gb += rd32_mac(yt, MMC_RX64OCTETS_GB_LO);
+	stats->rx65to127octets_gb += rd32_mac(yt, MMC_RX65TO127OCTETS_GB_LO);
+	stats->rx128to255octets_gb += rd32_mac(yt, MMC_RX128TO255OCTETS_GB_LO);
+	stats->rx256to511octets_gb += rd32_mac(yt, MMC_RX256TO511OCTETS_GB_LO);
+	stats->rx512to1023octets_gb +=
+		rd32_mac(yt, MMC_RX512TO1023OCTETS_GB_LO);
+	stats->rx1024tomaxoctets_gb +=
+		rd32_mac(yt, MMC_RX1024TOMAXOCTETS_GB_LO);
+	stats->rxunicastframes_g += rd32_mac(yt, MMC_RXUNICASTFRAMES_G_LO);
+	stats->rxlengtherror += rd32_mac(yt, MMC_RXLENGTHERROR_LO);
+	stats->rxoutofrangetype += rd32_mac(yt, MMC_RXOUTOFRANGETYPE_LO);
+	stats->rxpauseframes += rd32_mac(yt, MMC_RXPAUSEFRAMES_LO);
+	stats->rxfifooverflow += rd32_mac(yt, MMC_RXFIFOOVERFLOW_LO);
+	stats->rxvlanframes_gb += rd32_mac(yt, MMC_RXVLANFRAMES_GB_LO);
+	stats->rxwatchdogerror += rd32_mac(yt, MMC_RXWATCHDOGERROR);
+	stats->rxreceiveerrorframe += rd32_mac(yt, MMC_RXRECEIVEERRORFRAME);
+	stats->rxcontrolframe_g += rd32_mac(yt, MMC_RXCONTROLFRAME_G);
+}
+
 static void fxgmac_config_mmc(struct fxgmac_pdata *pdata)
 {
 	u32 val;
@@ -2610,6 +2675,10 @@ void fxgmac_hw_ops_init(struct fxgmac_hw_ops *hw_ops)
 	/* RX coalescing */
 	hw_ops->config_rx_coalesce = fxgmac_config_rx_coalesce;
 	hw_ops->usec_to_riwt = fxgmac_usec_to_riwt;
+
+	/* MMC statistics support */
+	hw_ops->read_mmc_stats = fxgmac_read_mmc_stats;
+
 	/* Receive Side Scaling */
 	hw_ops->enable_rss = fxgmac_enable_rss;
 	hw_ops->disable_rss = fxgmac_disable_rss;

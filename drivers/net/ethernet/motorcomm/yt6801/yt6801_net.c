@@ -1014,6 +1014,129 @@ static int fxgmac_close(struct net_device *netdev)
 	return 0;
 }
 
+static void fxgmac_dump_state(struct fxgmac_pdata *pdata)
+{
+	struct fxgmac_channel *channel = pdata->channel_head;
+	struct fxgmac_stats *pstats = &pdata->stats;
+	struct fxgmac_ring *ring;
+
+	ring = &channel->tx_ring[0];
+	yt_err(pdata, "Tx descriptor info:\n");
+	yt_err(pdata, "Tx cur = 0x%x\n", ring->cur);
+	yt_err(pdata, "Tx dirty = 0x%x\n", ring->dirty);
+	yt_err(pdata, "Tx dma_desc_head = %pad\n", &ring->dma_desc_head);
+	yt_err(pdata, "Tx desc_data_head = %pad\n", &ring->desc_data_head);
+
+	for (u32 i = 0; i < pdata->channel_count; i++, channel++) {
+		ring = &channel->rx_ring[0];
+		yt_err(pdata, "Rx[%d] descriptor info:\n", i);
+		yt_err(pdata, "Rx cur = 0x%x\n", ring->cur);
+		yt_err(pdata, "Rx dirty = 0x%x\n", ring->dirty);
+		yt_err(pdata, "Rx dma_desc_head = %pad\n",
+		       &ring->dma_desc_head);
+		yt_err(pdata, "Rx desc_data_head = %pad\n",
+		       &ring->desc_data_head);
+	}
+
+	yt_err(pdata, "Device Registers:\n");
+	yt_err(pdata, "MAC_ISR = %08x\n", rd32_mac(pdata, MAC_ISR));
+	yt_err(pdata, "MAC_IER = %08x\n", rd32_mac(pdata, MAC_IER));
+	yt_err(pdata, "MMC_RISR = %08x\n", rd32_mac(pdata, MMC_RISR));
+	yt_err(pdata, "MMC_RIER = %08x\n", rd32_mac(pdata, MMC_RIER));
+	yt_err(pdata, "MMC_TISR = %08x\n", rd32_mac(pdata, MMC_TISR));
+	yt_err(pdata, "MMC_TIER = %08x\n", rd32_mac(pdata, MMC_TIER));
+
+	yt_err(pdata, "EPHY_CTRL = %04x\n", rd32_mem(pdata, EPHY_CTRL));
+	yt_err(pdata, "MGMT_INT_CTRL0 = %04x\n",
+	       rd32_mem(pdata, MGMT_INT_CTRL0));
+	yt_err(pdata, "LPW_CTRL = %04x\n", rd32_mem(pdata, LPW_CTRL));
+	yt_err(pdata, "MSIX_TBL_MASK = %04x\n", rd32_mem(pdata, MSIX_TBL_MASK));
+
+	yt_err(pdata, "Dump nonstick regs:\n");
+	for (u32 i = GLOBAL_CTRL0; i < MSI_PBA; i += 4)
+		yt_err(pdata, "[%d] = %04x\n", i / 4, rd32_mem(pdata, i));
+
+	pdata->hw_ops.read_mmc_stats(pdata);
+
+	yt_err(pdata, "Dump TX counters:\n");
+	yt_err(pdata, "tx_packets %lld\n", pstats->txframecount_gb);
+	yt_err(pdata, "tx_errors %lld\n",
+	       pstats->txframecount_gb - pstats->txframecount_g);
+	yt_err(pdata, "tx_multicastframes_errors %lld\n",
+	       pstats->txmulticastframes_gb - pstats->txmulticastframes_g);
+	yt_err(pdata, "tx_broadcastframes_errors %lld\n",
+	       pstats->txbroadcastframes_gb - pstats->txbroadcastframes_g);
+
+	yt_err(pdata, "txunderflowerror %lld\n", pstats->txunderflowerror);
+	yt_err(pdata, "txdeferredframes %lld\n",
+	       pstats->txdeferredframes);
+	yt_err(pdata, "txlatecollisionframes %lld\n",
+	       pstats->txlatecollisionframes);
+	yt_err(pdata, "txexcessivecollisionframes %lld\n",
+	       pstats->txexcessivecollisionframes);
+	yt_err(pdata, "txcarriererrorframes %lld\n",
+	       pstats->txcarriererrorframes);
+	yt_err(pdata, "txexcessivedeferralerror %lld\n",
+	       pstats->txexcessivedeferralerror);
+
+	yt_err(pdata, "txsinglecollision_g %lld\n",
+	       pstats->txsinglecollision_g);
+	yt_err(pdata, "txmultiplecollision_g %lld\n",
+	       pstats->txmultiplecollision_g);
+	yt_err(pdata, "txoversize_g %lld\n", pstats->txoversize_g);
+
+	yt_err(pdata, "Dump RX counters:\n");
+	yt_err(pdata, "rx_packets %lld\n", pstats->rxframecount_gb);
+	yt_err(pdata, "rx_errors %lld\n",
+	       pstats->rxframecount_gb - pstats->rxbroadcastframes_g -
+	       pstats->rxmulticastframes_g - pstats->rxunicastframes_g);
+
+	yt_err(pdata, "rx_crc_errors %lld\n", pstats->rxcrcerror);
+	yt_err(pdata, "rxalignerror %lld\n", pstats->rxalignerror);
+	yt_err(pdata, "rxrunterror %lld\n", pstats->rxrunterror);
+	yt_err(pdata, "rxjabbererror %lld\n", pstats->rxjabbererror);
+	yt_err(pdata, "rx_length_errors %lld\n", pstats->rxlengtherror);
+	yt_err(pdata, "rxoutofrangetype %lld\n", pstats->rxoutofrangetype);
+	yt_err(pdata, "rx_fifo_errors %lld\n", pstats->rxfifooverflow);
+	yt_err(pdata, "rxwatchdogerror %lld\n", pstats->rxwatchdogerror);
+	yt_err(pdata, "rxreceiveerrorframe %lld\n",
+	       pstats->rxreceiveerrorframe);
+
+	yt_err(pdata, "rxbroadcastframes_g %lld\n",
+	       pstats->rxbroadcastframes_g);
+	yt_err(pdata, "rxmulticastframes_g %lld\n",
+	       pstats->rxmulticastframes_g);
+	yt_err(pdata, "rxundersize_g %lld\n", pstats->rxundersize_g);
+	yt_err(pdata, "rxoversize_g %lld\n", pstats->rxoversize_g);
+	yt_err(pdata, "rxunicastframes_g %lld\n", pstats->rxunicastframes_g);
+	yt_err(pdata, "rxcontrolframe_g %lld\n", pstats->rxcontrolframe_g);
+
+	yt_err(pdata, "Dump Extra counters:\n");
+	yt_err(pdata, "tx_tso_packets %lld\n", pstats->tx_tso_packets);
+	yt_err(pdata, "rx_split_header_packets %lld\n",
+	       pstats->rx_split_header_packets);
+	yt_err(pdata, "tx_process_stopped %lld\n", pstats->tx_process_stopped);
+	yt_err(pdata, "rx_process_stopped %lld\n", pstats->rx_process_stopped);
+	yt_err(pdata, "tx_buffer_unavailable %lld\n",
+	       pstats->tx_buffer_unavailable);
+	yt_err(pdata, "rx_buffer_unavailable %lld\n",
+	       pstats->rx_buffer_unavailable);
+	yt_err(pdata, "fatal_bus_error %lld\n", pstats->fatal_bus_error);
+	yt_err(pdata, "napi_poll_isr %lld\n", pstats->napi_poll_isr);
+	yt_err(pdata, "napi_poll_txtimer %lld\n", pstats->napi_poll_txtimer);
+	yt_err(pdata, "ephy_poll_timer_cnt %lld\n",
+	       pstats->ephy_poll_timer_cnt);
+	yt_err(pdata, "mgmt_int_isr %lld\n", pstats->mgmt_int_isr);
+}
+
+static void fxgmac_tx_timeout(struct net_device *netdev, unsigned int unused)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+
+	fxgmac_dump_state(pdata);
+	schedule_work(&pdata->restart_work);
+}
+
 #define EFUSE_FISRT_UPDATE_ADDR				255
 #define EFUSE_SECOND_UPDATE_ADDR			209
 #define EFUSE_MAX_ENTRY					39
@@ -2045,6 +2168,41 @@ static int fxgmac_set_mac_address(struct net_device *netdev, void *addr)
 	return 0;
 }
 
+static int fxgmac_change_mtu(struct net_device *netdev, int mtu)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	int old_mtu = netdev->mtu;
+	int ret;
+
+	mutex_lock(&pdata->mutex);
+	fxgmac_stop(pdata);
+	fxgmac_free_tx_data(pdata);
+
+	/* We must unmap rx desc's dma before we change rx_buf_size.
+	 * Becaues the size of the unmapped DMA is set according to rx_buf_size
+	 */
+	fxgmac_free_rx_data(pdata);
+	pdata->jumbo = mtu > ETH_DATA_LEN ? 1 : 0;
+	ret = fxgmac_calc_rx_buf_size(pdata, mtu);
+	if (ret < 0)
+		return ret;
+
+	pdata->rx_buf_size = ret;
+	netdev->mtu = mtu;
+
+	if (netif_running(netdev))
+		fxgmac_start(pdata);
+
+	netdev_update_features(netdev);
+
+	mutex_unlock(&pdata->mutex);
+
+	yt_dbg(pdata, "fxgmac,set MTU from %d to %d. min, max=(%d,%d)\n",
+	       old_mtu, netdev->mtu, netdev->min_mtu, netdev->max_mtu);
+
+	return 0;
+}
+
 static int fxgmac_vlan_rx_add_vid(struct net_device *netdev, __be16 proto,
 				  u16 vid)
 {
@@ -2168,7 +2326,9 @@ static const struct net_device_ops fxgmac_netdev_ops = {
 	.ndo_open		= fxgmac_open,
 	.ndo_stop		= fxgmac_close,
 	.ndo_start_xmit		= fxgmac_xmit,
+	.ndo_tx_timeout		= fxgmac_tx_timeout,
 	.ndo_get_stats64	= fxgmac_get_stats64,
+	.ndo_change_mtu		= fxgmac_change_mtu,
 	.ndo_set_mac_address	= fxgmac_set_mac_address,
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_vlan_rx_add_vid	= fxgmac_vlan_rx_add_vid,
