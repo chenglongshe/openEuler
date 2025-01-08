@@ -27,8 +27,12 @@
 #include <drm/spsc_queue.h>
 #include <linux/dma-fence.h>
 #include <linux/completion.h>
+#include <linux/xarray.h>
+#include <linux/workqueue.h>
 
 #define MAX_WAIT_SCHED_ENTITY_Q_EMPTY msecs_to_jiffies(1000)
+
+struct drm_gem_object;
 
 struct drm_gpu_scheduler;
 struct drm_sched_rq;
@@ -191,13 +195,33 @@ struct drm_sched_job {
 	struct spsc_node		queue_node;
 	struct drm_gpu_scheduler	*sched;
 	struct drm_sched_fence		*s_fence;
-	struct dma_fence_cb		finish_cb;
+
+	/*
+	 * work is used only after finish_cb has been used and will not be
+	 * accessed anymore.
+	 */
+	union {
+		struct dma_fence_cb		finish_cb;
+		struct work_struct 		work;
+	};
+
 	struct list_head		node;
 	uint64_t			id;
 	atomic_t			karma;
 	enum drm_sched_priority		s_priority;
 	struct drm_sched_entity  *entity;
 	struct dma_fence_cb		cb;
+	/**
+	 * @dependencies:
+	 *
+	 * Contains the dependencies as struct dma_fence for this job, see
+	 * drm_sched_job_add_dependency() and
+	 * drm_sched_job_add_implicit_dependencies().
+	 */
+	struct xarray			dependencies;
+
+	/** @last_dependency: tracks @dependencies as they signal */
+	unsigned long			last_dependency;
 };
 
 static inline bool drm_sched_invalidate_job(struct drm_sched_job *s_job,
@@ -214,9 +238,15 @@ static inline bool drm_sched_invalidate_job(struct drm_sched_job *s_job,
  */
 struct drm_sched_backend_ops {
 	/**
-         * @dependency: Called when the scheduler is considering scheduling
-         * this job next, to get another struct dma_fence for this job to
-	 * block on.  Once it returns NULL, run_job() may be called.
+	 * @dependency:
+	 *
+	 * Called when the scheduler is considering scheduling this job next, to
+	 * get another struct dma_fence for this job to block on.  Once it
+	 * returns NULL, run_job() may be called.
+	 *
+	 * If a driver exclusively uses drm_sched_job_add_dependency() and
+	 * drm_sched_job_add_implicit_dependencies() this can be ommitted and
+	 * left as NULL.
 	 */
 	struct dma_fence *(*dependency)(struct drm_sched_job *sched_job,
 					struct drm_sched_entity *s_entity);
@@ -299,6 +329,13 @@ void drm_sched_fini(struct drm_gpu_scheduler *sched);
 int drm_sched_job_init(struct drm_sched_job *job,
 		       struct drm_sched_entity *entity,
 		       void *owner);
+int drm_sched_job_add_dependency(struct drm_sched_job *job,
+				 struct dma_fence *fence);
+int drm_sched_job_add_implicit_dependencies(struct drm_sched_job *job,
+					    struct drm_gem_object *obj,
+					    bool write);
+
+
 void drm_sched_entity_modify_sched(struct drm_sched_entity *entity,
 				    struct drm_gpu_scheduler **sched_list,
                                    unsigned int num_sched_list);
