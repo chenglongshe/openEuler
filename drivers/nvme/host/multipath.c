@@ -277,6 +277,9 @@ static bool nvme_available_path(struct nvme_ns_head *head)
 {
 	struct nvme_ns *ns;
 
+	if (!test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags))
+		return NULL;
+
 	list_for_each_entry_rcu(ns, &head->list, siblings) {
 		switch (ns->ctrl->state) {
 		case NVME_CTRL_LIVE:
@@ -332,6 +335,27 @@ blk_qc_t nvme_ns_head_submit_bio(struct bio *bio)
 	return ret;
 }
 
+static void nvme_partition_scan_work(struct work_struct *work)
+{
+	struct nvme_ns_head_wrapper *head_wrapper =
+		container_of(work, struct nvme_ns_head_wrapper, partition_scan_work);
+	struct nvme_ns_head *head = &head_wrapper->head;
+	struct block_device *bdev;
+
+	if (WARN_ON_ONCE(!test_and_clear_bit(GENHD_FL_NO_PART_SCAN,
+					     &head->disk->state)))
+		return;
+
+	bdev = bdget_part(&head->disk->part0);
+	if (!bdev)
+		return;
+
+	mutex_lock(&bdev->bd_mutex);
+	bdev_disk_changed(bdev, false);
+	mutex_unlock(&bdev->bd_mutex);
+	bdput(bdev);
+}
+
 static void nvme_requeue_work(struct work_struct *work)
 {
 	struct nvme_ns_head *head =
@@ -358,12 +382,15 @@ static void nvme_requeue_work(struct work_struct *work)
 int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl, struct nvme_ns_head *head)
 {
 	struct request_queue *q;
+	struct nvme_ns_head_wrapper *head_wrapper =
+		container_of(head, struct nvme_ns_head_wrapper, head);
 	bool vwc = false;
 
 	mutex_init(&head->lock);
 	bio_list_init(&head->requeue_list);
 	spin_lock_init(&head->requeue_lock);
 	INIT_WORK(&head->requeue_work, nvme_requeue_work);
+	INIT_WORK(&head_wrapper->partition_scan_work, nvme_partition_scan_work);
 
 	/*
 	 * Add a multipath node if the subsystems supports multiple controllers.
@@ -393,6 +420,16 @@ int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl, struct nvme_ns_head *head)
 	head->disk->private_data = head;
 	head->disk->queue = q;
 	head->disk->flags = GENHD_FL_EXT_DEVT;
+
+	/*
+	 * We need to suppress the partition scan from occuring within the
+	 * controller's scan_work context. If a path error occurs here, the IO
+	 * will wait until a path becomes available or all paths are torn down,
+	 * but that action also occurs within scan_work, so it would deadlock.
+	 * Defer the partion scan to a different context that does not block
+	 * scan_work.
+	 */
+	set_bit(GENHD_FL_NO_PART_SCAN, &head->disk->state);
 	sprintf(head->disk->disk_name, "nvme%dn%d",
 			ctrl->subsys->instance, head->instance);
 	return 0;
@@ -406,13 +443,17 @@ out:
 static void nvme_mpath_set_live(struct nvme_ns *ns)
 {
 	struct nvme_ns_head *head = ns->head;
+	struct nvme_ns_head_wrapper *head_wrapper =
+		container_of(head, struct nvme_ns_head_wrapper, head);
 
 	if (!head->disk)
 		return;
 
-	if (!test_and_set_bit(NVME_NSHEAD_DISK_LIVE, &head->flags))
+	if (!test_and_set_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
 		device_add_disk(&head->subsys->dev, head->disk,
 				nvme_ns_id_attr_groups);
+		kblockd_schedule_work(&head_wrapper->partition_scan_work);
+	}
 
 	mutex_lock(&head->lock);
 	if (nvme_path_is_optimized(ns)) {
@@ -709,16 +750,33 @@ void nvme_mpath_add_disk(struct nvme_ns *ns, struct nvme_id_ns *id)
 #endif
 }
 
-void nvme_mpath_remove_disk(struct nvme_ns_head *head)
+void nvme_mpath_shutdown_disk(struct nvme_ns_head *head)
 {
 	if (!head->disk)
 		return;
-	if (head->disk->flags & GENHD_FL_UP)
+	if (test_and_clear_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
+		/*
+		 * requeue I/O after NVME_NSHEAD_DISK_LIVE has been cleared
+		 * to allow multipath to fail all I/O.
+		 */
+		synchronize_srcu(&head->srcu);
+		kblockd_schedule_work(&head->requeue_work);
 		del_gendisk(head->disk);
+	}
+}
+
+void nvme_mpath_remove_disk(struct nvme_ns_head *head)
+{
+	struct nvme_ns_head_wrapper *head_wrapper =
+		container_of(head, struct nvme_ns_head_wrapper, head);
+
+	if (!head->disk)
+		return;
 	blk_set_queue_dying(head->disk->queue);
 	/* make sure all pending bios are cleaned up */
 	kblockd_schedule_work(&head->requeue_work);
 	flush_work(&head->requeue_work);
+	flush_work(&head_wrapper->partition_scan_work);
 	blk_cleanup_queue(head->disk->queue);
 	if (!test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags)) {
 		/*
