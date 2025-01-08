@@ -38,6 +38,205 @@ static unsigned int fxgmac_desc_rx_dirty(struct fxgmac_ring *ring)
 	return dirty;
 }
 
+void fxgmac_tx_start_xmit(struct fxgmac_channel *channel,
+			  struct fxgmac_ring *ring)
+{
+	struct fxgmac_pdata *pdata = channel->pdata;
+	struct fxgmac_desc_data *desc_data;
+
+	/* Make sure everything is written before the register write */
+	wmb();
+
+	/* Issue a poll command to Tx DMA by writing address
+	 * of next immediate free descriptor
+	 */
+	desc_data = FXGMAC_GET_DESC_DATA(ring, ring->cur);
+	wr32_mac(pdata, lower_32_bits(desc_data->dma_desc_addr),
+		 FXGMAC_DMA_REG(channel, DMA_CH_TDTR_LO));
+
+	if (netif_msg_tx_done(pdata)) {
+		yt_dbg(pdata,
+		       "tx_start_xmit: dump before wr reg, reg=0x%08x,",
+		       rd32_mac(pdata, FXGMAC_DMA_REG(channel, DMA_CH_TDTR_LO)));
+
+		yt_dbg(pdata, "tx timer usecs=%u,tx_timer_active=%u\n",
+		       pdata->tx_usecs, channel->tx_timer_active);
+	}
+
+	ring->tx.xmit_more = 0;
+}
+
+static netdev_tx_t fxgmac_maybe_stop_tx_queue(struct fxgmac_channel *channel,
+					      struct fxgmac_ring *ring,
+					      unsigned int count)
+{
+	struct fxgmac_pdata *pdata = channel->pdata;
+
+	if (count > fxgmac_desc_tx_avail(ring)) {
+		/* Avoid wrongly optimistic queue wake-up: tx poll thread must
+		 * not miss a ring update when it notices a stopped queue.
+		 */
+		smp_wmb();
+		netif_stop_subqueue(pdata->netdev, channel->queue_index);
+		ring->tx.queue_stopped = 1;
+
+		/* Sync with tx poll:
+		 * - publish queue status and cur ring index (write barrier)
+		 * - refresh dirty ring index (read barrier).
+		 * May the current thread have a pessimistic view of the ring
+		 * status and forget to wake up queue, a racing tx poll thread
+		 * can't.
+		 */
+		smp_mb();
+		if (count <= fxgmac_desc_tx_avail(ring)) {
+			ring->tx.queue_stopped = 0;
+			netif_start_subqueue(pdata->netdev,
+					     channel->queue_index);
+			fxgmac_tx_start_xmit(channel, ring);
+		} else {
+			/* If we haven't notified the hardware because of
+			 * xmit_more support, tell it now
+			 */
+			if (ring->tx.xmit_more)
+				fxgmac_tx_start_xmit(channel, ring);
+			if (netif_msg_tx_done(pdata))
+				yt_dbg(pdata, "about stop tx q, ret BUSY\n");
+			return NETDEV_TX_BUSY;
+		}
+	}
+
+	return NETDEV_TX_OK;
+}
+
+static void fxgmac_prep_vlan(struct sk_buff *skb,
+			     struct fxgmac_pkt_info *pkt_info)
+{
+	if (skb_vlan_tag_present(skb))
+		pkt_info->vlan_ctag = skb_vlan_tag_get(skb);
+}
+
+static int fxgmac_prep_tso(struct fxgmac_pdata *pdata, struct sk_buff *skb,
+			   struct fxgmac_pkt_info *pkt_info)
+{
+	int ret;
+
+	if (!FXGMAC_GET_BITS(pkt_info->attributes, TX_PKT_ATTR_TSO_ENABLE_POS,
+			     TX_PKT_ATTR_TSO_ENABLE_LEN))
+		return 0;
+
+	ret = skb_cow_head(skb, 0);
+	if (ret)
+		return ret;
+
+	pkt_info->header_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
+	pkt_info->tcp_header_len = tcp_hdrlen(skb);
+	pkt_info->tcp_payload_len = skb->len - pkt_info->header_len;
+	pkt_info->mss = skb_shinfo(skb)->gso_size;
+
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata,
+		       "header_len=%u, tcp_header_len=%u, tcp_payload_len=%u, mss=%u\n",
+		       pkt_info->header_len, pkt_info->tcp_header_len,
+		       pkt_info->tcp_payload_len, pkt_info->mss);
+
+	/* Update the number of packets that will ultimately be transmitted
+	 * along with the extra bytes for each extra packet
+	 */
+	pkt_info->tx_packets = skb_shinfo(skb)->gso_segs;
+	pkt_info->tx_bytes += (pkt_info->tx_packets - 1) * pkt_info->header_len;
+
+	return 0;
+}
+
+static int fxgmac_is_tso(struct sk_buff *skb)
+{
+	if (skb->ip_summed != CHECKSUM_PARTIAL)
+		return 0;
+
+	if (!skb_is_gso(skb))
+		return 0;
+
+	return 1;
+}
+
+static void fxgmac_prep_tx_pkt(struct fxgmac_pdata *pdata,
+			       struct fxgmac_ring *ring, struct sk_buff *skb,
+			       struct fxgmac_pkt_info *pkt_info)
+{
+	u32 *attr = &pkt_info->attributes;
+	u32 len, context_desc = 0;
+
+	pkt_info->skb = skb;
+	pkt_info->desc_count = 0;
+	pkt_info->tx_packets = 1;
+	pkt_info->tx_bytes = skb->len;
+
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata, "%s, pkt desc cnt=%d,skb len=%d, skbheadlen=%d\n",
+		       __func__, pkt_info->desc_count, skb->len,
+		       skb_headlen(skb));
+
+	if (fxgmac_is_tso(skb)) {
+		/* TSO requires an extra descriptor if mss is different */
+		if (skb_shinfo(skb)->gso_size != ring->tx.cur_mss) {
+			context_desc = 1;
+			pkt_info->desc_count++;
+		}
+		if (netif_msg_tx_done(pdata))
+			yt_dbg(pdata,
+			       "fxgmac_is_tso=%d, ip_summed=%d,skb gso=%d\n",
+			       ((skb->ip_summed == CHECKSUM_PARTIAL) &&
+				(skb_is_gso(skb))) ? 1 : 0,
+			       skb->ip_summed, skb_is_gso(skb) ? 1 : 0);
+
+		/* TSO requires an extra descriptor for TSO header */
+		pkt_info->desc_count++;
+		fxgmac_set_bits(attr, TX_PKT_ATTR_TSO_ENABLE_POS,
+				TX_PKT_ATTR_TSO_ENABLE_LEN, 1);
+		fxgmac_set_bits(attr, TX_PKT_ATTR_CSUM_ENABLE_POS,
+				TX_PKT_ATTR_CSUM_ENABLE_LEN, 1);
+		if (netif_msg_tx_done(pdata))
+			yt_dbg(pdata, "%s,tso, pkt desc cnt=%d\n", __func__,
+			       pkt_info->desc_count);
+	} else if (skb->ip_summed == CHECKSUM_PARTIAL)
+		fxgmac_set_bits(attr, TX_PKT_ATTR_CSUM_ENABLE_POS,
+				TX_PKT_ATTR_CSUM_ENABLE_LEN, 1);
+
+	if (skb_vlan_tag_present(skb)) {
+		/* VLAN requires an extra descriptor if tag is different */
+		if (skb_vlan_tag_get(skb) != ring->tx.cur_vlan_ctag)
+			/* We can share with the TSO context descriptor */
+			if (!context_desc) {
+				context_desc = 1;
+				pkt_info->desc_count++;
+			}
+
+		fxgmac_set_bits(attr, TX_PKT_ATTR_VLAN_CTAG_POS,
+				TX_PKT_ATTR_VLAN_CTAG_LEN, 1);
+		if (netif_msg_tx_done(pdata))
+			yt_dbg(pdata, "%s,VLAN, pkt desc cnt=%d,vlan=0x%04x\n",
+			       __func__, pkt_info->desc_count,
+			       skb_vlan_tag_get(skb));
+	}
+
+	for (len = skb_headlen(skb); len;) {
+		pkt_info->desc_count++;
+		len -= min_t(unsigned int, len, FXGMAC_TX_MAX_BUF_SIZE);
+	}
+
+	for (u32 i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+		for (len = skb_frag_size(&skb_shinfo(skb)->frags[i]); len;) {
+			pkt_info->desc_count++;
+			len -= min_t(unsigned int, len, FXGMAC_TX_MAX_BUF_SIZE);
+		}
+
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata,
+		       "%s,pkt desc cnt%d,skb len%d, skbheadlen=%d,frags=%d\n",
+		       __func__, pkt_info->desc_count, skb->len,
+		       skb_headlen(skb), skb_shinfo(skb)->nr_frags);
+}
+
 static int fxgmac_calc_rx_buf_size(struct fxgmac_pdata *pdata, unsigned int mtu)
 {
 	u32 rx_buf_size, max_mtu;
@@ -1713,8 +1912,77 @@ void fxgmac_dbg_pkt(struct fxgmac_pdata *pdata, struct sk_buff *skb, bool tx_rx)
 	yt_dbg(pdata, "\n************** SKB dump ****************\n");
 }
 
+static netdev_tx_t fxgmac_xmit(struct sk_buff *skb, struct net_device *netdev)
+{
+	struct fxgmac_pdata *pdata = netdev_priv(netdev);
+	struct fxgmac_pkt_info *tx_pkt_info;
+	struct fxgmac_channel *channel;
+	struct fxgmac_hw_ops *hw_ops;
+	struct netdev_queue *txq;
+	struct fxgmac_ring *ring;
+	int ret;
+
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata, "%s, skb->len=%d,q=%d\n", __func__, skb->len,
+		       skb->queue_mapping);
+
+	channel = pdata->channel_head + skb->queue_mapping;
+	txq = netdev_get_tx_queue(netdev, channel->queue_index);
+	ring = channel->tx_ring;
+	tx_pkt_info = &ring->pkt_info;
+
+	hw_ops = &pdata->hw_ops;
+
+	if (skb->len == 0) {
+		yt_err(pdata, "empty skb received from stack\n");
+		dev_kfree_skb_any(skb);
+		return NETDEV_TX_OK;
+	}
+
+	/* Prepare preliminary packet info for TX */
+	memset(tx_pkt_info, 0, sizeof(*tx_pkt_info));
+	fxgmac_prep_tx_pkt(pdata, ring, skb, tx_pkt_info);
+
+	/* Check that there are enough descriptors available */
+	ret = fxgmac_maybe_stop_tx_queue(channel, ring,
+					 tx_pkt_info->desc_count);
+	if (ret == NETDEV_TX_BUSY)
+		return ret;
+
+	ret = fxgmac_prep_tso(pdata, skb, tx_pkt_info);
+	if (ret < 0) {
+		yt_err(pdata, "error processing TSO packet\n");
+		dev_kfree_skb_any(skb);
+		return NETDEV_TX_OK;
+	}
+	fxgmac_prep_vlan(skb, tx_pkt_info);
+
+	if (!fxgmac_tx_skb_map(channel, skb)) {
+		dev_kfree_skb_any(skb);
+		yt_err(pdata, "xmit, map tx skb err\n");
+		return NETDEV_TX_OK;
+	}
+
+	/* Report on the actual number of bytes (to be) sent */
+	netdev_tx_sent_queue(txq, tx_pkt_info->tx_bytes);
+	if (netif_msg_tx_done(pdata))
+		yt_dbg(pdata, "xmit,before hw_xmit, byte len=%d\n",
+		       tx_pkt_info->tx_bytes);
+
+	/* Configure required descriptor fields for transmission */
+	hw_ops->dev_xmit(channel);
+
+	if (netif_msg_pktdata(pdata))
+		fxgmac_dbg_pkt(pdata, skb, true);
+
+	/* Stop the queue in advance if there may not be enough descriptors */
+	fxgmac_maybe_stop_tx_queue(channel, ring, FXGMAC_TX_MAX_DESC_NR);
+
+	return NETDEV_TX_OK;
+}
 static const struct net_device_ops fxgmac_netdev_ops = {
 	.ndo_open		= fxgmac_open,
+	.ndo_start_xmit		= fxgmac_xmit,
 };
 
 const struct net_device_ops *fxgmac_get_netdev_ops(void)
