@@ -206,12 +206,10 @@ s32 cqm_init(void *ex_handle)
 
 	CQM_PTR_CHECK_RET(ex_handle, return CQM_FAIL, CQM_PTR_NULL(ex_handle));
 
-	cqm_handle = (struct cqm_handle_s *)kmalloc(sizeof(struct cqm_handle_s),
+	cqm_handle = kzalloc(sizeof(struct cqm_handle_s),
 						    GFP_KERNEL | __GFP_ZERO);
 	CQM_PTR_CHECK_RET(cqm_handle, return CQM_FAIL,
 			  CQM_ALLOC_FAIL(cqm_handle));
-	/* Clear memory to prevent other systems' memory from being cleared */
-	memset(cqm_handle, 0, sizeof(struct cqm_handle_s));
 
 	cqm_handle->ex_handle = handle;
 	cqm_handle->dev = (struct pci_dev *)(handle->pcidev_hdl);
