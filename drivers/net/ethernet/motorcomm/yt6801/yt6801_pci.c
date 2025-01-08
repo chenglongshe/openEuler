@@ -8,6 +8,8 @@
 #include <linux/pci.h>
 #endif
 
+#include "yt6801_net.h"
+
 static int fxgmac_probe(struct pci_dev *pcidev, const struct pci_device_id *id)
 {
 	struct device *dev = &pcidev->dev;
@@ -79,6 +81,29 @@ static int __fxgmac_shutdown(struct pci_dev *pcidev, bool *wake_en)
 	return 0;
 }
 
+static void fxgmac_shutdown(struct pci_dev *pcidev)
+{
+	struct fxgmac_pdata *pdata = dev_get_drvdata(&pcidev->dev);
+	struct device *dev = &pcidev->dev;
+	bool wake;
+	int ret;
+
+	mutex_lock(&pdata->mutex);
+	ret = __fxgmac_shutdown(pcidev, &wake);
+	if (ret < 0)
+		goto unlock;
+
+	if (system_state == SYSTEM_POWER_OFF) {
+		pci_wake_from_d3(pcidev, wake);
+		pci_set_power_state(pcidev, PCI_D3hot);
+	}
+unlock:
+	mutex_unlock(&pdata->mutex);
+
+	dev_dbg(dev, "%s, system power off=%d\n", __func__,
+		(system_state == SYSTEM_POWER_OFF) ? 1 : 0);
+}
+
 #define MOTORCOMM_PCI_ID			0x1f0a
 #define YT6801_PCI_DEVICE_ID			0x6801
 
@@ -94,6 +119,7 @@ static struct pci_driver fxgmac_pci_driver = {
 	.id_table	= fxgmac_pci_tbl,
 	.probe		= fxgmac_probe,
 	.remove		= fxgmac_remove,
+	.shutdown	= fxgmac_shutdown,
 };
 
 module_pci_driver(fxgmac_pci_driver);
