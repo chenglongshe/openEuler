@@ -477,12 +477,19 @@ static void nvme_free_ns_head(struct kref *ref)
 {
 	struct nvme_ns_head *head =
 		container_of(ref, struct nvme_ns_head, ref);
+	struct nvme_ns_head_wrapper *head_wrapper =
+		container_of(head, struct nvme_ns_head_wrapper, head);
 
 	nvme_mpath_remove_disk(head);
 	ida_simple_remove(&head->subsys->ns_ida, head->instance);
 	cleanup_srcu_struct(&head->srcu);
 	nvme_put_subsystem(head->subsys);
-	kfree(head);
+	kfree(head_wrapper);
+}
+
+static bool nvme_tryget_ns_head(struct nvme_ns_head *head)
+{
+	return kref_get_unless_zero(&head->ref);
 }
 
 static void nvme_put_ns_head(struct nvme_ns_head *head)
@@ -2312,9 +2319,7 @@ static const struct block_device_operations nvme_fops = {
 #ifdef CONFIG_NVME_MULTIPATH
 static int nvme_ns_head_open(struct block_device *bdev, fmode_t mode)
 {
-	struct nvme_ns_head *head = bdev->bd_disk->private_data;
-
-	if (!kref_get_unless_zero(&head->ref))
+	if (!nvme_tryget_ns_head(bdev->bd_disk->private_data))
 		return -ENXIO;
 	return 0;
 }
@@ -3707,7 +3712,9 @@ static struct nvme_ns_head *nvme_find_ns_head(struct nvme_subsystem *subsys,
 	lockdep_assert_held(&subsys->lock);
 
 	list_for_each_entry(h, &subsys->nsheads, entry) {
-		if (h->ns_id == nsid && kref_get_unless_zero(&h->ref))
+		if (h->ns_id != nsid)
+			continue;
+		if (!list_empty(&h->list) && nvme_tryget_ns_head(h))
 			return h;
 	}
 
@@ -3732,17 +3739,19 @@ static int nvme_subsys_check_duplicate_ids(struct nvme_subsystem *subsys,
 static struct nvme_ns_head *nvme_alloc_ns_head(struct nvme_ctrl *ctrl,
 		unsigned nsid, struct nvme_ns_ids *ids)
 {
+	struct nvme_ns_head_wrapper *head_wrapper;
 	struct nvme_ns_head *head;
-	size_t size = sizeof(*head);
+	size_t size = sizeof(*head_wrapper);
 	int ret = -ENOMEM;
 
 #ifdef CONFIG_NVME_MULTIPATH
 	size += num_possible_nodes() * sizeof(struct nvme_ns *);
 #endif
 
-	head = kzalloc(size, GFP_KERNEL);
-	if (!head)
+	head_wrapper = kzalloc(size, GFP_KERNEL);
+	if (!head_wrapper)
 		goto out;
+	head = &head_wrapper->head;
 	ret = ida_simple_get(&ctrl->subsys->ns_ida, 1, 0, GFP_KERNEL);
 	if (ret < 0)
 		goto out_free_head;
@@ -3784,7 +3793,7 @@ out_cleanup_srcu:
 out_ida_remove:
 	ida_simple_remove(&ctrl->subsys->ns_ida, head->instance);
 out_free_head:
-	kfree(head);
+	kfree(head_wrapper);
 out:
 	if (ret > 0)
 		ret = blk_status_to_errno(nvme_error_status(ret));
@@ -3960,6 +3969,8 @@ static void nvme_alloc_ns(struct nvme_ctrl *ctrl, unsigned nsid,
 
 static void nvme_ns_remove(struct nvme_ns *ns)
 {
+	bool last_path = false;
+
 	if (test_and_set_bit(NVME_NS_REMOVING, &ns->flags))
 		return;
 
@@ -3968,8 +3979,10 @@ static void nvme_ns_remove(struct nvme_ns *ns)
 
 	mutex_lock(&ns->ctrl->subsys->lock);
 	list_del_rcu(&ns->siblings);
-	if (list_empty(&ns->head->list))
+	if (list_empty(&ns->head->list)) {
 		list_del_init(&ns->head->entry);
+		last_path = true;
+	}
 	mutex_unlock(&ns->ctrl->subsys->lock);
 
 	synchronize_rcu(); /* guarantee not available in head->list */
@@ -3987,7 +4000,8 @@ static void nvme_ns_remove(struct nvme_ns *ns)
 	list_del_init(&ns->list);
 	up_write(&ns->ctrl->namespaces_rwsem);
 
-	nvme_mpath_check_last_path(ns);
+	if (last_path)
+		nvme_mpath_shutdown_disk(ns->head);
 	nvme_put_ns(ns);
 }
 
