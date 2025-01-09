@@ -2732,7 +2732,7 @@ static int relocate_file_extent_cluster(struct inode *inode,
 				PAGE_SIZE);
 		if (ret)
 			goto out;
-
+again:
 		page = find_lock_page(inode->i_mapping, index);
 		if (!page) {
 			page_cache_sync_readahead(inode->i_mapping,
@@ -2769,6 +2769,12 @@ static int relocate_file_extent_cluster(struct inode *inode,
 				ret = -EIO;
 				goto out;
 			}
+		}
+
+		if (page->mapping != inode->i_mapping) {
+			unlock_page(page);
+			put_page(page);
+			goto again;
 		}
 
 		page_start = page_offset(page);
