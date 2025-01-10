@@ -1,4 +1,4 @@
-
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __PS3LIB_EVENT_H__
 #define __PS3LIB_EVENT_H__
 
@@ -6,782 +6,754 @@
 extern "C" {
 #endif
 
-#define PS3LIB_MAX_VD_NAME_BYTES             (16)  
-#define PS3LIB_CTRL_AUTOCONFIG_EVTDATA_SIZE  (8)   
-#define PS3LIB_BBM_ERRTBL_NAME_LEN           (6)   
-#define PS3LIB_EVT_DESC_MAX_LEN              (4096)
-#define PS3LIB_FGI_MODE_LEN                  (5)
-#define PS3LIB_EVT_LOG_INFO_MAX_SIZE         (116)
+#define PS3LIB_MAX_VD_NAME_BYTES (16)
+#define PS3LIB_CTRL_AUTOCONFIG_EVTDATA_SIZE (8)
+#define PS3LIB_BBM_ERRTBL_NAME_LEN (6)
+#define PS3LIB_EVT_DESC_MAX_LEN (4096)
+#define PS3LIB_FGI_MODE_LEN (5)
+#define PS3LIB_EVT_LOG_INFO_MAX_SIZE (116)
 #define PS3LIB_EXP_EVENT_DATA_COLLECT_MAX_NUM (256)
-#define PS3LIB_MAX_EVENT_REG_CNT              (128)  
+#define PS3LIB_MAX_EVENT_REG_CNT (128)
 
 enum {
-    PS3LIB_EVT_LOG_OLDEST,       
-    PS3LIB_EVT_LOG_LATEST,       
-    PS3LIB_EVT_LOG_LAST_CLEAR,   
-    PS3LIB_EVT_LOG_LAST_REBOOT,  
-    PS3LIB_EVT_LOG_LAST_SHUTDOWN,
-    PS3LIB_EVT_LOG_FATAL_OLDEST, 
-    PS3LIB_EVT_LOG_FATAL_LATEST, 
-    PS3LIB_EVT_LOG_LAST_MAX,
+	PS3LIB_EVT_LOG_OLDEST,
+	PS3LIB_EVT_LOG_LATEST,
+	PS3LIB_EVT_LOG_LAST_CLEAR,
+	PS3LIB_EVT_LOG_LAST_REBOOT,
+	PS3LIB_EVT_LOG_LAST_SHUTDOWN,
+	PS3LIB_EVT_LOG_FATAL_OLDEST,
+	PS3LIB_EVT_LOG_FATAL_LATEST,
+	PS3LIB_EVT_LOG_LAST_MAX,
 };
 
-typedef enum Ps3LibEpEventLevel
-{
-    PS3LIB_EVT_CLASS_UNKNOWN   = 0b0000,   
-    PS3LIB_EVT_CLASS_DEBUG     = 0b0011,   
-    PS3LIB_EVT_CLASS_PROCESS   = 0b0101,   
-    PS3LIB_EVT_CLASS_INFO      = 0b0001,   
-    PS3LIB_EVT_CLASS_WARNING   = 0b0010,   
-    PS3LIB_EVT_CLASS_CRITICAL  = 0b0100,   
-    PS3LIB_EVT_CLASS_FATAL     = 0b1000,   
-    PS3LIB_EVT_CLASS_MAX,
-} Ps3LibEpEventLevel_e;
+enum Ps3LibEpEventLevel {
+	PS3LIB_EVT_CLASS_UNKNOWN = 0b0000,
+	PS3LIB_EVT_CLASS_DEBUG = 0b0011,
+	PS3LIB_EVT_CLASS_PROCESS = 0b0101,
+	PS3LIB_EVT_CLASS_INFO = 0b0001,
+	PS3LIB_EVT_CLASS_WARNING = 0b0010,
+	PS3LIB_EVT_CLASS_CRITICAL = 0b0100,
+	PS3LIB_EVT_CLASS_FATAL = 0b1000,
+	PS3LIB_EVT_CLASS_MAX,
+};
 
-enum
-{ 
-    PS3LIB_CTRL_EVT_SAS_INFO_LOCAL = 1,
-    PS3LIB_CTRL_EVT_PD_COUNT_LOCAL = 2,
-    PS3LIB_CTRL_EVT_VD_COUNT_LOCAL = 3,
-    PS3LIB_CTRL_EVT_CTRL_INFO_LOCAL = 4,
-    PS3LIB_CTRL_EVT_PD_ATTR_LOCAL = 5,
-    PS3LIB_CTRL_EVT_VD_ATTR_LOCAL = 6,
-    PS3LIB_CTRL_EVT_DG_INFO_LOCAL = 7,
-    PS3LIB_CTRL_EVT_BBU_INFO_LOCAL = 8,
-    PS3LIB_CTRL_EVT_CONFIG_LOCAL = 9,
-    PS3LIB_CTRL_EVT_IO_INFO_LOCAL = 10,
-    PS3LIB_CTRL_EVT_UKEY_INFO_LOCAL = 11,
-    PS3LIB_CTRL_EVT_HWR_INFO_LOCAL = 12,
-    PS3LIB_CTRL_EVT_ALARM_INFO_LOCAL = 13,
-    PS3LIB_CTRL_EVT_ECC_INFO_LOCAL = 14,
-    PS3LIB_CTRL_EVT_UPGRADE_INFO_LOCAL = 15,
-    PS3LIB_CTRL_EVT_TEMP_INFO_LOCAL = 16,
-    PS3LIB_CTRL_EVT_PD_ATTR_EXTEND_LOCAL = 17,
-    PS3LIB_CTRL_EVT_DEFAULT_UNUSED_LOCAL,
-    PS3LIB_CTRL_EVT_MAX_TYPE_LOCAL,
-}; 
+enum {
+	PS3LIB_CTRL_EVT_SAS_INFO_LOCAL = 1,
+	PS3LIB_CTRL_EVT_PD_COUNT_LOCAL = 2,
+	PS3LIB_CTRL_EVT_VD_COUNT_LOCAL = 3,
+	PS3LIB_CTRL_EVT_CTRL_INFO_LOCAL = 4,
+	PS3LIB_CTRL_EVT_PD_ATTR_LOCAL = 5,
+	PS3LIB_CTRL_EVT_VD_ATTR_LOCAL = 6,
+	PS3LIB_CTRL_EVT_DG_INFO_LOCAL = 7,
+	PS3LIB_CTRL_EVT_BBU_INFO_LOCAL = 8,
+	PS3LIB_CTRL_EVT_CONFIG_LOCAL = 9,
+	PS3LIB_CTRL_EVT_IO_INFO_LOCAL = 10,
+	PS3LIB_CTRL_EVT_UKEY_INFO_LOCAL = 11,
+	PS3LIB_CTRL_EVT_HWR_INFO_LOCAL = 12,
+	PS3LIB_CTRL_EVT_ALARM_INFO_LOCAL = 13,
+	PS3LIB_CTRL_EVT_ECC_INFO_LOCAL = 14,
+	PS3LIB_CTRL_EVT_UPGRADE_INFO_LOCAL = 15,
+	PS3LIB_CTRL_EVT_TEMP_INFO_LOCAL = 16,
+	PS3LIB_CTRL_EVT_PD_ATTR_EXTEND_LOCAL = 17,
+	PS3LIB_CTRL_EVT_DEFAULT_UNUSED_LOCAL,
+	PS3LIB_CTRL_EVT_MAX_TYPE_LOCAL,
+};
 
-typedef struct Ps3LibEvtLogRdEntry {
-    U32 loopCnt;       
-    U32 seqNum;        
-    U32 offset;        
-    U32 timeStampBySec;
-    U32 size;          
-} Ps3LibEvtLogRdEntry_s;
+struct Ps3LibEvtLogRdEntry {
+	unsigned int loopCnt;
+	unsigned int seqNum;
+	unsigned int offset;
+	unsigned int timeStampBySec;
+	unsigned int size;
+};
 
-typedef struct Ps3LibEvtLogRdInfo {
-    Ps3LibEvtLogRdEntry_s persistInfo[PS3LIB_EVT_LOG_LAST_MAX];
-} Ps3LibEvtLogRdInfo_s;
+struct Ps3LibEvtLogRdInfo {
+	struct Ps3LibEvtLogRdEntry persistInfo[PS3LIB_EVT_LOG_LAST_MAX];
+};
 
-typedef struct Ps3LibEvtPersistInfo {
-    U32               regionSz[2];  
-    Ps3LibEvtLogRdInfo_s persist;   
-} Ps3LibEvtPersistInfo_s;
+struct Ps3LibEvtPersistInfo {
+	unsigned int regionSz[2];
+	struct Ps3LibEvtLogRdInfo persist;
+};
 
-typedef struct Ps3LibEvtLogHeader {
-    U32 magic;         
-    U32 seqNum;        
-    U32 size    : 8;   
-    U32 funcType  : 2; 
-    U32 conFlag : 1;   
-    U32 evtCode : 12;  
-    U32 level : 4;     
-    U32 type : 5;      
-    U32 timeStampBySec;
-} Ps3LibEvtLogHeader_s;
+struct Ps3LibEvtLogHeader {
+	unsigned int magic;
+	unsigned int seqNum;
+	unsigned int size : 8;
+	unsigned int funcType : 2;
+	unsigned int conFlag : 1;
+	unsigned int evtCode : 12;
+	unsigned int level : 4;
+	unsigned int type : 5;
+	unsigned int timeStampBySec;
+};
 
 #pragma pack(1)
 
-typedef struct Ps3LibPdAttrInfo {
-    U32 checkSum    : 8;        
-    U32 enclosureId : 8;        
-    U32 phyId       : 8;        
-    U32 evtVersion  : 8;        
-    U16 phyDiskID;              
-    U16 softChan    : 4;        
-    U16 devID       : 12;       
-    U16 slotId;                 
-    U16 oldState    : 4;        
-    U16 newState    : 4;        
-    U16 isEnclPd    : 1;        
-    U16 longFault   : 1;        
-    U16 reason      : 6;        
-    U16 arrayId     : 8;        
-    U16 rowId       : 8;        
-    U16 prevState   : 8;        
-    U16 curState    : 8;        
-    U64 sasAddr;                
-}Ps3LibPdAttrInfo_s;
-
-typedef struct Ps3LibSparePdInfo {
-    Ps3LibPdAttrInfo_s baseInfo;
-    U8 dedicatedDgCnt;   
-    U8 reserved[3];      
-    U16 dedicatedDgId[8];
-}Ps3LibSparePdInfo_s;
-
-typedef struct Ps3LibVdAttrInfo {
-    U32 magicNum;                  
-    U16 virtDiskID;                
-    U16 softChan    : 4,           
-        devID       : 12;          
-    U16 diskGrpId;                 
-    U16 locked      : 1,           
-        pad         : 15;          
-}Ps3LibVdAttrInfo_s;
-
-typedef struct Ps3LibDiskPFCfgModifyEvtInfo {
-    U8 modifyCfgDataType;
-    U8 funcIsEnable:1;         
-    U8 pad : 7;                
-    U16 preFailPollTimeMin;    
-}Ps3LibDiskPFCfgModifyEvtInfo_s;
-
-typedef struct Ps3LibVdBaseSetting {
-    U32 accessPolicy            :2, 
-        hidden                  :1, 
-        defaultWriteCachePolicy :2, 
-        currentWriteCachePolicy :1, 
-        defaultReadCachePolicy  :1, 
-        currentReadCachePolicy  :1, 
-        diskCachePolicy         :2, 
-        ioPolicy                :1, 
-        noBgi                   :1, 
-        emulationType           :2, 
-        unmap                   :1, 
-        cbSize                  :2, 
-        cbMode                  :3, 
-        encryption              :1, 
-        rebootNoVerify          :1, 
-        rsv                     :10;
-    U8  vdName[PS3LIB_MAX_VD_NAME_BYTES];
-    U64 size;                       
-}Ps3LibVdBaseSetting_s;
-
-typedef struct Ps3LibVdPropertiesInfo {
-    Ps3LibVdAttrInfo_s baseInfo;       
-    Ps3LibVdBaseSetting_s oldSetting;  
-    Ps3LibVdBaseSetting_s newSetting;  
-}Ps3LibVdPropertiesInfo_s;
-
-typedef struct Ps3LibVdStateChangeInfo {
-    Ps3LibVdAttrInfo_s baseInfo;       
-    U8 oldVdState;                     
-    U8 newVdState;                     
-    U8 reserved[2];                    
-}Ps3LibVdStateChangeInfo_s;
-
-typedef struct Ps3LibVdCreateEvtInfo {
-    Ps3LibVdAttrInfo_s baseInfo;       
-    Ps3LibVdBaseSetting_s setting;     
-}Ps3LibVdCreateEvtInfo_s;
-
-typedef struct Ps3LibCtrlAttrInfo {
-    U32 supportUnevenSpans  : 1;
-    U32 supportJbodSecure   : 1;
-    U32 supportCrashDump    : 1;
-    U32 supportNvmePassthru : 1;
-    U32 supportDirectCmd    : 1;
-    U32 supportAcceleration : 1;
-    U32 supportNcq          : 1;
-    U32 reserved1           : 25;
-    U32 reserved2[1];            
-    U64 oldSysTime;
-    U64 newSysTIme;
-    U64 monoSysTime;            
-    U32 newSysTimeYear;         
-    U32 newSysTimeMon;          
-    U32 newSysTimeDay;          
-    U32 newSysTimeHour;         
-    U32 newSysTimeMin;          
-    U32 newSysTimeSec;          
-    U64 cfgNum;
-    U8  *pValue;       
-    U32 len;           
-}Ps3LibCtrlAttrInfo_s;
-
-typedef struct Ps3LibCtrlRebootInfo {
-    U16 ctrlBootMode;
-    U16 ctrlShutDownReason;
-
-
-
-
-
-    U32 regBootValue;
-}Ps3LibCtrlRebootInfo_s;
-
-typedef struct Ps3LibDgAttrInfo {
-    U16 dgId;               
-    U16 reserved[3];
-}Ps3LibDgAttrInfo_s;
-
-typedef struct Ps3LibExpanderInfo {
-    U8 EnclId;  
-    U8 port;
-    U8 reserved[6];
-}Ps3LibExpanderInfo_s;
-
-typedef struct Ps3LibCfgAttrInfo {
-    U16   profileId;
-    U8 reserved[2];
-}Ps3LibCfgAttrInfo_s;
-
-typedef struct Ps3LibCfgAutoConfig {
-    S8   cfgName[PS3LIB_CTRL_AUTOCONFIG_EVTDATA_SIZE];
-}Ps3LibCfgAutoConfig_s;
-
-typedef struct Ps3LibCtrlPowerMode {
-    U8   mode;
-    U8   rsv[3];
-}Ps3LibCtrlPowerMode_s;
-
-typedef struct Ps3LibBgtRebuildInfo {
-    U16 newPDFlatId;     
-    U16 newEnclosureId;  
-    U16 newSlotId;       
-    U16 oldPDFlatId;     
-    U16 oldEnclosureId;  
-    U16 oldSlotId;       
-    U16 virtDiskId;      
-    U16 devId;           
-    U32 remainSecs;      
-    U64 errorPba;        
-    U64 errorLba;        
-    U8  progressPercent; 
-    U8  rebuildRate;     
-    U8  enableMoveback;  
-    U8  autoRebuild;     
-    U8  eghs;            
-    U8  enablePdm;                  
-    U8  pdmSupportReadyPd;          
-    U8  reserved[1];
-    U32 pdmTimerInterval;           
-} Ps3LibBgtRebuildInfo_s;
-
-typedef struct Ps3LibBgtInitEvtInfo {
-    U32 aliveSec;      
-    U32 progressRate;  
-    U16 dgId;          
-    U16 virtDiskId;    
-    U16 pdFlatId;      
-    U16 enclosureId;   
-    U16 slotId;        
-    U8  cpuRate;       
-    S8  mode[PS3LIB_FGI_MODE_LEN];
-    U64 mediumErrLba;  
-    U64 mediumErrPba;  
-    U16 MediumErrPdFlatId;
-    U16 softChan : 4;  
-    U16 devID    : 12; 
-} Ps3LibBgtInitEvtInfo_s;
-
-typedef struct Ps3LibBgtEraseEvtInfo {
-    U32 aliveSec;      
-    U32 progressRate;  
-    U16 dgId;          
-    U16 virtDiskId;    
-    U16 pdFlatId;      
-    U16 enclosureId;   
-    U16 slotId;        
-    U16 devId;         
-} Ps3LibBgtEraseEvtInfo_s;
-
-typedef struct Ps3LibBgtCcEvtInfo {
-    U32 aliveSecs;      
-    U8  progressPercent;
-    U8  ccRate;
-    U8  mode;
-    U8  resered;
-    U16 virtDiskID;     
-    U16 diskGroupID;
-    U32 inconsistStrip;
-    U16 devId;
-    U16 faultDiskID;
-    U16 enclosureId;
-    U16 slotId;
-    U64 pdErrLba;
-    U64 vdErrLba;
-}Ps3LibBgtCcEvtInfo_s;
-
-typedef struct Ps3LibBgtPrEvtInfo {
-    U32 aliveSecs;      
-    U16 enclosureId;    
-    U16 slotId;         
-    U8  progressPercent;
-    U8  prRate;
-    U16 virtDiskID;     
-    U16 pdFlatId;
-    U16 diskGroupID;
-    U16 dgStatus;
-    U8 reserved[2];
-    U64 errLba;
-}Ps3LibBgtPrEvtInfo_s;
-
-typedef struct Ps3LibPhyEvtInfo {
-    U32 enclosureId:8,  
-        slotId:8,       
-        phyId:8,        
-        reason:8;
-} Ps3LibPhyEvtInfo_s;
-
-typedef struct Ps3LibVdBbmEvtInfo {
-    U64 lba;           
-    U64 pba;           
-    U16 lbaLen;        
-    U16 dgId;          
-    U16 virtDiskId;    
-    U16 percentErrTbl; 
-    U16 devId;         
-    S8  errTblName[PS3LIB_BBM_ERRTBL_NAME_LEN];
-    U16 pdFlatId;      
-    U16 enclosureId;   
-    U16 slotId;        
-    U16 reserved;
-} Ps3LibVdBbmEvtInfo_s;
-
-typedef struct Ps3LibRwDdtEvtInfo {
-    U16 virtDiskID;     
-    U16 diskGroupID;    
-    U32 vdLen;          
-    U64 vdLba;          
-} Ps3LibRwDdtEvtInfo_s;
-
-typedef struct Ps3LibFlushEvtInfo {
-    U16 opcode;        
-    U16 dgId;          
-    U16 virtDiskId;    
-    U16 minVdId;       
-    U16 devId;         
-    U8  reserved[6];
-    U64 vdIdMap[3];    
-} Ps3LibFlushEvtInfo_s;
-
-typedef struct Ps3LibMigrationInfo {
-    U8  migrRate;
-    U8  resv;
-    U16 diskGroupID;
-    U32 percent;
-    U32 aliveSec;
-    U16 currVdId;
-    U8 reserved[2];
-} Ps3LibMigrationInfo_s;
-
-typedef struct Ps3LibVdBbmBatchEvtInfo
-{
-    U32 count;
-    Ps3LibVdBbmEvtInfo_s vdBbmEvtInfo[0];
-} Ps3LibVdBbmBatchEvtInfo_s;
-
-typedef struct Ps3LibVdBatchEvtInfo
-{
-    U32 count;
-    Ps3LibVdAttrInfo_s vdInfo[0];
-}Ps3LibVdBatchEvtInfo_s;
-
-typedef struct Ps3LibPdBatchEvtInfo
-{
-    U32 count;
-    Ps3LibPdAttrInfo_s pdInfo[0];
-}Ps3LibPdBatchEvtInfo_s;
-
-typedef struct Ps3LibCtrlBatchEvtInfo
-{
-    U32 count;
-    Ps3LibCtrlAttrInfo_s ctrlInfo[0];
-}Ps3LibCtrlBatchEvtInfo_s;
-
-typedef struct Ps3libBatchEvtInfoCommon
-{
-    U32 count;
-    S8 batchInfo[0];
-}Ps3libBatchEvtInfoCommon_s;
-
-typedef struct Ps3LibBbuEvtInfo {
-    U8  absent : 1;                      
-    U8  overTemp : 1;                    
-    U8  overVol : 1;                     
-    U8  overCur : 1;                     
-    U8  overLoad : 1;                    
-    U8  lifeisOver : 1;                  
-    U8  reserved : 2;
-    U8  status;                          
-    U8  chargeStatus;                    
-    U8  learnStage;                      
-    S16  batTemperature;                  
-    U16  batVoltage;                      
-    S16  batCurrent;                      
-    U8  reserved1[2];
-} Ps3LibBbuEvtInfo_s;
-
-typedef struct Ps3LibUkeyEvtInfo {
-    U8  ukeyStatus;                   
-    U8  reserved[3];
-} Ps3LibUkeyEvtInfo_s;
-
-typedef struct Ps3LibExpEvtInfo {
-    U64 expanderSasAddr;
-    U64 attachedSasAddr;
-    U8  phyId[8];       
-} Ps3LibExpEvtInfo_s;
-
-typedef struct Ps3LibEccEvtInfo {
-    U32 eccErrObj;
-    U32 eccSingleBitCntInc;
-    U8  eccErrCntThreshold;
-    U8  pad[3];
-    U16 eccClearPeriod;
-    U8  eccType;
-    U8  eccErrSubObj;
-    U64 eccMutilErrAddr;
-    U32 eccEvtVersion;
-} Ps3LibEccEvtInfo_s;
-
-typedef struct Ps3LibTempEvtInfo {
-    U32 tempType;
-    S32 tempErrThreshold[4];
-    S32 temperature;
-} Ps3LibTempEvtInfo_s;
-
-typedef struct Ps3LibIoCmdType {
-    U8 cmdType;
-    U8 rsv[9];
-} Ps3LibIoCmdType_s;
-
-typedef struct Ps3LibDeviceResetEvtInfo {
-    U16 enclosureId;
-    U16 slotId;     
-    U16 phyDiskID;  
-    U16 resetType;
-    U64 sasAddress;
-} Ps3LibDeviceResetEvtInfo_s;
-
-typedef struct Ps3LibSenseDataEvtInfo {
-    U16 enclosureId;  
-    U16 slotId;       
-    U16 phyDiskID;    
-    union {
-        U8 cdb[10];  
-        Ps3LibIoCmdType_s ioCmdType;
-    };
-    U8 ioFormat;
-    U8 palErr;
-    U8 dataPre;
-    U8 scsiStatus;
-    U8 skStatus;
-    U8 sk;
-    U8 asc;
-    U8 ascq;
-    U64 path;
-} Ps3LibSenseDataEvtInfo_s;
-
-typedef struct Ps3LibErrSenseEvtInfo {
-    U16 enclosureId;  
-    U16 slotId;       
-    U16 phyDiskID;    
-    U8 CDBLen;
-    U8 senseLen;
-    U8 cdb[32];       
-    U8 senseData[56];  
-    U8 sk;
-    U8 asc;
-    U8 ascq;
-    U8 resv;
-    U64 path;
-} Ps3LibErrSenseEvtInfo_s;
-
-typedef struct Ps3LibPdDownloadInfo {
-    U32 downloadMode;
-    S32 isSuccess;
-    U16 phyDiskID;              
-    U16 softChan    : 4;       
-    U16 devID       : 12;       
-    U16 enclosureId;  
-    U16 slotId;       
-}Ps3LibPdDownloadInfo_s;
-
-typedef struct Ps3LibSanitizeEvtInfo {
-    Ps3LibPdAttrInfo_s baseInfo;
-    U32 aliveSecs;      
-    U8  progressPercent;
-    U8  pad[3];
-}Ps3LibSanitizeEvtInfo_s;
-
-typedef struct Ps3LibFormatEvtInfo {
-    Ps3LibPdAttrInfo_s baseInfo;
-    U32 aliveSecs;      
-    U8  progressPercent;
-    U8  pad[3];
-}Ps3LibFormatEvtInfo_s;
-
-typedef struct Ps3LibSnapshotEvtInfo {
-    U8  snapCount; 
-    U8  pad[3];    
-}Ps3LibSnapshotEvtInfo_s;
-
-typedef struct Ps3LibPdPreFailInfo {
-    U32 checkSum    : 8;       
-    U32 oldState    : 4;       
-    U32 newState    : 4;       
-    U32 diskType    : 4;       
-    U32 pad         : 12;
-    U16 phyDiskID;              
-    U16 softChan    : 4;       
-    U16 devID       : 12;       
-    U16 enclosureId;           
-    U16 slotId;                
-    U32 historyErrBitMap;    
-    U32 errBitMap;    
-    S8  vendor[8];
-    S8  diskSerialNum[24];     
-}Ps3LibPdPreFailInfo_s;
-
-typedef struct Ps3LibNvDataInvaildInfo {
-    U32  nvDataIDBitMap[16];   
-    U16  bitmapSize;           
-    U16  invaildCount;         
-} Ps3LibNvDataInvaildInfo_s;
-
-typedef struct Ps3LibSpeedNegoInfo {
-    U16 enclosureId;   
-    U16 slotId;        
-    S8 isPcie;
-    S8 speed;          
-    U8 width;          
-    U8 type;           
-}Ps3LibSpeedNegoInfo_s;
-
-typedef struct Ps3LibInitFailInfo {
-    U64 errCode;
-    U8  initFailCnt;
-    U8  pad[3];
-} Ps3LibInitFailInfo_s;
-
-typedef struct Ps3LibOemInfo {
-    S8  oemData[PS3LIB_EVT_LOG_INFO_MAX_SIZE];
-} Ps3LibOemInfo_s;
-
-typedef struct Ps3LibBplaneEvtInfo {
-    S8  bplaneData[PS3LIB_EVT_LOG_INFO_MAX_SIZE];
-} Ps3LibBplaneEvtInfo_s;
-
-typedef struct Ps3LibTriModeInfo {
-    U8 connectorId;
-    U8 subConnectorId;
-    U8 curMode;
-    U8 rev;
-} Ps3LibTriModeInfo_s;
-
-typedef struct Ps3LibPhyChgInfo {
-    U8 portId;
-    U8 phyId;
-    U8 reason;
-    U8 rev;
-} Ps3LibPhyChgInfo_s;
-
-typedef struct Ps3LibPhyInquiryInfo {
-    U32 pdId;
-    U16 slotId;  
-    U16 enclosureId;   
-    S8  vendor[9];     
-    S8  diskModelNum[41];
-    S8  diskSerialNum[25];
-    U8  isEnclPd:1;
-    U8  rev:7;
-    U16 sectorSize;
-    U16 res;
-    U64 physicalSize;  
-} Ps3LibPhyInquiryInfo_s;
-
-typedef struct Ps3LibSmpFailInfo {
-    U8 enclId;
-    U8 function;  
-    U8 rev[2];
-    U32 code;   
-} Ps3LibSmpFailInfo_s;
-
-typedef union Ps3LibNvmeEvtInfo {
-    struct {
-        U8 sqe[64];
-        U64 path;
-        U16 enclosureId;  
-        U16 slotId;       
-        U16 phyDiskId;    
-        U16 sf;
-        U32 cmdSpecfic;
-        U32 type:8;
-        U32 isAdminCmd:1;
-        U32 rsvd:23;
-    };     
-} Ps3LibNvmeEvtInfo_u;
- 
-typedef struct Ps3LibSasSataLinkSpeedMatchInfo {
-    U8   channelId; 
-    U8   lPhyId;    
-    U8   linkSpeed; 
-    U8   pad1;       
-    U32  pad2;       
-} Ps3LibSasSataLinkSpeedMatchInfo_s;
-
-typedef struct Ps3LibSasSataLNExceptionInfo {
-    U8   channelId; 
-    U8   lPhyId;    
-    U16  pad1;       
-    U32  type;
-    U32  status;
-    U32  pad2;       
-} Ps3LibSasSataLNExceptionInfo_s;
-
-typedef struct Ps3LibSasSataDriverInfo {
-    U8   channelId; 
-    U8   lPhyId;    
-    U16  pad1;       
-    U32  type;
-    U32  status;
-    U32  pad2;       
-} Ps3LibSasSataDriverInfo_s;
-
-typedef union Ps3LibReportEvtData
-{
-    Ps3LibPdAttrInfo_s    pdInfo;
-    Ps3LibSparePdInfo_s   sparePdInfo;
-    Ps3LibVdAttrInfo_s    vdInfo;
-    Ps3LibVdPropertiesInfo_s vdChange;
-    Ps3LibVdStateChangeInfo_s vdStateChangeInfo;
-    Ps3LibVdCreateEvtInfo_s  vdCreate;
-    Ps3LibCtrlAttrInfo_s  ctrlInfo;
-    Ps3LibCtrlRebootInfo_s  ctrlRebootInfo;
-    Ps3LibDgAttrInfo_s    dgInfo;
-    Ps3LibExpanderInfo_s  expanderInfo;
-    Ps3LibCfgAttrInfo_s   cfgInfo;
-    Ps3LibCfgAutoConfig_s   autoConfigInfo;
-
-    Ps3LibBgtRebuildInfo_s bgtRebuildInfo;
-    Ps3LibBgtInitEvtInfo_s bgtInitEvtInfo;
-    Ps3LibBgtEraseEvtInfo_s bgtEraseEvtInfo;
-    Ps3LibBgtCcEvtInfo_s   bgtCcInfo;
-
-    Ps3LibBgtPrEvtInfo_s   bgtPrInfo;
-
-    Ps3LibPhyEvtInfo_s     phyInfo;
-
-    Ps3LibVdBbmEvtInfo_s  vdBbmEvtInfo;
-    Ps3LibRwDdtEvtInfo_s  dataVdInfo;
-
-    Ps3LibFlushEvtInfo_s   flushEvtInfo;
-
-    Ps3LibMigrationInfo_s  bgtMigrInfo;
-
-    Ps3LibVdBatchEvtInfo_s   batchVdInfo;
-    Ps3LibPdBatchEvtInfo_s   batchPdInfo;
-    Ps3LibCtrlBatchEvtInfo_s batchCtrlInfo;
-    Ps3LibVdBbmBatchEvtInfo_s batchBbmInfo;
-    Ps3libBatchEvtInfoCommon_s *pBatchCommonInfo;
-    Ps3LibBbuEvtInfo_s        bbuEvtInfo;
-    Ps3LibUkeyEvtInfo_s       ukeyInfo;
-
-    Ps3LibExpEvtInfo_s        expEvtInfo;
-    Ps3LibOemInfo_s           oemEvtInfo;
-    Ps3LibBplaneEvtInfo_s     bplaneEvtInfo;
-    Ps3LibEccEvtInfo_s        eccEvtInfo;
-    Ps3LibTempEvtInfo_s       tempEvtInfo;
-    Ps3LibDeviceResetEvtInfo_s deviceResetEvtInfo;
-    Ps3LibSenseDataEvtInfo_s  senseDataEvtInfo;
-    Ps3LibErrSenseEvtInfo_s   errSenseEvtInfo;
-    Ps3LibPdDownloadInfo_s    pdDldEvtInfo;
-    Ps3LibSanitizeEvtInfo_s   sanitizeInfo;
-    Ps3LibFormatEvtInfo_s     formatInfo;
-    Ps3LibSnapshotEvtInfo_s   snapShotInfo;
-    Ps3LibPdPreFailInfo_s     pdPrefailInfo;
-    Ps3LibDiskPFCfgModifyEvtInfo_s  diskPFCfgModifyEvtInfo;
-    Ps3LibNvDataInvaildInfo_s nvDataInvaildInfo;
-    Ps3LibCtrlPowerMode_s   powerMode;
-    Ps3LibSpeedNegoInfo_s     speedNegoInfo;
-    Ps3LibInitFailInfo_s      initFailInfo;
-    Ps3LibTriModeInfo_s       triModeInfo;
-    Ps3LibPhyChgInfo_s        phyChgInfo;
-    Ps3LibPhyInquiryInfo_s    phyInquiryInfo;
-    Ps3LibSmpFailInfo_s       smpFailInfo;
-    Ps3LibNvmeEvtInfo_u     nvmeInfo;
-    Ps3LibSasSataLinkSpeedMatchInfo_s sasSataLinkSpeedNoMatchInfo;
-    Ps3LibSasSataLNExceptionInfo_s  sasSataLNExceptionInfo;
-    Ps3LibSasSataDriverInfo_s  sasSataDriverInfo;
-
-
-    U64 value;
-
-
-    U8 data[PS3LIB_EVT_LOG_INFO_MAX_SIZE];
-}Ps3LibReportEvtData_u;
-#pragma pack()
-
-typedef struct Ps3LibEvtLogEntry {
-    U32                seqNum;
-    Ps3LibEvtLogHeader_s  head;   
-    Ps3LibReportEvtData_u evtInfo;
-    CtrlId_t           ctrlId;    
-    CtrlId_t           regCtrlId; 
-    U32                registerId;
-    U32                pad;       
-} Ps3LibEvtLogEntry_s;
-
-typedef struct Ps3LibEvtLogList {
-    U32                   count;       
-    Ps3LibEvtLogEntry_s   evtEntry[0]; 
-} Ps3LibEvtLogList_s;
-
-typedef struct Ps3LibEvtErrDataEntry {
-    U32 beforeSeqNum;
-    U32 errDataLen;  
-    U8 *errData;     
-} Ps3LibEvtErrDataEntry_s;
-
-typedef struct Ps3LibEvtLog {
-    Ps3LibEvtPersistInfo_s   evtPerInfo;  
-    U32                      evtCount;    
-    U32                      errCount;    
-    Ps3LibEvtLogEntry_s *    evtEntryList;
-    Ps3LibEvtErrDataEntry_s *errDataList; 
-} Ps3LibEvtLog_s;
-
-typedef struct Ps3LibEventDataCollectionKV {
-    char key[PS3LIB_EXP_EVENT_DATA_COLLECT_MAX_NUM];  
-    char val[PS3LIB_EXP_EVENT_DATA_COLLECT_MAX_NUM];  
-} Ps3LibEventDataCollectionKV_s;
-
-typedef struct Ps3LibEventDataCollection {
-    struct Ps3LibEventDataCollectionKV kv[PS3LIB_EXP_EVENT_DATA_COLLECT_MAX_NUM];
-} Ps3LibEventDataCollection_s;
-
-enum {
-    PS3LIB_EXPANDER_EVENT_TYPE = 0,      
-    PS3LIB_SWITCH_EVENT_TYPE   = 1,      
-    PS3LIB_RAID_HBA_EVENT_TYPE = 0xff,   
+struct Ps3LibPdAttrInfo {
+	unsigned int checkSum : 8;
+	unsigned int enclosureId : 8;
+	unsigned int phyId : 8;
+	unsigned int evtVersion : 8;
+	unsigned short phyDiskID;
+	unsigned short softChan : 4;
+	unsigned short devID : 12;
+	unsigned short slotId;
+	unsigned short oldState : 4;
+	unsigned short newState : 4;
+	unsigned short isEnclPd : 1;
+	unsigned short longFault : 1;
+	unsigned short reason : 6;
+	unsigned short arrayId : 8;
+	unsigned short rowId : 8;
+	unsigned short prevState : 8;
+	unsigned short curState : 8;
+	unsigned long long sasAddr;
 };
 
-typedef struct Ps3LibEvtPrintFunc{
-    S8 const *(*evtCode2Str)(U32 opCode);
-    S8 const *(*evtLoca2Str)(U8 locate);
-    const S8 *(*getEvtDesc)(Ps3LibEvtLogEntry_s *event, S32 len, S8 *buff, S32 buffLen);
-    S32(*getEvtData)
-    (Ps3LibEventDataCollection_s *eventDataCollection, Ps3LibEvtLogEntry_s *event, S32 len, S8 *buff, S32 buffLen);
-}Ps3LibEvtPrintFunc_t;
+struct Ps3LibSparePdInfo {
+	struct Ps3LibPdAttrInfo baseInfo;
+	unsigned char dedicatedDgCnt;
+	unsigned char reserved[3];
+	unsigned short dedicatedDgId[8];
+};
 
-Ps3LibEvtPrintFunc_t *ps3libEventPrintFunc(CtrlId_t ctrlId, U8 eventType);
+struct Ps3LibVdAttrInfo {
+	unsigned int magicNum;
+	unsigned short virtDiskID;
+	unsigned short softChan : 4, devID : 12;
+	unsigned short diskGrpId;
+	unsigned short locked : 1, pad : 15;
+};
 
-Ps3Errno ps3libCtrlEvtlogPerGet(CtrlId_t ctrlId, Ps3LibEvtPersistInfo_s *evtlogRdInfo);
+struct Ps3LibDiskPFCfgModifyEvtInfo {
+	unsigned char modifyCfgDataType;
+	unsigned char funcIsEnable : 1;
+	unsigned char pad : 7;
+	unsigned short preFailPollTimeMin;
+};
 
-Ps3Errno ps3libEventLogGet(CtrlId_t ctrlId, U32 sinceSeqNum, Ps3LibEvtLog_s **ppEvtLog);
+struct Ps3LibVdBaseSetting {
+	unsigned int accessPolicy : 2, hidden : 1, defaultWriteCachePolicy : 2,
+		currentWriteCachePolicy : 1, defaultReadCachePolicy : 1,
+		currentReadCachePolicy : 1, diskCachePolicy : 2, ioPolicy : 1,
+		noBgi : 1, emulationType : 2, unmap : 1, cbSize : 2, cbMode : 3,
+		encryption : 1, rebootNoVerify : 1, rsv : 10;
+	unsigned char vdName[PS3LIB_MAX_VD_NAME_BYTES];
+	unsigned long long size;
+};
 
-void ps3libEventLogDestroy(Ps3LibEvtLog_s *pEvtLog);
+struct Ps3LibVdPropertiesInfo {
+	struct Ps3LibVdAttrInfo baseInfo;
+	struct Ps3LibVdBaseSetting oldSetting;
+	struct Ps3LibVdBaseSetting newSetting;
+};
 
-S32 ps3libEvtLevelCompare(U8 levelA, U8 levelB);
+struct Ps3LibVdStateChangeInfo {
+	struct Ps3LibVdAttrInfo baseInfo;
+	unsigned char oldVdState;
+	unsigned char newVdState;
+	unsigned char reserved[2];
+};
 
-Ps3Errno ps3libCtrlEventLogsDelete(CtrlId_t ctrlId);
+struct Ps3LibVdCreateEvtInfo {
+	struct Ps3LibVdAttrInfo baseInfo;
+	struct Ps3LibVdBaseSetting setting;
+};
 
-U32 ps3libEventUinqueIdToCtrlId(U32 uniqueId);
+struct Ps3LibCtrlAttrInfo {
+	unsigned int supportUnevenSpans : 1;
+	unsigned int supportJbodSecure : 1;
+	unsigned int supportCrashDump : 1;
+	unsigned int supportNvmePassthru : 1;
+	unsigned int supportDirectCmd : 1;
+	unsigned int supportAcceleration : 1;
+	unsigned int supportNcq : 1;
+	unsigned int reserved1 : 25;
+	unsigned int reserved2[1];
+	unsigned long long oldSysTime;
+	unsigned long long newSysTIme;
+	unsigned long long monoSysTime;
+	unsigned int newSysTimeYear;
+	unsigned int newSysTimeMon;
+	unsigned int newSysTimeDay;
+	unsigned int newSysTimeHour;
+	unsigned int newSysTimeMin;
+	unsigned int newSysTimeSec;
+	unsigned long long cfgNum;
+	unsigned char *pValue;
+	unsigned int len;
+};
 
+struct Ps3LibCtrlRebootInfo {
+	unsigned short ctrlBootMode;
+	unsigned short ctrlShutDownReason;
+	unsigned int regBootValue;
+};
 
+struct Ps3LibDgAttrInfo {
+	unsigned short dgId;
+	unsigned short reserved[3];
+};
+
+struct Ps3LibExpanderInfo {
+	unsigned char EnclId;
+	unsigned char port;
+	unsigned char reserved[6];
+};
+
+struct Ps3LibCfgAttrInfo {
+	unsigned short profileId;
+	unsigned char reserved[2];
+};
+
+struct Ps3LibCfgAutoConfig {
+	char cfgName[PS3LIB_CTRL_AUTOCONFIG_EVTDATA_SIZE];
+};
+
+struct Ps3LibCtrlPowerMode {
+	unsigned char mode;
+	unsigned char rsv[3];
+};
+
+struct Ps3LibBgtRebuildInfo {
+	unsigned short newPDFlatId;
+	unsigned short newEnclosureId;
+	unsigned short newSlotId;
+	unsigned short oldPDFlatId;
+	unsigned short oldEnclosureId;
+	unsigned short oldSlotId;
+	unsigned short virtDiskId;
+	unsigned short devId;
+	unsigned int remainSecs;
+	unsigned long long errorPba;
+	unsigned long long errorLba;
+	unsigned char progressPercent;
+	unsigned char rebuildRate;
+	unsigned char enableMoveback;
+	unsigned char autoRebuild;
+	unsigned char eghs;
+	unsigned char enablePdm;
+	unsigned char pdmSupportReadyPd;
+	unsigned char reserved[1];
+	unsigned int pdmTimerInterval;
+};
+
+struct Ps3LibBgtInitEvtInfo {
+	unsigned int aliveSec;
+	unsigned int progressRate;
+	unsigned short dgId;
+	unsigned short virtDiskId;
+	unsigned short pdFlatId;
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned char cpuRate;
+	char mode[PS3LIB_FGI_MODE_LEN];
+	unsigned long long mediumErrLba;
+	unsigned long long mediumErrPba;
+	unsigned short MediumErrPdFlatId;
+	unsigned short softChan : 4;
+	unsigned short devID : 12;
+};
+
+struct Ps3LibBgtEraseEvtInfo {
+	unsigned int aliveSec;
+	unsigned int progressRate;
+	unsigned short dgId;
+	unsigned short virtDiskId;
+	unsigned short pdFlatId;
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned short devId;
+};
+
+struct Ps3LibBgtCcEvtInfo {
+	unsigned int aliveSecs;
+	unsigned char progressPercent;
+	unsigned char ccRate;
+	unsigned char mode;
+	unsigned char resered;
+	unsigned short virtDiskID;
+	unsigned short diskGroupID;
+	unsigned int inconsistStrip;
+	unsigned short devId;
+	unsigned short faultDiskID;
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned long long pdErrLba;
+	unsigned long long vdErrLba;
+};
+
+struct Ps3LibBgtPrEvtInfo {
+	unsigned int aliveSecs;
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned char progressPercent;
+	unsigned char prRate;
+	unsigned short virtDiskID;
+	unsigned short pdFlatId;
+	unsigned short diskGroupID;
+	unsigned short dgStatus;
+	unsigned char reserved[2];
+	unsigned long long errLba;
+};
+
+struct Ps3LibPhyEvtInfo {
+	unsigned int enclosureId : 8, slotId : 8, phyId : 8, reason : 8;
+};
+
+struct Ps3LibVdBbmEvtInfo {
+	unsigned long long lba;
+	unsigned long long pba;
+	unsigned short lbaLen;
+	unsigned short dgId;
+	unsigned short virtDiskId;
+	unsigned short percentErrTbl;
+	unsigned short devId;
+	char errTblName[PS3LIB_BBM_ERRTBL_NAME_LEN];
+	unsigned short pdFlatId;
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned short reserved;
+};
+
+struct Ps3LibRwDdtEvtInfo {
+	unsigned short virtDiskID;
+	unsigned short diskGroupID;
+	unsigned int vdLen;
+	unsigned long long vdLba;
+};
+
+struct Ps3LibFlushEvtInfo {
+	unsigned short opcode;
+	unsigned short dgId;
+	unsigned short virtDiskId;
+	unsigned short minVdId;
+	unsigned short devId;
+	unsigned char reserved[6];
+	unsigned long long vdIdMap[3];
+};
+
+struct Ps3LibMigrationInfo {
+	unsigned char migrRate;
+	unsigned char resv;
+	unsigned short diskGroupID;
+	unsigned int percent;
+	unsigned int aliveSec;
+	unsigned short currVdId;
+	unsigned char reserved[2];
+};
+
+struct Ps3LibVdBbmBatchEvtInfo {
+	unsigned int count;
+	struct Ps3LibVdBbmEvtInfo vdBbmEvtInfo[0];
+};
+
+struct Ps3LibVdBatchEvtInfo {
+	unsigned int count;
+	struct Ps3LibVdAttrInfo vdInfo[0];
+};
+
+struct Ps3LibPdBatchEvtInfo {
+	unsigned int count;
+	struct Ps3LibPdAttrInfo pdInfo[0];
+};
+
+struct Ps3LibCtrlBatchEvtInfo {
+	unsigned int count;
+	struct Ps3LibCtrlAttrInfo ctrlInfo[0];
+};
+
+struct Ps3libBatchEvtInfoCommon {
+	unsigned int count;
+	char batchInfo[0];
+};
+
+struct Ps3LibBbuEvtInfo {
+	unsigned char absent : 1;
+	unsigned char overTemp : 1;
+	unsigned char overVol : 1;
+	unsigned char overCur : 1;
+	unsigned char overLoad : 1;
+	unsigned char lifeisOver : 1;
+	unsigned char reserved : 2;
+	unsigned char status;
+	unsigned char chargeStatus;
+	unsigned char learnStage;
+	short batTemperature;
+	unsigned short batVoltage;
+	short batCurrent;
+	unsigned char reserved1[2];
+};
+
+struct Ps3LibUkeyEvtInfo {
+	unsigned char ukeyStatus;
+	unsigned char reserved[3];
+};
+
+struct Ps3LibExpEvtInfo {
+	unsigned long long expanderSasAddr;
+	unsigned long long attachedSasAddr;
+	unsigned char phyId[8];
+};
+
+struct Ps3LibEccEvtInfo {
+	unsigned int eccErrObj;
+	unsigned int eccSingleBitCntInc;
+	unsigned char eccErrCntThreshold;
+	unsigned char pad[3];
+	unsigned short eccClearPeriod;
+	unsigned char eccType;
+	unsigned char eccErrSubObj;
+	unsigned long long eccMutilErrAddr;
+	unsigned int eccEvtVersion;
+};
+
+struct Ps3LibTempEvtInfo {
+	unsigned int tempType;
+	int tempErrThreshold[4];
+	int temperature;
+};
+
+struct Ps3LibIoCmdType {
+	unsigned char cmdType;
+	unsigned char rsv[9];
+};
+
+struct Ps3LibDeviceResetEvtInfo {
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned short phyDiskID;
+	unsigned short resetType;
+	unsigned long long sasAddress;
+};
+
+struct Ps3LibSenseDataEvtInfo {
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned short phyDiskID;
+	union {
+		unsigned char cdb[10];
+		struct Ps3LibIoCmdType ioCmdType;
+	};
+	unsigned char ioFormat;
+	unsigned char palErr;
+	unsigned char dataPre;
+	unsigned char scsiStatus;
+	unsigned char skStatus;
+	unsigned char sk;
+	unsigned char asc;
+	unsigned char ascq;
+	unsigned long long path;
+};
+
+struct Ps3LibErrSenseEvtInfo {
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned short phyDiskID;
+	unsigned char CDBLen;
+	unsigned char senseLen;
+	unsigned char cdb[32];
+	unsigned char senseData[56];
+	unsigned char sk;
+	unsigned char asc;
+	unsigned char ascq;
+	unsigned char resv;
+	unsigned long long path;
+};
+
+struct Ps3LibPdDownloadInfo {
+	unsigned int downloadMode;
+	int isSuccess;
+	unsigned short phyDiskID;
+	unsigned short softChan : 4;
+	unsigned short devID : 12;
+	unsigned short enclosureId;
+	unsigned short slotId;
+};
+
+struct Ps3LibSanitizeEvtInfo {
+	struct Ps3LibPdAttrInfo baseInfo;
+	unsigned int aliveSecs;
+	unsigned char progressPercent;
+	unsigned char pad[3];
+};
+
+struct Ps3LibFormatEvtInfo {
+	struct Ps3LibPdAttrInfo baseInfo;
+	unsigned int aliveSecs;
+	unsigned char progressPercent;
+	unsigned char pad[3];
+};
+
+struct Ps3LibSnapshotEvtInfo {
+	unsigned char snapCount;
+	unsigned char pad[3];
+};
+
+struct Ps3LibPdPreFailInfo {
+	unsigned int checkSum : 8;
+	unsigned int oldState : 4;
+	unsigned int newState : 4;
+	unsigned int diskType : 4;
+	unsigned int pad : 12;
+	unsigned short phyDiskID;
+	unsigned short softChan : 4;
+	unsigned short devID : 12;
+	unsigned short enclosureId;
+	unsigned short slotId;
+	unsigned int historyErrBitMap;
+	unsigned int errBitMap;
+	char vendor[8];
+	char diskSerialNum[24];
+};
+
+struct Ps3LibNvDataInvaildInfo {
+	unsigned int nvDataIDBitMap[16];
+	unsigned short bitmapSize;
+	unsigned short invaildCount;
+};
+
+struct Ps3LibSpeedNegoInfo {
+	unsigned short enclosureId;
+	unsigned short slotId;
+	char isPcie;
+	char speed;
+	unsigned char width;
+	unsigned char type;
+};
+
+struct Ps3LibInitFailInfo {
+	unsigned long long errCode;
+	unsigned char initFailCnt;
+	unsigned char pad[3];
+};
+
+struct Ps3LibOemInfo {
+	char oemData[PS3LIB_EVT_LOG_INFO_MAX_SIZE];
+};
+
+struct Ps3LibBplaneEvtInfo {
+	char bplaneData[PS3LIB_EVT_LOG_INFO_MAX_SIZE];
+};
+
+struct Ps3LibTriModeInfo {
+	unsigned char connectorId;
+	unsigned char subConnectorId;
+	unsigned char curMode;
+	unsigned char rev;
+};
+
+struct Ps3LibPhyChgInfo {
+	unsigned char portId;
+	unsigned char phyId;
+	unsigned char reason;
+	unsigned char rev;
+};
+
+struct Ps3LibPhyInquiryInfo {
+	unsigned int pdId;
+	unsigned short slotId;
+	unsigned short enclosureId;
+	char vendor[9];
+	char diskModelNum[41];
+	char diskSerialNum[25];
+	unsigned char isEnclPd : 1;
+	unsigned char rev : 7;
+	unsigned short sectorSize;
+	unsigned short res;
+	unsigned long long physicalSize;
+};
+
+struct Ps3LibSmpFailInfo {
+	unsigned char enclId;
+	unsigned char function;
+	unsigned char rev[2];
+	unsigned int code;
+};
+
+union Ps3LibNvmeEvtInfo {
+	struct {
+		unsigned char sqe[64];
+		unsigned long long path;
+		unsigned short enclosureId;
+		unsigned short slotId;
+		unsigned short phyDiskId;
+		unsigned short sf;
+		unsigned int cmdSpecfic;
+		unsigned int type : 8;
+		unsigned int isAdminCmd : 1;
+		unsigned int rsvd : 23;
+	};
+};
+
+struct Ps3LibSasSataLinkSpeedMatchInfo {
+	unsigned char channelId;
+	unsigned char lPhyId;
+	unsigned char linkSpeed;
+	unsigned char pad1;
+	unsigned int pad2;
+};
+
+struct Ps3LibSasSataLNExceptionInfo {
+	unsigned char channelId;
+	unsigned char lPhyId;
+	unsigned short pad1;
+	unsigned int type;
+	unsigned int status;
+	unsigned int pad2;
+};
+
+struct Ps3LibSasSataDriverInfo {
+	unsigned char channelId;
+	unsigned char lPhyId;
+	unsigned short pad1;
+	unsigned int type;
+	unsigned int status;
+	unsigned int pad2;
+};
+
+union Ps3LibReportEvtData {
+	struct Ps3LibPdAttrInfo pdInfo;
+	struct Ps3LibSparePdInfo sparePdInfo;
+	struct Ps3LibVdAttrInfo vdInfo;
+	struct Ps3LibVdPropertiesInfo vdChange;
+	struct Ps3LibVdStateChangeInfo vdStateChangeInfo;
+	struct Ps3LibVdCreateEvtInfo vdCreate;
+	struct Ps3LibCtrlAttrInfo ctrlInfo;
+	struct Ps3LibCtrlRebootInfo ctrlRebootInfo;
+	struct Ps3LibDgAttrInfo dgInfo;
+	struct Ps3LibExpanderInfo expanderInfo;
+	struct Ps3LibCfgAttrInfo cfgInfo;
+	struct Ps3LibCfgAutoConfig autoConfigInfo;
+
+	struct Ps3LibBgtRebuildInfo bgtRebuildInfo;
+	struct Ps3LibBgtInitEvtInfo bgtInitEvtInfo;
+	struct Ps3LibBgtEraseEvtInfo bgtEraseEvtInfo;
+	struct Ps3LibBgtCcEvtInfo bgtCcInfo;
+
+	struct Ps3LibBgtPrEvtInfo bgtPrInfo;
+
+	struct Ps3LibPhyEvtInfo phyInfo;
+
+	struct Ps3LibVdBbmEvtInfo vdBbmEvtInfo;
+	struct Ps3LibRwDdtEvtInfo dataVdInfo;
+
+	struct Ps3LibFlushEvtInfo flushEvtInfo;
+
+	struct Ps3LibMigrationInfo bgtMigrInfo;
+
+	struct Ps3LibVdBatchEvtInfo batchVdInfo;
+	struct Ps3LibPdBatchEvtInfo batchPdInfo;
+	struct Ps3LibCtrlBatchEvtInfo batchCtrlInfo;
+	struct Ps3LibVdBbmBatchEvtInfo batchBbmInfo;
+	struct Ps3libBatchEvtInfoCommon *pBatchCommonInfo;
+	struct Ps3LibBbuEvtInfo bbuEvtInfo;
+	struct Ps3LibUkeyEvtInfo ukeyInfo;
+
+	struct Ps3LibExpEvtInfo expEvtInfo;
+	struct Ps3LibOemInfo oemEvtInfo;
+	struct Ps3LibBplaneEvtInfo bplaneEvtInfo;
+	struct Ps3LibEccEvtInfo eccEvtInfo;
+	struct Ps3LibTempEvtInfo tempEvtInfo;
+	struct Ps3LibDeviceResetEvtInfo deviceResetEvtInfo;
+	struct Ps3LibSenseDataEvtInfo senseDataEvtInfo;
+	struct Ps3LibErrSenseEvtInfo errSenseEvtInfo;
+	struct Ps3LibPdDownloadInfo pdDldEvtInfo;
+	struct Ps3LibSanitizeEvtInfo sanitizeInfo;
+	struct Ps3LibFormatEvtInfo formatInfo;
+	struct Ps3LibSnapshotEvtInfo snapShotInfo;
+	struct Ps3LibPdPreFailInfo pdPrefailInfo;
+	struct Ps3LibDiskPFCfgModifyEvtInfo diskPFCfgModifyEvtInfo;
+	struct Ps3LibNvDataInvaildInfo nvDataInvaildInfo;
+	struct Ps3LibCtrlPowerMode powerMode;
+	struct Ps3LibSpeedNegoInfo speedNegoInfo;
+	struct Ps3LibInitFailInfo initFailInfo;
+	struct Ps3LibTriModeInfo triModeInfo;
+	struct Ps3LibPhyChgInfo phyChgInfo;
+	struct Ps3LibPhyInquiryInfo phyInquiryInfo;
+	struct Ps3LibSmpFailInfo smpFailInfo;
+	union Ps3LibNvmeEvtInfo nvmeInfo;
+	struct Ps3LibSasSataLinkSpeedMatchInfo sasSataLinkSpeedNoMatchInfo;
+	struct Ps3LibSasSataLNExceptionInfo sasSataLNExceptionInfo;
+	struct Ps3LibSasSataDriverInfo sasSataDriverInfo;
+	unsigned long long value;
+	unsigned char data[PS3LIB_EVT_LOG_INFO_MAX_SIZE];
+};
+#pragma pack()
+
+struct Ps3LibEvtLogEntry {
+	unsigned int seqNum;
+	struct Ps3LibEvtLogHeader head;
+	union Ps3LibReportEvtData evtInfo;
+	unsigned int ctrlId;
+	unsigned int regCtrlId;
+	unsigned int registerId;
+	unsigned int pad;
+};
+
+struct Ps3LibEvtLogList {
+	unsigned int count;
+	struct Ps3LibEvtLogEntry evtEntry[0];
+};
+
+struct Ps3LibEvtErrDataEntry {
+	unsigned int beforeSeqNum;
+	unsigned int errDataLen;
+	unsigned char *errData;
+};
+
+struct Ps3LibEvtLog {
+	struct Ps3LibEvtPersistInfo evtPerInfo;
+	unsigned int evtCount;
+	unsigned int errCount;
+	struct Ps3LibEvtLogEntry *evtEntryList;
+	struct Ps3LibEvtErrDataEntry *errDataList;
+};
+
+struct Ps3LibEventDataCollectionKV {
+	char key[PS3LIB_EXP_EVENT_DATA_COLLECT_MAX_NUM];
+	char val[PS3LIB_EXP_EVENT_DATA_COLLECT_MAX_NUM];
+};
+
+struct Ps3LibEventDataCollection {
+	struct Ps3LibEventDataCollectionKV
+		kv[PS3LIB_EXP_EVENT_DATA_COLLECT_MAX_NUM];
+};
+
+enum {
+	PS3LIB_EXPANDER_EVENT_TYPE = 0,
+	PS3LIB_SWITCH_EVENT_TYPE = 1,
+	PS3LIB_RAID_HBA_EVENT_TYPE = 0xff,
+};
+
+struct Ps3LibEvtPrintFunc {
+	char const *(*evtCode2Str)(unsigned int opCode);
+	char const *(*evtLoca2Str)(unsigned char locate);
+	const char *(*getEvtDesc)(struct Ps3LibEvtLogEntry *event, int len,
+				  char *buff, int buffLen);
+
+	int (*getEvtData)(struct Ps3LibEventDataCollection *eventDataCollection,
+			  struct Ps3LibEvtLogEntry *event, int len, char *buff,
+			  int buffLen);
+};
+
+struct Ps3LibEvtPrintFunc *ps3libEventPrintFunc(unsigned int ctrlId,
+						unsigned char eventType);
+
+int ps3libCtrlEvtlogPerGet(unsigned int ctrlId,
+			   struct Ps3LibEvtPersistInfo *evtlogRdInfo);
+
+int ps3libEventLogGet(unsigned int ctrlId, unsigned int sinceSeqNum,
+		      struct Ps3LibEvtLog **ppEvtLog);
+
+void ps3libEventLogDestroy(struct Ps3LibEvtLog *pEvtLog);
+
+int ps3libEvtLevelCompare(unsigned char levelA, unsigned char levelB);
+
+int ps3libCtrlEventLogsDelete(unsigned int ctrlId);
+
+unsigned int ps3libEventUinqueIdToCtrlId(unsigned int uniqueId);
 
 #if defined(__cplusplus)
 }
