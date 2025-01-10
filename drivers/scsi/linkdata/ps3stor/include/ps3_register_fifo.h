@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+
 #ifndef __PS3_REGISTER_FIFO_H__
 #define __PS3_REGISTER_FIFO_H__
 
@@ -10,26 +10,26 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-union ps3RequestFifo {
-	unsigned char reserved0[HIL_REG0_PS3_REQUEST_QUEUE_SIZE];
-	struct HilReg0Ps3RequestQueue request_fifo;
-};
+typedef union ps3RequestFifo {
+    U8 reserved0[HIL_REG0_PS3_REQUEST_QUEUE_SIZE];
+    HilReg0Ps3RequestQueue_s request_fifo;
+} ps3RequestFifo_u;
 
-union ps3RegShare {
-	unsigned char reserved0[HIL_REG0_PS3_REGISTER_S_SIZE];
-	struct HilReg0Ps3RegisterS share_reg;
-};
+typedef union ps3RegShare{
+    U8 reserved0[HIL_REG0_PS3_REGISTER_S_SIZE];
+    HilReg0Ps3RegisterS_s share_reg;
+} ps3RegShare_u;
 
-union ps3RegExclusive {
-	unsigned char reserved0[HIL_REG0_PS3_REGISTER_F_SIZE];
-	struct HilReg0Ps3RegisterF Excl_reg;
-};
+typedef union ps3RegExclusive{
+    U8 reserved0[HIL_REG0_PS3_REGISTER_F_SIZE];
+    HilReg0Ps3RegisterF_s Excl_reg;
+} ps3RegExclusive_u;
 
-struct Ps3Fifo {
-	union ps3RegExclusive reg_f;
-	union ps3RequestFifo cmd_fifo;
-	union ps3RegShare reg_s;
-};
+typedef struct Ps3Fifo{
+    ps3RegExclusive_u reg_f; 
+    ps3RequestFifo_u cmd_fifo;
+    ps3RegShare_u reg_s;  
+} Ps3Fifo_s;
 
 #ifdef __cplusplus
 }

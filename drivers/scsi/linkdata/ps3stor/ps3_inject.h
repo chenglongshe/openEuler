@@ -1,72 +1,74 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+
 #ifndef _PS3_INJECT_H_
 #define _PS3_INJECT_H_
 
-struct PS3Inject {
-	struct mutex lock;
+typedef struct PS3Inject {
+	ps3_mutex lock;
 	struct list_head scsi_rw_list;
 	struct list_head scsi_task_list;
 	struct list_head mgr_list;
-};
+} PS3Inject_s;
 
-struct PS3HitCmd {
+typedef struct PS3HitCmd {
 	struct list_head scsi_rw_list;
 	struct list_head scsi_task_list;
 	struct list_head mgr_list;
-};
+} PS3HitCmd_s;
 
-struct ps3_scsi_sense {
-	unsigned char resp_code;
-	unsigned char sense_key;
-	unsigned char asc;
-	unsigned char ascq;
-};
+typedef struct ps3_scsi_sense{
+	U8 resp_code; 
+	U8 sense_key;
+	U8 asc;
+	U8 ascq;
+} ps3_scsi_sense_s;
 
-struct PS3ScsiErrorReply {
-	int result;
-	struct ps3_scsi_sense sshdr;
-};
 
-struct PS3ScsiForceReply {
-	unsigned int step;
-};
+typedef struct PS3ScsiErrorReply {
+    S32 result;         
+	ps3_scsi_sense_s sshdr; 
+} PS3ScsiErrorReply_s;
+
+
+typedef struct PS3ScsiForceReply {
+    U32 step;         
+} PS3ScsiForceReply_s;
 
 union PS3CmdInjectDeal {
-	struct PS3ScsiErrorReply errReply;
-	struct PS3ScsiForceReply forceReply;
+    PS3ScsiErrorReply_s  errReply;     
+    PS3ScsiForceReply_s forceReply; 
 };
 
 struct inject_scsi_cmds_t {
-	unsigned int host_no;
-	unsigned int id;
-	unsigned int channel;
+	U32 host_no;
+	U32 id;
+	U32	channel;
 	struct scsi_device *device;
-	unsigned long long lba;
-	unsigned int len;
-	unsigned int dealType;
+	U64 lba;
+	U32 len;
+	U32 dealType;
 	union PS3CmdInjectDeal cmdDeal;
-	unsigned int inject_count;
+	U32 inject_count;
 };
 
 struct inject_scsi_task_cmds_t {
-	unsigned int host_no;
-	unsigned int id;
-	unsigned int channel;
+	U32 host_no;
+	U32 id;
+	U32	channel;
 	struct scsi_device *device;
-	unsigned char cmd_type;
-	unsigned char cmd_sub_type;
-	unsigned int dealType;
+	U8 cmd_type;
+	U8 cmd_sub_type;
+	U32 dealType;
 	union PS3CmdInjectDeal cmdDeal;
-	unsigned int inject_count;
+	U32 inject_count;
 };
 
 struct inject_mgr_cmds_t {
-	unsigned int host_no;
-	unsigned char cmd_type;
-	unsigned char cmd_sub_type;
-	unsigned int dealType;
-	unsigned int errType;
-	unsigned int inject_count;
+	U32 host_no;
+	U8 cmd_type;
+	U8 cmd_sub_type;
+	U32 dealType;
+	U32 errType;
+	U32 inject_count;
 };
 
 union PS3CmdInject {
@@ -94,23 +96,22 @@ enum {
 	PS3_MGR_CMD_NORMAL = 6,
 	PS3_MGR_CMD_TIMEOUT = 7,
 	PS3_MGR_CMD_ERROE = 8,
-};
-struct PS3Inject *get_inject(void);
+} ;
+PS3Inject_s * get_inject(void);
 
 #ifndef PS3_UT
-int ps3_scsi_rw_cmd_filter_handle(struct scsi_cmnd *scmd);
-int ps3_scsi_task_cmd_filter_handle(struct ps3_cmd *cmd);
-int ps3_mgr_cmd_filter_handle(struct ps3_cmd *cmd);
+S32 ps3_scsi_rw_cmd_filter_handle(struct scsi_cmnd *scmd);
+S32 ps3_scsi_task_cmd_filter_handle(struct ps3_cmd *cmd);
+S32 ps3_mgr_cmd_filter_handle(struct ps3_cmd *cmd);
 #endif
 
-unsigned char ps3_add_cmd_filter(struct ps3_instance *instance,
-				 struct PS3CmdWord *cmd_word);
+Bool ps3_add_cmd_filter(struct ps3_instance *instance, struct PS3CmdWord *cmd_word);
 
 void ps3_delete_scsi_rw_inject(struct inject_cmds_t *this_pitem);
 void ps3_delete_scsi_task_inject(struct inject_cmds_t *this_pitem);
 void ps3_delete_mgr_inject(struct inject_cmds_t *this_pitem);
 
-struct PS3HitCmd *get_hit_inject(void);
+PS3HitCmd_s * get_hit_inject(void);
 
 void ps3_inject_init(void);
 
