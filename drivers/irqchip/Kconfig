@@ -390,6 +390,14 @@ config QCOM_PDC
 	  Power Domain Controller driver to manage and configure wakeup
 	  IRQs for Qualcomm Technologies Inc (QTI) mobile chips.
 
+config PHYTIUM_IXIC
+	bool "Phytium D2000 SoC PCI Legacy Interrupt Controller"
+	depends on ARCH_PHYTIUM
+	select IRQ_DOMAIN
+	select IRQ_DOMAIN_HIERARCHY
+	help
+	  This enables support PCI Legacy Interrupt on Phytium D2000 SoC.
+
 endmenu
 
 config SIFIVE_PLIC
