@@ -1777,11 +1777,16 @@ pick_next_task_dl(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	if (unlikely(!dl_rq->dl_nr_running))
 		return NULL;
 
+<<<<<<< HEAD
 	put_prev_task(rq, prev);
 
 	dl_se = pick_next_dl_entity(rq, dl_rq);
 	WARN_ON_ONCE(!dl_se);
 
+=======
+	dl_se = pick_next_dl_entity(dl_rq);
+	WARN_ON_ONCE(!dl_se);
+>>>>>>> 5677c9387367 ([Backport] sched/all: Change all BUG_ON() instances in the scheduler to WARN_ON_ONCE())
 	p = dl_task_of(dl_se);
 	p->se.exec_start = rq_clock_task(rq);
 
