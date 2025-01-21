@@ -13,10 +13,11 @@
 
 #endif
 
-#include "ps3_meta.h"
-#include "ps3_dev_type.h"
+#include "ps3_htp_dev_info.h"
 #include "ps3_htp.h"
 #include "ps3_err_def.h"
+#include "ps3_kernel_version.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_QUEUE_DEPTH_DEFAULT (256)
 #define PS3_QUEUE_DEPTH_SATA (32)
@@ -83,6 +84,7 @@ struct ps3_stream_detect {
 	unsigned char rw_type;
 	unsigned char reserved[7];
 };
+
 
 struct ps3_vd_stream_detect {
 	spinlock_t ps3_sequence_stream_lock;
@@ -220,8 +222,6 @@ struct ps3_r1x_lock_mgr {
 	struct completion thread_sync;
 #endif
 };
-
-#define DRIVER_SUPPORT_PRIV_BUSY
 
 struct ps3_scsi_priv_data {
 	struct PS3DiskDevPos disk_pos;
@@ -466,7 +466,12 @@ union PS3Device *ps3_dev_mgr_lookup_pd_list(struct ps3_instance *instance,
 					    unsigned short target_id);
 
 #ifndef _WINDOWS
+#if defined(PS3_CHANGE_QUEUE_DEPTH)
+int ps3_change_queue_depth(struct scsi_device *sdev, int queue_depth,
+			   int reason);
+#else
 int ps3_change_queue_depth(struct scsi_device *sdev, int queue_depth);
+#endif
 
 int ps3_scsi_slave_alloc(struct scsi_device *sdev);
 
@@ -552,6 +557,7 @@ void ps3_sdev_bdi_stable_writes_set(struct ps3_instance *instance,
 
 void ps3_sdev_bdi_stable_writes_clear(struct ps3_instance *instance,
 				      struct scsi_device *sdev);
+
 int ps3_sdev_bdi_stable_writes_get(struct scsi_device *sdev);
 
 #endif

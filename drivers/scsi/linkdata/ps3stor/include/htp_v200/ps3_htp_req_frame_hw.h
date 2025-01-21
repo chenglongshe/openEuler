@@ -51,6 +51,7 @@ struct PS3NvmeCmdDw0_9 {
 
 	unsigned long long mPtr;
 
+
 	union {
 		struct {
 			unsigned long long prp1;
@@ -60,6 +61,7 @@ struct PS3NvmeCmdDw0_9 {
 
 	} dPtr;
 };
+
 
 struct PS3NvmeCommonCmd {
 	struct PS3NvmeCmdDw0_9 cDW0_9;
@@ -82,6 +84,7 @@ struct PS3NvmeRWCmd {
 	unsigned int cDW14;
 	unsigned int cDW15;
 };
+
 
 union PS3NvmeReqFrame {
 	struct PS3NvmeCommonCmd commonReqFrame;

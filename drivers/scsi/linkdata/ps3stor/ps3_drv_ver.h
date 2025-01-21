@@ -2,11 +2,11 @@
 #ifndef _PS3_DRV_VER_H_
 #define _PS3_DRV_VER_H_
 
-#define PS3_PRIVATE_VERSION "00.000.00.01"
-#define PS3_DRV_VERSION "2.5.0.30"
-#define PS3_DRV_COMMIT_ID "e2b0a93 3b1194f"
-#define PS3_DRV_BUILD_TIME "Dec 21 2024 10:06:20"
-#define PS3_DRV_TOOLCHAIN_ID ""
+#define PS3_PRIVATE_VERSION            "00.000.00.01"
+#define PS3_DRV_VERSION                "0.0.0.0"
+#define PS3_DRV_COMMIT_ID              "afbffce 133ed3e"
+#define PS3_DRV_BUILD_TIME             "Jan 21 2025 18:58:01"
+#define PS3_DRV_TOOLCHAIN_ID            ""
 
 #define PS3_DRV_PRODUCT_SUPPORT "RAID/HBA"
 #define PS3_DRV_LICENSE "GPL"

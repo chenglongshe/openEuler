@@ -5,6 +5,7 @@
 
 #include "ps3_htp_def.h"
 
+
 enum {
 	PS3_SUCCESS = 0x00,
 	PS3_FAILED = 0x01,

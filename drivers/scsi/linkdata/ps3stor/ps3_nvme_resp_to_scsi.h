@@ -10,5 +10,4 @@ struct ps3_nvme_scsi_status {
 
 void ps3_nvme_error_to_scsi_status(struct PS3NvmeCmdStatus status,
 				   struct ps3_nvme_scsi_status *cpl);
-
 void ps3_nvme_resp_to_scsi_status(struct ps3_cmd *cmd);

@@ -2,8 +2,6 @@
 #ifndef _PS3_MODULE_PARA_H_
 #define _PS3_MODULE_PARA_H_
 
-#include "ps3_types.h"
-
 #define MB_TO_BYTE(MB) ((MB) << 20)
 #define PS3_MAX_FUNC_ID (2)
 
@@ -72,41 +70,30 @@ unsigned int ps3_deep_soft_reset_enable_query(void);
 unsigned int ps3_log_level_query(void);
 
 unsigned int ps3_aer_handle_support_query(void);
-
 void ps3_aer_handle_support_set(unsigned int aer_handle_support);
 
 void ps3_version_verbose_fill(void);
 
 unsigned int ps3_hard_reset_waiting_query(void);
-
 unsigned int ps3_use_hard_reset_reg_query(void);
 unsigned int ps3_use_hard_reset_max_retry(void);
-
 unsigned int ps3_enable_heartbeat_query(void);
-
 unsigned int ps3_enable_heartbeat_set(unsigned int val);
-
 unsigned int ps3_hil_mode_query(void);
-
 void ps3_hil_mode_modify(unsigned int val);
-
 unsigned int ps3_available_func_id_query(void);
-
 void ps3_available_func_id_modify(unsigned int val);
-
 void ps3_direct_check_stream_modify(unsigned int val);
-
 unsigned int ps3_r1x_tmo_query(void);
-
 unsigned int ps3_r1x_conflict_queue_support_query(void);
-
 unsigned int ps3_pci_irq_mode_query(void);
 
 #if defined(PS3_TAGSET_SUPPORT)
 
+void ps3_tagset_enable_modify(unsigned char enable);
+
 unsigned char ps3_tagset_enable_query(void);
 #endif
-
 unsigned char ps3_smp_affinity_query(void);
 
 #ifndef _WINDOWS

@@ -10,6 +10,7 @@
 #include "ps3_inner_data.h"
 #include "ps3_instance_manager.h"
 #include "ps3_driver_log.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_WRITE_VERIFY_16 (0x8e)
 #define PS3_WRITE_VERIFY_32 (0x0C)
@@ -60,6 +61,7 @@ unsigned char ps3_scsih_rw_cmd_is_need_split_raid(struct ps3_cmd *cmd)
 	unsigned int num_blocks = 0;
 	unsigned int lba_lo = 0;
 	unsigned int lba_hi = 0;
+
 
 	ps3_scsih_cdb_parse(cmd->scmd->cmnd, &num_blocks, &lba_lo, &lba_hi,
 			    &is_need_split);
@@ -363,12 +365,10 @@ static inline void ps3_scsih_cdb_rw32_rebuild(unsigned char *cdb,
 		cdb[17] = (unsigned char)(lba_lo >> PS3_SHIFT_WORD) & 0xff;
 		cdb[18] = (unsigned char)(lba_lo >> PS3_SHIFT_BYTE) & 0xff;
 		cdb[19] = (unsigned char)lba_lo & 0xff;
-
 		cdb[20] = (unsigned char)(lba_lo >> PS3_SHIFT_3BYTE) & 0xff;
 		cdb[21] = (unsigned char)(lba_lo >> PS3_SHIFT_WORD) & 0xff;
 		cdb[22] = (unsigned char)(lba_lo >> PS3_SHIFT_BYTE) & 0xff;
 		cdb[23] = (unsigned char)lba_lo & 0xff;
-
 		cdb[28] = (unsigned char)(num_blocks >> PS3_SHIFT_3BYTE) & 0xff;
 		cdb[29] = (unsigned char)(num_blocks >> PS3_SHIFT_WORD) & 0xff;
 		cdb[30] = (unsigned char)(num_blocks >> PS3_SHIFT_BYTE) & 0xff;
@@ -524,7 +524,9 @@ static inline void ps3_scsih_cdb_rw32_parse(const unsigned char *cdb,
 	case WRITE_32:
 	case PS3_WRITE_VERIFY_32:
 		*is_need_split = PS3_TRUE;
+#if defined(PS3_FALLTHROUGH)
 		fallthrough;
+#endif
 	case VERIFY_32:
 	case WRITE_SAME_32:
 	case ORWRITE_32:
@@ -637,7 +639,9 @@ void ps3_scsih_cdb_parse(const unsigned char *cdb, unsigned int *num_blocks,
 	case WRITE_10:
 	case WRITE_VERIFY:
 		*is_need_split = PS3_TRUE;
+#if defined(PS3_FALLTHROUGH)
 		fallthrough;
+#endif
 	case VERIFY:
 	case WRITE_SAME:
 	case PRE_FETCH:
@@ -649,7 +653,9 @@ void ps3_scsih_cdb_parse(const unsigned char *cdb, unsigned int *num_blocks,
 	case WRITE_12:
 	case WRITE_VERIFY_12:
 		*is_need_split = PS3_TRUE;
+#if defined(PS3_FALLTHROUGH)
 		fallthrough;
+#endif
 	case VERIFY_12:
 		ps3_scsih_cdb_rw12_parse(cdb, num_blocks, lba_lo, lba_hi);
 		break;
@@ -658,7 +664,9 @@ void ps3_scsih_cdb_parse(const unsigned char *cdb, unsigned int *num_blocks,
 	case WRITE_16:
 	case PS3_WRITE_VERIFY_16:
 		*is_need_split = PS3_TRUE;
+#if defined(PS3_FALLTHROUGH)
 		fallthrough;
+#endif
 	case VERIFY_16:
 	case WRITE_SAME_16:
 	case ORWRITE_16:
@@ -744,7 +752,6 @@ static inline void ps3_convert_to_cdb16(unsigned char *cdb,
 	cdb[1] = flagvals;
 	cdb[14] = groupnum;
 	cdb[15] = control;
-
 	cdb[9] = (unsigned char)(lba_lo & 0xff);
 	cdb[8] = (unsigned char)((lba_lo >> PS3_SHIFT_BYTE) & 0xff);
 	cdb[7] = (unsigned char)((lba_lo >> PS3_SHIFT_WORD) & 0xff);
@@ -753,7 +760,6 @@ static inline void ps3_convert_to_cdb16(unsigned char *cdb,
 	cdb[4] = (unsigned char)((lba_hi >> PS3_SHIFT_BYTE) & 0xff);
 	cdb[3] = (unsigned char)((lba_hi >> PS3_SHIFT_WORD) & 0xff);
 	cdb[2] = (unsigned char)((lba_hi >> PS3_SHIFT_3BYTE) & 0xff);
-
 	cdb[13] = (unsigned char)(num_blocks & 0xff);
 	cdb[12] = (unsigned char)((num_blocks >> PS3_SHIFT_BYTE) & 0xff);
 	cdb[11] = (unsigned char)((num_blocks >> PS3_SHIFT_WORD) & 0xff);

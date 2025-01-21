@@ -39,7 +39,6 @@
 #include "ps3_scsi_cmd_err.h"
 #include "ps3_drv_ver.h"
 #include "ps3_pcie_err_handle.h"
-#include "ps3_err_inject.h"
 #include "ps3_r1x_write_lock.h"
 #include "ps3_watchdog.h"
 #if defined PS3_HARDWARE_ASIC
@@ -47,7 +46,7 @@
 #endif
 #include "ps3_cli_debug.h"
 #include "ps3_recovery.h"
-
+#include "ps3_kernel_version.h"
 const char *const PS3_CHRDEV_NAME = "ps3stor-ioctl";
 #define PS3_PCI_DRIVER_NAME "ps3stor"
 #define PS3_SCSI_HOST_NAME "ps3stor_scsi_host"
@@ -150,9 +149,20 @@ static MAP_QUEUES_RET_TYPE ps3_map_queues(struct Scsi_Host *shost)
 	map = &shost->tag_set.map[HCTX_TYPE_DEFAULT];
 	map->nr_queues = instance->irq_context.valid_msix_vector_count - offset;
 	map->queue_offset = 0;
+#if defined(PS3_MAP_QUEUES_RET)
 	(void)qoff;
 	return MAP_QUEUES_RET_VAL(blk_mq_pci_map_queues(map, instance->pdev, offset));
+#else
+	blk_mq_pci_map_queues(map, instance->pdev, offset);
+	qoff += map->nr_queues;
 
+	map = &shost->tag_set.map[HCTX_TYPE_POLL];
+	map->nr_queues = 0;
+	if (map->nr_queues) {
+		map->queue_offset = qoff;
+		blk_mq_map_queues(map);
+	}
+#endif
 l_out:
 	return MAP_QUEUES_RET_VAL(0);
 }
@@ -379,6 +389,42 @@ static DEVICE_ATTR_RO(cli_ver);
 static DEVICE_ATTR_RW(irq_prk_support);
 #endif
 
+#if defined(PS3_HOST_ATTRS)
+static struct attribute *ps3_host_attrs[] = {
+	&dev_attr_page_size.attr,
+	&dev_attr_vd_io_outstanding.attr,
+	&dev_attr_io_outstanding.attr,
+	&dev_attr_is_load.attr,
+	&dev_attr_dump_ioc_regs.attr,
+	&dev_attr_max_scsi_cmds.attr,
+	&dev_attr_event_subscribe_info.attr,
+	&dev_attr_ioc_state.attr,
+	&dev_attr_log_level.attr,
+	&dev_attr_io_trace.attr,
+	&dev_attr_dump_state.attr,
+	&dev_attr_dump_type.attr,
+	&dev_attr_dump_dir.attr,
+	&dev_attr_soc_dead_reset.attr,
+	&dev_attr_halt_support_cli.attr,
+	&dev_attr_qos_switch.attr,
+	&dev_attr_product_model.attr,
+	&dev_attr_cli_ver.attr,
+#if defined(PS3_SUPPORT_DEBUG) ||                                              \
+	(defined(PS3_CFG_RELEASE) && defined(PS3_CFG_OCM_DBGBUG)) ||           \
+	(defined(PS3_CFG_RELEASE) && defined(PS3_CFG_OCM_RELEASE))
+#else
+	&dev_attr_irq_prk_support.attr,
+#endif
+	NULL,
+};
+
+static const struct attribute_group ps3_host_attr_group = {
+	.attrs = ps3_host_attrs
+};
+
+const struct attribute_group *ps3_host_groups[] = { &ps3_host_attr_group,
+						    NULL };
+#else
 static struct device_attribute *ps3_host_attrs[] = {
 	&dev_attr_page_size,
 	&dev_attr_vd_io_outstanding,
@@ -406,7 +452,7 @@ static struct device_attribute *ps3_host_attrs[] = {
 #endif
 	NULL,
 };
-
+#endif
 static struct scsi_host_template ps3_scsi_host_template = {
 	.module = THIS_MODULE,
 	.name = PS3_SCSI_HOST_NAME,
@@ -425,8 +471,16 @@ static struct scsi_host_template ps3_scsi_host_template = {
 #if defined(PS3_TAGSET_SUPPORT)
 	.map_queues = ps3_map_queues,
 #endif
+
+#if defined(PS3_TRACK_QUEUE_DEPTH)
 	.track_queue_depth = 1,
+#endif
+
+#if defined(PS3_HOST_ATTRS)
+	.shost_groups = ps3_host_groups,
+#else
 	.shost_attrs = ps3_host_attrs,
+#endif
 };
 
 static inline void ps3_set_product_model(struct ps3_instance *instance,
@@ -515,7 +569,9 @@ int ps3_pci_init(struct pci_dev *pdev, struct ps3_instance *instance)
 		LOG_ERROR("hno:%u IO memory region busy\n", PS3_HOST(instance));
 		goto l_pci_request_selected_regions_failed;
 	}
+#if defined(PS3_SUPPORT_PCIE_REPORT)
 	pci_enable_pcie_error_reporting(pdev);
+#endif
 	if (instance->ioc_adpter->reg_set) {
 		instance->reg_set =
 			(struct Ps3Fifo __iomem *)instance->ioc_adpter->reg_set(
@@ -540,7 +596,9 @@ int ps3_pci_init(struct pci_dev *pdev, struct ps3_instance *instance)
 	return PS3_SUCCESS;
 l_ioremap_failed:
 	pci_release_selected_regions(instance->pdev, 1 << instance->reg_bar);
+#if defined(PS3_SUPPORT_PCIE_REPORT)
 	pci_disable_pcie_error_reporting(pdev);
+#endif
 l_pci_request_selected_regions_failed:
 	pci_disable_device(instance->pdev);
 l_bar_check_failed:
@@ -558,7 +616,9 @@ static void ps3_pci_exit(struct ps3_instance *instance)
 	if (pci_is_enabled(instance->pdev)) {
 		pci_release_selected_regions(instance->pdev,
 					     1 << instance->reg_bar);
+#if defined(PS3_SUPPORT_PCIE_REPORT)
 		pci_disable_pcie_error_reporting(instance->pdev);
+#endif
 		pci_disable_device(instance->pdev);
 	}
 }
@@ -577,6 +637,9 @@ static int ps3_scsi_init(struct ps3_instance *instance)
 	host->max_id = instance->dev_context.max_dev_per_channel;
 	host->max_lun = PS3_FRAME_LUN_BUFLEN;
 	host->max_cmd_len = PS3_FRAME_CDB_BUFLEN;
+#if defined(PS3_SUPPORT_BIO_MERGE)
+	host->use_clustering = instance->use_clusting;
+#endif
 
 	if (instance->ioc_adpter->sas_transport_get != NULL) {
 		host->transportt = instance->ioc_adpter->sas_transport_get();
@@ -597,6 +660,16 @@ static int ps3_scsi_init(struct ps3_instance *instance)
 	}
 #endif
 
+#if defined(PS3_CHANGE_QUEUE_DEPTH)
+
+	ret = scsi_init_shared_tag_map(host, host->can_queue);
+	if (ret) {
+		LOG_ERROR("hno:%u Failed to shared tag from\n",
+			  PS3_HOST(instance));
+		ret = -PS3_FAILED;
+		goto l_out;
+	}
+#endif
 	if (scsi_add_host(instance->host, &instance->pdev->dev)) {
 		LOG_ERROR("hno:%u Failed to add host\n", PS3_HOST(instance));
 		ret = -PS3_FAILED;
@@ -1475,7 +1548,9 @@ static int ps3_suspend(struct pci_dev *pdev, pm_message_t state)
 
 	if (instance->is_half_hard_reset)
 		goto l_release_res;
+#if defined(PS3_SUPPORT_FLUSH_SCHEDULED)
 	flush_scheduled_work();
+#endif
 	scsi_block_requests(instance->host);
 
 	if (state.event == PM_EVENT_FREEZE)
@@ -1526,7 +1601,9 @@ l_reset_to_ready:
 	    1) {
 		ps3_web_cmd_clear(instance);
 	}
+#if defined(PS3_SUPPORT_FLUSH_SCHEDULED)
 	flush_scheduled_work();
+#endif
 	scsi_block_requests(instance->host);
 l_release_res:
 

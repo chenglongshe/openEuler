@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <scsi/scsi_eh.h>
 
-#include "ps3_nvme_spec.h"
+#include "ps3_htp_dev_info.h"
 #include "ps3_nvme_resp_to_scsi.h"
 #include "ps3_instance_manager.h"
 #include "ps3_htp_def.h"

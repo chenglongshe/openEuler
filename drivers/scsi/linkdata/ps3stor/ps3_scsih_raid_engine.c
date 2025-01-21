@@ -8,7 +8,7 @@
 
 #include "ps3_scsih_raid_engine.h"
 #include "ps3_instance_manager.h"
-#include "ps3_meta.h"
+#include "ps3_htp_dev_info.h"
 #include "ps3_scsih_cmd_parse.h"
 #include "ps3_driver_log.h"
 #include "ps3_util.h"

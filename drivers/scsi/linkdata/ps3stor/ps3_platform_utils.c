@@ -6,6 +6,8 @@
 #ifndef _WINDOWS
 #include <linux/vmalloc.h>
 #endif
+#include "ps3_kernel_version.h"
+
 #ifdef _WINDOWS
 int ps3_dma_free(struct ps3_instance *instance, size_t length, void *buffer)
 {
@@ -239,6 +241,48 @@ void ps3_scsi_device_put(struct ps3_instance *instance,
 #endif
 }
 
+#ifndef _WINDOWS
+
+#if defined(PS3_SCSI_DEVICE_LOOKUP)
+struct scsi_device *__ps3_scsi_device_lookup_check(struct Scsi_Host *shost,
+						   unsigned int channel,
+						   unsigned int id,
+						   unsigned int lun)
+{
+	struct scsi_device *sdev = NULL;
+
+	list_for_each_entry(sdev, &shost->__devices, siblings) {
+		if (sdev->sdev_state == SDEV_DEL)
+			continue;
+		if (sdev->channel == channel && sdev->id == id &&
+		    sdev->lun == lun)
+			return sdev;
+	}
+
+	return NULL;
+}
+
+struct scsi_device *ps3_scsi_device_lookup_check(struct Scsi_Host *shost,
+						 unsigned int channel,
+						 unsigned int id,
+						 unsigned int lun)
+{
+	struct scsi_device *sdev = NULL;
+	unsigned long flags = 0;
+
+	spin_lock_irqsave(shost->host_lock, flags);
+	sdev = __ps3_scsi_device_lookup_check(shost, channel, id, lun);
+	if (sdev && scsi_device_get(sdev))
+		sdev = NULL;
+	spin_unlock_irqrestore(shost->host_lock, flags);
+
+	return sdev;
+}
+
+#endif
+
+#endif
+
 struct scsi_device *ps3_scsi_device_lookup(struct ps3_instance *instance,
 					   unsigned char channel,
 					   unsigned short target_id,
@@ -252,7 +296,12 @@ struct scsi_device *ps3_scsi_device_lookup(struct ps3_instance *instance,
 		return sdev;
 	return NULL;
 #else
+#if defined(PS3_SCSI_DEVICE_LOOKUP)
+	return ps3_scsi_device_lookup_check(instance->host, channel, target_id,
+					    lun);
+#else
 	return scsi_device_lookup(instance->host, channel, target_id, lun);
+#endif
 #endif
 }
 
@@ -283,7 +332,6 @@ unsigned long long ps3_now_ms_get(void)
 {
 #ifdef _WINDOWS
 	LARGE_INTEGER timestamp;
-
 	KeQuerySystemTime(&timestamp);
 	return timestamp.QuadPart / 10000;
 #else
@@ -318,7 +366,6 @@ int ps3_now_format_get(char *buff, int buf_len)
 {
 #ifdef _WINDOWS
 	LARGE_INTEGER timestamp;
-
 	KeQuerySystemTime(&timestamp);
 	LARGE_INTEGER localtime;
 	TIME_FIELDS timefiled;

@@ -68,16 +68,14 @@ void ps3_remove(struct ps3_instance *instance)
 	unsigned long flags = 0;
 
 	LOG_INFO("hno:%u %s\n", PS3_HOST(instance), __func__);
-
 	instance->state_machine.is_load = PS3_FALSE;
 	instance->ioc_adpter->irq_disable(instance);
 
 	ps3_watchdog_stop(instance);
-
 	ps3_recovery_context_exit(instance);
 
 	ps3_event_unsubscribe(instance);
-	ps3_spin_lock_irqsave(&instance->recovery_context->recovery_lock,
+	ps3_spin_lock_irqsave(&instance->recov	ery_context->recovery_lock,
 			      &flags);
 	ps3_atomic_set(&instance->event_context.abort_eventcmd, 0);
 	ps3_atomic_set(&instance->dev_context.abort_vdpending_cmd, 0);

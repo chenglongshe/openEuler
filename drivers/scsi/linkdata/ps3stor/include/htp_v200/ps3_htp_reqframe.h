@@ -61,6 +61,8 @@ struct PS3Prp {
 	unsigned long long prp2;
 };
 
+
+
 struct PS3SoftwareZone {
 	unsigned long long virtDiskLba;
 	unsigned int numBlocks;
@@ -104,7 +106,7 @@ struct PS3HwReqFrame {
 	struct PS3SoftwareZone softwareZone;
 	unsigned char reserved[8];
 	union {
-		struct __packed IODT_V1 sasReqFrame;
+		struct IODT_V1 sasReqFrame;
 		union PS3NvmeReqFrame nvmeReqFrame;
 	};
 	struct PS3Sge sgl[PS3_FRAME_REQ_SGE_NUM_FE];
@@ -123,6 +125,7 @@ struct PS3VDAccAttr {
 	unsigned short ioOutStandingCnt;
 	unsigned char reserved2[16];
 };
+
 
 struct PS3FrontEndReqFrame {
 	struct PS3ReqFrameHead reqHead;
@@ -152,6 +155,7 @@ struct PS3MgrEvent {
 	unsigned char reserved[20];
 };
 
+
 struct PS3SasMgr {
 	unsigned long long sasAddr;
 	unsigned char enclID;
@@ -161,6 +165,7 @@ struct PS3SasMgr {
 	unsigned short reqLen;
 	unsigned char reserved2[2];
 };
+
 
 struct PS3SasPhySet {
 	unsigned long long sasAddr;
@@ -183,6 +188,7 @@ union PS3MgrReqDiffValue {
 	int isRetry;
 };
 
+
 struct PS3MgrReqFrame {
 	struct PS3ReqFrameHead reqHead;
 	unsigned short sgeCount;
@@ -198,6 +204,7 @@ struct PS3MgrReqFrame {
 	struct PS3Sge sgl[PS3_FRAME_REQ_SGE_NUM_MGR];
 };
 
+
 struct PS3MgrTaskReqFrame {
 	struct PS3ReqFrameHead reqHead;
 	unsigned short taskID;
@@ -206,6 +213,7 @@ struct PS3MgrTaskReqFrame {
 	unsigned char reserved[5];
 };
 
+
 union PS3ReqFrame {
 	struct PS3MgrTaskReqFrame taskReq;
 	struct PS3MgrReqFrame mgrReq;
@@ -213,6 +221,7 @@ union PS3ReqFrame {
 	struct PS3HwReqFrame hwReq;
 	unsigned char word[256];
 };
+
 
 struct PS3DrvInfo {
 	char drvName[PS3_DRV_NAME_MAX_LEN];
@@ -227,11 +236,13 @@ struct PS3DrvInfo {
 	unsigned char reserved1[56];
 };
 
+
 enum {
 	PS3_MEM_TYPE_UNKNOWN = 0,
 	PS3_MEM_TYPE_SO = 1,
 	PS3_MEM_TYPE_RO = 2,
 };
+
 
 struct PS3HostMemInfo {
 	unsigned long long startAddr;

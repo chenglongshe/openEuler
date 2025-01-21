@@ -98,6 +98,7 @@
 union HilReg0Ps3RequestQueuePs3RequestQueue {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long port : 64;
 	} reg;
 };
@@ -105,6 +106,7 @@ union HilReg0Ps3RequestQueuePs3RequestQueue {
 union HilReg0Ps3RequestQueueFifoErrCnt {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long waddrerr : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -113,6 +115,7 @@ union HilReg0Ps3RequestQueueFifoErrCnt {
 union HilReg0Ps3RequestQueueFifoStatus {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long filled : 16;
 		unsigned long long fifoDepth : 16;
 		unsigned long long almostfull : 1;
@@ -126,6 +129,7 @@ union HilReg0Ps3RequestQueueFifoStatus {
 union HilReg0Ps3RequestQueueFifoLevelConfig {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cfgAempty : 16;
 		unsigned long long cfgAfull : 16;
 		unsigned long long emptyProtect : 1;
@@ -137,6 +141,7 @@ union HilReg0Ps3RequestQueueFifoLevelConfig {
 union HilReg0Ps3RequestQueueFifoRst {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long resetPls : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -145,6 +150,7 @@ union HilReg0Ps3RequestQueueFifoRst {
 union HilReg0Ps3RequestQueueFifoIOCnt {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long wr : 32;
 		unsigned long long rd : 32;
 	} reg;
@@ -153,6 +159,7 @@ union HilReg0Ps3RequestQueueFifoIOCnt {
 union HilReg0Ps3RequestQueueFifoFlowCnt {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long overflow : 32;
 		unsigned long long underflow : 32;
 	} reg;
@@ -161,6 +168,7 @@ union HilReg0Ps3RequestQueueFifoFlowCnt {
 union HilReg0Ps3RequestQueueFifoIntStatus {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long overflowStatus : 1;
 		unsigned long long underflowStatus : 1;
 		unsigned long long nemptyStatus : 1;
@@ -172,6 +180,7 @@ union HilReg0Ps3RequestQueueFifoIntStatus {
 union HilReg0Ps3RequestQueueFifoIntSet {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long overflowSet : 1;
 		unsigned long long underflowSet : 1;
 		unsigned long long nemptySet : 1;
@@ -183,6 +192,7 @@ union HilReg0Ps3RequestQueueFifoIntSet {
 union HilReg0Ps3RequestQueueFifoIntClr {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long overflowClr : 1;
 		unsigned long long underflowClr : 1;
 		unsigned long long nemptyClr : 1;
@@ -194,6 +204,7 @@ union HilReg0Ps3RequestQueueFifoIntClr {
 union HilReg0Ps3RequestQueueFifoIntMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long overflowMask : 1;
 		unsigned long long underflowMask : 1;
 		unsigned long long nemptyMask : 1;
@@ -205,6 +216,7 @@ union HilReg0Ps3RequestQueueFifoIntMask {
 union HilReg0Ps3RequestQueueFifoCntClr {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long fifowrcntClr : 1;
 		unsigned long long fifordcntClr : 1;
 		unsigned long long fifoerrcntClr : 1;
@@ -219,6 +231,7 @@ union HilReg0Ps3RequestQueueFifoCntClr {
 union HilReg0Ps3RequestQueueFifoOrderError {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long wrcnt : 32;
 		unsigned long long rdcnt : 32;
 	} reg;
@@ -227,6 +240,7 @@ union HilReg0Ps3RequestQueueFifoOrderError {
 union HilReg0Ps3RequestQueueFifoDinShift {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long val : 64;
 	} reg;
 };
@@ -234,6 +248,7 @@ union HilReg0Ps3RequestQueueFifoDinShift {
 union HilReg0Ps3RequestQueueFifoDoutShift {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long val : 64;
 	} reg;
 };
@@ -241,6 +256,7 @@ union HilReg0Ps3RequestQueueFifoDoutShift {
 union HilReg0Ps3RequestQueueFifostatusMaxlevel {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long val : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -249,6 +265,7 @@ union HilReg0Ps3RequestQueueFifostatusMaxlevel {
 union HilReg0Ps3RequestQueueFifoInit {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long stat : 2;
 		unsigned long long reserved1 : 62;
 	} reg;
@@ -257,6 +274,7 @@ union HilReg0Ps3RequestQueueFifoInit {
 union HilReg0Ps3RequestQueueFifoinitEn {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long start : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -265,6 +283,7 @@ union HilReg0Ps3RequestQueueFifoinitEn {
 union HilReg0Ps3RequestQueueFifoinitMax {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long num : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -273,6 +292,7 @@ union HilReg0Ps3RequestQueueFifoinitMax {
 union HilReg0Ps3RequestQueueFifostatusEccCnt {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long bit1Err : 32;
 		unsigned long long bit2Err : 32;
 	} reg;
@@ -281,6 +301,7 @@ union HilReg0Ps3RequestQueueFifostatusEccCnt {
 union HilReg0Ps3RequestQueueFifostatusEccAddr {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long errPoint : 64;
 	} reg;
 };
@@ -288,6 +309,7 @@ union HilReg0Ps3RequestQueueFifostatusEccAddr {
 union HilReg0Ps3RequestQueueFifoDecoderOverflow {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rCmdwordEmpty : 1;
 		unsigned long long rPortindexEmpty : 1;
 		unsigned long long rCmdbackEmpty : 1;
@@ -307,6 +329,7 @@ union HilReg0Ps3RequestQueueFifoDecoderOverflow {
 union HilReg0Ps3RequestQueueFifoEccBadProject {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long en : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -315,6 +338,7 @@ union HilReg0Ps3RequestQueueFifoEccBadProject {
 union HilReg0Ps3RequestQueueFifooverflowWord {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long record : 64;
 	} reg;
 };
@@ -322,6 +346,7 @@ union HilReg0Ps3RequestQueueFifooverflowWord {
 union HilReg0Ps3RequestQueueFifoLevelMonitorCtl {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long low : 16;
 		unsigned long long high : 16;
 		unsigned long long en : 1;
@@ -332,6 +357,7 @@ union HilReg0Ps3RequestQueueFifoLevelMonitorCtl {
 union HilReg0Ps3RequestQueueFifoLevelMonitorCntClr {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long en : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -340,6 +366,7 @@ union HilReg0Ps3RequestQueueFifoLevelMonitorCntClr {
 union HilReg0Ps3RequestQueueFifoLevelMonitorLow {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cnt : 64;
 	} reg;
 };
@@ -347,6 +374,7 @@ union HilReg0Ps3RequestQueueFifoLevelMonitorLow {
 union HilReg0Ps3RequestQueueFifoLevelMonitorMid {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cnt : 64;
 	} reg;
 };
@@ -354,11 +382,13 @@ union HilReg0Ps3RequestQueueFifoLevelMonitorMid {
 union HilReg0Ps3RequestQueueFifoLevelMonitorHigh {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cnt : 64;
 	} reg;
 };
 
 struct HilReg0Ps3RequestQueue {
+
 	union HilReg0Ps3RequestQueuePs3RequestQueue ps3RequestQueue;
 	union HilReg0Ps3RequestQueueFifoErrCnt fifoErrCnt;
 	union HilReg0Ps3RequestQueueFifoStatus fifoStatus;

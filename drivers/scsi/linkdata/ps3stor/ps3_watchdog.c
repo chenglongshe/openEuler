@@ -17,10 +17,8 @@
 #include "ps3_dump.h"
 #include "ps3_module_para.h"
 #include "ps3_ioc_manager.h"
-#include "ps3_err_inject.h"
 
 #define PS3_WATCHDOG_NAME_MAX_LENGTH (48)
-
 static int ps3_watchdog_fault_detect_and_recovery(struct ps3_instance *instance)
 {
 	unsigned int ioc_recovery_count = 0;

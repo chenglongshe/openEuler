@@ -10,6 +10,7 @@
 
 #include "ps3_htp_def.h"
 #include "ps3_instance_manager.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_SCSI_HOST_SHIFT (16)
 #define PS3_SCSI_DRIVER_SHIFT (24)
@@ -70,7 +71,11 @@ int ps3_err_scsi_task_mgr_abort(struct scsi_cmnd *scmd);
 int ps3_device_reset_handler(struct scsi_cmnd *scmd);
 int ps3_err_reset_target(struct scsi_cmnd *scmd);
 int ps3_err_reset_host(struct scsi_cmnd *scmd);
+#if defined(PS3_RESET_TIMER)
+enum scsi_timeout_action ps3_err_reset_timer(struct scsi_cmnd *scmd);
+#else
 enum blk_eh_timer_return ps3_err_reset_timer(struct scsi_cmnd *scmd);
+#endif
 unsigned char ps3_err_is_resp_from_direct_cmd(unsigned short mode);
 
 void ps3_errcode_to_scsi_status(struct ps3_instance *instance,
@@ -80,7 +85,6 @@ void ps3_errcode_to_scsi_status(struct ps3_instance *instance,
 
 int ps3_err_scsi_io_processing(struct ps3_instance *instance, unsigned int id,
 			       unsigned int channel);
-
 int ps3_reset_host(struct ps3_instance *instance);
 
 void ps3_scsih_drv_io_reply_scsi(struct scsi_cmnd *s_cmd, struct ps3_cmd *cmd,

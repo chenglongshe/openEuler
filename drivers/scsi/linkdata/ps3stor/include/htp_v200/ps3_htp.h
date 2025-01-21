@@ -56,6 +56,7 @@ struct Ps3DumpNotifyInfo {
 	int dumpType;
 };
 
+
 struct PS3LinkErrInfo {
 	unsigned int invalidDwordCount;
 	unsigned int runningDisparityErrCount;
@@ -70,12 +71,14 @@ enum PhyCtrl {
 	PS3_SAS_CTRL_DISABLE = 3
 };
 
+
 enum {
 	PS3_UNLOAD_SUB_TYPE_RESERVED = 0,
 	PS3_UNLOAD_SUB_TYPE_REMOVE = 1,
 	PS3_UNLOAD_SUB_TYPE_SHUTDOWN = 2,
 	PS3_UNLOAD_SUB_TYPE_SUSPEND = 3,
 };
+
 
 enum {
 	PS3_SUSPEND_TYPE_NONE = 0,
@@ -94,6 +97,7 @@ static inline const char *namePhyCtrl(enum PhyCtrl e)
 
 	return myNames[e];
 }
+
 
 struct PS3InitCmdWord {
 	union {
@@ -124,6 +128,7 @@ struct PS3CmdWord {
 	unsigned short qMask : 4;
 };
 
+
 struct PS3CmdWordSw {
 	unsigned int type : 2;
 	unsigned int noReplyWord : 1;
@@ -132,10 +137,12 @@ struct PS3CmdWordSw {
 	unsigned int cmdIndex : 8;
 };
 
+
 union PS3CmdWordU32 {
 	struct PS3CmdWordSw cmdWord;
 	unsigned int val;
 };
+
 
 union PS3DefaultCmdWord {
 	struct PS3CmdWord cmdWord;
@@ -179,6 +186,7 @@ struct PS3ReplyWord {
 	unsigned short qMask : 4;
 };
 
+
 struct PS3MgrTaskRespInfo {
 	unsigned char iocStatus;
 	unsigned char reserved1;
@@ -188,10 +196,12 @@ struct PS3MgrTaskRespInfo {
 	unsigned int reserved2;
 };
 
+
 struct PS3MgrCmdReplyRespInfo {
 	unsigned char cmdReplyStatus;
 	unsigned char reserved[15];
 };
+
 
 union PS3RespDetails {
 	unsigned int xfer_cnt;
@@ -200,11 +210,13 @@ union PS3RespDetails {
 	struct PS3MgrCmdReplyRespInfo replyCmdRespInfo;
 };
 
+
 struct PS3SasDirectRespStatus {
 	unsigned int status : 8;
 	unsigned int dataPres : 2;
 	unsigned int reserved : 22;
 };
+
 
 struct Ps3SasDirectRespFrameIU {
 	union {
@@ -224,6 +236,7 @@ struct Ps3SasDirectRespFrameIU {
 	unsigned char reserved3[8];
 };
 
+
 struct PS3NormalRespFrame {
 	union PS3RespDetails respDetail;
 	unsigned char reserved1[8];
@@ -240,11 +253,13 @@ union PS3RespFrame {
 	struct PS3NormalRespFrame normalRespFrame;
 };
 
+
 struct Ps3DebugMemEntry {
 	unsigned long long debugMemAddr;
 	unsigned int debugMemSize;
 	unsigned int reserved;
 };
+
 
 struct PS3NvmeCmdStatus {
 	union {

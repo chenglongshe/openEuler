@@ -13,7 +13,7 @@
 #include "ps3_driver_log.h"
 #include "ps3_rb_tree.h"
 #include "ps3_inner_data.h"
-#include "ps3_meta.h"
+#include "ps3_htp_dev_info.h"
 #include "ps3_cmd_channel.h"
 #include "ps3_scsih_cmd_parse.h"
 #include "ps3_r1x_write_lock.h"
@@ -769,6 +769,7 @@ int ps3_r1x_hash_bit_lock(struct ps3_r1x_lock_mgr *mgr, struct ps3_cmd *cmd)
 
 	is_conflict_q_empty = list_empty(&mgr->conflict_cmd_list);
 
+
 	len = SZBLOCK_SIZE - (lba & SZBLOCK_SIZE_MASK);
 	if (is_conflict_q_empty) {
 		do {
@@ -1281,7 +1282,6 @@ int ps3_r1x_hash_range_lock(struct ps3_r1x_lock_mgr *mgr, struct ps3_cmd *cmd)
 	} while (left > 0);
 
 	ps3_spin_unlock_irqrestore(&mgr->mgr_lock, flag);
-
 	cmd->szblock_cnt = node_num;
 	cmd->is_got_r1x = 1;
 

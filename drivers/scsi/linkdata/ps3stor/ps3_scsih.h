@@ -11,6 +11,7 @@
 
 #include "ps3_htp_def.h"
 #include "ps3_inner_data.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_HW_VD_MAX_IO_SIZE_1M (1ULL << 20)
 #define PS3_PAGE_MODE_ABOVE_3_ADDR_MASK 0xFFFFFF8000000000ULL
@@ -21,9 +22,17 @@
 	 (raidlevel) == RAID10 || (raidlevel) == RAID1E ||                     \
 	 (raidlevel) == RAID00)
 
+#if defined(PS3_SCMD_GET_REQUEST)
+#define SCMD_GET_REQUEST(scmd) scsi_cmd_to_rq(scmd)
+#else
 #define SCMD_GET_REQUEST(scmd) scmd->request
+#endif
 
+#if defined(PS3_SCMD_IO_DONE)
+#define SCMD_IO_DONE(scmd) scsi_done(scmd)
+#else
 #define SCMD_IO_DONE(scmd) scmd->scsi_done(scmd)
+#endif
 
 #define PS3_IF_QUIT_STREAM_DIRECT_DETECT()                                     \
 	(ps3_direct_check_stream_query() == PS3_FALSE)

@@ -252,11 +252,14 @@ int ps3_ioc_init_proc(struct ps3_instance *instance);
 
 void ps3_ioc_reg_write(struct ps3_instance *instance, unsigned long long val,
 		       void __iomem *reg);
+
 void ps3_ioc_hardreset_reg_write(struct ps3_instance *instance,
 				 unsigned long long val, void __iomem *reg,
 				 unsigned char is_warn_prk);
+
 unsigned long long ps3_ioc_hardreset_reg_read(struct ps3_instance *instance,
 					      void __iomem *reg);
+
 unsigned long long ps3_ioc_reg_read(struct ps3_instance *instance,
 				    void __iomem *reg);
 

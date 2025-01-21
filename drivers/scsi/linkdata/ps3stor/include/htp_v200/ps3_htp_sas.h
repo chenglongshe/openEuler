@@ -95,6 +95,7 @@ union IoDmaCfg {
 	unsigned char byte;
 };
 
+
 struct __packed SspTaskFrameIu {
 	unsigned long long LUN;
 	unsigned short reserved0;
@@ -104,6 +105,7 @@ struct __packed SspTaskFrameIu {
 	unsigned char reserved2[14];
 };
 
+
 union __packed SmpFrameIu {
 	struct {
 		unsigned char frameType;
@@ -112,7 +114,9 @@ union __packed SmpFrameIu {
 	unsigned char smpIURaw[32];
 };
 
+
 struct __packed DfifoWordCommon {
+
 	union {
 		struct {
 			unsigned short type : 2;
@@ -124,9 +128,12 @@ struct __packed DfifoWordCommon {
 		unsigned short WD0;
 	};
 
+
 	union {
+
 		struct {
 			union {
+
 				struct {
 					unsigned short darID : 13;
 					unsigned short rsv3 : 2;
@@ -142,6 +149,7 @@ struct __packed DfifoWordCommon {
 
 		struct {
 			union {
+
 				struct {
 					unsigned short reqFrameID : 13;
 				};
@@ -166,6 +174,7 @@ struct __packed DfifoWordCommon {
 
 struct __packed IODT_V1 {
 	union {
+
 		struct __packed {
 			union {
 				struct {
@@ -184,6 +193,8 @@ struct __packed IODT_V1 {
 				};
 				unsigned short config;
 			};
+
+
 
 			unsigned short cmdLen : 9;
 			unsigned short rsv0 : 7;
@@ -210,10 +221,10 @@ struct __packed IODT_V1 {
 		unsigned long long QW0;
 	};
 
+
 	union {
 		struct __packed {
-			struct __packed
-			DfifoWordCommon commonWord;
+			struct DfifoWordCommon commonWord;
 			unsigned short rsv2 : 1;
 			unsigned short sataCtl : 1;
 			unsigned short rsv3 : 2;
@@ -225,17 +236,21 @@ struct __packed IODT_V1 {
 		unsigned long long QW1;
 	};
 
+
 	union {
 		unsigned long long dataBaseAddr;
 		unsigned long long QW2;
 	};
+
 
 	union {
 		unsigned long long eedpBaseAddr;
 		unsigned long long QW3;
 	};
 
+
 	union {
+
 		struct {
 			unsigned long long cmdIUAddr;
 			unsigned long long rsv9;
@@ -249,9 +264,10 @@ struct __packed IODT_V1 {
 
 		union {
 			unsigned char cdb[32];
-			struct __packed SspTaskFrameIu taskIU;
-			union __packed SmpFrameIu smpIU;
+			struct SspTaskFrameIu taskIU;
+			union SmpFrameIu smpIU;
 		} B;
+
 
 		struct {
 			unsigned long long opCode : 8;

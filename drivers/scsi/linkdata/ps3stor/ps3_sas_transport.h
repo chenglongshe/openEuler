@@ -9,6 +9,7 @@
 #include <linux/version.h>
 
 #include "ps3_htp.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_SAS_TIMEOUT_SEC (40)
 #define PS3_SMP_CRC_LEN (4)
@@ -31,8 +32,13 @@ int ps3_sas_phy_enable(struct sas_phy *phy, int enable);
 
 int ps3_sas_linkrates_set(struct sas_phy *phy, struct sas_phy_linkrates *rates);
 
+#if defined(PS3_SAS_SMP_RETURN)
+int ps3_sas_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
+			struct request *req);
+#else
 void ps3_sas_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
 			 struct sas_rphy *rphy);
+#endif
 
 #endif
 #endif

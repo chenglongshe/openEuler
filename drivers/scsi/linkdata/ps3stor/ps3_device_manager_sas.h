@@ -12,6 +12,7 @@
 #include "ps3_htp_dev.h"
 #include "ps3_htp_event.h"
 #include "ps3_device_manager.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_SAS_HBA_MAX_SAS_NUM 3
 
@@ -118,7 +119,13 @@ void ps3_sas_node_phy_update(struct ps3_instance *instance,
 			     struct ps3_sas_phy *ps3_phy,
 			     struct PS3PhyInfo *phy_info);
 
+#if defined(PS3_SAS_LONG_LUN)
+int ps3_sas_user_scan(struct Scsi_Host *host, unsigned int channel,
+		      unsigned int id, unsigned int lun);
+#else
 int ps3_sas_user_scan(struct Scsi_Host *host, unsigned int channel,
 		      unsigned int id, unsigned long long lun);
+#endif
+
 #endif
 #endif

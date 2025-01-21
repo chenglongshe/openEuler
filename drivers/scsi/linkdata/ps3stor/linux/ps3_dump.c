@@ -7,7 +7,9 @@
 #include <linux/rtc.h>
 #include <linux/errno.h>
 #include <linux/uaccess.h>
-#include <linux/uaccess.h>
+#ifdef PS3_UT
+#include <asm/uaccess.h>
+#endif
 
 #include "ps3_dump.h"
 #include "ps3_mgr_cmd.h"
@@ -18,19 +20,28 @@
 #include "ps3_util.h"
 #include "ps3_cli.h"
 #include "ps3_module_para.h"
-#include "ps3_err_inject.h"
+#include "ps3_kernel_version.h"
 
 static inline void ps3_dump_status_set(struct ps3_instance *instance,
 				       unsigned long long value);
 
 int ps3_dump_local_time(struct rtc_time *tm)
 {
+#if defined(PS3_DUMP_TIME_32)
+	struct timeval time;
+	unsigned long long local_time;
+
+	do_gettimeofday(&time);
+	local_time = (unsigned long long)(time.tv_sec - (sys_tz.tz_minuteswest * 60));
+	rtc_time_to_tm(local_time, tm);
+#else
 	struct timespec64 time;
 	unsigned long long local_time;
 
 	ktime_get_real_ts64(&time);
 	local_time = (unsigned long long)(time.tv_sec - (sys_tz.tz_minuteswest * 60));
 	rtc_time64_to_tm(local_time, tm);
+#endif
 	tm->tm_mon += 1;
 	tm->tm_year += 1900;
 	return 0;
@@ -69,7 +80,9 @@ int ps3_dump_file_open(struct ps3_dump_context *ctxt, unsigned int dump_type)
 	unsigned char *p_prefix = NULL;
 	int ret = PS3_SUCCESS;
 	struct file *fp = NULL;
+#if defined(PS3_SUPPORT_FS)
 	mm_segment_t old_fs;
+#endif
 
 	if (file_info->fp || file_info->file_status == PS3_DUMP_FILE_OPEN) {
 		LOG_INFO("dump file open: file already open\n");
@@ -112,9 +125,24 @@ int ps3_dump_file_open(struct ps3_dump_context *ctxt, unsigned int dump_type)
 		goto l_out;
 	}
 	if (!ps3_fs_requires_dev(fp)) {
+#if defined(PS3_KERNEL_WRITE_GET_DS)
+		old_fs = get_fs();
+		set_fs(get_ds());
+#elif defined(PS3_KERNEL_WRITE)
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+#elif defined(PS3_VFS_WRITE)
+#else
 		old_fs = force_uaccess_begin();
+#endif
 		filp_close(fp, NULL);
+#if defined(PS3_SET_FS)
+		set_fs(old_fs);
+#elif defined(PS3_FORCE_UACCESS)
+#else
 		force_uaccess_end(old_fs);
+#endif
+
 		ret = -PS3_FAILED;
 		goto l_out;
 	}
@@ -131,15 +159,35 @@ l_out:
 int ps3_dump_file_write(struct ps3_dump_file_info *file_info, unsigned char *buf, unsigned int len)
 {
 	struct file *fp = NULL;
+#if defined(PS3_SUPPORT_FS)
 	mm_segment_t old_fs;
+#endif
 	int ret = 0;
 
 	if (file_info && file_info->fp) {
 		fp = file_info->fp;
+#if defined(PS3_KERNEL_WRITE_GET_DS)
+		old_fs = get_fs();
+		set_fs(get_ds());
+#elif defined(PS3_KERNEL_WRITE)
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+#elif defined(PS3_VFS_WRITE)
+#else
 		old_fs = force_uaccess_begin();
+#endif
 
+#if defined(PS3_KERNEL_WRITE_FILE)
 		ret = kernel_write(fp, (char *)buf, len, &fp->f_pos);
+#else
+		ret = vfs_write(fp, (char *)buf, len, &fp->f_pos);
+#endif
+#if defined(PS3_SET_FS)
+		set_fs(old_fs);
+#elif defined(PS3_FORCE_UACCESS)
+#else
 		force_uaccess_end(old_fs);
+#endif
 
 		if (ret > 0)
 			file_info->file_size += len;
@@ -151,13 +199,28 @@ int ps3_dump_file_write(struct ps3_dump_file_info *file_info, unsigned char *buf
 
 int ps3_dump_file_close(struct ps3_dump_file_info *file_info)
 {
+#if defined(PS3_SUPPORT_FS)
 	mm_segment_t old_fs;
-
+#endif
 	if (file_info && file_info->fp) {
 		PS3_BUG_ON(IS_ERR(file_info->fp));
+#if defined(PS3_KERNEL_WRITE_GET_DS)
+		old_fs = get_fs();
+		set_fs(get_ds());
+#elif defined(PS3_KERNEL_WRITE)
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+#elif defined(PS3_VFS_WRITE)
+#else
 		old_fs = force_uaccess_begin();
+#endif
 		filp_close(file_info->fp, NULL);
+#if defined(PS3_SET_FS)
+		set_fs(old_fs);
+#elif defined(PS3_FORCE_UACCESS)
+#else
 		force_uaccess_end(old_fs);
+#endif
 
 		file_info->fp = NULL;
 		file_info->file_status = PS3_DUMP_FILE_CLOSE;
@@ -504,9 +567,11 @@ static void ps3_dump_work(struct work_struct *work)
 			break;
 		case PS3_DUMP_STATE_PRE_ABORT:
 			ps3_dump_abort(ctxt->instance);
+#if defined(PS3_FALLTHROUGH)
 			ps3_dump_work_done(ctxt, cur_state);
 			work_wait_times = 0;
 			goto l_out;
+#endif
 		case PS3_DUMP_STATE_ABORTED:
 		case PS3_DUMP_STATE_COPY_DONE:
 			ps3_dump_work_done(ctxt, cur_state);
@@ -736,6 +801,7 @@ irqreturn_t ps3_dump_irq_handler(int virq, void *dev_id)
 
 	spin_lock_irqsave(&p_dump_ctx->dump_irq_handler_lock, flags);
 	if (p_dump_ctx->dump_enabled) {
+
 		LOG_DEBUG(
 			"hno:%u  dump irq received, virq: %d, dev_id: 0x%llx\n",
 			PS3_HOST(pInstance), virq, (unsigned long long)(uintptr_t)dev_id);

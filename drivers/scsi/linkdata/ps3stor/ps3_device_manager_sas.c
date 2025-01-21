@@ -1032,7 +1032,6 @@ static int ps3_sas_expander_node_add(struct ps3_instance *instance,
 
 	LOG_DEBUG("hno:%u enter !\n", PS3_HOST(instance));
 	exp_node = ps3_sas_find_node_by_id(instance, exp_info->enclID);
-
 	if (exp_node != NULL &&
 	    unlikely(exp_node->parent_sas_address != exp_info->parentSasAddr ||
 		     exp_node->parent_encl_id != exp_info->parentId)) {
@@ -1227,6 +1226,7 @@ void ps3_sas_expander_node_del(struct ps3_instance *instance,
 		ps3_sas_find_node_by_id(instance, exp_node->parent_encl_id);
 	if (parent_node == NULL) {
 		LOG_ERROR("hno:%u cannot find parent node[%d] !\n",
+
 			  PS3_HOST(instance), exp_node->parent_encl_id);
 		BUG();
 		goto l_out;
@@ -1277,6 +1277,8 @@ int ps3_sas_device_data_init(struct ps3_instance *instance)
 
 	LOG_DEBUG("hno:%u ready get init expander enter\n", PS3_HOST(instance));
 
+
+
 	memset(p_expanders, 0, PS3_SAS_REQ_BUFF_LEN);
 	ret = ps3_sas_expander_all_get(instance);
 	if (ret != PS3_SUCCESS) {
@@ -1323,6 +1325,7 @@ int ps3_sas_device_data_exit(struct ps3_instance *instance)
 		goto l_out;
 
 	LOG_INFO("hno:%u %s\n", PS3_HOST(instance), __func__);
+
 
 	(void)instance;
 l_out:
@@ -1453,6 +1456,7 @@ int ps3_sas_device_mgr_exit(struct ps3_instance *instance)
 
 	return PS3_SUCCESS;
 }
+
 
 static void ps3_sas_end_dev_del(struct ps3_instance *instance,
 				struct ps3_sas_node *parent_node,
@@ -2103,8 +2107,13 @@ l_out:
 	return ret;
 }
 
+#if defined(PS3_SAS_LONG_LUN)
+int ps3_sas_user_scan(struct Scsi_Host *host, unsigned int channel,
+		      unsigned int id, unsigned int lun)
+#else
 int ps3_sas_user_scan(struct Scsi_Host *host, unsigned int channel,
 		      unsigned int id, unsigned long long lun)
+#endif
 {
 	struct PS3ChannelInfo *channel_info = NULL;
 	struct ps3_instance *instance = NULL;

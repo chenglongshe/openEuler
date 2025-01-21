@@ -319,6 +319,7 @@ struct ps3_ioc_adp_template g_ps3_template_hba = {
 	.io_cmd_build = ps3_scsih_cmd_build,
 	.mgr_cmd_build = NULL,
 
+
 	.init_cmd_send = ps3_switch_init_cmd_send,
 	.cmd_send = ps3_ioc_cmd_send,
 	.ioc_state_get = ps3_ioc_state_get,

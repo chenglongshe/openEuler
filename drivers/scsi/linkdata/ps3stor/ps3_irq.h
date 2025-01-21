@@ -14,13 +14,12 @@
 #include "ps3_err_def.h"
 #include "ps3_cmd_channel.h"
 #include "ps3_inner_data.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_IRQ_NAME_LENGTH (32)
 #define PS3_SWITCH_IRQ_INDEX (0)
 
 struct ps3_instance;
-
-#define DRIVER_SUPPORT_KERNEL_IRQ_AFFINITY
 
 enum {
 	PS3_PCI_IRQ_MODE_NONE_SPE = 0,
@@ -40,7 +39,7 @@ struct ps3_irq {
 	unsigned char reserved0[6];
 #ifdef _WINDOWS
 	STOR_DPC dpc;
-	unsigned char is_dpc_running;
+	volatile unsigned char is_dpc_running;
 #else
 	struct irq_poll irqpoll;
 	unsigned char is_irq_poll_disabled;

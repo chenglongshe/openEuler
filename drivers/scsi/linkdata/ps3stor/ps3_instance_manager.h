@@ -29,7 +29,6 @@
 #include "ps3_dump.h"
 #include "ps3_cmd_stat_def.h"
 #include "ps3_watchdog.h"
-#include "ps3_err_inject.h"
 #include "ps3_qos.h"
 
 enum PS3_INSTANCE_STATE_TYPE {
@@ -282,6 +281,7 @@ void ps3_instance_init(struct ps3_instance *instance);
 int ps3_instance_state_transfer(struct ps3_instance *instance,
 				unsigned int exp_cur_state,
 				unsigned int dest_state);
+
 int ps3_instance_no_lock_state_transfer(struct ps3_instance *instance,
 					unsigned int dest_state);
 
@@ -299,6 +299,7 @@ void ps3_instance_state_transition_to_recovery(struct ps3_instance *instance);
 
 int ps3_instance_wait_for_operational(struct ps3_instance *instance,
 				      unsigned char is_hardreset);
+
 int ps3_instance_wait_for_hard_reset_flag_done(struct ps3_instance *instance);
 
 int ps3_instance_wait_for_dead_or_pre_operational(struct ps3_instance *instance);

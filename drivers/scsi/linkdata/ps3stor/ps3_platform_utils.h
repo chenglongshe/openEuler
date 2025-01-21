@@ -9,7 +9,7 @@
 #include <linux/atomic.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
-
+#include "linux/kernel.h"
 #endif
 
 #include "ps3_err_def.h"
@@ -34,6 +34,21 @@ struct ps3_cmd;
 #define ps3_container_of container_of
 #endif
 #define MAX_MDELAY (1)
+#ifndef PS3_FALSE
+#define PS3_FALSE (0)
+#endif
+#ifndef PS3_TRUE
+#define PS3_TRUE (1)
+#endif
+#ifndef PS3_MAX
+#define PS3_MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+#ifndef PS3_MIN
+#define PS3_MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+#ifndef PS3_DESC
+#define PS3_DESC(a) 1
+#endif
 
 static inline void ps3_mutex_init(struct mutex *mutex_lock)
 {
@@ -335,14 +350,11 @@ static inline int list_empty(const struct list_head *head)
 
 #define list_first_entry(ptr, type, member)                                    \
 	list_entry((ptr)->Blink, type, member)
-
 #define list_next_entry(pos, type, member)                                     \
 	list_entry((pos)->member.Blink, type, member)
-
 #define list_for_each_entry(pos, type, head, member)                           \
 	for (pos = list_first_entry(head, type, member);                       \
 	     &pos->member != (head); pos = list_next_entry(pos, type, member))
-
 #define list_for_each_entry_safe(pos, type, tmp, head, member)                 \
 	for (pos = list_first_entry(head, type, member),                       \
 	    tmp = list_next_entry(pos, type, member);                          \

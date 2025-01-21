@@ -47,7 +47,6 @@ static void cmd_pool_free(struct list_head *pool_list, spinlock_t *pool_lock,
 			  struct ps3_cmd *cmd);
 static struct ps3_cmd *cmd_pool_alloc(struct list_head *pool_list,
 				      spinlock_t *pool_lock);
-
 #define PS3_RESP_FRAME_LENGTH (PS3_SENSE_BUFFER_SIZE + 32)
 
 static inline unsigned char is_mgr_cmd(struct ps3_instance *instance,
@@ -1672,7 +1671,7 @@ unsigned char ps3_bit_pos_update(struct ps3_instance *instance)
 		break;
 	default:
 		LOG_WARN("hno:%u bit pos value is unexpect %u\n",
-			 PS3_HOST(instance), bit_pos);
+					PS3_HOST(instance), bit_pos);
 		goto l_out;
 	}
 	mb(); /* in order to force CPU ordering */

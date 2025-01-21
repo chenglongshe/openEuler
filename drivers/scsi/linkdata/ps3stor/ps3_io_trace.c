@@ -7,6 +7,7 @@
 #include "ps3_instance_manager.h"
 #include "ps3_scsih_cmd_parse.h"
 #include "ps3_io_trace.h"
+#include "ps3_kernel_version.h"
 
 static inline const char *ps3_io_trace_direct_name(enum ps3_io_trace_dtype type)
 {
@@ -87,10 +88,17 @@ void ps3_scsih_io_trace(const struct ps3_cmd *cmd, enum ps3_io_trace_dtype type)
 	if (scsi_sg_count(cmd->scmd) == 0)
 		goto l_out;
 
+#if defined(PS3_CMD_CDB_CHECK)
 	if (cmd->scmd->cmnd == NULL || cmd->instance->host == NULL) {
 		LOG_WARN("cdb null\n");
 		goto l_out;
 	}
+#else
+	if (cmd->instance->host == NULL) {
+		LOG_WARN("cdb null\n");
+		goto l_out;
+	}
+#endif
 
 	if ((type == PS3_IO_TRACE_DIRECT_SEND &&
 	     ps3_is_scsi_write_cmd(cmd->scmd)) ||

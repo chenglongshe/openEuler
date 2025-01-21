@@ -14,6 +14,7 @@
 #include <linux/version.h>
 #include "ps3_cli.h"
 #include "ps3_instance_manager.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_CLI_STATIC_MINOR 26
 #define PS3_CLI_DYNAMIC_MINOR MISC_DYNAMIC_MINOR
@@ -44,7 +45,11 @@ static inline int ps3_cli_minor_get(void)
 {
 	if (strstr(ps3_host_release_get(), "5.10.134-16.2.an8"))
 		return PS3_CLI_DYNAMIC_MINOR;
+#if defined(PS3_STATIC_MINOR)
 	return PS3_CLI_STATIC_MINOR;
+#else
+	return PS3_CLI_DYNAMIC_MINOR;
+#endif
 }
 
 static ssize_t ps3_cli_write(struct file *fp, const char __user *buffer,

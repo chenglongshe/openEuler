@@ -5,7 +5,7 @@
 #include <linux/percpu-defs.h>
 #include <linux/percpu.h>
 
-#include "ps3_trace_id.h"
+#include "ps3_htp_dev_info.h"
 #include "ps3_err_def.h"
 #include "ps3_trace_id_alloc.h"
 

@@ -32,7 +32,6 @@
 #include "ps3_mgr_channel.h"
 #include "ps3_mgr_cmd_err.h"
 #include "ps3_util.h"
-#include "ps3_err_inject.h"
 #include "ps3_event.h"
 
 int ps3_ioctl_init(struct ps3_instance *instance, int cmd_num)
@@ -320,7 +319,6 @@ l_out:
 
 static int ps3_ioctl_mgr_handle(struct ps3_instance *instance,
 				struct PS3IoctlSyncCmd *ioc)
-
 {
 	int ret = PS3_SUCCESS;
 	struct ps3_cmd *cmd = NULL;

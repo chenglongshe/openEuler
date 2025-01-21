@@ -54,6 +54,7 @@ int ps3_mgr_cmd_cancel(struct ps3_instance *instance,
 
 int ps3_event_register(struct ps3_instance *instance,
 		       struct PS3MgrEvent *event);
+
 int ps3_web_register(struct ps3_instance *instance);
 
 int ps3_scsi_task_mgr_abort(struct ps3_instance *instance,
@@ -74,9 +75,6 @@ int ps3_mgr_complete_proc(struct ps3_instance *instance, struct ps3_cmd *cmd,
 			  int send_result);
 
 struct ps3_cmd *ps3_dump_notify_cmd_build(struct ps3_instance *instance);
-struct ps3_cmd *
-ps3_scsi_task_mgr_reset_build(struct ps3_instance *instance,
-			      struct ps3_scsi_priv_data *priv_data);
 
 struct ps3_cmd *
 ps3_scsi_task_mgr_reset_build(struct ps3_instance *instance,
@@ -91,6 +89,7 @@ ps3_check_ioc_state_is_normal_in_unload(struct ps3_instance *instance);
 int ps3_mgr_cmd_cancel_send(struct ps3_instance *instance,
 			    unsigned short cancel_cmd_frame_id,
 			    unsigned char type);
+
 int ps3_mgr_cmd_cancel_wait(struct ps3_instance *instance, unsigned char type);
 
 #endif

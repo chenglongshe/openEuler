@@ -5,10 +5,10 @@
 #ifndef _WINDOWS
 #include <linux/kernel.h>
 #include <linux/version.h>
+#include <linux/bitmap.h>
 #endif
 
 #include "ps3_driver_log.h"
-#include "ps3_define.h"
 #include "ps3_err_def.h"
 
 static inline void setBitNonAtomic(unsigned int nr,
@@ -34,6 +34,7 @@ static inline int testBitNonAtomic(unsigned int nr,
 {
 	return 1UL & (addr[BIT_WORD(nr)] >> (nr & (BITS_PER_LONG - 1)));
 }
+
 
 struct Ps3RbNode {
 	__aligned(8) unsigned long long pParentColor;

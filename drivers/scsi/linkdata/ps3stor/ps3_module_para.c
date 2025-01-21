@@ -7,6 +7,7 @@
 #include "ps3_driver_log.h"
 #include "ps3_drv_ver.h"
 #include "ps3_ioc_state.h"
+#include "ps3_kernel_version.h"
 
 #ifndef _WINDOWS
 static unsigned int cli_ver = PS3_IOCTL_VERSION;
@@ -327,10 +328,18 @@ MODULE_PARM_DESC(g_pci_irq_mode,
 
 #if defined(PS3_TAGSET_SUPPORT)
 
+#if defined(PS3_SUPPORT_TAGSET)
+static int g_ps3_tagset_enable = 1;
+module_param(g_ps3_tagset_enable, int, 0444);
+MODULE_PARM_DESC(g_ps3_tagset_enable,
+		 "Shared host tagset enable/disable. Default: enable(1)");
+#else
 static int g_ps3_tagset_enable;
 module_param(g_ps3_tagset_enable, int, 0444);
 MODULE_PARM_DESC(g_ps3_tagset_enable,
 		 "Shared host tagset enable/disable. Default: disable(0)");
+#endif
+
 #endif
 
 static unsigned int g_smp_affinity_enable = 1;
@@ -602,6 +611,11 @@ unsigned int ps3_cli_ver_query(void)
 	return cli_ver;
 }
 #if defined(PS3_TAGSET_SUPPORT)
+
+void ps3_tagset_enable_modify(unsigned char enable)
+{
+	g_ps3_tagset_enable = enable;
+}
 
 unsigned char ps3_tagset_enable_query(void)
 {

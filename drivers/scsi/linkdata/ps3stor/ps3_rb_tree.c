@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
 #include "ps3_rb_tree.h"
-
 static void rbtNodeSetParent(struct Ps3RbNode *pNode, struct Ps3RbNode *pParent)
 {
 	pNode->pParentColor =
@@ -71,14 +70,12 @@ static void rbtColorAfterDel(struct Ps3RbRoot *pRoot, struct Ps3RbNode *pNode,
 	       (pNode != pRoot->pRoot)) {
 		if (pParent->pLeft == pNode) {
 			pOther = pParent->pRight;
-
 			if (RBT_IS_RED(pOther)) {
 				RBT_SET_BLACK(pOther);
 				RBT_SET_RED(pParent);
 				rbtRotateLeft(pRoot, pParent);
 				pOther = pParent->pRight;
 			}
-
 			if (((pOther->pLeft == NULL) ||
 			     RBT_IS_BLACK(pOther->pLeft)) &&
 			    ((pOther->pRight == NULL) ||
@@ -89,7 +86,6 @@ static void rbtColorAfterDel(struct Ps3RbRoot *pRoot, struct Ps3RbNode *pNode,
 
 				continue;
 			}
-
 			if ((pOther->pRight == NULL) ||
 			    RBT_IS_BLACK(pOther->pRight)) {
 				pOLeft = pOther->pLeft;
@@ -112,9 +108,7 @@ static void rbtColorAfterDel(struct Ps3RbRoot *pRoot, struct Ps3RbNode *pNode,
 
 			break;
 		}
-
 		pOther = pParent->pLeft;
-
 		if (RBT_IS_RED(pOther)) {
 			RBT_SET_BLACK(pOther);
 			RBT_SET_RED(pParent);
@@ -122,7 +116,6 @@ static void rbtColorAfterDel(struct Ps3RbRoot *pRoot, struct Ps3RbNode *pNode,
 			rbtRotateRight(pRoot, pParent);
 			pOther = pParent->pLeft;
 		}
-
 		if (((pOther->pLeft == NULL) || RBT_IS_BLACK(pOther->pLeft)) &&
 		    ((pOther->pRight == NULL) ||
 		     RBT_IS_BLACK(pOther->pRight))) {
@@ -132,7 +125,6 @@ static void rbtColorAfterDel(struct Ps3RbRoot *pRoot, struct Ps3RbNode *pNode,
 
 			continue;
 		}
-
 		if ((pOther->pLeft == NULL) || RBT_IS_BLACK(pOther->pLeft)) {
 			pORight = pOther->pRight;
 			if (pORight != NULL)
@@ -389,7 +381,6 @@ struct Ps3RbNode *ps3RbtPrevNode(struct Ps3RbNode *pNode)
 
 		return pNode;
 	}
-
 	while (1) {
 		pParent = RBT_PARENT(pNode);
 		if ((pParent == NULL) || (pNode != pParent->pLeft))

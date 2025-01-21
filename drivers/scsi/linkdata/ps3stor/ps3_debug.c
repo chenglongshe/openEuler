@@ -28,6 +28,8 @@
 #include "ps3_instance_manager.h"
 #include "ps3_event.h"
 #include "ps3_dump.h"
+#include "ps3_kernel_version.h"
+
 #define REG_OFFSET_BY_ADDR(instance, reg)                                      \
 	((unsigned char *)(reg) - ((unsigned char *)(instance)->reg_set))
 
@@ -169,9 +171,15 @@ static inline unsigned long long ps3_util_now_timestamp_ms_get(void)
 	unsigned long long timenow = 0;
 #ifndef _WINDOWS
 
+#if defined(PS3_DUMP_TIME_32)
+	struct timespec now;
+
+	now = current_kernel_time();
+#else
 	struct timespec64 now;
 
 	ktime_get_coarse_real_ts64(&now);
+#endif
 	timenow = now.tv_sec * 1000 + now.tv_nsec / 1000000;
 #else
 	LARGE_INTEGER now;
@@ -964,6 +972,21 @@ l_ret:
 
 void ps3_dma_dump_mapping(struct pci_dev *pdev)
 {
+#if defined(PS3_DMA_MAPPING)
+#if defined(PS3_SUPPORT_DEBUG) ||                                              \
+	(defined(PS3_CFG_RELEASE) && defined(PS3_CFG_OCM_DBGBUG)) ||           \
+	(defined(PS3_CFG_RELEASE) && defined(PS3_CFG_OCM_RELEASE))
+	void (*dma_dump_mappings)(struct device *dev) = NULL;
+
+	dma_dump_mappings = (void (*)(struct device *))
+		kallsyms_lookup_name("debug_dma_dump_mappings");
+	if (dma_dump_mappings && pdev) {
+		pr_info("ps3 dma dump mapping begin\n");
+		dma_dump_mappings(&pdev->dev);
+		pr_info("ps3 dma dump mapping end\n");
+	}
+#endif
+#endif
 	(void)pdev;
 }
 
@@ -1135,7 +1158,6 @@ ssize_t ps3_qos_switch_store(struct device *cdev, struct device_attribute *attr,
 		instance->qos_context.qos_switch = 0;
 		ps3_qos_close(instance);
 	}
-
 	if (instance->qos_context.qos_switch == 0 && qos_switch > 0) {
 		ps3_qos_open(instance);
 		instance->qos_context.qos_switch = qos_switch;

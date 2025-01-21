@@ -18,7 +18,6 @@
 
 #ifndef _WINDOWS
 
-static const unsigned int PS3_INTERRUPT_STATUS_NO_IRQ;
 static const unsigned int PS3_INTERRUPT_CMD_DISABLE_ALL_MASK = 0x02;
 static const unsigned int PS3_INTERRUPT_CMD_ENABLE_MSIX = 0x01;
 static const unsigned int PS3_INTERRUPT_MASK_DISABLE = 0x00000002;
@@ -706,7 +705,6 @@ int ps3_irqs_init_switch(struct ps3_instance *instance)
 		goto l_failed;
 	}
 	irq_context->dump_isrSN = dump_irq_index;
-
 	irq_context->irq_recovery = (struct ps3_irq_recovery *)ps3_kcalloc(
 		instance, 1, sizeof(struct ps3_irq_recovery));
 	if (irq_context->irq_recovery == NULL) {

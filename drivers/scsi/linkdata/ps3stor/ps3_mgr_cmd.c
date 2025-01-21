@@ -23,7 +23,6 @@
 #include "ps3_scsih.h"
 #include "ps3_util.h"
 #include "ps3_ioc_manager.h"
-#include "ps3_err_inject.h"
 #include "ps3_ioc_state.h"
 #include "ps3_ioctl.h"
 

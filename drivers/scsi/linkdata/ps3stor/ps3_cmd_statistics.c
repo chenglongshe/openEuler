@@ -1067,7 +1067,6 @@ ps3_direct_cmd_back_inc(const struct ps3_cmd *cmd,
 			unsigned char vd_flag, unsigned char status)
 {
 	unsigned short type = PS3_DRV_IOC_READ;
-
 	if (ps3_is_direct_cmd(cmd->io_attr.direct_flag)) {
 		if (ps3_scsih_is_read_cmd(cmd->io_attr.rw_flag)) {
 			type = vd_flag ? PS3_DRV_IOC_VD_D_READ :

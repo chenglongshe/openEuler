@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+
 #include <scsi/scsi_host.h>
 
 #include "ps3_pcie_err_handle.h"
@@ -6,6 +7,7 @@
 #include "ps3_recovery.h"
 #include "ps3_ioc_state.h"
 #include "ps3_module_para.h"
+#include "ps3_kernel_version.h"
 
 static pci_ers_result_t ps3_pci_err_detected(struct pci_dev *pdev,
 					     pci_channel_state_t state);
@@ -221,13 +223,21 @@ static void ps3_pci_resume(struct pci_dev *pdev)
 	}
 
 l_norecovery:
+#if defined(PS3_AER_CLEAR_STATUS)
 	pci_aer_clear_nonfatal_status(pdev);
+#elif defined(PS3_AER_CLEAR_STATUS_LOW_KERNER)
+	pci_cleanup_aer_uncorrect_error_status(pdev);
+#endif
 	ps3_watchdog_start(instance);
 	scsi_unblock_requests(instance->host);
 	instance->pci_err_handle_state = PS3_DEVICE_ERR_STATE_NORMAL;
 	return;
 l_failed:
+#if defined(PS3_AER_CLEAR_STATUS)
 	pci_aer_clear_nonfatal_status(pdev);
+#elif defined(PS3_AER_CLEAR_STATUS_LOW_KERNER)
+	pci_cleanup_aer_uncorrect_error_status(pdev);
+#endif
 	if (instance)
 		ps3_instance_state_transfer_to_dead(instance);
 	instance->pci_err_handle_state = PS3_DEVICE_ERR_STATE_NORMAL;

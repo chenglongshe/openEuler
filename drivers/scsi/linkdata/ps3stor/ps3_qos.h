@@ -5,6 +5,7 @@
 #include "ps3_platform_utils.h"
 #include "ps3_htp.h"
 #include "ps3_cmd_channel.h"
+#include "ps3_kernel_version.h"
 
 #define QOS_HIGH_PRI_EXCLUSIVE_CMD_COUNT 32
 #define QOS_MGR_EXCLUSIVE_CMD_COUNT 64
@@ -293,5 +294,10 @@ void ps3_qos_vd_attr_change(struct ps3_instance *instance,
 
 void ps3_qos_pd_rsc_init(struct ps3_qos_pd_mgr *qos_pd_mgr,
 			 struct ps3_pd_entry *pd_entry);
+
+#if defined(PS3_SUPPORT_LINX80)
+void ps3_linx80_vd_member_change(struct ps3_instance *instance,
+				 struct ps3_pd_entry *pd_entry);
+#endif
 
 #endif

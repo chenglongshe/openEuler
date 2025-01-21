@@ -29,7 +29,7 @@
 #include "ps3_scsih_cmd_parse.h"
 #include "ps3_module_para.h"
 #include "ps3_r1x_write_lock.h"
-#include "ps3_nvme_spec.h"
+#include "ps3_htp_dev_info.h"
 #include "ps3_nvme_resp_to_scsi.h"
 #include "ps3_scsi_cmd_err.h"
 #include "ps3_ioc_manager.h"
@@ -66,7 +66,9 @@ static void ps3_internal_errcode_to_scsi(struct scsi_cmnd *s_cmd, int err_code,
 	case PS3_STATUS_ACCESS_BLOCK:
 		host_status = DID_OK;
 #ifndef _WINDOWS
+#if defined(PS3_SUPPORT_DRIVER_SENSE)
 		s_cmd->result |= PS3_SCSI_RESULT_DRIVER_STATUS(DRIVER_SENSE);
+#endif
 		status = SAM_STAT_CHECK_CONDITION;
 		scsi_build_sense_buffer(0, s_cmd->sense_buffer, ILLEGAL_REQUEST,
 					0x20, 0x02);
@@ -74,7 +76,9 @@ static void ps3_internal_errcode_to_scsi(struct scsi_cmnd *s_cmd, int err_code,
 		break;
 	case PS3_STATUS_REQ_ILLEGAL:
 		host_status = DID_OK;
+#if defined(PS3_SUPPORT_DRIVER_SENSE)
 		s_cmd->result |= PS3_SCSI_RESULT_DRIVER_STATUS(DRIVER_SENSE);
+#endif
 		status = SAM_STAT_CHECK_CONDITION;
 		scsi_build_sense_buffer(0, s_cmd->sense_buffer, ILLEGAL_REQUEST,
 					0x20, 0x00);
@@ -91,7 +95,11 @@ static void ps3_internal_errcode_to_scsi(struct scsi_cmnd *s_cmd, int err_code,
 		host_status = DID_IMM_RETRY;
 		break;
 	case PS3_STATUS_HOST_RESET:
+#if defined(PS3_DID_REQUEUE)
+		host_status = DID_REQUEUE;
+#else
 		host_status = DID_RESET;
+#endif
 		break;
 	case PS3_STATUS_UNDERRUN:
 		if ((scsi_bufflen(s_cmd) < xfer_cnt) &&
@@ -111,8 +119,10 @@ static void ps3_internal_errcode_to_scsi(struct scsi_cmnd *s_cmd, int err_code,
 				host_status = DID_SOFT_ERROR;
 			} else if (!xfer_cnt && s_cmd->cmnd[0] == REPORT_LUNS) {
 				host_status = DID_OK;
+#if defined(PS3_SUPPORT_DRIVER_SENSE)
 				s_cmd->result |= PS3_SCSI_RESULT_DRIVER_STATUS(
 					DRIVER_SENSE);
+#endif
 				status = SAM_STAT_CHECK_CONDITION;
 				scsi_build_sense_buffer(0, s_cmd->sense_buffer,
 							ILLEGAL_REQUEST, 0x20,
@@ -156,7 +166,9 @@ static void ps3_standard_errcode_to_scsi(struct ps3_instance *instance,
 		status = err_code;
 		break;
 	case SCSI_STATUS_RESERVATION_CONFLICT:
+#if defined(PS3_DID_NEXUS_FAILURE)
 		host_status = DID_NEXUS_FAILURE;
+#endif
 		status = err_code;
 		break;
 	case SCSI_STATUS_CHECK_CONDITION:
@@ -170,7 +182,9 @@ static void ps3_standard_errcode_to_scsi(struct ps3_instance *instance,
 					     SCSI_SENSE_BUFFERSIZE,
 					     SCMD_GET_REQUEST(s_cmd)->tag);
 		}
+#if defined(PS3_SUPPORT_DRIVER_SENSE)
 		s_cmd->result |= PS3_SCSI_RESULT_DRIVER_STATUS(DRIVER_SENSE);
+#endif
 		break;
 	default:
 		host_status = DID_ERROR;
@@ -460,7 +474,9 @@ static void ps3_err_sas_errcode_mapping_with_sense(struct ps3_cmd *cmd,
 		goto l_out;
 	}
 
+#if defined(PS3_SUPPORT_DRIVER_SENSE)
 	scmd->result |= PS3_SCSI_RESULT_DRIVER_STATUS(DRIVER_SENSE);
+#endif
 	scmd->result |=
 		PS3_SCSI_RESULT_HOST_STATUS(host_status) | frame_sas.status;
 
@@ -689,7 +705,9 @@ void ps3_scsih_drv_io_reply_scsi(struct scsi_cmnd *s_cmd, struct ps3_cmd *cmd,
 	ps3_errcode_to_scsi_status(cmd->instance, s_cmd, resp_status, NULL, 0,
 				   cmd);
 
+#if defined(PS3_SUPPORT_CMD_SCP)
 	s_cmd->SCp.ptr = NULL;
+#endif
 	ps3_scsi_dma_unmap(cmd);
 	data = (struct ps3_scsi_priv_data *)s_cmd->device->hostdata;
 	if (likely(data != NULL))
@@ -1037,7 +1055,6 @@ static int ps3_hard_reset_pre_check(struct ps3_instance *instance)
 
 	LOG_WARN("hno:%u ready to host reset,instance state: %s\n",
 		 PS3_HOST(instance), namePS3InstanceState(cur_state));
-
 	if (is_support_halt && (cur_state != PS3_INSTANCE_STATE_DEAD)) {
 		ps3_atomic_set(&instance->state_machine.state,
 			       PS3_INSTANCE_STATE_DEAD);
@@ -1161,6 +1178,7 @@ int ps3_reset_host(struct ps3_instance *instance)
 		}
 		ps3_msleep(100);
 	} while (1);
+
 
 	ps3_mutex_lock(&instance->state_machine.lock);
 	if (instance->recovery_context->recovery_state ==
@@ -1326,7 +1344,11 @@ int ps3_err_reset_host(struct scsi_cmnd *scmd)
 	return ret;
 }
 
+#if defined(PS3_RESET_TIMER)
+enum scsi_timeout_action ps3_err_reset_timer(struct scsi_cmnd *scmd)
+#else
 enum blk_eh_timer_return ps3_err_reset_timer(struct scsi_cmnd *scmd)
+#endif
 {
 	struct ps3_instance *instance = NULL;
 	unsigned long flags = 0;
@@ -1344,7 +1366,13 @@ enum blk_eh_timer_return ps3_err_reset_timer(struct scsi_cmnd *scmd)
 			scmd->cmd_len > 0 ? scmd->cmnd[0] : 0xff,
 			SCMD_GET_REQUEST(scmd)->timeout, scmd->jiffies_at_alloc,
 			jiffies);
+#if defined(PS3_BLK_EH_NOT_HANDLED)
+		return BLK_EH_NOT_HANDLED;
+#elif defined(PS3_RESET_TIMER)
+		return SCSI_EH_NOT_HANDLED;
+#else
 		return BLK_EH_DONE;
+#endif
 	}
 
 	if (instance->is_support_io_limit &&
@@ -1367,7 +1395,11 @@ enum blk_eh_timer_return ps3_err_reset_timer(struct scsi_cmnd *scmd)
 		      SCMD_GET_REQUEST(scmd)->timeout, scmd->jiffies_at_alloc,
 		      jiffies);
 
+#if defined(PS3_RESET_TIMER)
+	return SCSI_EH_RESET_TIMER;
+#else
 	return BLK_EH_RESET_TIMER;
+#endif
 }
 static void ps3_scsi_sense_print(struct ps3_instance *instance,
 				 const unsigned char *sense_buffer,

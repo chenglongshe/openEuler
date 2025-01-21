@@ -2,7 +2,6 @@
 #ifndef __PS3_R1X_WRITE_LOCK_H__
 #define __PS3_R1X_WRITE_LOCK_H__
 
-#include "ps3_types.h"
 #include "ps3_cmd_channel.h"
 
 enum {
@@ -45,7 +44,6 @@ static inline void ps3_r1x_write_unlock(struct ps3_r1x_lock_mgr *mgr,
 int ps3_r1x_lock_prepare_for_vd(struct ps3_instance *instance,
 				struct scsi_device *sdev,
 				unsigned char raid_level);
-
 void ps3_r1x_lock_destroy_for_vd(struct ps3_instance *instance,
 				 struct ps3_r1x_lock_mgr *mgr);
 

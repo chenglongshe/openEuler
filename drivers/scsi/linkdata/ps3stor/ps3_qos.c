@@ -7,7 +7,6 @@
 #include <scsi/scsi_host.h>
 #include "ps3_ioc_manager.h"
 #include "ps3_util.h"
-#include "ps3_types.h"
 #include "ps3_instance_manager.h"
 #include "ps3_htp_def.h"
 #include "ps3_scsih.h"
@@ -20,6 +19,7 @@
 #include "ps3_cmd_statistics.h"
 #include "ps3_scsih_raid_engine.h"
 #include "ps3_ioc_state.h"
+#include "ps3_kernel_version.h"
 
 #define PS3_QOS_PD_IS_VD_MEMBER(qos_pd_mgr) ((qos_pd_mgr)->vd_id > 0)
 
@@ -2287,6 +2287,30 @@ static void ps3_hba_qos_vd_clean(struct ps3_instance *instance,
 #define PS3_QOS_JBOD_VD_MGR(instance)                                          \
 	(&instance->qos_context.vd_ctx                                         \
 		  .qos_vd_mgrs[instance->qos_context.max_vd_count])
+
+#if defined(PS3_SUPPORT_LINX80)
+void ps3_linx80_vd_member_change(struct ps3_instance *instance,
+				 struct ps3_pd_entry *pd_entry)
+{
+	unsigned short pd_id = 0;
+	struct ps3_qos_pd_mgr *qos_pd_mgr = NULL;
+
+	if (!PS3_QOS_INITED(instance))
+		goto _out;
+
+	pd_id = PS3_PDID(&pd_entry->disk_pos);
+	qos_pd_mgr = ps3_qos_pd_mgr_get(instance, pd_id);
+	if (ps3_atomic_read(&qos_pd_mgr->valid) != PS3_TRUE)
+		goto _out;
+	ps3_pd_quota_waitq_clean(qos_pd_mgr, 0, PS3_STATUS_VD_MEMBER_OFFLINE);
+	cancel_work_sync(&qos_pd_mgr->resend_work);
+	LOG_INFO("linx80 update pd qos rsc. host_no:%u pd_id:%u dev_type:%u\n",
+		 PS3_HOST(instance), pd_id, pd_entry->dev_type);
+
+_out:
+	return;
+}
+#endif
 static void ps3_hba_qos_pd_clean(struct ps3_instance *instance,
 				 struct ps3_scsi_priv_data *priv_data,
 				 int resp_status)
@@ -2667,7 +2691,13 @@ struct ps3_qos_pd_mgr *ps3_qos_pd_mgr_init(struct ps3_instance *instance,
 	qos_pd_mgr = ps3_qos_pd_mgr_get(instance, pd_id);
 
 	if ((ps3_atomic_add_unless(&qos_pd_mgr->valid, 1, 1) != 0) ||
+#if defined(PS3_SUPPORT_LINX80)
+	    ((ps3_sas_is_support_smp(instance)) &&
+	     (!ps3_check_pd_is_vd_member(pd_entry->config_flag))) ||
 	    (pd_entry->config_flag == MIC_PD_STATE_JBOD)) {
+#else
+	    (pd_entry->config_flag == MIC_PD_STATE_JBOD)) {
+#endif
 		if (pd_entry->config_flag == MIC_PD_STATE_JBOD)
 			ps3_qos_vd_member_del(instance, &pd_entry->disk_pos);
 

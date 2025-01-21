@@ -22,6 +22,7 @@
 
 #include "ps3_driver_log.h"
 #include "ps3_module_para.h"
+#include "ps3_kernel_version.h"
 
 #if defined DRIVER_DEBUG && defined __KERNEL__
 
@@ -38,6 +39,17 @@ char g_log_path_bin[LOG_PATH_LEN] = { 0 };
 
 static inline int time_for_log(char *buff, int buf_len)
 {
+#if defined(PS3_DUMP_TIME_32)
+	struct timeval tv;
+	struct tm td;
+
+	do_gettimeofday(&tv);
+	time_to_tm(tv.tv_sec, -sys_tz.tz_minuteswest * 60, &td);
+
+	return snprintf(buff, buf_len, "[%04ld-%02d-%02d;%02d:%02d:%02d.%ld]",
+			td.tm_year + 1900, td.tm_mon + 1, td.tm_mday,
+			td.tm_hour, td.tm_min, td.tm_sec, tv.tv_usec);
+#else
 	struct timespec64 tv;
 	struct tm td;
 
@@ -46,15 +58,24 @@ static inline int time_for_log(char *buff, int buf_len)
 	return snprintf(buff, buf_len, "[%04ld-%02d-%02d;%02d:%02d:%02d.%ld]",
 			td.tm_year + 1900, td.tm_mon + 1, td.tm_mday,
 			td.tm_hour, td.tm_min, td.tm_sec, tv.tv_nsec * 1000);
+#endif
 }
 
 static inline int time_for_file_name(char *buff, int buf_len)
 {
+#if defined(PS3_DUMP_TIME_32)
+	struct timeval tv;
+	struct tm td;
+
+	do_gettimeofday(&tv);
+	time_to_tm(tv.tv_sec, -sys_tz.tz_minuteswest * 60, &td);
+#else
 	struct timespec64 tv;
 	struct tm td;
 
 	ktime_get_real_ts64(&tv);
 	time64_to_tm(tv.tv_sec, -sys_tz.tz_minuteswest * 60, &td);
+#endif
 	return snprintf(buff, buf_len, "%04ld-%02d-%02d_%02d:%02d:%02d",
 			td.tm_year + 1900, td.tm_mon + 1, td.tm_mday,
 			td.tm_hour, td.tm_min, td.tm_sec);
@@ -62,8 +83,11 @@ static inline int time_for_file_name(char *buff, int buf_len)
 
 static inline char *ps3_stack_top(void)
 {
+#if defined(PS3_THREAD_INFO)
+	unsigned long *ptr = (unsigned long *)(current->thread_info + 1);
+#else
 	unsigned long *ptr = (unsigned long *)(task_thread_info(current) + 1);
-
+#endif
 	return (char *)(ptr + 1);
 }
 
@@ -309,9 +333,25 @@ static void ps3_file_sync(struct file *file)
 
 	journal = current->journal_info;
 	current->journal_info = NULL;
+
 	mapping = file->f_mapping;
+
 	ret = filemap_fdatawrite(mapping);
+
+#if defined(PS3_FILEMAP_WAIT)
+	mutex_lock(&mapping->host->i_mutex);
+	err = file->f_op->fsync(file, file->f_path.dentry, 1);
+	if (!ret)
+		ret = err;
+	mutex_unlock(&mapping->host->i_mutex);
+	err = filemap_fdatawait(mapping);
+	if (!ret)
+		ret = err;
+
+#else
 	err = file->f_op->fsync(file, 0, file->f_mapping->host->i_size, 1);
+#endif
+
 	current->journal_info = journal;
 
 l_end:
@@ -323,24 +363,54 @@ static int ps3_file_write(struct file *file, char *buf, int len)
 	int ret = 0;
 
 	void *journal;
+#if defined(PS3_SUPPORT_FS)
 	mm_segment_t old_fs;
+#endif
 
+#if defined(PS3_KERNEL_WRITE_GET_DS)
+	old_fs = get_fs();
+	set_fs(get_ds());
+#elif defined(PS3_KERNEL_WRITE)
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+#elif defined(PS3_VFS_WRITE)
+#else
 	old_fs = force_uaccess_begin();
+#endif
+
 	journal = current->journal_info;
 	current->journal_info = NULL;
 
-	if (!file)
+	if (!file) {
 		return 0;
+	}
 
 	do {
+#if defined(PS3_KERNEL_WRITE_FILE_OP)
+		ret = file->f_op->write(file, buf, len, &file->f_pos);
+#elif defined(PS3_KERNEL_WRITE_FILE_VFS)
+		ret = vfs_write(file, buf, len, &file->f_pos);
+#else
 		ret = kernel_write(file, buf, len, &file->f_pos);
+#endif
 	} while (ret == -EINTR);
 
-	if (ret >= 0)
+	if (ret >= 0) {
+#if defined(PS3_FSNOTIFY_FILE)
 		fsnotify_modify(file);
+#elif defined(PS3_FSNOTIFY_FILE_PATH)
+		if (file->f_path.dentry)
+			fsnotify_modify(file->f_path.dentry);
+#endif
+	}
 
 	current->journal_info = journal;
+#if defined(PS3_SET_FS)
+	set_fs(old_fs);
+#elif defined(PS3_FORCE_UACCESS)
+#else
 	force_uaccess_end(old_fs);
+#endif
 
 	return ret;
 }
@@ -876,3 +946,14 @@ void ps3_debug_exit(void)
 }
 
 #endif
+
+static int g_ramfs_test_enable;
+int ps3_ramfs_test_query(void)
+{
+	return g_ramfs_test_enable;
+}
+
+void ps3_ramfs_test_store(int val)
+{
+	g_ramfs_test_enable = val;
+}

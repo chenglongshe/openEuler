@@ -59,8 +59,6 @@ static void ps3_cli_remove_host_force(int argc, char *argv[]);
 static void ps3_hardreset_cnt_clear_cli_cb(int argc, char *argv[]);
 static void ps3_hardreset_cnt_show_cli_cb(int argc, char *argv[]);
 static void ps3_cli_ramfs_test_set(int argc, char *argv[]);
-static void ps3_cli_err_inject_active(int argc, char *argv[]);
-static void ps3_cli_err_inject_clear(int argc, char *argv[]);
 static void ps3_no_wait_cli_cmd(int argc, char *argv[]);
 static void ps3_cli_qos_info(int argc, char *argv[]);
 static void ps3_cli_special_log(int argc, char *argv[]);
@@ -134,9 +132,6 @@ static struct ps3_cli_debug_cmd g_ps3_cli_debug_cmd_table[] = {
 	  "hardreset_cnt_show host_no xxx(host number)" },
 	{ ps3_cli_ramfs_test_set, "ramfs_test_set",
 	  "set or clear filesystem type to ramfs: <xxx> (0: clear, 1: set)" },
-	{ ps3_cli_err_inject_active, "err_inject",
-	  "err_inject err_type count" },
-	{ ps3_cli_err_inject_clear, "cli_err_clear", "" },
 	{ ps3_no_wait_cli_cmd, "ps3_no_wait_cli_cmd",
 	  "clean_wait_cli_cmd flag xxx" },
 	{ ps3_cli_qos_info, "qos_dump",
@@ -1984,6 +1979,7 @@ static ssize_t ps3_io_statis_to_str(struct ps3_dev_io_statis *disk_io_statis,
 		(unsigned long long)atomic64_read(&disk_io_statis->read_send_wait_cnt));
 	if ((len + temp_len) > total_len)
 		goto l_out;
+
 	len += snprintf(
 		buf + len, total_len - len, "%-20s:%llu\n", "readOutStandCnt",
 		(unsigned long long)atomic64_read(&disk_io_statis->read_send_wait_cnt));
@@ -2045,6 +2041,7 @@ static ssize_t ps3_io_statis_to_str(struct ps3_dev_io_statis *disk_io_statis,
 	len += snprintf(
 		buf + len, total_len - len, "%-20s:%llu\n", "writeOutStandCnt",
 		(unsigned long long)atomic64_read(&disk_io_statis->write_send_wait_cnt));
+
 
 	memset(temp, 0, temp_array_len);
 	temp_len =
@@ -3632,43 +3629,6 @@ static void ps3_cli_ramfs_test_set(int argc, char *argv[])
 	ps3stor_cli_printf("set ramfs test enable to %d\n", ramfs_enable);
 l_out:
 	return;
-}
-
-static void ps3_cli_err_inject_active(int argc, char *argv[])
-{
-	unsigned int err_inject_type = 0;
-	unsigned int count;
-	int ret = PS3_SUCCESS;
-
-	if (argc < 3) {
-		ps3stor_cli_printf("Too few args, must input 3 args!\n");
-		goto l_out;
-	}
-
-	ret = kstrtouint(argv[1], 0, &err_inject_type);
-	if (ret != 0) {
-		ps3stor_cli_printf("Can not parse err_inject_type!\n");
-		goto l_out;
-	}
-
-	ret = kstrtouint(argv[2], 0, &count);
-	if (ret != 0) {
-		ps3stor_cli_printf("Can not parse count!\n");
-		goto l_out;
-	}
-
-	if ((err_inject_type >= PS3_ERR_IJ_WATCHDOG_CONCURY) &&
-	    (err_inject_type < PS3_ERR_IJ_MAX_COUNT)) {
-		ps3stor_cli_printf("active %u count %u\n", err_inject_type,
-				   count);
-	}
-l_out:
-	return;
-}
-static void ps3_cli_err_inject_clear(int argc, char *argv[])
-{
-	(void)argc;
-	(void)argv;
 }
 
 unsigned char ps3_get_wait_cli_flag(void)

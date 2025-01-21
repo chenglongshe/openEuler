@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+
 #include "ps3_device_update.h"
 
 #ifdef _WINDOWS
@@ -23,7 +23,7 @@
 #endif
 
 #include "ps3_event.h"
-#include "ps3_meta.h"
+#include "ps3_htp_dev_info.h"
 #include "ps3_htp_event.h"
 #include "ps3_mgr_cmd.h"
 #include "ps3_ioc_manager.h"
@@ -33,6 +33,7 @@
 #include "ps3_scsi_cmd_err.h"
 #include "ps3_r1x_write_lock.h"
 #include "ps3_ioc_state.h"
+#include "ps3_kernel_version.h"
 
 static int ps3_pd_del(struct ps3_instance *instance,
 		      struct PS3DiskDevPos *dev_pos, unsigned char config_flag);
@@ -88,6 +89,20 @@ unsigned char ps3_pd_scsi_visible_check(struct ps3_instance *instance,
 			namePS3DevType((enum PS3DevType)dev_type));
 		goto l_out;
 	}
+
+#if defined(PS3_SUPPORT_LINX80)
+	if (!instance->is_support_jbod &&
+	    ps3_check_pd_is_vd_member(config_flag)) {
+		LOG_DEBUG(
+			"hno:%u PD[%u:%u:%u] is vd component, config_flag[%s]\n",
+			PS3_HOST(instance), PS3_CHANNEL(disk_pos),
+			PS3_TARGET(disk_pos), PS3_PDID(disk_pos),
+			getPdStateName((enum MicPdState)config_flag,
+				       instance->is_raid));
+		visible = PS3_DRV_FALSE;
+		goto l_out;
+	}
+#endif
 
 	if (instance->is_support_jbod && config_flag != MIC_PD_STATE_JBOD) {
 		LOG_DEBUG(
@@ -267,7 +282,6 @@ l_out:
 	return ret;
 }
 #ifndef _WINDOWS
-
 static unsigned char ps3_sd_available_check(struct scsi_device *sdev)
 {
 	unsigned char ret = PS3_TRUE;
@@ -575,6 +589,42 @@ void ps3_check_vd_member_change(struct ps3_instance *instance,
 
 	if (!ps3_sas_is_support_smp(instance))
 		goto l_out;
+#if defined(PS3_SUPPORT_LINX80)
+	(void)sdev;
+	if (ps3_check_pd_is_vd_member(local_entry->config_flag)) {
+		LOG_WARN(
+			"hno:%u change ready to component, remove device channel[%u], id[%u], begin\n",
+			PS3_HOST(instance), PS3_CHANNEL(&local_entry->disk_pos),
+			PS3_TARGET(&local_entry->disk_pos));
+		ps3_pd_del(instance, &local_entry->disk_pos,
+			   local_entry->config_flag);
+		LOG_WARN(
+			"hno:%u change ready to component, remove device channel[%u], id[%u] end\n",
+			PS3_HOST(instance), PS3_CHANNEL(&local_entry->disk_pos),
+			PS3_TARGET(&local_entry->disk_pos));
+	} else {
+		ps3_mutex_lock(&instance->dev_context.dev_scan_lock);
+		sdev = ps3_scsi_device_lookup(
+			instance, PS3_CHANNEL(&local_entry->disk_pos),
+			PS3_TARGET(&local_entry->disk_pos), 0);
+		if (sdev) {
+			ps3_scsi_device_put(instance, sdev);
+			ps3_mutex_unlock(&instance->dev_context.dev_scan_lock);
+		} else {
+			ps3_mutex_unlock(&instance->dev_context.dev_scan_lock);
+			ps3_linx80_vd_member_change(instance, local_entry);
+		}
+		LOG_WARN(
+			"hno:%u change component to ready, add device channel[%u], id[%u], begin\n",
+			PS3_HOST(instance), PS3_CHANNEL(&local_entry->disk_pos),
+			PS3_TARGET(&local_entry->disk_pos));
+		ps3_pd_add(instance, &local_entry->disk_pos);
+		LOG_WARN(
+			"hno:%u change component to ready, add device channel[%u], id[%u], end\n",
+			PS3_HOST(instance), PS3_CHANNEL(&local_entry->disk_pos),
+			PS3_TARGET(&local_entry->disk_pos));
+	}
+#else
 
 	ps3_mutex_lock(&instance->dev_context.dev_scan_lock);
 	sdev = ps3_scsi_device_lookup(instance,
@@ -615,6 +665,7 @@ void ps3_check_vd_member_change(struct ps3_instance *instance,
 		ps3_scsi_device_put(instance, sdev);
 	}
 	ps3_mutex_unlock(&instance->dev_context.dev_scan_lock);
+#endif
 l_out:
 	return;
 }

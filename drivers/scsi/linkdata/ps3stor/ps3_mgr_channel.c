@@ -29,10 +29,14 @@
 #include "ps3_driver_log.h"
 #include "ps3_instance_manager.h"
 #include "ps3_cmd_statistics.h"
-#include "ps3_err_inject.h"
+#include "ps3_kernel_version.h"
 
 #ifndef _WINDOWS
+#if defined(PS3_LINUX_SIGNAL)
+#include <linux/sched/signal.h>
+#else
 #include <linux/signal.h>
+#endif
 #endif
 
 #define CMD_MAX_RETRY_COUNT (10)

@@ -2,7 +2,8 @@
 #ifndef _PS3_HTP_DEF_H_
 #define _PS3_HTP_DEF_H_
 
-#include "ps3_types.h"
+
+
 
 #define PCIE_DMA_HOST_ADDR_BIT_POS (44)
 
@@ -22,6 +23,7 @@
 #define PCIE_DMA_HOST_ADDR_BIT_POS_CLEAR_NEW(bit_pos, addr)                    \
 	((addr) - ((1ULL) << (bit_pos)))
 
+
 enum PS3FWDiagKey {
 	PS3_FW_DIAG_FLUSH = 0X00,
 	PS3_FW_DIAG_1ST_KEY = 0x52,
@@ -35,15 +37,18 @@ enum PS3FWDiagKey {
 	PS3_FW_DIAG_9TH_KEY = 0x59,
 };
 
+
 enum PS3FWStateAct {
 	PS3_FW_STATE_ACT_INIT_READY = 0X00000001,
 };
+
 
 enum PS3RegDoorBellType {
 	PS3_REG_DOORBELL_STATE_TO_READY = 1,
 	PS3_REG_DOORBELL_STATE_TO_FAULT = 2,
 	PS3_REG_DOORBELL_STATE_TO_HALT = 3,
 };
+
 
 enum PS3FWSoftResetAct {
 	PS3_FW_STATE_ACT_SHALLOW_SOFT_RESET = 0X00000001,
@@ -55,6 +60,7 @@ enum PS3PerfModeType {
 	PS3_PERF_MODE_IOPS = 1,
 	PS3_PERF_MODE_LATENCY = 2,
 };
+
 
 enum PS3BitPos {
 	PS3_BIT_POS_DEFAULT = 0,
@@ -70,6 +76,7 @@ enum PS3BitPos {
 	PS3_BIT_POS_53 = 10,
 	PS3_BIT_POS_54 = 11,
 };
+
 
 enum PS3CmdType {
 	PS3_CMD_INIT_IOC = 0x0,
@@ -96,6 +103,7 @@ enum {
 	PS3_CMD_OPERATOR_TYPE_IOC = 0x2,
 };
 
+
 enum {
 	PS3_PCI_IRQ_LEGACY = 0,
 	PS3_PCI_IRQ_MSI = 1,
@@ -106,10 +114,12 @@ enum {
 #define PS3_SENSE_BUFFER_SIZE (96)
 #define PS3_RESP_FRAME_BUFFER_SIZE (128)
 
+
 #define PS3_REQUEST_CONTROL_DIR_NONE 0x00
 #define PS3_REQUEST_CONTROL_DIR_READ 0x01
 #define PS3_REQUEST_CONTROL_DIR_WRITE 0x02
 #define PS3_REQUEST_CONTROL_DIR_BOTH 0x03
+
 
 #define PS3_MAX_PD_COUNT_IN_SPAN 32
 #define PS3_MAX_SPAN_IN_VD 8
@@ -117,9 +127,12 @@ enum {
 #define PS3_IOC_INIT_STATE_MASK 0xFFFF
 #define PS3_IOC_RECOVERY_COUNT_MASK 0xFFFFFFFF
 
+
 #define PS3_START_STATE_SPACE 0x0100
 
+
 #define PS3_DRV_MGR_FLUSH_RETRY_MAX_COUNT 1
+
 
 #define MAX_MGR_CMD_TOTAL_COUNT (16)
 
@@ -130,11 +143,13 @@ enum {
 union HilRegPs3RegisterHotReset {
 	unsigned long long val;
 	struct {
+
 		unsigned char isHotReset : 1;
 		unsigned char reserved0 : 7;
 		unsigned char reserved1[7];
 	} reg;
 };
+
 
 #define PS3_ATU_SUPPORT_OFFSET                                                 \
 	(HIL_REG1_PS3_REGISTER_F_PS3_DEBUG8_ADDR -                             \
@@ -143,10 +158,12 @@ union HilRegPs3RegisterHotReset {
 union HilRegPs3RegisterFPs3AtuSupport {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned char bitPos;
 		unsigned char reserved[7];
 	} reg;
 };
+
 
 #define PS3_CAN_HARD_RESET_OFFSET                                              \
 	(HIL_REG1_PS3_REGISTER_F_PS3_DEBUG9_ADDR -                             \
@@ -155,11 +172,13 @@ union HilRegPs3RegisterFPs3AtuSupport {
 union HilRegPs3RegisterFPs3CanHardReset {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned char canHardReset : 1;
 		unsigned char reserved0 : 7;
 		unsigned char reserved1[7];
 	} reg;
 };
+
 
 enum PS3FWRunState {
 	PS3_FW_STATE_UNDEFINED = 0x00,
@@ -177,6 +196,7 @@ enum PS3FWRunState {
 	PS3_FW_STATE_WDT_MASK = 0xFF0000FF,
 };
 
+
 enum PS3FWStartState {
 	PS3_START_STATE_UNDEFINED = 0x0000,
 	PS3_START_STATE_INIT_BASE = 0x0100,
@@ -192,9 +212,11 @@ enum PS3FWStartState {
 	PS3_START_STATE_WDT_MASK = 0xFF00FF00,
 };
 
+
 #define PS3_FW_RESET_FLAG (0X00000001)
 #define PS3_FW_DIAG_ENABLE (0X00000001)
 #define PS3_FW_HARD_RESET_ACT (0X00000001)
+
 
 #define PS3_FW_MAX_CMD_MASK (0X0000FFFF)
 #define PS3_FW_MAX_MSIX_VECTORS_MASK (0X0000FFFF)
@@ -202,16 +224,19 @@ enum PS3FWStartState {
 #define PS3_FW_MAX_RAID_MAP_SIZE_MASK (0XFFFFFFFF)
 #define PS3_FW_MAX_NVME_PAGE_SIZE_MASK (0xFFFFFFFF)
 
+
 #define PS3_FW_INTERRUPT_STATUS_MASK (0X00000001)
 #define PS3_FW_INTERRUPT_CMD_INTR_CAP_MASK (0X00000004)
 #define PS3_FW_INTERRUPT_CMD_MSI_CAP_MASK (0X00000002)
 #define PS3_FW_INTERRUPT_CMD_MSIX_CAP_MASK (0X00000001)
 #define PS3_FW_INTERRUPT_CLEAR_MASK (0X00000001)
 
+
 enum PS3FWFeatureSupportMask {
 	PS3_FW_FEATURE_SUPPORT_SYNC_CACHE = 0X00000001,
 	PS3_FW_FEATURE_SUPPORT_DMA64 = 0X00000002,
 };
+
 
 enum PS3FWCtrlMask {
 	PS3_FW_CTRL_CMD_TRIGGER_SNAPSHOT = 0X00000001,
@@ -219,30 +244,36 @@ enum PS3FWCtrlMask {
 	PS3_FW_CTRL_CMD_CRASHDUMP_DMA_CLEAR = 0X00000004,
 };
 
+
 enum PS3FWCtrlStatusMask {
 	PS3_FW_CTRL_STATUS_CRASHDUMP_DONE = 0X00000001,
 	PS3_FW_CTRL_STATUS_RSVR = 0X00000002,
 	PS3_FW_CTRL_STATUS_CRASHDUMP_MAP = 0X00000004,
 };
 
+
 enum PS3CmdTrigger {
 	PS3_CMD_TRIGGER_UNLOAD = 0X0001,
 	PS3_CMD_TRIGGER_UNLOAD_SUSPEND = 0X0002,
 };
 
+
 enum PS3RegCmdState {
 	PS3_DOORBELL_DONE = 0X0001,
 };
 
+
 enum PS3Debug12Mask {
 	PS3_DEBUG12__HOT_RESET = 0X00000001,
 };
+
 
 enum PS3MgrControlFlag {
 	PS3_REQUEST_CONTROL_SKIP_REFIRE = 0x0,
 	PS3_REQUEST_CONTROL_SENSE32 = 0x1,
 	PS3_REQUEST_CONTROL_SENSE64 = 0x2,
 };
+
 
 enum PS3TaskCmdSubType {
 	PS3_TASK_CMD_SCSI_TASK_ABORT,
@@ -340,6 +371,7 @@ static inline const char *namePS3MgrCmdSubType(enum PS3MgrCmdSubType type)
 	return "PS3_MGR_CMD_INVALID";
 }
 
+
 enum PS3CmdIocErrCode {
 	PS3_IOC_ERR_CODE_OK = 0x00,
 	PS3_IOC_ERR_CODE_ERR = 0x01,
@@ -375,6 +407,7 @@ enum PS3CmdStatusCode {
 	PS3_STATUS_DIF_APP_ERROR = 0x90,
 	PS3_STATUS_ACCESS_RO = 0x91,
 };
+
 
 enum PS3CmdWordType {
 	PS3_CMDWORD_TYPE_INIT = 0x00,

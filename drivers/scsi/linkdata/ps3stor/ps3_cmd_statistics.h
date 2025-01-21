@@ -34,6 +34,7 @@ void ps3_io_statis_clear(struct scsi_device *sdev);
 
 int ps3_cmd_statistics_init(struct ps3_instance *instance);
 
+
 void ps3_cmd_statistics_exit(struct ps3_instance *instance);
 
 void ps3_dev_io_start_inc(struct ps3_instance *instance,

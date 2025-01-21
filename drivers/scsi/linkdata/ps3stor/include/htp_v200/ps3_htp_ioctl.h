@@ -22,6 +22,7 @@
 
 #define PS3_PSW_PRODUCT_MODEL "psw"
 
+
 struct PS3CmdIoctlHeader {
 	unsigned char cmdType;
 	unsigned char version;
@@ -37,12 +38,10 @@ struct PS3CmdIoctlHeader {
 	unsigned char syncFlag;
 	unsigned int abortCmdFrameId;
 };
-
 union PS3IoctlFrame {
 	unsigned char value[PS3_IOCTL_MAX_FRAME_SIZE];
 	struct PS3CmdIoctlHeader header;
 };
-
 #ifdef _WINDOWS
 
 #define PS3_IOCTL_SIG "ps3stor"
@@ -63,12 +62,12 @@ struct PS3IoctlSyncCmd {
 	unsigned short reserved;
 	unsigned long long traceId;
 	struct PS3Sge Sgl[PS3_MAX_IOCTL_SGE_NUM];
-	UCHAR data[0];
+	unsigned char data[0];
 };
 
 struct _PS3_IO_CONTROL {
 	SRB_IO_CONTROL SrbHeader;
-	ULONG reserved;
+	unsigned long reserved;
 	struct PS3IoctlSyncCmd ps3Ioctl;
 };
 #else
@@ -92,8 +91,8 @@ struct PS3IoctlSyncCmd {
 	unsigned char sense[PS3_IOCTL_SENSE_SIZE];
 	unsigned long long traceId;
 	unsigned char reserved3[120];
-	union PS3IoctlFrame msg;
 	struct PS3Sge sgl[PS3_MAX_IOCTL_SGE_NUM];
+	union PS3IoctlFrame msg;
 };
 #endif
 
@@ -110,5 +109,4 @@ struct PS3IoctlAsynCmd {
 };
 
 #endif
-
 #endif

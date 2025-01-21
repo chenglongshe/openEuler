@@ -17,7 +17,6 @@
 #include "ps3_pci.h"
 #include "ps3_htp_def.h"
 #include "ps3_mgr_cmd.h"
-#include "ps3_err_inject.h"
 #include "ps3_drv_ver.h"
 
 #define PS3_INIT_CMD_WAIT_MAX_TIMEOUT (180)
@@ -587,6 +586,7 @@ static void ps3_ioc_init_cmd_prepare(struct ps3_instance *instance)
 		(unsigned short)cmd_context->max_cmd_count;
 	init_frame_msg->bufSizePerRespFrame = PS3_RESP_FRAME_BUFFER_SIZE;
 
+
 	if (ps3_hil_mode_query() > HIL_MODEL_SW_ASSIST)
 		init_frame_msg->hilMode = instance->hilMode;
 	else
@@ -1013,6 +1013,7 @@ unsigned long long ps3_ioc_hardreset_reg_read(struct ps3_instance *instance,
 		value = instance->ioc_adpter->reg_read(instance, reg);
 	else
 		LOG_ERROR("hno:%u  no register read\n", PS3_HOST(instance));
+
 
 	return value;
 }

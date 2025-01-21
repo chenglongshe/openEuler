@@ -56,7 +56,6 @@ ssize_t ps3_ioc_state_show(struct device *cdev, struct device_attribute *attr,
 
 ssize_t ps3_log_level_store(struct device *cdev, struct device_attribute *attr,
 			    const char *buf, size_t count);
-
 ssize_t ps3_log_level_show(struct device *cdev, struct device_attribute *attr,
 			   char *buf);
 
@@ -68,7 +67,6 @@ ssize_t ps3_io_trace_switch_show(struct device *cdev,
 				 struct device_attribute *attr, char *buf);
 ssize_t ps3_halt_support_cli_show(struct device *cdev,
 				  struct device_attribute *attr, char *buf);
-
 ssize_t ps3_halt_support_cli_store(struct device *cdev,
 				   struct device_attribute *attr,
 				   const char *buf, size_t count);
@@ -102,15 +100,11 @@ ssize_t ps3_event_subscribe_info_get(struct ps3_instance *instance, char *buf,
 #ifndef _WINDOWS
 
 int ps3_debug_mem_alloc(struct ps3_instance *ins);
-
 int ps3_debug_mem_free(struct ps3_instance *ins);
-
 ssize_t ps3_dump_state_show(struct device *cdev, struct device_attribute *attr,
 			    char *buf);
-
 ssize_t ps3_dump_state_store(struct device *cdev, struct device_attribute *attr,
 			     const char *buf, size_t count);
-
 ssize_t ps3_dump_type_show(struct device *cdev, struct device_attribute *attr,
 			   char *buf);
 

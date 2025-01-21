@@ -22,10 +22,9 @@
 #include "hwapi/include_v200/s1861_regs/s1861_hil_reg0_ps3_register_s_reg.h"
 
 #include "ps3_device_manager.h"
-#include "ps3_register_fifo.h"
+#include "ps3_htp_register_fifo.h"
 #include "ps3_err_def.h"
-#include <linux/blk-mq-pci.h>
-
+#include "ps3_kernel_version.h"
 #define PS3_DEFAULT_PAGE_SIZE_SHIFT (12)
 #define PS3_CMD_SGE_FRAME_BUFFER_SIZE (4096)
 #define PS3_DUMP_DMA_BUF_SIZE (0x100000)
@@ -47,12 +46,13 @@
 
 #define PS3_DEVICE_IO_BUSY_THRESHOLD (8)
 
-#ifndef PS3_TAGSET_SUPPORT
-#define PS3_TAGSET_SUPPORT
-#endif
-
+#if defined(PS3_MAP_QUEUES)
+#define MAP_QUEUES_RET_TYPE void
+#define MAP_QUEUES_RET_VAL(x)
+#else
 #define MAP_QUEUES_RET_TYPE int
 #define MAP_QUEUES_RET_VAL(x) (x)
+#endif
 
 #define PS3_BLOCK_NUM_OF_32K (1 << 6)
 #define PS3_VD_IO_16_OUTSTANDING (16)
@@ -66,6 +66,7 @@ enum {
 enum {
 	PS3_DEVICE_QDEPTH_DEFAULT_VALUE = 16,
 };
+
 
 enum PS3FuncID {
 	PS3_FUNC_ID_0 = 0,

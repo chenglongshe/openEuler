@@ -13,7 +13,6 @@
 #endif
 
 #include "ps3_htp.h"
-#include "ps3_meta.h"
 #include "ps3_err_def.h"
 #include "ps3_instance_manager.h"
 #include "ps3_cmd_channel.h"
@@ -107,6 +106,7 @@ unsigned char ps3_scsih_stream_is_detect(struct ps3_cmd *cmd)
 
 	if (PS3_IF_QUIT_STREAM_DIRECT_DETECT())
 		goto l_out;
+
 
 	if ((type != PS3_SCSI_CMD_TYPE_READ) &&
 	    (type != PS3_SCSI_CMD_TYPE_WRITE)) {
@@ -2678,7 +2678,6 @@ static inline int ps3_scsih_prp_len_check(struct ps3_cmd *cmd,
 
 	return ret;
 }
-
 static unsigned short
 ps3_scsih_frontend_data_buf_build(struct ps3_cmd *cmd,
 				  struct PS3FrontEndReqFrame *req)
@@ -2890,7 +2889,7 @@ static int ps3_scsih_sata_hw_req_frame_build(struct ps3_cmd *cmd,
 	struct PS3ReqFrameHead *req_head = &cmd->req_frame->hwReq.reqHead;
 	unsigned char req_frame_format = PS3_REQFRAME_FORMAT_SATA;
 
-	memset(iodt, 0, sizeof(struct __packed IODT_V1));
+	memset(iodt, 0, sizeof(struct IODT_V1));
 
 	ps3_scsih_req_frame_head_build(cmd, req_frame_format);
 
@@ -2990,7 +2989,7 @@ static int ps3_scsih_sas_hw_req_frame_build(struct ps3_cmd *cmd,
 
 	if (cmd->io_attr.dev_type == PS3_DEV_TYPE_VD)
 		cdb = cmd->io_attr.cdb;
-	memset(iodt, 0, sizeof(struct __packed IODT_V1));
+	memset(iodt, 0, sizeof(struct IODT_V1));
 
 	ps3_scsih_req_frame_head_build(cmd, req_frame_format);
 
@@ -3300,7 +3299,9 @@ int ps3_scsih_io_done(struct ps3_cmd *cmd, unsigned short reply_flags)
 
 	ps3_r1x_read_dec(cmd, data->r1x_rb_info);
 
+#if defined(PS3_SUPPORT_CMD_SCP)
 	s_cmd->SCp.ptr = NULL;
+#endif
 	ps3_scsi_dma_unmap(cmd);
 
 	ps3_qos_cmd_update(cmd->instance, cmd);
@@ -3653,7 +3654,11 @@ l_out:
 
 int ps3_get_requeue_or_reset(void)
 {
+#if defined(PS3_DID_REQUEUE)
+	return PS3_SCSI_RESULT_HOST_STATUS(DID_REQUEUE);
+#else
 	return PS3_SCSI_RESULT_HOST_STATUS(DID_RESET);
+#endif
 }
 
 unsigned char ps3_write_direct_enable(struct ps3_cmd *cmd)

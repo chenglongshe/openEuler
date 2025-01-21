@@ -20,7 +20,6 @@
 #include "ps3_device_update.h"
 #include "ps3_util.h"
 #include "ps3_cmd_statistics.h"
-#include "ps3_err_inject.h"
 unsigned short ps3_event_code_pd_count[] = {
 	PS3_EVT_CODE(MGR_EVT_DEVM_DISK_IN),
 	PS3_EVT_CODE(MGR_EVT_DEVM_DISK_OUT),

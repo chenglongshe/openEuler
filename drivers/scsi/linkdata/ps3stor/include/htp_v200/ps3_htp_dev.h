@@ -10,12 +10,14 @@
 #define PS3_SECURITY_CIPHER_NUM_MAX 2
 #define PS3_STABLE_WRITES_MASK (0x1)
 
+
 struct PS3IocCtrlProp {
 	unsigned int enableSnapshot : 1;
 	unsigned int enableSoftReset : 1;
 	unsigned int reserved1 : 30;
 	unsigned int reserved2;
 };
+
 
 struct PS3IocCtrlCapable {
 	unsigned int supportUnevenSpans : 1;
@@ -53,7 +55,9 @@ struct PS3QosInfo {
 	unsigned short nvmeNormalQuota;
 };
 
+
 struct PS3IocCtrlInfo {
+
 	unsigned short maxVdCount;
 
 	unsigned short maxPdCount;
@@ -87,6 +91,7 @@ struct PS3IocCtrlInfo {
 	unsigned char reserved3[2];
 
 	unsigned char reserved4[32];
+
 };
 
 struct PS3Dev {
@@ -102,6 +107,7 @@ union PS3DiskDev {
 	unsigned int diskID;
 	struct PS3Dev ps3Dev;
 };
+
 
 struct PS3DiskDevPos {
 	union {
@@ -178,6 +184,7 @@ struct PS3PDInfo {
 	unsigned char reserved4[20];
 };
 
+
 struct PS3Extent {
 	union PS3DiskDev phyDiskID;
 	unsigned char state;
@@ -232,6 +239,7 @@ struct PS3VDEntry {
 	unsigned short directQuota;
 	unsigned short reserved4[21];
 	struct PS3Span span[PS3_MAX_SPAN_IN_VD];
+
 };
 
 struct PS3VDInfo {
@@ -246,6 +254,7 @@ struct PS3DrvSysInfo {
 	unsigned char reserved[6];
 	unsigned char systemID[PS3_DRV_SYSTEM_ID_MAX_LEN];
 };
+
 
 struct PS3PhyInfo {
 	unsigned long long sasAddr;
@@ -267,6 +276,7 @@ struct PS3PhyInfo {
 	unsigned char reserved[7];
 };
 
+
 struct PS3ExpanderInfo {
 	unsigned long long sasAddr;
 	unsigned long long parentSasAddr;
@@ -276,6 +286,7 @@ struct PS3ExpanderInfo {
 	unsigned char phyCount;
 	unsigned char reserved[4];
 };
+
 
 struct PS3Expanders {
 	unsigned char count;

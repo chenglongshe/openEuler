@@ -5,6 +5,7 @@
 #ifndef _WINDOWS
 #include <linux/mutex.h>
 #include <linux/atomic.h>
+#include "linux/kernel.h"
 #endif
 
 #include "ps3_htp_def.h"

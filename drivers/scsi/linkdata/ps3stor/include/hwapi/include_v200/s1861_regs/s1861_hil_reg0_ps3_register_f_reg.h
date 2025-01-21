@@ -258,6 +258,7 @@
 union HilReg0Ps3RegisterFPs3Doorbell {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -266,6 +267,7 @@ union HilReg0Ps3RegisterFPs3Doorbell {
 union HilReg0Ps3RegisterFPs3DoorbellIrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -274,6 +276,7 @@ union HilReg0Ps3RegisterFPs3DoorbellIrqClear {
 union HilReg0Ps3RegisterFPs3DoorbellIrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -282,6 +285,7 @@ union HilReg0Ps3RegisterFPs3DoorbellIrqMask {
 union HilReg0Ps3RegisterFPs3IrqControl {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long global : 1;
 		unsigned long long fwState : 1;
 		unsigned long long tbd : 30;
@@ -292,6 +296,7 @@ union HilReg0Ps3RegisterFPs3IrqControl {
 union HilReg0Ps3RegisterFPs3SoftresetKey {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3SoftresetKey : 8;
 		unsigned long long reserved1 : 56;
 	} reg;
@@ -300,6 +305,7 @@ union HilReg0Ps3RegisterFPs3SoftresetKey {
 union HilReg0Ps3RegisterFPs3SoftresetState {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -308,6 +314,7 @@ union HilReg0Ps3RegisterFPs3SoftresetState {
 union HilReg0Ps3RegisterFPs3Softreset {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 8;
 		unsigned long long reserved1 : 56;
 	} reg;
@@ -316,6 +323,7 @@ union HilReg0Ps3RegisterFPs3Softreset {
 union HilReg0Ps3RegisterFPs3SoftresetIrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -324,6 +332,7 @@ union HilReg0Ps3RegisterFPs3SoftresetIrqClear {
 union HilReg0Ps3RegisterFPs3SoftresetIrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -332,6 +341,7 @@ union HilReg0Ps3RegisterFPs3SoftresetIrqMask {
 union HilReg0Ps3RegisterFPs3SoftresetKeyShiftRegLow {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 64;
 	} reg;
 };
@@ -339,6 +349,7 @@ union HilReg0Ps3RegisterFPs3SoftresetKeyShiftRegLow {
 union HilReg0Ps3RegisterFPs3SoftresetKeyShiftRegHigh {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 8;
 		unsigned long long reserved1 : 56;
 	} reg;
@@ -347,6 +358,7 @@ union HilReg0Ps3RegisterFPs3SoftresetKeyShiftRegHigh {
 union HilReg0Ps3RegisterFPs3SoftresetTimeCnt {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 64;
 	} reg;
 };
@@ -354,6 +366,7 @@ union HilReg0Ps3RegisterFPs3SoftresetTimeCnt {
 union HilReg0Ps3RegisterFPs3SoftresetTimeOutEn {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -362,6 +375,7 @@ union HilReg0Ps3RegisterFPs3SoftresetTimeOutEn {
 union HilReg0Ps3RegisterFPs3HardresetKey {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3HardresetKey : 8;
 		unsigned long long reserved1 : 56;
 	} reg;
@@ -370,6 +384,7 @@ union HilReg0Ps3RegisterFPs3HardresetKey {
 union HilReg0Ps3RegisterFPs3HardresetState {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -378,6 +393,7 @@ union HilReg0Ps3RegisterFPs3HardresetState {
 union HilReg0Ps3RegisterFPs3Hardreset {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long config : 8;
 		unsigned long long reserved1 : 56;
 	} reg;
@@ -386,6 +402,7 @@ union HilReg0Ps3RegisterFPs3Hardreset {
 union HilReg0Ps3RegisterFPs3HardresetKeyShiftRegLow {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 64;
 	} reg;
 };
@@ -393,6 +410,7 @@ union HilReg0Ps3RegisterFPs3HardresetKeyShiftRegLow {
 union HilReg0Ps3RegisterFPs3HardresetKeyShiftRegHigh {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 8;
 		unsigned long long reserved1 : 56;
 	} reg;
@@ -401,6 +419,7 @@ union HilReg0Ps3RegisterFPs3HardresetKeyShiftRegHigh {
 union HilReg0Ps3RegisterFPs3HardresetTimeCnt {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 64;
 	} reg;
 };
@@ -408,6 +427,7 @@ union HilReg0Ps3RegisterFPs3HardresetTimeCnt {
 union HilReg0Ps3RegisterFPs3HardresetTimeOutEn {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -416,6 +436,7 @@ union HilReg0Ps3RegisterFPs3HardresetTimeOutEn {
 union HilReg0Ps3RegisterFPs3KeyGapCfg {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3KeyGapCfg : 64;
 	} reg;
 };
@@ -423,6 +444,7 @@ union HilReg0Ps3RegisterFPs3KeyGapCfg {
 union HilReg0Ps3RegisterFPs3HardresetIrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -431,6 +453,7 @@ union HilReg0Ps3RegisterFPs3HardresetIrqClear {
 union HilReg0Ps3RegisterFPs3HardresetIrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -439,6 +462,7 @@ union HilReg0Ps3RegisterFPs3HardresetIrqMask {
 union HilReg0Ps3RegisterFPs3SocFwState {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3SocFwState : 8;
 		unsigned long long ps3SocFwStartState : 8;
 		unsigned long long ps3SocBootState : 8;
@@ -450,6 +474,7 @@ union HilReg0Ps3RegisterFPs3SocFwState {
 union HilReg0Ps3RegisterFPs3MaxFwCmd {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3MaxFwCmd : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -458,6 +483,7 @@ union HilReg0Ps3RegisterFPs3MaxFwCmd {
 union HilReg0Ps3RegisterFPs3MaxChainSize {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3MaxChainSize : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -466,6 +492,7 @@ union HilReg0Ps3RegisterFPs3MaxChainSize {
 union HilReg0Ps3RegisterFPs3MaxVdInfoSize {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3MaxVdInfoSize : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -474,6 +501,7 @@ union HilReg0Ps3RegisterFPs3MaxVdInfoSize {
 union HilReg0Ps3RegisterFPs3MaxNvmePageSize {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3MaxNvmePageSize : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -482,6 +510,7 @@ union HilReg0Ps3RegisterFPs3MaxNvmePageSize {
 union HilReg0Ps3RegisterFPs3FeatureSupport {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long multiDevfnSupport : 1;
 		unsigned long long dmaBit64Support : 1;
 		unsigned long long debugOcmSupport : 1;
@@ -499,6 +528,7 @@ union HilReg0Ps3RegisterFPs3FeatureSupport {
 union HilReg0Ps3RegisterFPs3FirmwareVersion {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3FmVer : 8;
 		unsigned long long tbd : 24;
 		unsigned long long reserved2 : 32;
@@ -508,6 +538,7 @@ union HilReg0Ps3RegisterFPs3FirmwareVersion {
 union HilReg0Ps3RegisterFPs3MaxReplyque {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3MaxReplyque : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -516,6 +547,7 @@ union HilReg0Ps3RegisterFPs3MaxReplyque {
 union HilReg0Ps3RegisterFPs3HardwareVersion {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long chipId : 64;
 	} reg;
 };
@@ -523,6 +555,7 @@ union HilReg0Ps3RegisterFPs3HardwareVersion {
 union HilReg0Ps3RegisterFPs3MgrQueueDepth {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3MgrQueueDepth : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -531,6 +564,7 @@ union HilReg0Ps3RegisterFPs3MgrQueueDepth {
 union HilReg0Ps3RegisterFPs3CmdQueueDepth {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3CmdQueueDepth : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -539,6 +573,7 @@ union HilReg0Ps3RegisterFPs3CmdQueueDepth {
 union HilReg0Ps3RegisterFPs3TfifoDepth {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3TfifoDepth : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -547,6 +582,7 @@ union HilReg0Ps3RegisterFPs3TfifoDepth {
 union HilReg0Ps3RegisterFPs3MaxSecR1xCmds {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3MaxSecR1xCmds : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -555,6 +591,7 @@ union HilReg0Ps3RegisterFPs3MaxSecR1xCmds {
 union HilReg0Ps3RegisterFPs3HilAdvice2directCnt0 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -563,6 +600,7 @@ union HilReg0Ps3RegisterFPs3HilAdvice2directCnt0 {
 union HilReg0Ps3RegisterFPs3HilAdvice2directCnt1 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -571,6 +609,7 @@ union HilReg0Ps3RegisterFPs3HilAdvice2directCnt1 {
 union HilReg0Ps3RegisterFPs3HilAdvice2directCnt2 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -579,6 +618,7 @@ union HilReg0Ps3RegisterFPs3HilAdvice2directCnt2 {
 union HilReg0Ps3RegisterFPs3HilAdvice2directCnt3 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -587,6 +627,7 @@ union HilReg0Ps3RegisterFPs3HilAdvice2directCnt3 {
 union HilReg0Ps3RegisterFPs3HilAdvice2directCntAll {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -595,6 +636,7 @@ union HilReg0Ps3RegisterFPs3HilAdvice2directCntAll {
 union HilReg0Ps3RegisterFPs3IrqStatusRpt {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long doorbell : 1;
 		unsigned long long reserved1 : 3;
 		unsigned long long softreset : 1;
@@ -623,6 +665,7 @@ union HilReg0Ps3RegisterFPs3IrqStatusRpt {
 union HilReg0Ps3RegisterFPs3DumpCtrl {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 16;
 		unsigned long long reserved1 : 48;
 	} reg;
@@ -631,6 +674,7 @@ union HilReg0Ps3RegisterFPs3DumpCtrl {
 union HilReg0Ps3RegisterFPs3DumpCtrlIrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -639,6 +683,7 @@ union HilReg0Ps3RegisterFPs3DumpCtrlIrqClear {
 union HilReg0Ps3RegisterFPs3DumpCtrlIrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -647,6 +692,7 @@ union HilReg0Ps3RegisterFPs3DumpCtrlIrqMask {
 union HilReg0Ps3RegisterFPs3DumpStatus {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long dmaFinish : 1;
 		unsigned long long hasCrashDump : 1;
 		unsigned long long hasFwDump : 1;
@@ -660,6 +706,7 @@ union HilReg0Ps3RegisterFPs3DumpStatus {
 union HilReg0Ps3RegisterFPs3DumpDataSize {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long ps3DumpDataSize : 32;
 		unsigned long long reserved1 : 32;
 	} reg;
@@ -668,6 +715,7 @@ union HilReg0Ps3RegisterFPs3DumpDataSize {
 union HilReg0Ps3RegisterFPs3CmdTrigger {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -675,6 +723,7 @@ union HilReg0Ps3RegisterFPs3CmdTrigger {
 union HilReg0Ps3RegisterFPs3CmdTriggerIrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -683,6 +732,7 @@ union HilReg0Ps3RegisterFPs3CmdTriggerIrqClear {
 union HilReg0Ps3RegisterFPs3CmdTriggerIrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -691,6 +741,7 @@ union HilReg0Ps3RegisterFPs3CmdTriggerIrqMask {
 union HilReg0Ps3RegisterFPs3SoftresetCounter {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long rpt : 32;
 		unsigned long long tbd : 32;
 	} reg;
@@ -699,6 +750,7 @@ union HilReg0Ps3RegisterFPs3SoftresetCounter {
 union HilReg0Ps3RegisterFPs3RegCmdState {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -706,6 +758,7 @@ union HilReg0Ps3RegisterFPs3RegCmdState {
 union HilReg0Ps3RegisterFPs3Debug0 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -713,6 +766,7 @@ union HilReg0Ps3RegisterFPs3Debug0 {
 union HilReg0Ps3RegisterFPs3Debug0IrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -721,6 +775,7 @@ union HilReg0Ps3RegisterFPs3Debug0IrqClear {
 union HilReg0Ps3RegisterFPs3Debug0IrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -729,6 +784,7 @@ union HilReg0Ps3RegisterFPs3Debug0IrqMask {
 union HilReg0Ps3RegisterFPs3Debug1 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -736,6 +792,7 @@ union HilReg0Ps3RegisterFPs3Debug1 {
 union HilReg0Ps3RegisterFPs3Debug1IrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -744,6 +801,7 @@ union HilReg0Ps3RegisterFPs3Debug1IrqClear {
 union HilReg0Ps3RegisterFPs3Debug1IrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -752,6 +810,7 @@ union HilReg0Ps3RegisterFPs3Debug1IrqMask {
 union HilReg0Ps3RegisterFPs3Debug2 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -759,6 +818,7 @@ union HilReg0Ps3RegisterFPs3Debug2 {
 union HilReg0Ps3RegisterFPs3Debug2IrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -767,6 +827,7 @@ union HilReg0Ps3RegisterFPs3Debug2IrqClear {
 union HilReg0Ps3RegisterFPs3Debug2IrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -775,6 +836,7 @@ union HilReg0Ps3RegisterFPs3Debug2IrqMask {
 union HilReg0Ps3RegisterFPs3Debug3 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -782,6 +844,7 @@ union HilReg0Ps3RegisterFPs3Debug3 {
 union HilReg0Ps3RegisterFPs3Debug3IrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -790,6 +853,7 @@ union HilReg0Ps3RegisterFPs3Debug3IrqClear {
 union HilReg0Ps3RegisterFPs3Debug3IrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -798,6 +862,7 @@ union HilReg0Ps3RegisterFPs3Debug3IrqMask {
 union HilReg0Ps3RegisterFPs3Debug4 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -805,6 +870,7 @@ union HilReg0Ps3RegisterFPs3Debug4 {
 union HilReg0Ps3RegisterFPs3Debug4IrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -813,6 +879,7 @@ union HilReg0Ps3RegisterFPs3Debug4IrqClear {
 union HilReg0Ps3RegisterFPs3Debug4IrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -821,6 +888,7 @@ union HilReg0Ps3RegisterFPs3Debug4IrqMask {
 union HilReg0Ps3RegisterFPs3Debug5 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -828,6 +896,7 @@ union HilReg0Ps3RegisterFPs3Debug5 {
 union HilReg0Ps3RegisterFPs3Debug6 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -835,6 +904,7 @@ union HilReg0Ps3RegisterFPs3Debug6 {
 union HilReg0Ps3RegisterFPs3Debug7 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -842,6 +912,7 @@ union HilReg0Ps3RegisterFPs3Debug7 {
 union HilReg0Ps3RegisterFPs3Debug8 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -849,6 +920,7 @@ union HilReg0Ps3RegisterFPs3Debug8 {
 union HilReg0Ps3RegisterFPs3Debug9 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -856,6 +928,7 @@ union HilReg0Ps3RegisterFPs3Debug9 {
 union HilReg0Ps3RegisterFPs3Debug10 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -863,6 +936,7 @@ union HilReg0Ps3RegisterFPs3Debug10 {
 union HilReg0Ps3RegisterFPs3Debug11 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -870,6 +944,7 @@ union HilReg0Ps3RegisterFPs3Debug11 {
 union HilReg0Ps3RegisterFPs3Debug12 {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -877,6 +952,7 @@ union HilReg0Ps3RegisterFPs3Debug12 {
 union HilReg0Ps3RegisterFPs3SessioncmdAddr {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long cmd : 64;
 	} reg;
 };
@@ -884,6 +960,7 @@ union HilReg0Ps3RegisterFPs3SessioncmdAddr {
 union HilReg0Ps3RegisterFPs3SessioncmdAddrIrqClear {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long pulse : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -892,12 +969,14 @@ union HilReg0Ps3RegisterFPs3SessioncmdAddrIrqClear {
 union HilReg0Ps3RegisterFPs3SessioncmdAddrIrqMask {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long level : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
 };
 
 struct HilReg0Ps3RegisterF {
+
 	unsigned long long reserved0[8];
 	union HilReg0Ps3RegisterFPs3Doorbell ps3Doorbell;
 	union HilReg0Ps3RegisterFPs3DoorbellIrqClear ps3DoorbellIrqClear;

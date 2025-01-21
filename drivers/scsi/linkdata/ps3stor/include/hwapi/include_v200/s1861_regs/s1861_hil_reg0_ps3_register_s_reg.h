@@ -15,6 +15,7 @@
 union HilReg0Ps3RegisterSPs3FucntionLock {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long lock : 1;
 		unsigned long long reserved1 : 63;
 	} reg;
@@ -23,12 +24,14 @@ union HilReg0Ps3RegisterSPs3FucntionLock {
 union HilReg0Ps3RegisterSPs3FunctionLockOwner {
 	volatile unsigned long long val;
 	struct {
+
 		unsigned long long display : 2;
 		unsigned long long reserved1 : 62;
 	} reg;
 };
 
 struct HilReg0Ps3RegisterS {
+
 	union HilReg0Ps3RegisterSPs3FucntionLock ps3FucntionLock;
 	union HilReg0Ps3RegisterSPs3FunctionLockOwner ps3FunctionLockOwner;
 };

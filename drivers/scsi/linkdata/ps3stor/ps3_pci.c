@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+
 #include "ps3_instance_manager.h"
 #include "ps3_pci.h"
 
@@ -21,7 +22,6 @@ static unsigned short ps3_pci_msix_vec_count(struct ps3_instance *instance,
 					     PPCI_COMMON_CONFIG pci_config);
 static unsigned short ps3_pci_msi_vec_count(struct ps3_instance *instance,
 					    PPCI_COMMON_CONFIG pci_config);
-
 int ps3_pci_init(struct ps3_instance *instance, void *config)
 {
 	int ret = PS3_SUCCESS;
@@ -54,7 +54,6 @@ static int ps3_pci_info_get(struct ps3_instance *instance,
 #ifdef PS3_HARDWARE_ASIC
 	unsigned int check_count = ps3_hba_check_time_query() * 10;
 #endif
-
 	if (config->AdapterInterfaceType != PCIBus) {
 		LOG_ERROR("there is not pcibus, type:%d\n",
 			  config->AdapterInterfaceType);
@@ -100,7 +99,6 @@ static int ps3_pci_info_get(struct ps3_instance *instance,
 		pci_config.u.type0.SubVendorID;
 	instance->pci_dev_context.sub_device_id =
 		pci_config.u.type0.SubSystemID;
-
 	base_addr =
 		pci_config.u.type0.BaseAddresses[PS3_VALID_MEMORY_BAR_INDEX];
 	if (!PS3_CHECK_BAR_MEMORYSPACE(base_addr)) {

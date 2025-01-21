@@ -18,9 +18,6 @@
 #define PCI_STATUS_INTERRUPT 0x08
 #define PCI_MSIX_FLAGS_QSIZE 0x07FF
 #define PCI_MSI_FLAGS_QMASK 0x000e
-
-#else
-#include "ps3_types.h"
 #endif
 
 #ifndef _WINDOWS
@@ -38,7 +35,6 @@ struct ps3_pci_context {
 	unsigned short device_id;
 	unsigned short sub_vendor_id;
 	unsigned short sub_device_id;
-
 	unsigned long long bar_base_addr;
 	unsigned short irq_vec_count;
 	unsigned short valid_irq_count;
@@ -52,7 +48,6 @@ void ps3_pci_exit(struct ps3_instance *instance);
 void ps3_pci_intx(struct ps3_instance *instance, unsigned char enable);
 
 #endif
-
 int ps3_pci_find_capability(struct ps3_instance *instance, int cap_id);
 
 int ps3_pci_read_config_word(struct ps3_instance *instance, unsigned int offset,

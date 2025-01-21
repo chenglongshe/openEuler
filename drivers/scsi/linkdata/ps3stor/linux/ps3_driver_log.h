@@ -8,6 +8,7 @@
 #include <linux/sched.h>
 
 #include "ps3_htp_def.h"
+#include "ps3_platform_utils.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -271,16 +272,8 @@ void ps3_log_binary(const char *file, int line, char *ptr, int size, char *str);
 
 void ps3_log_sync(void);
 
-static int g_ramfs_test_enable;
-static inline int ps3_ramfs_test_query(void)
-{
-	return g_ramfs_test_enable;
-}
-
-static inline void ps3_ramfs_test_store(int val)
-{
-	g_ramfs_test_enable = val;
-}
+int ps3_ramfs_test_query(void);
+void ps3_ramfs_test_store(int val);
 
 #if defined DRIVER_DEBUG && defined __KERNEL__
 
@@ -408,7 +401,6 @@ static inline void ps3_ramfs_test_store(int val)
 #define LOG2_INFO_LIM(fmt, ...) LOG_INFO_LIM(fmt, ##__VA_ARGS__)
 #define LOG2_WARN_LIM(fmt, ...) LOG_WARN_LIM(fmt, ##__VA_ARGS__)
 #define LOG2_ERROR_LIM(fmt, ...) LOG_ERROR_LIM(fmt, ##__VA_ARGS__)
-
 #define LOG_SPC_ERROR(fmt, ...) LOG_INFO(fmt, ##__VA_ARGS__)
 
 #define LOG_FILE_INFO(fmt, ...)
@@ -437,7 +429,6 @@ static inline void ps3_ramfs_test_store(int val)
 			ps3_printk(LEVEL_ERROR, fmt, ##__VA_ARGS__);           \
 		}                                                              \
 	} while (0)
-
 #define LOG_INFO_LIM_WITH_CHECK(ins, need_prk_err, fmt, ...)                   \
 	do {                                                                   \
 		if (need_prk_err) {                                            \
@@ -543,7 +534,6 @@ static inline unsigned char ps3_fs_requires_dev(struct file *fp)
 		(void)ins;                                                     \
 		ps3_print(PS3_FALSE, LEVEL_ERROR, fmt, ##__VA_ARGS__);         \
 	} while (0)
-
 #define LOG_INFO_LIM_WITH_CHECK(ins, need_prk_err, fmt, ...)                   \
 	do {                                                                   \
 		(void)ins;                                                     \

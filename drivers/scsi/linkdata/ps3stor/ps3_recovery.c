@@ -19,10 +19,11 @@
 #include "ps3_r1x_write_lock.h"
 #include "ps3_ioc_state.h"
 #include "ps3_module_para.h"
-#include "ps3_err_inject.h"
 #include "ps3_ioctl.h"
 #include "ps3_dump.h"
 #include "ps3_cli_debug.h"
+#include "ps3_kernel_version.h"
+
 int ps3_recovery_cancel_work_sync(struct ps3_instance *instance);
 #ifndef _WINDOWS
 static void ps3_recovery_work(struct work_struct *work);
@@ -186,6 +187,7 @@ irqreturn_t ps3_recovery_irq_handler(int virq, void *dev_id)
 	if (instance->ioc_adpter->ioc_heartbeat_detect(instance) == PS3_TRUE &&
 	    !ps3_pci_err_recovery_get(instance) &&
 	    instance->recovery_irq_enable) {
+
 		LOG_DEBUG(
 			"hno:%u  recovery irq received, virq: %d, dev_id: 0x%llx\n",
 			PS3_HOST(instance), virq,
@@ -1457,6 +1459,7 @@ static void ps3_recovery_work(void *ins)
 		LOG_WARN("hno:%u  pci recovery resetting\n",
 			 PS3_HOST(instance));
 
+
 		if (instance->recovery_context->recovery_state ==
 		    PS3_HARD_RECOVERY_DECIDE) {
 			ps3_recovery_state_transfer(instance,
@@ -2235,6 +2238,7 @@ ps3_wait_event_vdpending_cmd_complete(struct ps3_instance *instance)
 	int ret = PS3_SUCCESS;
 	unsigned int count = 0;
 
+
 	const unsigned int retry_max = PS3_WAIT_EVENT_CMD_LOOP_COUNT;
 
 	while (ps3_atomic_read(&instance->event_context.abort_eventcmd) != 0 ||
@@ -2916,7 +2920,6 @@ static int ps3_hard_recovery_handle(struct ps3_instance *instance)
 		LOG_INFO(
 			"hno:%u  IOC state to pre-operatioal success! retries:%d\n",
 			PS3_HOST(instance), retries);
-
 		if (instance->peer_instance != NULL &&
 		    !PS3_IS_INSTANCE_NOT_LOAD_NORMAL(instance->peer_instance) &&
 		    instance->peer_instance->recovery_function
@@ -3260,7 +3263,9 @@ void ps3_scsi_cmd_force_stop(struct ps3_instance *instance)
 		PS3_DEV_BUSY_DEC(s_cmd);
 
 		s_cmd->result = ret_code;
+#if defined(PS3_SUPPORT_CMD_SCP)
 		s_cmd->SCp.ptr = NULL;
+#endif
 		ps3_scsi_dma_unmap(cmd);
 		if (likely(cmd && cmd->scmd && cmd->scmd->device &&
 			   cmd->scmd->device->hostdata)) {
@@ -3466,6 +3471,7 @@ unsigned char ps3_is_need_hard_reset(struct ps3_instance *instance)
 
 	LOG_INFO("hno:%u  instance state not support hardreset!\n",
 		 PS3_HOST(instance));
+
 	if (is_support_halt && (cur_state != PS3_INSTANCE_STATE_DEAD)) {
 		ps3_atomic_set(&instance->state_machine.state,
 			       PS3_INSTANCE_STATE_DEAD);
