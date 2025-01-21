@@ -19,6 +19,10 @@
 #endif
 #include <linux/zswap.h>
 #include <linux/dynamic_pool.h>
+#include <linux/memcontrol.h>
+#ifdef CONFIG_VKERNEL
+#include <linux/vkernel.h>
+#endif
 #include <asm/page.h>
 #include "internal.h"
 
@@ -35,12 +39,24 @@ static void show_val_kb(struct seq_file *m, const char *s, unsigned long num)
 static int meminfo_proc_show(struct seq_file *m, void *v)
 {
 	struct sysinfo i;
+	unsigned long commit_limit;
 	unsigned long committed;
 	long cached;
 	long available;
 	unsigned long pages[NR_LRU_LISTS];
 	unsigned long sreclaimable, sunreclaim;
 	int lru;
+#if defined(CONFIG_VKERNEL) && defined(CONFIG_MEMCG)
+	struct vkernel *vk;
+	struct mem_cgroup *memcg;
+
+	vk = vkernel_find_vk_by_task(current);
+	memcg = mem_cgroup_from_task(current);
+	if (vk && memcg)
+		commit_limit = vk_vm_commit_limit(&vk->sysctl_vm, memcg);
+#else
+		commit_limit = vm_commit_limit();
+#endif
 
 	si_meminfo(&i);
 	si_swapinfo(&i);
@@ -126,7 +142,7 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 		    global_zone_page_state(NR_BOUNCE));
 	show_val_kb(m, "WritebackTmp:   ",
 		    global_node_page_state(NR_WRITEBACK_TEMP));
-	show_val_kb(m, "CommitLimit:    ", vm_commit_limit());
+	show_val_kb(m, "CommitLimit:    ", commit_limit);
 	show_val_kb(m, "Committed_AS:   ", committed);
 	seq_printf(m, "VmallocTotal:   %8lu kB\n",
 		   (unsigned long)VMALLOC_TOTAL >> 10);
