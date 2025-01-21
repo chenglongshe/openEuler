@@ -597,9 +597,11 @@ static void xsk_drop_skb(struct sk_buff *skb)
 static struct sk_buff *xsk_build_skb(struct xdp_sock *xs,
 				     struct xdp_desc *desc)
 {
+	struct xsk_tx_metadata *meta = NULL;
 	struct net_device *dev = xs->dev;
 	struct sk_buff *skb = xs->skb;
 	int err;
+	bool first_frag = false;
 
 	if (dev->priv_flags & IFF_TX_SKB_NO_LINEAR) {
 		err = -EOPNOTSUPP;
@@ -626,6 +628,7 @@ static struct sk_buff *xsk_build_skb(struct xdp_sock *xs,
 				kfree_skb(skb);
 				goto free_err;
 			}
+			first_frag = true;
 		} else {
 			int nr_frags = skb_shinfo(skb)->nr_frags;
 			struct page *page;
@@ -648,6 +651,32 @@ static struct sk_buff *xsk_build_skb(struct xdp_sock *xs,
 
 			skb_add_rx_frag(skb, nr_frags, page, 0, len, PAGE_SIZE);
 			refcount_add(PAGE_SIZE, &xs->sk.sk_wmem_alloc);
+		}
+		if (first_frag && desc->options & XDP_TX_METADATA) {
+			meta = buffer - sizeof(struct xsk_tx_metadata);
+			if (unlikely(!xsk_buff_valid_tx_metadata(meta))) {
+				err = -EINVAL;
+				goto free_err;
+			}
+
+			if (meta->flags & XDP_TXMD_FLAGS_CHECKSUM) {
+				if (unlikely(meta->request.csum_start +
+						meta->request.csum_offset +
+						sizeof(__sum16) > len)) {
+					err = -EINVAL;
+					goto free_err;
+				}
+
+				skb->csum_start = hr + meta->request.csum_start;
+				skb->csum_offset = meta->request.csum_offset;
+				skb->ip_summed = CHECKSUM_PARTIAL;
+			}
+
+			if (meta->flags & XDP_TXMD_FLAGS_TSO) {
+				skb_shinfo(skb)->gso_size = meta->gso.gso_size;
+				skb_shinfo(skb)->gso_segs = meta->gso.gso_segs;
+				skb_shinfo(skb)->gso_type = meta->gso.gso_type;
+			}
 		}
 	}
 

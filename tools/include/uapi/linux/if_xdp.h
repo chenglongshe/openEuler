@@ -99,6 +99,49 @@ struct xdp_options {
 #define XSK_UNALIGNED_BUF_ADDR_MASK \
 	((1ULL << XSK_UNALIGNED_BUF_OFFSET_SHIFT) - 1)
 
+/* Request transmit timestamp. Upon completion, put it into tx_timestamp
+ * field of union xsk_tx_metadata.
+ */
+#define XDP_TXMD_FLAGS_TIMESTAMP       (1 << 0)
+
+/* Request transmit checksum offload. Checksum start position and offset
+ * are communicated via csum_start and csum_offset fields of union
+ * xsk_tx_metadata.
+ */
+#define XDP_TXMD_FLAGS_CHECKSUM            (1 << 1)
+
+#define XDP_TXMD_FLAGS_TSO       (1 << 2)
+
+/* AF_XDP offloads request. 'request' union member is consumed by the driver
+ * when the packet is being transmitted. 'completion' union member is
+ * filled by the driver when the transmit completion arrives.
+ */
+struct xsk_tx_metadata {
+	__u64 flags;
+
+	union {
+		struct {
+			/* XDP_TXMD_FLAGS_CHECKSUM */
+
+			/* Offset from desc->addr where checksumming should start. */
+			__u16 csum_start;
+			/* Offset from csum_start where checksum should be stored. */
+			__u16 csum_offset;
+		} request;
+
+		struct {
+			/* XDP_TXMD_FLAGS_TIMESTAMP */
+			__u64 tx_timestamp;
+		} completion;
+	};
+
+	struct {
+		unsigned short gso_size;
+		unsigned short gso_segs;
+		unsigned int   gso_type;
+	} gso;
+};
+
 /* Rx/Tx descriptor */
 struct xdp_desc {
 	__u64 addr;
@@ -106,6 +149,7 @@ struct xdp_desc {
 	__u32 options;
 };
 
-/* UMEM descriptor is __u64 */
+/* TX packet carries valid metadata. */
+#define XDP_TX_METADATA (1 << 1)
 
 #endif /* _LINUX_IF_XDP_H */
