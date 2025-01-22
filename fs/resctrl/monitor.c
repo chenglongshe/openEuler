@@ -817,12 +817,39 @@ static void l3_mon_evt_init(struct rdt_resource *r)
 {
 	INIT_LIST_HEAD(&r->evt_list);
 
-	if (resctrl_arch_is_llc_occupancy_enabled())
+	if ((r->rid == RDT_RESOURCE_L3) &&
+	     resctrl_arch_is_llc_occupancy_enabled()) {
 		list_add_tail(&llc_occupancy_event.list, &r->evt_list);
-	if (resctrl_arch_is_mbm_total_enabled())
+
+		if (resctrl_arch_is_mbm_local_enabled())
+			list_add_tail(&mbm_local_event.list, &r->evt_list);
+	}
+
+	if ((r->rid == RDT_RESOURCE_MBA) &&
+	     resctrl_arch_is_mbm_total_enabled())
 		list_add_tail(&mbm_total_event.list, &r->evt_list);
-	if (resctrl_arch_is_mbm_local_enabled())
-		list_add_tail(&mbm_local_event.list, &r->evt_list);
+}
+
+static int __resctrl_mon_resource_init(enum resctrl_res_level res)
+{
+	struct rdt_resource *r = resctrl_arch_get_resource(res);
+
+	if (!r->mon_capable)
+		return 0;
+
+	l3_mon_evt_init(r);
+
+	if ((r->rid == RDT_RESOURCE_MBA) &&
+	     resctrl_arch_is_evt_configurable(QOS_L3_MBM_TOTAL_EVENT_ID)) {
+		mbm_total_event.configurable = true;
+		mbm_config_rftype_init("mbm_total_bytes_config");
+	}
+	if (resctrl_arch_is_evt_configurable(QOS_L3_MBM_LOCAL_EVENT_ID)) {
+		mbm_local_event.configurable = true;
+		mbm_config_rftype_init("mbm_local_bytes_config");
+	}
+
+	return 0;
 }
 
 int resctrl_mon_resource_init(void)
@@ -837,17 +864,8 @@ int resctrl_mon_resource_init(void)
 	if (ret)
 		return ret;
 
-	l3_mon_evt_init(r);
-
-	if (resctrl_arch_is_evt_configurable(QOS_L3_MBM_TOTAL_EVENT_ID)) {
-		mbm_total_event.configurable = true;
-		mbm_config_rftype_init("mbm_total_bytes_config");
-	}
-	if (resctrl_arch_is_evt_configurable(QOS_L3_MBM_LOCAL_EVENT_ID)) {
-		mbm_local_event.configurable = true;
-		mbm_config_rftype_init("mbm_local_bytes_config");
-	}
-
+	__resctrl_mon_resource_init(RDT_RESOURCE_L3);
+	__resctrl_mon_resource_init(RDT_RESOURCE_MBA);
 	return 0;
 }
 
