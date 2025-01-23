@@ -100,7 +100,6 @@ struct dentry {
 	unsigned char d_iname[DNAME_INLINE_LEN];	/* small names */
 
 	/* Ref lookup also touches following */
-	struct lockref d_lockref;	/* per-dentry lock and refcount */
 	const struct dentry_operations *d_op;
 	struct super_block *d_sb;	/* The root of the dentry tree */
 	unsigned long d_time;		/* used by d_revalidate */
@@ -125,6 +124,8 @@ struct dentry {
 
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
+	
+	struct lockref d_lockref;	/* per-dentry lock and refcount */
 } __randomize_layout;
 
 /*
