@@ -4212,4 +4212,7 @@ void vma_pgtable_walk_end(struct vm_area_struct *vma);
 /* added to mm.h to avoid every caller adding new header file */
 #include <linux/mem_reliable.h>
 
+#ifdef CONFIG_PFN_RANGE_ALLOC
+extern unsigned long contig_mem_pool_percent;
+#endif
 #endif /* _LINUX_MM_H */
