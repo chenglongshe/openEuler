@@ -4213,6 +4213,21 @@ void vma_pgtable_walk_end(struct vm_area_struct *vma);
 #include <linux/mem_reliable.h>
 
 #ifdef CONFIG_PFN_RANGE_ALLOC
+#define PFN_RANGE_ALLOC_SIZE PMD_SIZE
+#define PFN_RANGE_ALLOC_ORDER PMD_ORDER
+#define PFN_RANGE_ALLOC_NR_PAGES (1 << PFN_RANGE_ALLOC_ORDER)
+
 extern unsigned long contig_mem_pool_percent;
+struct folio *pfn_range_alloc(unsigned int nr_pages, int nid);
+int pfn_range_free(struct folio *folio);
+#else
+static inline struct folio *pfn_range_alloc(unsigned int nr_pages, int nid)
+{
+	return ERR_PTR(-EINVAL);
+}
+static inline int pfn_range_free(struct folio *folio)
+{
+	return -EINVAL;
+}
 #endif
 #endif /* _LINUX_MM_H */
