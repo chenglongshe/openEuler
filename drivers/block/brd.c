@@ -429,27 +429,15 @@ out_free_dev:
 	return err;
 }
 
-static struct brd_device *brd_init_one(int i, bool *new)
+static void brd_init_one(int i)
 {
 	struct brd_device *brd;
-	int err;
 
-	*new = false;
-	list_for_each_entry(brd, &brd_devices, brd_list) {
+	list_for_each_entry(brd, &brd_devices, brd_list)
 		if (brd->brd_number == i)
-			goto out;
-	}
+			return;
 
-	*new = true;
-	err = brd_alloc(i);
-	if (err)
-		return NULL;
-	list_for_each_entry(brd, &brd_devices, brd_list) {
-		if (brd->brd_number == i)
-			goto out;
-	}
-out:
-	return brd;
+	brd_alloc(i);
 }
 
 static void brd_del_one(struct brd_device *brd)
@@ -463,19 +451,11 @@ static void brd_del_one(struct brd_device *brd)
 
 static struct kobject *brd_probe(dev_t dev, int *part, void *data)
 {
-	struct brd_device *brd;
-	struct kobject *kobj;
-	bool new;
-
 	mutex_lock(&brd_devices_mutex);
-	brd = brd_init_one(MINOR(dev) / max_part, &new);
-	kobj = brd ? get_disk_and_module(brd->brd_disk) : NULL;
+	brd_init_one(MINOR(dev) / max_part);
 	mutex_unlock(&brd_devices_mutex);
 
-	if (new)
-		*part = 0;
-
-	return kobj;
+	return NULL;
 }
 
 static inline void brd_check_and_reset_par(void)
