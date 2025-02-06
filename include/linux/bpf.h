@@ -1544,17 +1544,14 @@ struct bpf_prog_aux {
 	};
 
 	KABI_USE(1, u64 prog_array_member_cnt) /* counts how many times as member of prog_array */
-#ifdef __GENKSYMS__
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
 	KABI_RESERVE(5)
-#else
-	struct mutex ext_mutex; /* mutex for is_extended and prog_array_member_cnt */
-#endif
 	KABI_RESERVE(6)
 	KABI_RESERVE(7)
 	KABI_RESERVE(8)
+	KABI_EXTEND(struct mutex ext_mutex) /* mutex for is_extended and prog_array_member_cnt */
 };
 
 struct bpf_prog {
