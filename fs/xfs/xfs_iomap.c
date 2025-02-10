@@ -1195,7 +1195,7 @@ xfs_iomap_write_delalloc_scan(
 		}
 
 		/* move offset to start of next folio in range */
-		start_byte = (page->index + 1) << PAGE_SHIFT;
+		start_byte = page_offset(page) + PAGE_SIZE;
 		unlock_page(page);
 		put_page(page);
 	}
