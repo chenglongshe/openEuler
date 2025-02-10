@@ -26,4 +26,18 @@ static inline void enable_swiotlb_for_cvm_dev(struct device *dev, bool enable) {
 
 #endif
 
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+
+u64 virtcca_get_tmi_version(void);
+
+#else
+
+u64 virtcca_get_tmi_version(void)
+{
+   return 0;
+}
+
+#endif
+
 #endif /* __VIRTCCA_CVM_DOMAIN_H */
