@@ -33,7 +33,7 @@ u64 virtcca_get_tmi_version(void);
 
 #else
 
-u64 virtcca_get_tmi_version(void)
+static inline u64 virtcca_get_tmi_version(void)
 {
    return 0;
 }
