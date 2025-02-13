@@ -1721,8 +1721,7 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu)
 	memslot = gfn_to_memslot(vcpu->kvm, gfn);
 	hva = gfn_to_hva_memslot_prot(memslot, gfn, &writable);
 	write_fault = kvm_is_write_fault(vcpu);
-	if (kvm_is_error_hva(hva) || (write_fault && !writable) ||
-	    (fault_ipa >= VIRT_PCIE_MMIO_START && fault_ipa <= VIRT_PCIE_MMIO_START + VIRT_PCIE_MMIO_SIZE)) {
+	if (kvm_is_error_hva(hva) || (write_fault && !writable)) {
 		/*
 		 * The guest has put either its instructions or its page-tables
 		 * somewhere it shouldn't have. Userspace won't be able to do
@@ -1766,6 +1765,11 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu)
 		ret = io_mem_abort(vcpu, fault_ipa);
 		goto out_unlock;
 	}
+
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	if ((ret = virtcca_io_mem_abort(vcpu, hva, fault_ipa)) >= 0)
+		goto out_unlock;
+#endif
 
 	/* Userspace should not be able to register out-of-bounds IPAs */
 	VM_BUG_ON(fault_ipa >= kvm_phys_size(vcpu->kvm));

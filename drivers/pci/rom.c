@@ -11,6 +11,7 @@
 #include <linux/slab.h>
 
 #include "pci.h"
+#include <asm/virtcca_coda.h>
 
 /**
  * pci_enable_rom - enable ROM decoding for a PCI device
@@ -86,6 +87,11 @@ static size_t pci_get_rom_size(struct pci_dev *pdev, void __iomem *rom,
 	void __iomem *image;
 	int last_image;
 	unsigned int length;
+
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	if (is_virtcca_cvm_enable() && is_cc_dev(pci_dev_id(pdev)))
+		return virtcca_pci_get_rom_size(pdev, rom, size);
+#endif
 
 	image = rom;
 	do {
