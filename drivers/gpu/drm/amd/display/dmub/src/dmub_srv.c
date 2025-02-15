@@ -751,7 +751,16 @@ enum dmub_status dmub_srv_cmd_execute(struct dmub_srv *dmub)
 	return DMUB_STATUS_OK;
 }
 
-enum dmub_status dmub_srv_wait_for_auto_load(struct dmub_srv *dmub,
+bool dmub_srv_is_hw_pwr_up(struct dmub_srv *dmub)
+{
+	if (!dmub->hw_funcs.is_hw_powered_up)
+		return true;
+
+	return dmub->hw_funcs.is_hw_powered_up(dmub) &&
+		dmub->hw_funcs.is_hw_init(dmub);
+}
+
+enum dmub_status dmub_srv_wait_for_hw_pwr_up(struct dmub_srv *dmub,
 					     uint32_t timeout_us)
 {
 	uint32_t i;
@@ -760,9 +769,31 @@ enum dmub_status dmub_srv_wait_for_auto_load(struct dmub_srv *dmub,
 		return DMUB_STATUS_INVALID;
 
 	for (i = 0; i <= timeout_us; i += 100) {
+		if (dmub_srv_is_hw_pwr_up(dmub))
+			return DMUB_STATUS_OK;
+
+		udelay(100);
+	}
+
+	return DMUB_STATUS_TIMEOUT;
+}
+
+enum dmub_status dmub_srv_wait_for_auto_load(struct dmub_srv *dmub,
+					     uint32_t timeout_us)
+{
+	uint32_t i;
+	bool hw_on = true;
+
+	if (!dmub->hw_init)
+		return DMUB_STATUS_INVALID;
+
+	for (i = 0; i <= timeout_us; i += 100) {
 		union dmub_fw_boot_status status = dmub->hw_funcs.get_fw_status(dmub);
 
-		if (status.bits.dal_fw && status.bits.mailbox_rdy)
+		if (dmub->hw_funcs.is_hw_powered_up)
+			hw_on = dmub->hw_funcs.is_hw_powered_up(dmub);
+
+		if (status.bits.dal_fw && status.bits.mailbox_rdy && hw_on)
 			return DMUB_STATUS_OK;
 
 		udelay(100);
