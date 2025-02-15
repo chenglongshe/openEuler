@@ -1767,7 +1767,7 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu)
 	}
 
 #ifdef CONFIG_HISI_VIRTCCA_CODA
-	if ((ret = virtcca_io_mem_abort(vcpu, hva, fault_ipa)) >= 0)
+	if ((ret = virtcca_io_mem_abort(vcpu, hva, fault_ipa)) != -EPERM)
 		goto out_unlock;
 #endif
 

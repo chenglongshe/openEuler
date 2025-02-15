@@ -42,13 +42,9 @@ EXPORT_SYMBOL(mmio_va_to_pa);
 
 int virtcca_io_mem_abort(struct kvm_vcpu *vcpu, unsigned long hva, phys_addr_t fault_ipa)
 {
-	struct virtcca_cvm *cvm;
+	struct virtcca_cvm *cvm = vcpu->kvm->arch.virtcca_cvm;
 
-	if (!is_virtcca_cvm_world())
-		return -EPERM;
-
-	cvm = vcpu->kvm->arch.virtcca_cvm;
-	if (!(fault_ipa >= cvm->mmio_start && fault_ipa <= cvm->mmio_end))
+	if (!vcpu_is_tec(vcpu) || !(fault_ipa >= cvm->mmio_start && fault_ipa < cvm->mmio_end))
 		return -EPERM;
 	
 	if (kvm_is_error_hva(hva) && kvm_vcpu_dabt_is_cm(vcpu)) {
