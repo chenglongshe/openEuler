@@ -16,20 +16,49 @@
 
 #include "hisi-uncore.h"
 
-HISI_UNCORE_EVENT_TYPE_ATTR;
-HISI_UNCORE_EVENT_CONFIG_ATTR;
+#define CORRECT_PERIOD		(10)
+#define CALC_PRECSION		(1000)
+
+static HISI_UNCORE_EVENT_TYPE_ATTR;
+static HISI_UNCORE_EVENT_CONFIG_ATTR;
 
 static int l3c_get_events(struct devfreq_event_dev *edev, struct devfreq_event_data *edata)
 {
 	u64 load;
-	struct hisi_uncore_event_info *info = devfreq_event_get_drvdata(edev);
+	static int period;
+	static u64 last_load;
+	int f0, f1, p0, p1, per_step;
+	struct hisi_uncore_event_info *info;
 
+	info = devfreq_event_get_drvdata(edev);
 	load = get_pmu_monitor_status(info);
+	per_step = info->freq_domain->per_step;
 
 	if (info->is_reset) {
 		info->is_reset = false;
 		info->max_load = 0;
+		period = 0;
 		return 0;
+	}
+
+	period++;
+	if (period == CORRECT_PERIOD) {
+		edata->load_count = info->max_load;
+		edata->total_count = info->max_load;
+		last_load = load;
+		return 0;
+	}
+
+	if (period > CORRECT_PERIOD) {
+		period = 0;
+		p0 = (CALC_PRECSION * load) / last_load;
+		p1 = (CALC_PRECSION * last_load) / info->max_load;
+		f0 = (CALC_PRECSION * load) / (info->max_load * per_step);
+		f1 = (CALC_PRECSION * last_load) / (info->max_load * per_step);
+
+		if (p1 < per_step || p0 > (f0 * (CALC_PRECSION * info->freq_domain->freq_max)) /
+			 (f1 * (info->freq_domain->freq_max - info->freq_domain->freq_step)))
+			info->max_load = load;
 	}
 
 	info->max_load = max(info->max_load, load);
@@ -71,6 +100,9 @@ static int hisi_l3c_event_probe(struct platform_device *pdev)
 	desc->driver_data = data;
 	desc->name = data->name;
 	data->desc = desc;
+	data->freq_domain = pdev->dev.platform_data;
+	data->freq_domain->per_step =
+		 CALC_PRECSION / (data->freq_domain->freq_max / data->freq_domain->freq_step);
 
 	edev = devm_devfreq_event_add_edev(dev, desc);
 	if (IS_ERR(edev)) {

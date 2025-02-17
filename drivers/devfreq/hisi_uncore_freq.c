@@ -21,6 +21,7 @@
 #include <linux/property.h>
 #include <linux/topology.h>
 #include <linux/devfreq-event.h>
+#include "event/hisi-uncore.h"
 
 #include <acpi/pcc.h>
 
@@ -44,9 +45,7 @@ struct hisi_uncore_freq {
 	struct pcc_mbox_chan *pchan;
 	void __iomem *pcc_shmem_addr;
 	int chan_id;
-	unsigned long freq_min;
-	unsigned long freq_max;
-	unsigned long freq_step;
+	struct freq_domain freq_domain;
 	struct devfreq *devfreq;
 	int related_package;
 	struct cpumask related_cpus;
@@ -228,11 +227,12 @@ static int hisi_uncore_target(struct device *dev, unsigned long *freq,
 	u32 data = *freq / HZ_PER_MHZ;
 
 	if (flags & DEVFREQ_FLAG_LEAST_UPPER_BOUND)
-		data = roundup(data, uncore->freq_step);
+		data = roundup(data, uncore->freq_domain.freq_step);
 	else
-		data = rounddown(data, uncore->freq_step);
+		data = rounddown(data, uncore->freq_domain.freq_step);
 
-	data = clamp((unsigned long)data, uncore->freq_min, uncore->freq_max);
+	data = clamp((unsigned long)data,
+		 uncore->freq_domain.freq_min, uncore->freq_domain.freq_max);
 
 	return hisi_uncore_cmd_send(uncore, HUCF_PCC_CMD_SET_FREQ, &data);
 }
@@ -255,10 +255,16 @@ static int hisi_uncore_get_dev_status(struct device *dev,
 		if (rc)
 			return rc;
 
-		if (ratio <= edata.load_count * 1000 / edata.total_count) {
+		if (edata.load_count == edata.total_count) {
 			stat->busy_time = edata.load_count;
 			stat->total_time = edata.total_count;
-			ratio = edata.load_count * 1000 / edata.total_count;
+			return 0;
+		}
+
+		if (ratio <= edata.load_count * 100 / edata.total_count) {
+			stat->busy_time = edata.load_count;
+			stat->total_time = edata.total_count;
+			ratio = edata.load_count * 100 / edata.total_count;
 		}
 	}
 
@@ -286,28 +292,28 @@ static int hisi_uncore_add_opp(struct hisi_uncore_freq *uncore)
 	rc = hisi_uncore_cmd_send(uncore, HUCF_PCC_CMD_GET_PLAT_FREQ_MIN, &data);
 	if (rc)
 		return rc;
-	uncore->freq_min = data;
+	uncore->freq_domain.freq_min = data;
 
 	rc = hisi_uncore_cmd_send(uncore, HUCF_PCC_CMD_GET_PLAT_FREQ_MAX, &data);
 	if (rc)
 		return rc;
-	uncore->freq_max = data;
+	uncore->freq_domain.freq_max = data;
 
 	rc = hisi_uncore_cmd_send(uncore, HUCF_PCC_CMD_GET_PLAT_FREQ_STEP, &data);
 	if (rc)
 		return rc;
-	uncore->freq_step = data;
+	uncore->freq_domain.freq_step = data;
 
-	for (freq_mhz = uncore->freq_min; freq_mhz <= uncore->freq_max;
-		 freq_mhz += uncore->freq_step) {
+	for (freq_mhz = uncore->freq_domain.freq_min; freq_mhz <= uncore->freq_domain.freq_max;
+		 freq_mhz += uncore->freq_domain.freq_step) {
 		rc = dev_pm_opp_add(uncore->dev, freq_mhz * HZ_PER_MHZ, DEF_OPP_VOLT_UV);
 		if (rc) {
 			unsigned long freq_curr = freq_mhz;
 
 			dev_err(uncore->dev, "Add OPP %lu failed (%d)\n", freq_mhz, rc);
 
-			for (freq_mhz = uncore->freq_min; freq_mhz < freq_curr;
-				 freq_mhz += uncore->freq_step)
+			for (freq_mhz = uncore->freq_domain.freq_min; freq_mhz < freq_curr;
+				 freq_mhz += uncore->freq_domain.freq_step)
 				dev_pm_opp_remove(uncore->dev,
 						  freq_mhz * HZ_PER_MHZ);
 			break;
@@ -321,8 +327,8 @@ static void hisi_uncore_remove_opp(struct hisi_uncore_freq *uncore)
 {
 	unsigned long freq_mhz;
 
-	for (freq_mhz = uncore->freq_min; freq_mhz <= uncore->freq_max;
-	     freq_mhz += uncore->freq_step)
+	for (freq_mhz = uncore->freq_domain.freq_min; freq_mhz <= uncore->freq_domain.freq_max;
+	     freq_mhz += uncore->freq_domain.freq_step)
 		dev_pm_opp_remove(uncore->dev, freq_mhz * HZ_PER_MHZ);
 }
 
@@ -483,8 +489,8 @@ static int creat_related_event(struct hisi_uncore_freq *uncore, char *name)
 					 uncore->dev,
 					 dev_name,
 					 uncore->related_package,
-					 NULL,
-					 0);
+					 &(uncore->freq_domain),
+					 sizeof(uncore->freq_domain));
 	if (IS_ERR(event->pdev))
 		return PTR_ERR(event->pdev);
 

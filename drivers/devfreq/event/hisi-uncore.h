@@ -32,6 +32,16 @@
 #define EVENT_CONFIG_INVALID_VAL	(0xffff)
 
 /*
+ * tunable domain
+ */
+struct freq_domain {
+	int per_step;
+	unsigned long freq_min;
+	unsigned long freq_max;
+	unsigned long freq_step;
+};
+
+/*
  * The signle uncore pmu info.
  */
 struct pmu_info {
@@ -50,6 +60,7 @@ struct hisi_uncore_event_info {
 	int config_cnt;
 	__u64 configs[EVENT_CONFIG_MAX_CNT];
 	u64 max_load;
+	struct freq_domain *freq_domain;
 	struct device *dev;
 	struct devfreq_event_dev *edev;
 	struct devfreq_event_desc *desc;
