@@ -143,6 +143,12 @@ config ARM_RK3399_DMC_DEVFREQ
 	  It sets the frequency for the memory controller and reads the usage counts
 	  from hardware.
 
+config ARM_HISI_UNCORE_DEVFREQ
+	tristate "HiSilicon uncore DEVFREQ Driver"
+	depends on ARM64 && ((PCC && ACPI && ACPI_PPTT) || COMPILE_TEST)
+	help
+	  HiSilicon uncore DEVFREQ Driver
+
 source "drivers/devfreq/event/Kconfig"
 
 endif # PM_DEVFREQ
