@@ -13,7 +13,7 @@ static inline char const *mgrEvtCodeTrans(unsigned int opCode)
 	unsigned int typeIndex = 0;
 	unsigned int codeIndex = 0;
 	const char *pEvtTransStr = NULL;
-	static const char *pEvtCodeInfo[MGR_EVT_EXTEND_TYPE_START][MGR_EVT_TYPE_OFFSET] = {
+	static char const *pEvtCodeInfo[MGR_EVT_EXTEND_TYPE_START][MGR_EVT_TYPE_OFFSET] = {
 		{
 			"MGR_EVT_SAS_START",
 			"MGR_EVT_SAS_EXPANDER_IN",
