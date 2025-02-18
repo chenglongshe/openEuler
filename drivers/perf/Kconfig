@@ -147,6 +147,13 @@ config PHYT_PS2364_DDRPMU
 	help
 	  Support for Phytium PS2364 DDR PMU.
 
+config PHYT_PS2364_PCIEPMU
+        tristate "Phytium PS2364 PCIE PMU drivers"
+        depends on ARM64 && ACPI
+        default m
+        help
+          Support for Phytium PS2364 PCIE PMU.
+
 source "drivers/perf/hisilicon/Kconfig"
 
 endmenu
