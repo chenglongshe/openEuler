@@ -362,6 +362,9 @@ armpmu_add(struct perf_event *event, int flags)
 	if (idx < 0)
 		return idx;
 
+	/* The newly-allocated counter should be empty */
+	WARN_ON_ONCE(hw_events->events[idx]);
+
 	if (has_branch_stack(event))
 		armpmu->branch_stack_add(event, hw_events);
 
@@ -370,7 +373,6 @@ armpmu_add(struct perf_event *event, int flags)
 	 * sure it is disabled.
 	 */
 	event->hw.idx = idx;
-	armpmu->disable(event);
 	hw_events->events[idx] = event;
 
 	hwc->state = PERF_HES_STOPPED | PERF_HES_UPTODATE;
