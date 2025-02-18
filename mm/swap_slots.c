@@ -34,6 +34,7 @@
 #include <linux/vmalloc.h>
 #include <linux/mutex.h>
 #include <linux/mm.h>
+#include <linux/zswap.h>
 
 static DEFINE_PER_CPU(struct swap_slots_cache, swp_slots);
 #ifdef CONFIG_MEMCG_SWAP_QOS
@@ -393,6 +394,9 @@ static int refill_swap_slots_cache(struct swap_slots_cache *cache, int type)
 void free_swap_slot(swp_entry_t entry)
 {
 	struct swap_slots_cache *cache;
+
+	/* Large folio swap slot is not covered. */
+	zswap_invalidate(entry);
 
 	cache = raw_cpu_ptr(&swp_slots);
 	if (likely(use_swap_slot_cache && cache->slots_ret)) {
