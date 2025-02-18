@@ -140,6 +140,13 @@ config ARM64_BRBE
 	  relevant information such as cycle count, misprediction and branch
 	  type, branch privilege level etc.
 
+config PHYT_PS2364_DDRPMU
+	tristate "Phytium PS2364 DDR PMU drivers"
+	depends on ARM64 && ACPI
+	default m
+	help
+	  Support for Phytium PS2364 DDR PMU.
+
 source "drivers/perf/hisilicon/Kconfig"
 
 endmenu
