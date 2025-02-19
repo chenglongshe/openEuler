@@ -155,6 +155,7 @@ static int hundred_thousand = 100000;
 static int __unthrottle_qos_cfs_rqs(int cpu);
 static int unthrottle_qos_cfs_rqs(int cpu);
 static bool qos_smt_expelled(int this_cpu);
+static bool is_offline_task(struct task_struct *p);
 #endif
 
 #ifdef CONFIG_QOS_SCHED_SMT_EXPELLER
@@ -3452,10 +3453,16 @@ static void task_numa_work(struct callback_head *work)
 
 		/* Initialise new per-VMA NUMAB state. */
 		if (!vma->numab_state) {
-			vma->numab_state = kzalloc(sizeof(struct vma_numab_state),
-				GFP_KERNEL);
-			if (!vma->numab_state)
+			struct vma_numab_state *ptr;
+
+			ptr = kzalloc(sizeof(*ptr), GFP_KERNEL);
+			if (!ptr)
 				continue;
+
+			if (cmpxchg(&vma->numab_state, NULL, ptr)) {
+				kfree(ptr);
+				continue;
+			}
 
 			vma->numab_state->next_scan = now +
 				msecs_to_jiffies(sysctl_numa_balancing_scan_delay);
@@ -9348,6 +9355,11 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		goto preempt;
 	if (cse_is_idle != pse_is_idle)
 		return;
+
+#ifdef CONFIG_QOS_SCHED
+	if (unlikely(is_offline_task(curr) && !is_offline_task(p)))
+		goto preempt;
+#endif
 
 	/*
 	 * BATCH and IDLE tasks do not preempt others.
