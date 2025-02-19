@@ -1748,6 +1748,16 @@ static int sd_sync_cache(struct scsi_disk *sdkp, struct scsi_sense_hdr *sshdr)
 			 (sshdr->asc == 0x74 && sshdr->ascq == 0x71)))	/* drive is password locked */
 				/* this is no error here */
 				return 0;
+		
+		/*
+		 * If a format is in progress or if the drive does not
+		 * support sync, there is not much we can do because
+		 * this is called during shutdown or suspend so just
+		 * return success so those operations can proceed.
+		 */
+		if ((sshdr->asc == 0x04 && sshdr->ascq == 0x04) ||
+			sshdr->sense_key == ILLEGAL_REQUEST)
+				return 0;
 
 		switch (host_byte(res)) {
 		/* ignore errors due to racing a disconnection */
