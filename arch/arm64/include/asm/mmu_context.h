@@ -245,6 +245,8 @@ enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
 
 static inline void __switch_mm(struct mm_struct *next)
 {
+	unsigned int cpu = smp_processor_id();
+	cpumask_set_cpu(cpu, mm_cpumask(next));
 	/*
 	 * init_mm.pgd does not contain any user mappings and it is always
 	 * active for kernel addresses in TTBR1. Just set the reserved TTBR0.

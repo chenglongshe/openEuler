@@ -250,7 +250,7 @@ static inline void flush_tlb_all(void)
 	isb();
 }
 
-static inline void flush_tlb_mm(struct mm_struct *mm)
+static inline void flush_tlb_mm_nosync(struct mm_struct *mm)
 {
 	unsigned long asid;
 
@@ -258,7 +258,6 @@ static inline void flush_tlb_mm(struct mm_struct *mm)
 	asid = __TLBI_VADDR(0, ASID(mm));
 	__tlbi(aside1is, asid);
 	__tlbi_user(aside1is, asid);
-	dsb(ish);
 	mmu_notifier_arch_invalidate_secondary_tlbs(mm, 0, -1UL);
 }
 
@@ -275,6 +274,49 @@ static inline void __flush_tlb_page_nosync(struct mm_struct *mm,
 						(uaddr & PAGE_MASK) + PAGE_SIZE);
 }
 
+static inline void local_flush_tlb_mm(struct mm_struct *mm)
+{
+	unsigned long asid = __TLBI_VADDR(0,ASID(mm));
+
+	dsb(nshst);
+	__tlbi(aside1, asid);
+	dsb(nsh);
+}
+
+static inline void flush_tlb_mm(struct mm_struct *mm)
+{
+	if(unlikely(cpumask_full(mm_cpumask(mm)))) {
+		flush_tlb_mm_nosync(mm);
+		dsb(ish);
+	} else {
+		on_each_cpu_mask(mm_cpumask(mm), (smp_call_func_t)local_flush_tlb_mm, mm, 1);
+	}
+}
+
+struct tlb_args {
+	struct vm_area_struct *ta_vma;
+	unsigned long ta_start;
+	unsigned long ta_end;
+};
+
+static inline void local_flush_tlb_page(struct vm_area_struct *vma,
+	unsigned long uaddr)
+{
+	unsigned long addr = __TLBI_VADDR(uaddr, ASID(vma->vm_mm));
+
+	dsb(nshst);
+	__tlbi(vale1, addr);
+	__tlbi_user(vale1, addr);
+	dsb(nsh);
+}
+
+static inline void ipi_flush_tlb_page(void *arg)
+{
+	struct tlb_args *ta = arg;
+
+	local_flush_tlb_page(ta->ta_vma, ta->ta_start);
+}
+
 static inline void flush_tlb_page_nosync(struct vm_area_struct *vma,
 					 unsigned long uaddr)
 {
@@ -284,8 +326,17 @@ static inline void flush_tlb_page_nosync(struct vm_area_struct *vma,
 static inline void flush_tlb_page(struct vm_area_struct *vma,
 				  unsigned long uaddr)
 {
-	flush_tlb_page_nosync(vma, uaddr);
-	dsb(ish);
+	struct tlb_args ta = {
+		.ta_vma = vma,
+		.ta_start = uaddr
+	};
+
+	if(unlikely(cpumask_full(mm_cpumask(vma->vm_mm)))) {
+		flush_tlb_page_nosync(vma, uaddr);
+		dsb(ish);
+	} else {
+		on_each_cpu_mask(mm_cpumask(vma->vm_mm, ipi_flush_tlb_page, &ta, 1));
+	}
 }
 
 static inline bool arch_tlbbatch_should_defer(struct mm_struct *mm)
