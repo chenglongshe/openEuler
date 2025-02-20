@@ -21,6 +21,7 @@
 
 #define HCLGE_TM_PF_MAX_PRI_NUM		8
 #define HCLGE_TM_PF_MAX_QSET_NUM	8
+#define HCLGE_ETHER_MAX_RATE	100000
 
 struct hclge_pg_to_pri_link_cmd {
 	u8 pg_id;
