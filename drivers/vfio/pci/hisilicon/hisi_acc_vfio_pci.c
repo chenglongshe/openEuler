@@ -1634,8 +1634,13 @@ static void vf_debugfs_init(struct hisi_acc_vf_core_device *hisi_acc_vdev)
 
 static void vf_debugfs_exit(struct hisi_acc_vf_core_device *hisi_acc_vdev)
 {
-	if (hisi_acc_vdev->debug_migf)
+	struct device *dev = &hisi_acc_vdev->vf_dev->dev;
+
+	if (hisi_acc_vdev->debug_migf) {
 		acc_vf_debug_release(hisi_acc_vdev->debug_migf);
+		hisi_acc_vdev->debug_migf = NULL;
+		dev_err(dev, "vf_debugfs_exit free mig file.\n");
+	}
 
 	debugfs_remove_recursive(hisi_acc_vdev->debug_root);
 
