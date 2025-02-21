@@ -111,6 +111,14 @@ EXPORT_SYMBOL(__arm64_is_protected_mmio);
 
 static int realm_ioremap_hook(phys_addr_t phys, size_t size, pgprot_t *prot)
 {
+	pteval_t protval = pgprot_val(*prot);
+	/*
+	 * In realm, when the prot is PROT_DEVICE_nGnRE or PROT_DEVICE_nGnRnE,
+	 * it should be considered whether NS_SHARED_PROT is needed.
+	 */
+	if (protval != PROT_DEVICE_nGnRE && protval != PROT_DEVICE_nGnRnE)
+		return 0;
+
 	if (__arm64_is_protected_mmio(phys, size))
 		*prot = pgprot_encrypted(*prot);
 	else
