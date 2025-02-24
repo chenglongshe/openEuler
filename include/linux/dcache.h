@@ -69,12 +69,12 @@ extern const struct qstr dotdot_name;
  * large memory footprint increase).
  */
 #ifdef CONFIG_64BIT
-# define DNAME_INLINE_LEN 40 /* 192 bytes */
+# define DNAME_INLINE_LEN 32 /* 192 bytes */
 #else
 # ifdef CONFIG_SMP
-#  define DNAME_INLINE_LEN 40 /* 128 bytes */
+#  define DNAME_INLINE_LEN 36 /* 128 bytes */
 # else
-#  define DNAME_INLINE_LEN 44 /* 128 bytes */
+#  define DNAME_INLINE_LEN 40 /* 128 bytes */
 # endif
 #endif
 
@@ -103,8 +103,8 @@ struct dentry {
 		struct list_head d_lru;		/* LRU list */
 		wait_queue_head_t *d_wait;	/* in-lookup ones only */
 	};
-	struct hlist_node d_sib;	/* child of parent list */
-	struct hlist_head d_children;	/* our children */
+	KABI_REPLACE(struct list_head d_child, struct hlist_node d_sib) /* child of parent list */
+	KABI_REPLACE2(struct list_head d_subdirs, struct hlist_head d_children, KABI_RESERVE(3))        /* our children */
 	/*
 	 * d_alias and d_rcu can share memory
 	 */
