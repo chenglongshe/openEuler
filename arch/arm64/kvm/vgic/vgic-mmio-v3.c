@@ -552,6 +552,25 @@ static void vgic_mmio_write_pendbase(struct kvm_vcpu *vcpu,
 			   pendbaser) != old_pendbaser);
 }
 
+static unsigned long vgic_mmio_uaccess_read_waker(struct kvm_vcpu *vcpu,
+					     gpa_t addr, unsigned int len)
+{
+	return GICR_WAKER_PVSCHED_VALID;
+}
+
+/* If pvsched info stored in pending table valid.
+ * When migrate from old version, since kernel don't save pvsched info.
+ * here we just reuse vcpu->arch.pvsched.pv_unhalted, and clear it in pvsched_restore_all_gpa
+ */
+static int vgic_mmio_uaccess_write_waker(struct kvm_vcpu *vcpu,
+				     gpa_t addr, unsigned int len,
+				     unsigned long val)
+{
+	vcpu->arch.pvsched.pv_unhalted = !!(val & GICR_WAKER_PVSCHED_VALID);
+
+	return 0;
+}
+
 /*
  * The GICv3 per-IRQ registers are split to control PPIs and SGIs in the
  * redistributors, while SPIs are covered by registers in the distributor
@@ -648,8 +667,9 @@ static const struct vgic_register_region vgic_v3_rd_registers[] = {
 		vgic_mmio_read_v3r_typer, vgic_mmio_write_wi,
 		vgic_uaccess_read_v3r_typer, vgic_mmio_uaccess_write_wi, 8,
 		VGIC_ACCESS_64bit | VGIC_ACCESS_32bit),
-	REGISTER_DESC_WITH_LENGTH(GICR_WAKER,
-		vgic_mmio_read_raz, vgic_mmio_write_wi, 4,
+	REGISTER_DESC_WITH_LENGTH_UACCESS(GICR_WAKER,
+		vgic_mmio_read_raz, vgic_mmio_write_wi,
+		vgic_mmio_uaccess_read_waker, vgic_mmio_uaccess_write_waker, 4,
 		VGIC_ACCESS_32bit),
 	REGISTER_DESC_WITH_LENGTH(GICR_PROPBASER,
 		vgic_mmio_read_propbase, vgic_mmio_write_propbase, 8,
