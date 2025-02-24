@@ -1063,3 +1063,12 @@ On same-directory ->rename() the (tautological) update of .. is not protected
 by any locks; just don't do it if the old parent is the same as the new one.
 We really can't lock two subdirectories in same-directory rename - not without
 deadlocks.
+
+---
+
+**mandatory**
+
+The list of children anchored in parent dentry got turned into hlist now.
+Field names got changed (->d_children/->d_sib instead of ->d_subdirs/->d_child
+for anchor/entries resp.), so any affected places will be immediately caught
+by compiler.
