@@ -126,6 +126,8 @@ extern unsigned int sysctl_sched_rt_period;
 extern int sysctl_sched_rt_runtime;
 extern int sched_rr_timeslice;
 
+extern unsigned int __read_mostly sysctl_sched_shortask_syncwake_curcpu;
+
 /*
  * Helpers for converting nanosecond timing to jiffy resolution
  */
