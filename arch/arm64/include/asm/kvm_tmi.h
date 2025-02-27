@@ -380,17 +380,171 @@ static inline bool is_armv8_4_sel2_present(void)
 			ID_AA64PFR0_SEL2_MASK) == 1UL;
 }
 
-u64 tmi_version(void);
-u64 tmi_data_create(u64 data, u64 rd, u64 map_addr, u64 src, u64 level);
-u64 tmi_cvm_activate(u64 rd);
-u64 tmi_cvm_create(u64 params_ptr, u64 numa_set);
-u64 tmi_cvm_destroy(u64 rd);
-u64 tmi_tec_create(u64 numa_set, u64 rd, u64 mpidr, u64 params_ptr);
-u64 tmi_tec_destroy(u64 tec);
-u64 tmi_tec_enter(u64 tec, u64 run_ptr);
-u64 tmi_ttt_create(u64 numa_set, u64 rd, u64 map_addr, u64 level);
-u64 tmi_psci_complete(u64 calling_tec, u64 target_tec);
-u64 tmi_features(u64 index);
+/* Return TMI ABI version */
+static inline u64 tmi_version(void)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_VERSION_REQ, &res);
+	return res.a1;
+}
+
+/**
+ * Mapping of IPA ranges with data and data copying.
+ * @numa_set: Affinity NUMA nodes represented by a bitmap.
+ * @rd: Confidential VM descriptor, which is a physical address.
+ * @map_addr: Intermediate Physical Address to be mapped.
+ * @src: Address of the data to be copied on the non-secure side.
+ * @level: Page table level reflecting the mapping granularity.
+ */
+static inline u64 tmi_data_create(u64 numa_set, u64 rd, u64 map_addr, u64 src, u64 level)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_DATA_CREATE, numa_set, rd, map_addr, src, level, &res);
+	return res.a1;
+}
+
+/**
+ * Create RD, copy data from the non-secure side, and populate CVM info.
+ * @params_ptr: Non-secure side address stores the CVM parameters.
+ * @numa_set: Affinity NUMA nodes represented by a bitmap.
+ */
+static inline u64 tmi_cvm_create(u64 params_ptr, u64 numa_set)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_CVM_CREATE, params_ptr, numa_set, &res);
+	return res.a1;
+}
+
+/**
+ * Change the status of the CVM to ACTIVE.
+ * @rd: Confidential VM descriptor, which is a physical address.
+ */
+static inline u64 tmi_cvm_activate(u64 rd)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_CVM_ACTIVATE, rd, &res);
+	return res.a1;
+}
+
+/**
+ * Destroy the Confidential VM.
+ * @rd: Confidential VM descriptor, which is a physical address.
+ */
+static inline u64 tmi_cvm_destroy(u64 rd)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_CVM_DESTROY, rd, &res);
+	return res.a1;
+}
+
+/**
+ * Create TEC, copy parameters from the non-secure side, and populate struct tec.
+ * @numa_set: Affinity NUMA nodes represented by a bitmap.
+ * @rd: Confidential VM descriptor, which is a physical address.
+ * @mpidr: MPIDR register.
+ * @params_ptr: Non-secure side address stores the tec parameters.
+ */
+static inline u64 tmi_tec_create(u64 numa_set, u64 rd, u64 mpidr, u64 params_ptr)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_TEC_CREATE, numa_set, rd, mpidr, params_ptr, &res);
+	return res.a1;
+}
+
+/**
+ * Copy runtime parameters from the non-secure side and start execution.
+ * @tec: vCPU context, which is a physical address.
+ * @run_ptr: The address of tec_run parameters to be copied from the non-secure side.
+ */
+static inline u64 tmi_tec_enter(u64 tec, u64 run_ptr)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_TEC_ENTER, tec, run_ptr, &res);
+	return res.a1;
+}
+
+/**
+ * Destroy vCPU context.
+ * @tec: vCPU context descriptor, which is a physical address.
+ */
+static inline u64 tmi_tec_destroy(u64 tec)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_TEC_DESTROY, tec, &res);
+	return res.a1;
+}
+
+/**
+ * Create the missing stage2 page table.
+ * @numa_set: Affinity NUMA nodes represented by a bitmap.
+ * @rd: Confidential Vm descriptor, which is a physical address.
+ * @map_addr: Intermediate Physical Address to be mapped.
+ * @level: Page table level reflecting the mapping granularity.
+ */
+static inline u64 tmi_ttt_create(u64 numa_set, u64 rd, u64 map_addr, u64 level)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_TTT_CREATE, numa_set, rd, map_addr, level, &res);
+	return res.a1;
+}
+
+/**
+ * Complete the power state transition of the vCPU.
+ * @calling_tec: vCPU context of the calling vCPU.
+ * @target_tec: vCPU context of the target vCPU.
+ */
+static inline u64 tmi_psci_complete(u64 calling_tec, u64 target_tec)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_PSCI_COMPLETE, calling_tec, target_tec, &res);
+	return res.a1;
+}
+
+/**
+ * Return the feat_reg0 register.
+ * @index: feature register index.
+ */
+static inline u64 tmi_features(u64 index)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_FEATURES, index, &res);
+	return res.a1;
+}
+
+/* Initialize kae. */
+static inline u64 tmi_kae_init(void)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_KAE_INIT, &res);
+	return res.a1;
+}
+
+/**
+ * Enable or disable kae.
+ * @rd: Confidential VM descriptor, which is a physical address.
+ * @numa_set: Affinity NUMA nodes represented by a bitmap.
+ * @is_enable: Enable or disable kae.
+ */
+static inline u64 tmi_kae_enable(u64 rd, u64 numa_set, u64 is_enable)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_KAE_ENABLE, rd, numa_set, is_enable, &res);
+	return res.a1;
+}
+
 u64 tmi_ttt_map_range(u64 rd, u64 map_addr, u64 size, u64 cur_node, u64 target_node);
 u64 tmi_mem_info_show(u64 mem_info_addr);
 
@@ -409,8 +563,6 @@ u64 tmi_smmu_device_reset(u64 params);
 u64 tmi_smmu_pcie_core_check(u64 smmu_base);
 u64 tmi_smmu_write(u64 smmu_base, u64 reg_offset, u64 val, u64 bits);
 u64 tmi_smmu_read(u64 smmu_base, u64 reg_offset, u64 bits);
-u64 tmi_kae_init(void);
-u64 tmi_kae_enable(u64 rd, u64 numa_set, u64 is_enable);
 
 u64 mmio_va_to_pa(void *addr);
 int virtcca_io_mem_abort(struct kvm_vcpu *vcpu, unsigned long hva, phys_addr_t fault_ipa);
