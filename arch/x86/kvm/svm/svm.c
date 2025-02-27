@@ -71,7 +71,6 @@ MODULE_DEVICE_TABLE(x86cpu, svm_cpu_id);
 #define SVM_FEATURE_DECODE_ASSIST  (1 <<  7)
 #define SVM_FEATURE_PAUSE_FILTER   (1 << 10)
 
-#define DEBUGCTL_RESERVED_BITS (~(0x3fULL))
 
 #define TSC_RATIO_RSVD          0xffffff0000000000ULL
 #define TSC_RATIO_MIN		0x0000000000000001ULL
@@ -2777,6 +2776,18 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
 				    __func__, data);
 			break;
 		}
+
+		/*
+		 * AMD changed the architectural behavior of bits 5:2.  On CPUs
+		 * without BusLockTrap, bits 5:2 control "external pins", but
+		 * on CPUs that support BusLockDetect, bit 2 enables BusLockTrap
+		 * and bits 5:3 are reserved-to-zero.  Sadly, old KVM allowed
+		 * the guest to set bits 5:2 despite not actually virtualizing
+		 * Performance-Monitoring/Breakpoint external pins.  Drop bits
+		 * 5:2 for backwards compatibility.
+		 */
+		data &= ~GENMASK(5, 2);
+
 		if (data & DEBUGCTL_RESERVED_BITS)
 			return 1;
 
