@@ -4405,7 +4405,6 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 
 	/* Save host pkru register if supported */
 	vcpu->arch.host_pkru = read_pkru();
-	vcpu->arch.host_debugctl = get_debugctlmsr();
 
 	/* Apply any externally detected TSC adjustments (due to suspend) */
 	if (unlikely(vcpu->arch.tsc_offset_adjustment)) {
@@ -9706,6 +9705,8 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	}
 
 	exit_fastpath = kvm_x86_ops.run(vcpu);
+	vcpu->arch.host_debugctl = get_debugctlmsr();
+
 
 	/*
 	 * Do this here before restoring debug registers on the host.  And
