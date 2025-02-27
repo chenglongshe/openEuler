@@ -24,6 +24,9 @@
 #endif
 #include "trace.h"
 
+#define VIRT_PCIE_MMIO_START 0x10000000
+#define VIRT_PCIE_MMIO_SIZE 0x2eff0000
+
 static struct kvm_pgtable *hyp_pgtable;
 static DEFINE_MUTEX(kvm_hyp_pgd_mutex);
 
@@ -1718,7 +1721,9 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu)
 	memslot = gfn_to_memslot(vcpu->kvm, gfn);
 	hva = gfn_to_hva_memslot_prot(memslot, gfn, &writable);
 	write_fault = kvm_is_write_fault(vcpu);
-	if (kvm_is_error_hva(hva) || (write_fault && !writable)) {
+	if (kvm_is_error_hva(hva) || (write_fault && !writable) ||
+	    (fault_ipa >= VIRT_PCIE_MMIO_START && fault_ipa <= VIRT_PCIE_MMIO_START + VIRT_PCIE_MMIO_SIZE)) {
+
 		/*
 		 * The guest has put either its instructions or its page-tables
 		 * somewhere it shouldn't have. Userspace won't be able to do
