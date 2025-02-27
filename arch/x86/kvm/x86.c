@@ -2032,13 +2032,18 @@ int kvm_emulate_wrmsr(struct kvm_vcpu *vcpu)
 	return static_call(kvm_x86_complete_emulated_msr)(vcpu, r);
 }
 EXPORT_SYMBOL_GPL(kvm_emulate_wrmsr);
-
+#ifdef CONFIG_KVM_VCPU_EXIT_REQUEST
 static inline bool kvm_vcpu_exit_request(struct kvm_vcpu *vcpu)
+#else
+bool kvm_vcpu_exit_request(struct kvm_vcpu *vcpu)
+#endif
 {
 	return vcpu->mode == EXITING_GUEST_MODE || kvm_request_pending(vcpu) ||
 		xfer_to_guest_mode_work_pending();
 }
-
+#ifndef CONFIG_KVM_VCPU_EXIT_REQUEST
+EXPORT_SYMBOL_GPL(kvm_vcpu_exit_request);
+#endif
 /*
  * The fast path for frequent and performance sensitive wrmsr emulation,
  * i.e. the sending of IPI, sending IPI early in the VM-Exit flow reduces

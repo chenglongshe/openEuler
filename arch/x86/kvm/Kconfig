@@ -118,4 +118,16 @@ config KVM_AMD_SEV
 config KVM_EXTERNAL_WRITE_TRACKING
 	bool
 
+config KVM_VCPU_EXIT_REQUEST
+	bool "Enable VCPU Exit Request support in KVM"
+	default y if KVM && X86_64
+	depends on KVM
+	depends on EXPERT
+	depends on X86_64
+	help
+	 Enable support for the VCPU exit request mechanism in KVM.
+	 This allows userspace to trigger exits from virtual CPUs (VCPUs)
+	 in certain scenarios. It is intended for specific use cases,
+	 such as debugging or performance monitoring. If in doubt, say "N".
+
 endif # VIRTUALIZATION
