@@ -24,6 +24,7 @@
 #include <linux/rculist.h>
 #include <net/xdp_sock_drv.h>
 #include <net/xdp.h>
+#include <net/ip.h>
 
 #include "xsk_queue.h"
 #include "xdp_umem.h"
