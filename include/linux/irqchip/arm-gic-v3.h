@@ -365,6 +365,9 @@
 #define GICR_VSGIPENDR_BUSY		(1U << 31)
 #define GICR_VSGIPENDR_PENDING		GENMASK(15, 0)
 
+#define GICR_VM_TABLE_BAR_L		0x140
+#define GICR_VM_TABLE_BAR_H		0x144
+
 /*
  * ITS registers, offsets from ITS_base
  */
