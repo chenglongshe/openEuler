@@ -630,8 +630,7 @@ int kvm_vgic_hyp_init(void)
 	}
 
 	if (static_branch_unlikely(&ipiv_enable)) {
-		/* FIXME: need to check irq type */
-		ipiv_irq = acpi_register_gsi(NULL, 18, ACPI_LEVEL_SENSITIVE,
+		ipiv_irq = acpi_register_gsi(NULL, 18, ACPI_EDGE_SENSITIVE,
 			ACPI_ACTIVE_HIGH);
 		if (ipiv_irq < 0) {
 			kvm_err("No ipiv exception irq\n");
