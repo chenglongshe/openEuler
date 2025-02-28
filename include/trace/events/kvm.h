@@ -504,6 +504,30 @@ TRACE_EVENT(kvm_test_age_hva,
 	TP_printk("mmu notifier test age hva: %#016lx", __entry->hva)
 );
 
+TRACE_EVENT(kvm_arm_set_vcpu_preempted,
+	TP_PROTO(unsigned int vcpu_id, u64 avg_steal, unsigned long thresh,
+		unsigned int update_preempted_value),
+	TP_ARGS(vcpu_id, avg_steal, thresh, update_preempted_value),
+
+	TP_STRUCT__entry(
+		__field(unsigned int, vcpu_id)
+		__field(unsigned long long, avg_steal)
+		__field(unsigned long, thresh)
+		__field(unsigned int, update_preempted_value)
+	),
+
+	TP_fast_assign(
+		__entry->vcpu_id = vcpu_id;
+		__entry->avg_steal = avg_steal;
+		__entry->thresh = thresh;
+		__entry->update_preempted_value = update_preempted_value;
+	),
+
+	TP_printk("vcpu:%u  avg steal time:%llu  thresh:%lu  update_preempted_value:%u",
+		__entry->vcpu_id, __entry->avg_steal, __entry->thresh,
+		__entry->update_preempted_value)
+);
+
 #endif /* _TRACE_KVM_MAIN_H */
 
 /* This part must be outside protection */

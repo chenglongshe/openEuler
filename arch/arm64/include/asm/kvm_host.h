@@ -407,6 +407,7 @@ struct kvm_vcpu_arch {
 	struct {
 		u64 last_steal;
 		gpa_t base;
+		u64 avg_steal;
 	} steal;
 
 	/* Guest PV sched state */

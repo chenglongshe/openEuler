@@ -19,6 +19,14 @@ void kvm_update_stolen_time(struct kvm_vcpu *vcpu)
 	u64 steal = 0;
 	int idx;
 
+	/*
+	 * Because workloads change over time, we keep avg_steal as a floating
+	 * average which ends up weighing recent steal time more than old ones.
+	 */
+	vcpu->arch.steal.avg_steal +=
+		READ_ONCE(current->sched_info.run_delay) - vcpu->arch.steal.last_steal;
+	vcpu->arch.steal.avg_steal /= 2;
+
 	if (base == GPA_INVALID)
 		return;
 
