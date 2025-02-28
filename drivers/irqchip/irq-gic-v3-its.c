@@ -4574,7 +4574,8 @@ static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 	u64 val = 0;
 	u32 nr_vpes;
 
-	if (static_branch_unlikely(&ipiv_enable)) {
+	if (static_branch_unlikely(&ipiv_enable) &&
+	    vm->nassgireq) {
 		/* wait gicr_ipiv_busy */
 		WARN_ON_ONCE(readl_relaxed_poll_timeout_atomic(
 			     vlpi_base + GICR_IPIV_ST,
@@ -4606,6 +4607,12 @@ static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
 		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
 
+	} else {
+		/* enable guest access ICC_SGI1R_EL1 trap, disable ipiv */
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+		val &= ~1UL;
+		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
 	}
 
 	/* Schedule the VPE */
@@ -4621,6 +4628,7 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 				   struct its_cmd_info *info)
 {
 	void __iomem *vlpi_base = gic_data_rdist_vlpi_base();
+	struct its_vm *vm = vpe->its_vm;
 	u64 val;
 
 	if (info->req_db) {
@@ -4653,7 +4661,8 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 		vpe->pending_last = true;
 	}
 
-	if (static_branch_unlikely(&ipiv_enable)) {
+	if (static_branch_unlikely(&ipiv_enable) &&
+	    vm->nassgireq) {
 		if (!static_branch_unlikely(&ipiv_direct)) {
 
 			/* wait gicr_ipiv_busy */
