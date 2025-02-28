@@ -111,5 +111,5 @@ static inline void kvm_tlbi_dvmbm_vcpu_put(struct kvm_vcpu *vcpu) {}
 static inline void kvm_hisi_reload_lsudvmbm(struct kvm *kvm) {}
 #endif /* CONFIG_KVM_HISI_VIRT */
 
-extern bool gic_dist_enable_ipiv(void);
+extern bool gic_dist_enable_ipiv(bool direct);
 #endif /* __HISI_VIRT_H__ */

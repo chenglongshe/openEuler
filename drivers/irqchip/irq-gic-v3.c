@@ -114,6 +114,9 @@ EXPORT_SYMBOL(gic_nonsecure_priorities);
 DEFINE_STATIC_KEY_FALSE(ipiv_enable);
 EXPORT_SYMBOL(ipiv_enable);
 
+DEFINE_STATIC_KEY_FALSE(ipiv_direct);
+EXPORT_SYMBOL(ipiv_direct);
+
 /*
  * When the Non-secure world has access to group 0 interrupts (as a
  * consequence of SCR_EL3.FIQ == 0), reading the ICC_RPR_EL1 register will
@@ -1514,7 +1517,7 @@ static int gic_dist_supports_lpis(void)
 		!gicv3_nolpi);
 }
 
-bool gic_dist_enable_ipiv(void)
+bool gic_dist_enable_ipiv(bool direct)
 {
 	u32 val;
 
@@ -1526,6 +1529,13 @@ bool gic_dist_enable_ipiv(void)
 	val |= GICD_MISC_CTRL_CFG_IPIV_EN;
 	writel_relaxed(val, gic_data.dist_base + GICD_MISC_CTRL);
 	static_branch_enable(&ipiv_enable);
+
+	val = readl_relaxed(gic_data.dist_base + GICD_IPIV_CTRL);
+	if (direct) {
+		val |= GICD_IPIV_CTRL_AFF_DIRECT_VPEID;
+		static_branch_enable(&ipiv_direct);
+	}
+	writel_relaxed(val, gic_data.dist_base + GICD_IPIV_CTRL);
 
 	return true;
 }

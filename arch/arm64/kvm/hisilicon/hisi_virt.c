@@ -13,6 +13,7 @@ static enum hisi_cpu_type cpu_type = UNKNOWN_HI_TYPE;
 
 static bool dvmbm_enabled;
 static bool ipiv_enabled;
+static bool ipiv_direct;
 
 static const char * const hisi_cpu_type_str[] = {
 	"Hisi1612",
@@ -164,6 +165,12 @@ static int __init early_ipiv_enable(char *buf)
 }
 early_param("kvm-arm.ipiv_enabled", early_ipiv_enable);
 
+static int __init early_ipiv_direct(char *buf)
+{
+	return kstrtobool(buf, &ipiv_direct);
+}
+early_param("kvm-arm.ipiv_direct", early_ipiv_direct);
+
 bool hisi_ipiv_supported(void)
 {
 	/* Determine whether IPIV is supported by the hardware */
@@ -178,10 +185,12 @@ bool hisi_ipiv_supported(void)
 		return false;
 
 	/* Enable IPIV feature if necessary */
-	if (!gic_dist_enable_ipiv()) {
+	if (!gic_dist_enable_ipiv(ipiv_direct)) {
 		kvm_info("Need to enable GICv4p1!\n");
 		return false;
 	}
+
+	kvm_info("Enable Hisi ipiv with %s mode\n", ipiv_direct ? "direct" : "indirect");
 	return true;
 }
 

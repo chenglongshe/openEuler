@@ -389,6 +389,7 @@ static int alloc_devid_from_rsv_pools(struct rsv_devid_pool **devid_pool,
 #define gic_data_rdist_vlpi_base()	(gic_data_rdist_rd_base() + SZ_128K)
 
 extern struct static_key_false ipiv_enable;
+extern struct static_key_false ipiv_direct;
 
 #ifdef CONFIG_VIRT_PLAT_DEV
 /*
@@ -4572,7 +4573,8 @@ static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 	unsigned long vpe_addr;
 	u64 val = 0;
 
-	if (static_branch_unlikely(&ipiv_enable)) {
+	if (static_branch_unlikely(&ipiv_enable) &&
+	    !static_branch_unlikely(&ipiv_direct)) {
 		vpe_addr = virt_to_phys(page_address(vm->vpe_page));
 		writeq_relaxed(vpe_addr & 0xffffffff,
 			       vlpi_base + GICR_VM_TABLE_BAR_L);
@@ -4625,7 +4627,8 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 		vpe->pending_last = true;
 	}
 
-	if (static_branch_unlikely(&ipiv_enable)) {
+	if (static_branch_unlikely(&ipiv_enable) &&
+	    !static_branch_unlikely(&ipiv_direct)) {
 		writeq_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_L);
 		writeq_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_H);
 	}
@@ -5031,7 +5034,8 @@ static void its_vpe_irq_domain_free(struct irq_domain *domain,
 	if (bitmap_empty(vm->db_bitmap, vm->nr_db_lpis)) {
 		its_lpi_free(vm->db_bitmap, vm->db_lpi_base, vm->nr_db_lpis);
 		its_free_prop_table(vm->vprop_page);
-		if (static_branch_unlikely(&ipiv_enable)) {
+		if (static_branch_unlikely(&ipiv_enable) &&
+		    !static_branch_unlikely(&ipiv_direct)) {
 			free_pages((unsigned long)page_address(vm->vpe_page),
 				    get_order(nr_irqs * 2));
 		}
@@ -5072,7 +5076,8 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 
 	if (gic_rdists->has_rvpeid) {
 		irqchip = &its_vpe_4_1_irq_chip;
-		if (static_branch_unlikely(&ipiv_enable)) {
+		if (static_branch_unlikely(&ipiv_enable) &&
+		    !static_branch_unlikely(&ipiv_direct)) {
 			vpe_page = alloc_pages(GFP_KERNEL, get_order(nr_irqs * 2));
 			if (!vpe_page) {
 				its_lpi_free(vm->db_bitmap, vm->db_lpi_base, vm->nr_db_lpis);
@@ -5089,7 +5094,8 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 		err = its_vpe_init(vm->vpes[i]);
 		if (err)
 			break;
-		if (static_branch_unlikely(&ipiv_enable)) {
+		if (static_branch_unlikely(&ipiv_enable) &&
+		    !static_branch_unlikely(&ipiv_direct)) {
 			vpe_entry = (u16 *)vpe_table_va + i;
 			*(u16 *)vpe_entry = vm->vpes[i]->vpe_id;
 		}
@@ -5105,7 +5111,8 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 
 	if (err) {
 		its_vpe_irq_domain_free(domain, virq, i);
-		if (static_branch_unlikely(&ipiv_enable)) {
+		if (static_branch_unlikely(&ipiv_enable) &
+		    !static_branch_unlikely(&ipiv_direct)) {
 			free_pages((unsigned long)page_address(vm->vpe_page),
 				    get_order(nr_irqs * 2));
 		}

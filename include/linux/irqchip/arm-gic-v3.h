@@ -116,6 +116,9 @@
 #define GICD_MISC_CTRL			0x2084
 #define GICD_MISC_CTRL_CFG_IPIV_EN	(1U << 19)
 
+#define GICD_IPIV_CTRL			0xc05c
+#define GICD_IPIV_CTRL_AFF_DIRECT_VPEID	(1U << 4)
+
 /*
  * Re-Distributor registers, offsets from RD_base
  */
