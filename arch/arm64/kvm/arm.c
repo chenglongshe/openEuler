@@ -315,6 +315,8 @@ void kvm_arch_destroy_vm(struct kvm *kvm)
 #endif
 }
 
+extern struct static_key_false ipiv_enable;
+extern struct static_key_false ipiv_direct;
 int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 {
 	int r;
@@ -439,6 +441,16 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 		r = static_key_enabled(&virtcca_cvm_is_available);
 		break;
 #endif
+	case KVM_CAP_ARM_IPIV_MODE:
+		if (static_branch_unlikely(&ipiv_enable)) {
+			if (static_branch_unlikely(&ipiv_direct))
+				r = 2; /* direct mode */
+			else
+				r = 1; /* indirect mode */
+		} else {
+			r = 0; /* don't enable IPIV */
+		}
+		break;
 	default:
 		r = 0;
 	}
