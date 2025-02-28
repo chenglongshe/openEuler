@@ -113,6 +113,9 @@
 #define GIC_PAGE_SIZE_64K		2ULL
 #define GIC_PAGE_SIZE_MASK		3ULL
 
+#define GICD_MISC_CTRL			0x2084
+#define GICD_MISC_CTRL_CFG_IPIV_EN	(1U << 19)
+
 /*
  * Re-Distributor registers, offsets from RD_base
  */
