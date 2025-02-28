@@ -28,10 +28,8 @@
 #include "svm.h"
 
 /* enable / disable AVIC */
-int avic;
-#ifdef CONFIG_X86_LOCAL_APIC
-module_param(avic, int, S_IRUGO);
-#endif
+bool avic;
+module_param(avic, bool, S_IRUGO);
 
 /* AVIC GATAG is encoded using VM and VCPU IDs */
 #define AVIC_VCPU_ID_BITS		8
@@ -203,7 +201,7 @@ static u64 *avic_get_physical_id_entry(struct kvm_vcpu *vcpu,
 	return &avic_physical_id_table[index];
 }
 
-/**
+/*
  * Note:
  * AVIC hardware walks the nested page table to check permissions,
  * but does not use the SPA address specified in the leaf page
@@ -278,6 +276,23 @@ static int avic_init_backing_page(struct kvm_vcpu *vcpu)
 	return 0;
 }
 
+static void avic_kick_target_vcpus(struct kvm *kvm, struct kvm_lapic *source,
+				   u32 icrl, u32 icrh)
+{
+	struct kvm_vcpu *vcpu;
+	int i;
+
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+		bool m = kvm_apic_match_dest(vcpu, source,
+					     icrl & APIC_SHORT_MASK,
+					     GET_APIC_DEST_FIELD(icrh),
+					     icrl & APIC_DEST_MASK);
+
+		if (m && !avic_vcpu_is_running(vcpu))
+			kvm_vcpu_wake_up(vcpu);
+	}
+}
+
 int avic_incomplete_ipi_interception(struct vcpu_svm *svm)
 {
 	u32 icrh = svm->vmcb->control.exit_info_1 >> 32;
@@ -304,28 +319,14 @@ int avic_incomplete_ipi_interception(struct vcpu_svm *svm)
 		kvm_lapic_reg_write(apic, APIC_ICR2, icrh);
 		kvm_lapic_reg_write(apic, APIC_ICR, icrl);
 		break;
-	case AVIC_IPI_FAILURE_TARGET_NOT_RUNNING: {
-		int i;
-		struct kvm_vcpu *vcpu;
-		struct kvm *kvm = svm->vcpu.kvm;
-		struct kvm_lapic *apic = svm->vcpu.arch.apic;
-
+	case AVIC_IPI_FAILURE_TARGET_NOT_RUNNING:
 		/*
 		 * At this point, we expect that the AVIC HW has already
 		 * set the appropriate IRR bits on the valid target
 		 * vcpus. So, we just need to kick the appropriate vcpu.
 		 */
-		kvm_for_each_vcpu(i, vcpu, kvm) {
-			bool m = kvm_apic_match_dest(vcpu, apic,
-						     icrl & APIC_SHORT_MASK,
-						     GET_APIC_DEST_FIELD(icrh),
-						     icrl & APIC_DEST_MASK);
-
-			if (m && !avic_vcpu_is_running(vcpu))
-				kvm_vcpu_wake_up(vcpu);
-		}
+		avic_kick_target_vcpus(svm->vcpu.kvm, apic, icrl, icrh);
 		break;
-	}
 	case AVIC_IPI_FAILURE_INVALID_TARGET:
 		break;
 	case AVIC_IPI_FAILURE_INVALID_BACKING_PAGE:
@@ -739,7 +740,7 @@ out:
 	return ret;
 }
 
-/**
+/*
  * Note:
  * The HW cannot support posting multicast/broadcast
  * interrupts to a vCPU. So, we still use legacy interrupt
@@ -981,7 +982,7 @@ void avic_vcpu_put(struct kvm_vcpu *vcpu)
 	WRITE_ONCE(*(svm->avic_physical_id_cache), entry);
 }
 
-/**
+/*
  * This function is called during VCPU halt/unhalt.
  */
 static void avic_set_running(struct kvm_vcpu *vcpu, bool is_run)
