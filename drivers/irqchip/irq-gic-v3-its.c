@@ -4572,18 +4572,44 @@ static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 	struct its_vm *vm = vpe->its_vm;
 	unsigned long vpe_addr;
 	u64 val = 0;
+	u32 nr_vpes;
 
-	if (static_branch_unlikely(&ipiv_enable) &&
-	    !static_branch_unlikely(&ipiv_direct)) {
-		vpe_addr = virt_to_phys(page_address(vm->vpe_page));
-		writeq_relaxed(vpe_addr & 0xffffffff,
+	if (static_branch_unlikely(&ipiv_enable)) {
+		/* wait gicr_ipiv_busy */
+		WARN_ON_ONCE(readl_relaxed_poll_timeout_atomic(
+			     vlpi_base + GICR_IPIV_ST,
+			     val,
+			     !(val & GICR_IPIV_ST_IPIV_BUSY),
+			     1, 500));
+		if (!static_branch_unlikely(&ipiv_direct)) {
+			/* setup vm table */
+			vpe_addr = virt_to_phys(page_address(vm->vpe_page));
+			writel_relaxed(vpe_addr & 0xffffffff,
 			       vlpi_base + GICR_VM_TABLE_BAR_L);
-		writeq_relaxed((vpe_addr >> 32) & 0xffffffff,
+			writel_relaxed((vpe_addr >> 32) & 0xffffffff,
 				vlpi_base + GICR_VM_TABLE_BAR_H);
+
+			/* setup gicr_vcpu_entry_num_max and gicr_ipiv_its_ta_sel */
+			nr_vpes = vpe->its_vm->nr_vpes;
+			val = ((nr_vpes - 1) << GICR_IPIV_CTRL_VCPU_ENTRY_NUM_MAX_SHIFT) |
+				(0 << GICR_IPIV_CTRL_IPIV_ITS_TA_SEL_SHIFT);
+			writel_relaxed(val, vlpi_base + GICR_IPIV_CTRL);
+		} else {
+			/* setup gicr_ipiv_its_ta_sel */
+			val = (0 << GICR_IPIV_CTRL_IPIV_ITS_TA_SEL_SHIFT);
+			writel_relaxed(val, vlpi_base + GICR_IPIV_CTRL);
+		}
+
+		/* disable guest access ICC_SGI1R_EL1 trap */
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+		val |= 1ULL;
+		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+
 	}
 
 	/* Schedule the VPE */
-	val |= GICR_VPENDBASER_Valid;
+	val = GICR_VPENDBASER_Valid;
 	val |= info->g0en ? GICR_VPENDBASER_4_1_VGRP0EN : 0;
 	val |= info->g1en ? GICR_VPENDBASER_4_1_VGRP1EN : 0;
 	val |= FIELD_PREP(GICR_VPENDBASER_4_1_VPEID, vpe->vpe_id);
@@ -4627,10 +4653,20 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 		vpe->pending_last = true;
 	}
 
-	if (static_branch_unlikely(&ipiv_enable) &&
-	    !static_branch_unlikely(&ipiv_direct)) {
-		writeq_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_L);
-		writeq_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_H);
+	if (static_branch_unlikely(&ipiv_enable)) {
+		if (!static_branch_unlikely(&ipiv_direct)) {
+
+			/* wait gicr_ipiv_busy */
+			WARN_ON_ONCE(readl_relaxed_poll_timeout_atomic(vlpi_base + GICR_IPIV_ST,
+					val, !(val & GICR_IPIV_ST_IPIV_BUSY), 1, 500));
+			writel_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_L);
+			writel_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_H);
+		}
+		/* enable guest access ICC_SGI1R_EL1 trap, disable ipiv */
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+		val &= ~1UL;
+		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
 	}
 }
 

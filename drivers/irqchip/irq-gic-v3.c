@@ -1534,9 +1534,16 @@ bool gic_dist_enable_ipiv(bool direct)
 	if (direct) {
 		val |= GICD_IPIV_CTRL_AFF_DIRECT_VPEID;
 		static_branch_enable(&ipiv_direct);
+	} else {
+		val = (0 << GICD_IPIV_CTRL_AFF_DIRECT_VPEID_SHIFT) |
+			(0 << GICD_IPIV_CTRL_AFF1_LEFT_SHIFT_SHIFT) |
+			(4 << GICD_IPIV_CTRL_AFF2_LEFT_SHIFT_SHIFT) |
+			(7 << GICD_IPIV_CTRL_VM_TABLE_INNERCACHE_SHIFT) |
+			(2 << GICD_IPIV_CTRL_VM_TABLE_SHAREABILITY_SHIFT);
 	}
 	writel_relaxed(val, gic_data.dist_base + GICD_IPIV_CTRL);
-
+	/* Set target ITS address of IPIV feature */
+	writel_relaxed(0x4880, gic_data.dist_base + GICD_IPIV_ITS_TA_BASE);
 	return true;
 }
 EXPORT_SYMBOL(gic_dist_enable_ipiv);
