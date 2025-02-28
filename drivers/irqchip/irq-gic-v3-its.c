@@ -4607,7 +4607,7 @@ static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
 		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
 
-	} else {
+	} else if (static_branch_unlikely(&ipiv_enable)) {
 		/* enable guest access ICC_SGI1R_EL1 trap, disable ipiv */
 		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
 		val &= ~1UL;
