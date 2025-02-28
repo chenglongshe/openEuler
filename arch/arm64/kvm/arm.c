@@ -514,6 +514,10 @@ int kvm_arch_vcpu_create(struct kvm_vcpu *vcpu)
 	if (err)
 		return err;
 
+	err = kvm_vgic_vpe_id_alloc(vcpu);
+	if (err)
+		return err;
+
 	return kvm_share_hyp(vcpu, vcpu + 1);
 }
 
@@ -530,6 +534,8 @@ void kvm_arch_vcpu_destroy(struct kvm_vcpu *vcpu)
 	kvm_arm_vcpu_destroy(vcpu);
 
 	kvm_sched_affinity_vcpu_destroy(vcpu);
+
+	kvm_vgic_vpe_id_free(vcpu);
 }
 
 void kvm_arch_vcpu_blocking(struct kvm_vcpu *vcpu)

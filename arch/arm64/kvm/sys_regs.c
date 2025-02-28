@@ -726,9 +726,12 @@ static u64 reset_mpidr(struct kvm_vcpu *vcpu, const struct sys_reg_desc *r)
 	 */
 	if (static_branch_unlikely(&ipiv_enable)) {
 		if (static_branch_unlikely(&ipiv_direct)) {
-			u64 vpe_id_aff3 = (vpe->vpe_id >> 8) & 0xff;
+			u64 vpe_id_aff3, vpe_id_aff2;
 
-			mpidr |= ((vpe->vpe_id & 0xff) << MPIDR_LEVEL_SHIFT(2));
+			vpe_id_aff2 = (vpe->vpe_id >> 8) & 0xff;
+			vpe_id_aff3 = (vpe->vpe_id & 0xff);
+
+			mpidr |= vpe_id_aff2 << MPIDR_LEVEL_SHIFT(2);
 			mpidr |= vpe_id_aff3 << MPIDR_LEVEL_SHIFT(3);
 		} else {
 			mpidr = (vcpu->vcpu_id & 0x0f) << MPIDR_LEVEL_SHIFT(1);

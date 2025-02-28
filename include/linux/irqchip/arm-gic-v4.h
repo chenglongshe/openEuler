@@ -92,6 +92,7 @@ struct its_vpe {
 	u16			col_idx;
 	/* Unique (system-wide) VPE identifier */
 	u16			vpe_id;
+	bool			vpe_id_allocated;
 	/* Pending VLPIs on schedule out? */
 	bool			pending_last;
 };
