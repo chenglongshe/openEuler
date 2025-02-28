@@ -20,7 +20,6 @@ struct its_vm {
 	struct fwnode_handle	*fwnode;
 	struct irq_domain	*domain;
 	struct page		*vprop_page;
-	struct page		*vpe_page;
 	struct its_vpe		**vpes;
 	int			nr_vpes;
 	irq_hw_number_t		db_lpi_base;
@@ -35,7 +34,10 @@ struct its_vm {
 	 */
 	raw_spinlock_t		vmapp_lock;
 	u32			vlpi_count[GICv4_ITS_LIST_MAX];
+#ifndef __GENKSYMS__
+	struct page		*vpe_page;
 	bool			nassgireq;
+#endif
 };
 
 /* Embedded in kvm_vcpu.arch */
@@ -93,9 +95,11 @@ struct its_vpe {
 	u16			col_idx;
 	/* Unique (system-wide) VPE identifier */
 	u16			vpe_id;
-	bool			vpe_id_allocated;
 	/* Pending VLPIs on schedule out? */
 	bool			pending_last;
+#ifndef __GENKSYMS__
+	bool			vpe_id_allocated;
+#endif
 };
 
 /*
