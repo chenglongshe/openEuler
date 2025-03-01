@@ -8,6 +8,7 @@
 #include <linux/pci.h>
 #include <linux/memblock.h>
 #include <linux/dma-mapping.h>
+#include <linux/dma-map-ops.h>
 
 /*
  * The PCI controller list.
@@ -134,4 +135,4 @@ void __init common_init_pci(void)
 }
 
 void __init sw64_init_arch(void) { }
-void __init sw64_init_irq(void) { }
+void __init sunway_init_pci_intx(void) { }

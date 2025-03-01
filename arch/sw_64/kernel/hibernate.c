@@ -14,8 +14,13 @@ void save_processor_state(void)
 
 	vcb->ksp = rdksp();
 	vcb->usp = rdusp();
-	vcb->tid = rtid();
+	vcb->soft_tid = rtid();
+#if defined(CONFIG_SUBARCH_C3B)
 	vcb->ptbr = rdptbr();
+#elif defined(CONFIG_SUBARCH_C4)
+	vcb->ptbr_usr = sw64_read_csr(CSR_PTBR_USR);
+	vcb->ptbr_sys = sw64_read_csr(CSR_PTBR_SYS);
+#endif
 }
 
 void restore_processor_state(void)
@@ -24,8 +29,13 @@ void restore_processor_state(void)
 
 	wrksp(vcb->ksp);
 	wrusp(vcb->usp);
-	wrtp(vcb->tid);
+	wrtp(vcb->soft_tid);
+#if defined(CONFIG_SUBARCH_C3B)
 	wrptbr(vcb->ptbr);
+#elif defined(CONFIG_SUBARCH_C4)
+	sw64_write_csr_imb(vcb->ptbr_usr, CSR_PTBR_USR);
+	sw64_write_csr_imb(vcb->ptbr_sys, CSR_PTBR_SYS);
+#endif
 	sflush();
 	tbiv();
 }

@@ -4,6 +4,8 @@
 #include <asm/suspend.h>
 #include <asm/sw64_init.h>
 
+#define	PME_EN	0x2
+
 struct processor_state suspend_state;
 
 static int native_suspend_state_valid(suspend_state_t pm_state)
@@ -33,46 +35,33 @@ void sw64_suspend_enter(void)
 	/* boot processor will go to deep sleep mode from here
 	 * After wake up  boot processor, pc will go here
 	 */
-
-#ifdef CONFIG_SW64_SUPPORT_S3_SLEEPING_STATE
-	if (sw64_chip->suspend)
-		sw64_chip->suspend(false);
-#endif
-
 	disable_local_timer();
 	current_thread_info()->pcb.tp = rtid();
 
-#ifdef CONFIG_SW64_SUSPEND_DEEPSLEEP_BOOTCORE
-	sw64_suspend_deep_sleep(&suspend_state);
-#else
-	mtinten();
-	asm("halt");
-#endif
-	wrtp(current_thread_info()->pcb.tp);
+	if (!is_junzhang_v1())
+		sw64_suspend_deep_sleep(&suspend_state);
+	else {
+		pme_state = PME_WFW;
+		sw64_write_csr_imb(PME_EN, CSR_INT_EN);
+		asm("halt");
+		local_irq_disable();
+	}
 
-#ifdef CONFIG_SW64_SUPPORT_S3_SLEEPING_STATE
-	if (sw64_chip->suspend)
-		sw64_chip->suspend(true);
-#endif
+	wrtp(current_thread_info()->pcb.tp);
 
 	disable_local_timer();
 }
 
 static int native_suspend_enter(suspend_state_t state)
 {
+	if (is_in_guest())
+		return 0;
 	/* processor specific suspend */
 	sw64_suspend_enter();
 	return 0;
 }
 
-static const struct platform_suspend_ops native_suspend_ops = {
+const struct platform_suspend_ops native_suspend_ops = {
 	.valid = native_suspend_state_valid,
 	.enter = native_suspend_enter,
 };
-
-static int __init sw64_pm_init(void)
-{
-	suspend_set_ops(&native_suspend_ops);
-	return 0;
-}
-arch_initcall(sw64_pm_init);

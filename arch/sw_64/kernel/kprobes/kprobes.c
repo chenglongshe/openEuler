@@ -267,11 +267,24 @@ void kretprobe_trampoline(void);
 void __kprobes arch_prepare_kretprobe(struct kretprobe_instance *ri,
 		struct pt_regs *regs)
 {
-	ri->ret_addr = (kprobe_opcode_t *) regs->r26;
+	ri->ret_addr = (kprobe_opcode_t *) regs->regs[26];
 	ri->fp = NULL;
 
 	/* Replace the return addr with trampoline addr */
-	regs->r26 = (unsigned long)kretprobe_trampoline;
+	regs->regs[26] = (unsigned long)kretprobe_trampoline;
+}
+
+/*
+ * Provide a blacklist of symbols identifying ranges which cannot be kprobed.
+ * This blacklist is exposed to userspace via debugfs (kprobes/blacklist).
+ */
+int __init arch_populate_kprobe_blacklist(void)
+{
+	int ret;
+
+	ret = kprobe_add_area_blacklist((unsigned long)__entry_text_start,
+					(unsigned long)__entry_text_end);
+		return ret;
 }
 
 /*
@@ -284,7 +297,7 @@ static int __kprobes trampoline_probe_handler(struct kprobe *p,
 
 	orig_ret_address = __kretprobe_trampoline_handler(regs, kretprobe_trampoline, NULL);
 	instruction_pointer(regs) = orig_ret_address;
-	regs->r26 = orig_ret_address;
+	regs->regs[26] = orig_ret_address;
 
 	/*
 	 * By returning a non-zero value, we are telling

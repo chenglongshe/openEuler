@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-ARCH ?= $(shell uname -m)
 FILES=                                          \
          test-all.bin                           \
          test-backtrace.bin                     \
@@ -233,11 +232,7 @@ $(OUTPUT)test-libpython.bin:
 	$(BUILD) $(FLAGS_PYTHON_EMBED)
 
 $(OUTPUT)test-libbfd.bin:
-ifeq ($(ARCH),sw_64)
-	$(BUILD) -DPACKAGE='"perf"' -lbfd -ldl -liberty -lz
-else
 	$(BUILD) -DPACKAGE='"perf"' -lbfd -ldl
-endif
 
 $(OUTPUT)test-libbfd-buildid.bin:
 	$(BUILD) -DPACKAGE='"perf"' -lbfd -ldl

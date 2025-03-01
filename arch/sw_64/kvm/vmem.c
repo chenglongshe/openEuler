@@ -72,7 +72,7 @@ static void vmem_vm_close(struct vm_area_struct *vma)
 
 	info = vma->vm_private_data;
 	addr = info->start;
-	size = info->size;
+	size = round_up(info->size, 8 << 20);
 
 	if (atomic_dec_and_test(&info->refcnt)) {
 		if (sw64_kvm_pool && addr_in_pool(sw64_kvm_pool, addr, size)) {
@@ -123,7 +123,7 @@ static int vmem_mmap(struct file *flip, struct vm_area_struct *vma)
 		return -ENOMEM;
 
 	if (flip->private_data == NULL) {
-		addr = gen_pool_alloc(sw64_kvm_pool, size);
+		addr = gen_pool_alloc(sw64_kvm_pool, round_up(size, 8 << 20));
 		if (!addr)
 			return -ENOMEM;
 
@@ -144,7 +144,7 @@ static int vmem_mmap(struct file *flip, struct vm_area_struct *vma)
 	/*to do if size bigger than vm_mem_size*/
 	pr_info("sw64_vmem: vm_start=%#lx, size= %#lx\n", vma->vm_start, size);
 
-	vmem_vm_insert_page(vma);
+	ret = vmem_vm_insert_page(vma);
 	if (ret < 0)
 		return ret;
 
@@ -165,7 +165,7 @@ static struct miscdevice vmem_dev = {
 	.fops  = &vmem_fops,
 };
 
-static int __init vmem_init(void)
+int __init vmem_init(void)
 {
 	int err;
 
@@ -177,7 +177,7 @@ static int __init vmem_init(void)
 	return 0;
 }
 
-static void vmem_exit(void)
+void vmem_exit(void)
 {
 	misc_deregister(&vmem_dev);
 }

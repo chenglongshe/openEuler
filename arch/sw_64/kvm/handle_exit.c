@@ -8,12 +8,14 @@
 #include <asm/kvm_asm.h>
 #include <asm/kvm_emulate.h>
 #include <asm/kvm_timer.h>
+#include <asm/kvm_mmu.h>
 #include <linux/kvm.h>
+#include <linux/kvm_host.h>
 
 int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *run,
 		int exception_index, struct hcall_args *hargs)
 {
-	gfn_t gfn;
+	gfn_t gfn __maybe_unused;
 
 	switch (exception_index) {
 	case SW64_KVM_EXIT_IO:
@@ -54,18 +56,16 @@ int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *run,
 		return 1;
 	case SW64_KVM_EXIT_IPI:
 		vcpu->stat.ipi_exits++;
-		vcpu_send_ipi(vcpu, hargs->arg0);
+		vcpu_send_ipi(vcpu, hargs->arg0, hargs->arg1);
 		return 1;
 	case SW64_KVM_EXIT_DEBUG:
 		vcpu->stat.debug_exits++;
 		vcpu->run->exit_reason = KVM_EXIT_DEBUG;
 		vcpu->run->debug.arch.epc = vcpu->arch.regs.pc;
 		return 0;
-#ifdef CONFIG_KVM_MEMHOTPLUG
-	case SW64_KVM_EXIT_MEMHOTPLUG:
-		vcpu->stat.memhotplug_exits++;
-		vcpu_mem_hotplug(vcpu, hargs->arg0);
-		return 1;
+#ifdef CONFIG_SUBARCH_C4
+	case SW64_KVM_EXIT_APT_FAULT:
+		return kvm_handle_guest_abort(vcpu, run, hargs);
 #endif
 	case SW64_KVM_EXIT_FATAL_ERROR:
 		vcpu->stat.fatal_error_exits++;

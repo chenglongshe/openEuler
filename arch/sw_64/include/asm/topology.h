@@ -8,26 +8,19 @@
 #include <asm/core.h>
 #include <asm/smp.h>
 
-#define THREAD_ID_SHIFT	5	/* thread_id is removed from rcid */
-#define THREAD_ID_MASK	0	/* set mask to 0 */
-#define CORE_ID_MASK	((1 << THREAD_ID_SHIFT) - 1)
-
-extern struct cpu_topology cpu_topology[NR_CPUS];
-
-#define topology_physical_package_id(cpu)	(cpu_topology[cpu].package_id)
-#define topology_core_id(cpu)			(cpu_topology[cpu].core_id)
-#define topology_core_cpumask(cpu)		(&cpu_topology[cpu].core_sibling)
-#define topology_sibling_cpumask(cpu)		(&cpu_topology[cpu].thread_sibling)
-#define topology_llc_cpumask(cpu)		(&cpu_topology[cpu].llc_sibling)
-
-void init_cpu_topology(void);
-void store_cpu_topology(int cpuid);
-void remove_cpu_topology(int cpuid);
-const struct cpumask *cpu_coregroup_mask(int cpu);
-
-static inline int rcid_to_package(int rcid)
+static inline int rcid_to_thread_id(int rcid)
 {
-	return rcid >> CORES_PER_NODE_SHIFT;
+	return (rcid & THREAD_ID_MASK) >> THREAD_ID_SHIFT;
+}
+
+static inline int rcid_to_core_id(int rcid)
+{
+	return (rcid & CORE_ID_MASK) >> CORE_ID_SHIFT;
+}
+
+static inline int rcid_to_domain_id(int rcid)
+{
+	return (rcid & DOMAIN_ID_MASK) >> DOMAIN_ID_SHIFT;
 }
 
 #ifdef CONFIG_NUMA
@@ -54,6 +47,7 @@ static inline void numa_add_cpu(unsigned int cpu) { }
 static inline void numa_remove_cpu(unsigned int cpu) { }
 static inline void numa_store_cpu_info(unsigned int cpu) { }
 #endif /* CONFIG_NUMA */
+
 #include <asm-generic/topology.h>
 
 static inline void arch_fix_phys_package_id(int num, u32 slot) { }

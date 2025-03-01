@@ -61,7 +61,7 @@ int unwind_frame(struct task_struct *tsk, struct stackframe *frame)
 }
 EXPORT_SYMBOL_GPL(unwind_frame);
 
-void walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
+void noinstr walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
 		     int (*fn)(unsigned long, void *), void *data)
 {
 	unsigned long pc, fp;
@@ -71,7 +71,7 @@ void walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
 	if (regs) {
 		unsigned long offset;
 		pc = regs->pc;
-		fp = regs->r15;
+		fp = regs->regs[15];
 		if (kallsyms_lookup_size_offset(pc, NULL, &offset)
 				&& offset < 16) {
 			/* call stack has not been setup
@@ -79,7 +79,7 @@ void walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
 			 */
 			if (fn(pc, data))
 				return;
-			pc = regs->r26;
+			pc = regs->regs[26];
 		}
 	} else if (tsk == current || tsk == NULL) {
 		fp = (unsigned long)__builtin_frame_address(0);
@@ -107,7 +107,7 @@ void walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
 EXPORT_SYMBOL_GPL(walk_stackframe);
 
 #else /* !CONFIG_FRAME_POINTER */
-void walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
+void noinstr walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
 		     int (*fn)(unsigned long, void *), void *data)
 {
 	unsigned long *ksp;
@@ -130,7 +130,7 @@ void walk_stackframe(struct task_struct *tsk, struct pt_regs *regs,
 	while (!kstack_end(ksp)) {
 		if (__kernel_text_address(pc) && fn(pc, data))
 			break;
-		pc = (*ksp++) - 0x4;
+		pc = *ksp++;
 	}
 }
 EXPORT_SYMBOL_GPL(walk_stackframe);
@@ -172,6 +172,19 @@ int save_trace(unsigned long pc, void *d)
 
 	trace->entries[trace->nr_entries++] = pc;
 	return (trace->nr_entries >= trace->max_entries);
+}
+
+void save_stack_trace_regs(struct pt_regs *regs, struct stack_trace *trace)
+{
+	struct stack_trace_data data;
+
+	data.trace = trace;
+	data.nosched = 0;
+
+	walk_stackframe(current, regs, save_trace, &data);
+
+	if (trace->nr_entries < trace->max_entries)
+		trace->entries[trace->nr_entries++] = ULONG_MAX;
 }
 
 static void __save_stack_trace(struct task_struct *tsk,

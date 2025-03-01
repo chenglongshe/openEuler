@@ -8,17 +8,6 @@
 #include <linux/perf_event.h>
 #include <asm/stacktrace.h>
 
-/* For tracking PMCs and the hw events they monitor on each CPU. */
-struct cpu_hw_events {
-	/*
-	 * Set the bit (indexed by the counter number) when the counter
-	 * is used for an event.
-	 */
-	unsigned long		used_mask[BITS_TO_LONGS(MAX_HWEVENTS)];
-	/* Array of events current scheduled on this cpu. */
-	struct perf_event	*event[MAX_HWEVENTS];
-};
-
 DEFINE_PER_CPU(struct cpu_hw_events, cpu_hw_events);
 
 struct sw64_perf_event {
@@ -91,12 +80,12 @@ static const struct sw64_pmu_t *sw64_pmu;
 
 /* Mapping of the hw event types to the perf tool interface */
 static const struct sw64_perf_event core3_hw_event_map[] = {
-	[PERF_COUNT_HW_CPU_CYCLES]		= {PERFMON_PC0, PC0_CPU_CYCLES},
-	[PERF_COUNT_HW_INSTRUCTIONS]		= {PERFMON_PC0, PC0_INSTRUCTIONS},
-	[PERF_COUNT_HW_CACHE_REFERENCES]	= {PERFMON_PC0,	PC0_SCACHE_REFERENCES},
-	[PERF_COUNT_HW_CACHE_MISSES]		= {PERFMON_PC1, PC1_SCACHE_MISSES},
-	[PERF_COUNT_HW_BRANCH_INSTRUCTIONS]	= {PERFMON_PC0, PC0_BRANCH_INSTRUCTIONS},
-	[PERF_COUNT_HW_BRANCH_MISSES]		= {PERFMON_PC1, PC1_BRANCH_MISSES},
+	[PERF_COUNT_HW_CPU_CYCLES]		= {PMC_PC0, PC0_CPU_CYCLES},
+	[PERF_COUNT_HW_INSTRUCTIONS]		= {PMC_PC0, PC0_INSTRUCTIONS},
+	[PERF_COUNT_HW_CACHE_REFERENCES]	= {PMC_PC0, PC0_SCACHE_REFERENCES},
+	[PERF_COUNT_HW_CACHE_MISSES]		= {PMC_PC1, PC1_SCACHE_MISSES},
+	[PERF_COUNT_HW_BRANCH_INSTRUCTIONS]	= {PMC_PC0, PC0_BRANCH_INSTRUCTIONS},
+	[PERF_COUNT_HW_BRANCH_MISSES]		= {PMC_PC1, PC1_BRANCH_MISSES},
 };
 
 /* Mapping of the hw cache event types to the perf tool interface */
@@ -107,8 +96,8 @@ static const struct sw64_perf_event core3_cache_event_map
 				[PERF_COUNT_HW_CACHE_RESULT_MAX] = {
 	[C(L1D)] = {
 		[C(OP_READ)] = {
-			[C(RESULT_ACCESS)]	= {PERFMON_PC0, PC0_DCACHE_READ},
-			[C(RESULT_MISS)]	= {PERFMON_PC1, PC1_DCACHE_MISSES}
+			[C(RESULT_ACCESS)]	= {PMC_PC0, PC0_DCACHE_READ},
+			[C(RESULT_MISS)]	= {PMC_PC1, PC1_DCACHE_MISSES}
 		},
 		[C(OP_WRITE)] = {
 			[C(RESULT_ACCESS)]	= SW64_OP_UNSUP,
@@ -121,8 +110,8 @@ static const struct sw64_perf_event core3_cache_event_map
 	},
 	[C(L1I)] = {
 		[C(OP_READ)] = {
-			[C(RESULT_ACCESS)]	= {PERFMON_PC0, PC0_ICACHE_READ},
-			[C(RESULT_MISS)]	= {PERFMON_PC1, PC1_ICACHE_READ_MISSES},
+			[C(RESULT_ACCESS)]	= {PMC_PC0, PC0_ICACHE_READ},
+			[C(RESULT_MISS)]	= {PMC_PC1, PC1_ICACHE_READ_MISSES},
 		},
 		[C(OP_WRITE)] = {
 			[C(RESULT_ACCESS)]	= SW64_OP_UNSUP,
@@ -149,8 +138,8 @@ static const struct sw64_perf_event core3_cache_event_map
 	},
 	[C(DTLB)] = {
 		[C(OP_READ)] = {
-			[C(RESULT_ACCESS)]	= {PERFMON_PC0, PC0_DTB_READ},
-			[C(RESULT_MISS)]	= {PERFMON_PC1, PC1_DTB_SINGLE_MISSES},
+			[C(RESULT_ACCESS)]	= {PMC_PC0, PC0_DTB_READ},
+			[C(RESULT_MISS)]	= {PMC_PC1, PC1_DTB_SINGLE_MISSES},
 		},
 		[C(OP_WRITE)] = {
 			[C(RESULT_ACCESS)]	= SW64_OP_UNSUP,
@@ -163,8 +152,8 @@ static const struct sw64_perf_event core3_cache_event_map
 	},
 	[C(ITLB)] = {
 		[C(OP_READ)] = {
-			[C(RESULT_ACCESS)]	= {PERFMON_PC0, PC0_ITB_READ},
-			[C(RESULT_MISS)]	= {PERFMON_PC1, PC1_ITB_MISSES},
+			[C(RESULT_ACCESS)]	= {PMC_PC0, PC0_ITB_READ},
+			[C(RESULT_MISS)]	= {PMC_PC1, PC1_ITB_MISSES},
 		},
 		[C(OP_WRITE)] = {
 			[C(RESULT_ACCESS)]	= SW64_OP_UNSUP,
@@ -267,21 +256,12 @@ static const struct sw64_pmu_t core3_pmu = {
  */
 static void sw64_write_pmc(int idx, unsigned long val)
 {
-	if (idx == PERFMON_PC0)
-		wrperfmon(PERFMON_CMD_WRITE_PC0, val);
-	else
-		wrperfmon(PERFMON_CMD_WRITE_PC1, val);
+	wrperfmon(PMC_CMD_WRITE_BASE + idx, val);
 }
 
 static unsigned long sw64_read_pmc(int idx)
 {
-	unsigned long val;
-
-	if (idx == PERFMON_PC0)
-		val = wrperfmon(PERFMON_CMD_READ, PERFMON_READ_PC0);
-	else
-		val = wrperfmon(PERFMON_CMD_READ, PERFMON_READ_PC1);
-	return val;
+	return wrperfmon(PMC_CMD_READ, idx);
 }
 
 /* Set a new period to sample over */
@@ -386,14 +366,9 @@ static void sw64_pmu_start(struct perf_event *event, int flags)
 	hwc->state = 0;
 
 	/* counting in selected modes, for both counters */
-	wrperfmon(PERFMON_CMD_PM, hwc->config_base);
-	if (hwc->idx == PERFMON_PC0) {
-		wrperfmon(PERFMON_CMD_EVENT_PC0, hwc->event_base);
-		wrperfmon(PERFMON_CMD_ENABLE, PERFMON_ENABLE_ARGS_PC0);
-	} else {
-		wrperfmon(PERFMON_CMD_EVENT_PC1, hwc->event_base);
-		wrperfmon(PERFMON_CMD_ENABLE, PERFMON_ENABLE_ARGS_PC1);
-	}
+	wrperfmon(PMC_CMD_PM, hwc->config_base);
+	wrperfmon(PMC_CMD_EVENT_BASE + hwc->idx, hwc->config);
+	wrperfmon(PMC_CMD_ENABLE, PMC_ENABLE_BASE + hwc->idx);
 }
 
 /*
@@ -404,9 +379,7 @@ static void sw64_pmu_stop(struct perf_event *event, int flags)
 	struct hw_perf_event *hwc = &event->hw;
 
 	if (!(hwc->state & PERF_HES_STOPPED)) {
-		wrperfmon(PERFMON_CMD_DISABLE, hwc->idx == 0 ?
-				PERFMON_DISABLE_ARGS_PC0 :
-				PERFMON_DISABLE_ARGS_PC1);
+		wrperfmon(PMC_CMD_DISABLE, PMC_DISABLE_BASE + hwc->idx);
 		hwc->state |= PERF_HES_STOPPED;
 		barrier();
 	}
@@ -490,49 +463,10 @@ static void hw_perf_event_destroy(struct perf_event *event)
 	/* Nothing to be done! */
 }
 
-static int __hw_perf_event_init(struct perf_event *event)
+static void __hw_perf_event_init(struct perf_event *event)
 {
 	struct perf_event_attr *attr = &event->attr;
 	struct hw_perf_event *hwc = &event->hw;
-	const struct sw64_perf_event *event_type;
-
-
-	/*
-	 * SW64 does not have per-counter usr/os/guest/host bits,
-	 * we can distinguish exclude_user and exclude_kernel by
-	 * sample mode.
-	 */
-	if (event->attr.exclude_hv || event->attr.exclude_idle ||
-			event->attr.exclude_host || event->attr.exclude_guest)
-		return -EINVAL;
-
-	/*
-	 * SW64 does not support precise ip feature, and system hang when
-	 * detecting precise_ip by perf_event_attr__set_max_precise_ip
-	 * in userspace
-	 */
-	if (attr->precise_ip != 0)
-		return -EOPNOTSUPP;
-
-	/* SW64 has fixed counter for given event type */
-	if (attr->type == PERF_TYPE_HARDWARE) {
-		if (attr->config >= sw64_pmu->max_events)
-			return -EINVAL;
-		event_type = sw64_pmu->map_hw_event(attr->config);
-		hwc->idx = event_type->counter;
-		hwc->event_base = event_type->event;
-	} else if (attr->type == PERF_TYPE_HW_CACHE) {
-		event_type = sw64_pmu->map_cache_event(attr->config);
-		if (IS_ERR(event_type))	/* */
-			return PTR_ERR(event_type);
-		hwc->idx = event_type->counter;
-		hwc->event_base = event_type->event;
-	} else { /* PERF_TYPE_RAW */
-		if (!sw64_pmu->raw_event_valid(attr->config))
-			return -EINVAL;
-		hwc->idx = attr->config >> 8;	/* counter selector */
-		hwc->event_base = attr->config & 0xff;	/* event selector */
-	}
 
 	hwc->config_base = SW64_PERFCTRL_AM;
 
@@ -540,8 +474,6 @@ static int __hw_perf_event_init(struct perf_event *event)
 		hwc->config_base = SW64_PERFCTRL_KM;
 	if (attr->exclude_kernel)
 		hwc->config_base = SW64_PERFCTRL_UM;
-
-	hwc->config = attr->config;
 
 	if (!is_sampling_event(event))
 		pr_debug("not sampling event\n");
@@ -553,8 +485,6 @@ static int __hw_perf_event_init(struct perf_event *event)
 		hwc->last_period = hwc->sample_period;
 		local64_set(&hwc->period_left, hwc->sample_period);
 	}
-
-	return 0;
 }
 
 /*
@@ -562,28 +492,66 @@ static int __hw_perf_event_init(struct perf_event *event)
  */
 static int sw64_pmu_event_init(struct perf_event *event)
 {
-	int err;
+	struct perf_event_attr *attr = &event->attr;
+	struct hw_perf_event *hwc = &event->hw;
+	const struct sw64_perf_event *event_type;
+
+	if (!sw64_pmu)
+		return -ENODEV;
 
 	/* does not support taken branch sampling */
 	if (has_branch_stack(event))
 		return -EOPNOTSUPP;
 
-	switch (event->attr.type) {
-	case PERF_TYPE_RAW:
+	if (attr->exclude_user && attr->exclude_kernel)
+		return -EOPNOTSUPP;
+	/*
+	 * SW64 does not support precise ip feature, and system hang when
+	 * detecting precise_ip by perf_event_attr__set_max_precise_ip
+	 * in userspace
+	 */
+	if (attr->precise_ip != 0)
+		return -EOPNOTSUPP;
+
+	/* SW64 has fixed counter for given event type */
+	switch (attr->type) {
 	case PERF_TYPE_HARDWARE:
+		if (attr->config >= sw64_pmu->max_events)
+			return -EINVAL;
+		event_type = sw64_pmu->map_hw_event(attr->config);
+		hwc->idx = event_type->counter;
+		hwc->config = event_type->event;
+		break;
 	case PERF_TYPE_HW_CACHE:
+		event_type = sw64_pmu->map_cache_event(attr->config);
+		if (IS_ERR(event_type))
+			return PTR_ERR(event_type);
+		hwc->idx = event_type->counter;
+		hwc->config = event_type->event;
+		break;
+	case PERF_TYPE_RAW:
+		if (!sw64_pmu->raw_event_valid(attr->config))
+			return -EINVAL;
+		hwc->idx = attr->config >> 8;	/* counter selector */
+		hwc->config = attr->config & 0xff;	/* event selector */
 		break;
 	default:
 		return -ENOENT;
 	}
 
-	if (!sw64_pmu)
-		return -ENODEV;
+	/*
+	 * SW64 does not have per-counter usr/os/guest/host bits,
+	 * we can distinguish exclude_user and exclude_kernel by
+	 * sample mode.
+	 */
+	if (attr->exclude_hv || attr->exclude_idle ||
+			attr->exclude_host || attr->exclude_guest)
+		return -EINVAL;
 
 	/* Do the real initialisation work. */
-	err = __hw_perf_event_init(event);
+	__hw_perf_event_init(event);
 
-	return err;
+	return 0;
 }
 
 static struct pmu pmu = {
@@ -610,27 +578,24 @@ void perf_event_print_debug(void)
 
 	cpu = smp_processor_id();
 
-	pcr0 = wrperfmon(PERFMON_CMD_READ, PERFMON_READ_PC0);
-	pcr1 = wrperfmon(PERFMON_CMD_READ, PERFMON_READ_PC1);
+	pcr0 = wrperfmon(PMC_CMD_READ, PMC_PC0);
+	pcr1 = wrperfmon(PMC_CMD_READ, PMC_PC1);
 
 	pr_info("CPU#%d: PCTR0[%lx] PCTR1[%lx]\n", cpu, pcr0, pcr1);
 
 	local_irq_restore(flags);
 }
 
-static void sw64_perf_event_irq_handler(unsigned long perfmon_num,
+static void sw64_perf_event_irq_handler(unsigned long idx,
 					struct pt_regs *regs)
 {
 	struct cpu_hw_events *cpuc;
 	struct perf_sample_data data;
 	struct perf_event *event;
 	struct hw_perf_event *hwc;
-	int idx;
 
 	__this_cpu_inc(irq_pmi_count);
 	cpuc = this_cpu_ptr(&cpu_hw_events);
-
-	idx = perfmon_num;
 
 	event = cpuc->event[idx];
 
@@ -653,144 +618,24 @@ static void sw64_perf_event_irq_handler(unsigned long perfmon_num,
 	}
 }
 
-bool valid_utext_addr(unsigned long addr)
-{
-	return addr >= current->mm->start_code && addr <= current->mm->end_code;
-}
-
-bool valid_dy_addr(unsigned long addr)
-{
-	bool ret = false;
-	struct vm_area_struct *vma;
-	struct mm_struct *mm = current->mm;
-
-	if (addr > TASK_SIZE || addr < TASK_UNMAPPED_BASE)
-		return ret;
-	vma = find_vma(mm, addr);
-	if (vma && vma->vm_start <= addr && (vma->vm_flags & VM_EXEC))
-		ret = true;
-	return ret;
-}
-
-#ifdef CONFIG_FRAME_POINTER
-void perf_callchain_user(struct perf_callchain_entry_ctx *entry,
-		struct pt_regs *regs)
-{
-
-	struct stack_frame frame;
-	unsigned long __user *fp;
-	int err;
-
-	perf_callchain_store(entry, regs->pc);
-
-	fp = (unsigned long __user *)regs->r15;
-
-	while (entry->nr < entry->max_stack && (unsigned long)fp < current->mm->start_stack) {
-		if (!access_ok(fp, sizeof(frame)))
-			break;
-
-		pagefault_disable();
-		err =  __copy_from_user_inatomic(&frame, fp, sizeof(frame));
-		pagefault_enable();
-
-		if (err)
-			break;
-
-		if (valid_utext_addr(frame.return_address) || valid_dy_addr(frame.return_address))
-			perf_callchain_store(entry, frame.return_address);
-		fp = (void __user *)frame.next_frame;
-	}
-}
-#else /* !CONFIG_FRAME_POINTER */
-void perf_callchain_user(struct perf_callchain_entry_ctx *entry,
-		struct pt_regs *regs)
-{
-	unsigned long usp = current_user_stack_pointer();
-	unsigned long user_addr;
-	int err;
-
-	perf_callchain_store(entry, regs->pc);
-
-	while (entry->nr < entry->max_stack && usp < current->mm->start_stack) {
-		if (!access_ok(usp, 8))
-			break;
-
-		pagefault_disable();
-		err = __get_user(user_addr, (unsigned long *)usp);
-		pagefault_enable();
-
-		if (err)
-			break;
-
-		if (valid_utext_addr(user_addr) || valid_dy_addr(user_addr))
-			perf_callchain_store(entry, user_addr);
-		usp = usp + 8;
-	}
-}
-#endif/* CONFIG_FRAME_POINTER */
-
-/*
- * Gets called by walk_stackframe() for every stackframe. This will be called
- * whist unwinding the stackframe and is like a subroutine return so we use
- * the PC.
- */
-static int callchain_trace(unsigned long pc, void *data)
-{
-	struct perf_callchain_entry_ctx *entry = data;
-
-	perf_callchain_store(entry, pc);
-	return 0;
-}
-
-void perf_callchain_kernel(struct perf_callchain_entry_ctx *entry,
-			   struct pt_regs *regs)
-{
-	walk_stackframe(NULL, regs, callchain_trace, entry);
-}
-
-/*
- * Gets the perf_instruction_pointer and perf_misc_flags for guest os.
- */
-#undef is_in_guest
-
-unsigned long perf_instruction_pointer(struct pt_regs *regs)
-{
-	if (perf_guest_cbs && perf_guest_cbs->is_in_guest())
-		return perf_guest_cbs->get_guest_ip();
-
-	return instruction_pointer(regs);
-}
-
-unsigned long perf_misc_flags(struct pt_regs *regs)
-{
-	int misc = 0;
-
-	if (perf_guest_cbs && perf_guest_cbs->is_in_guest()) {
-		if (perf_guest_cbs->is_user_mode())
-			misc |= PERF_RECORD_MISC_GUEST_USER;
-		else
-			misc |= PERF_RECORD_MISC_GUEST_KERNEL;
-	} else {
-		if (user_mode(regs))
-			misc |= PERF_RECORD_MISC_USER;
-		else
-			misc |= PERF_RECORD_MISC_KERNEL;
-	}
-
-	return misc;
-}
-
 /*
  * Init call to initialise performance events at kernel startup.
  */
 int __init init_hw_perf_events(void)
 {
+	pr_info("Performance Events: ");
+
 	if (!supported_cpu()) {
-		pr_info("Performance events: Unsupported CPU type!\n");
+		pr_cont("Unsupported CPU type!\n");
 		return 0;
 	}
 
-	pr_info("Performance events: Supported CPU type!\n");
+	if (is_in_guest()) {
+		pr_cont("No PMU driver, software events only.\n");
+		return 0;
+	}
+
+	pr_cont("Supported CPU type!\n");
 
 	/* Override performance counter IRQ vector */
 
