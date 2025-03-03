@@ -445,10 +445,27 @@ static int erofs_file_mmap(struct file *file, struct vm_area_struct *vma)
 #define erofs_file_mmap	generic_file_readonly_mmap
 #endif
 
+#ifdef CONFIG_EROFS_TRIO
+static int erofs_file_open(struct inode *inode, struct file *file)
+{
+	if (!erofs_is_fscache_mode(inode->i_sb))
+		return 0;
+
+	if (!inode->i_private) {
+		inode->i_private = erofs_get_trio_object(inode);
+	}
+
+	return 0;
+}
+#else
+#define erofs_file_open	generic_file_open
+#endif
+
 const struct file_operations erofs_file_fops = {
 	.llseek		= generic_file_llseek,
 	.read_iter	= erofs_file_read_iter,
 	.mmap		= erofs_file_mmap,
 	.get_unmapped_area = thp_get_unmapped_area,
 	.splice_read	= filemap_splice_read,
+	.open		= erofs_file_open,
 };
