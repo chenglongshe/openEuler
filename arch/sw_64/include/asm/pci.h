@@ -36,7 +36,6 @@ struct piu_saved {
 };
 
 /* A controller.  Used to manage multiple PCI busses.  */
-
 struct pci_controller {
 	struct pci_controller *next;
 	struct pci_bus *bus;
@@ -74,7 +73,7 @@ struct pci_controller {
  * bus numbers.
  */
 
-#define pcibios_assign_all_busses()	1
+#define pcibios_assign_all_busses() (pci_has_flag(PCI_REASSIGN_ALL_BUS))
 
 #define PCIBIOS_MIN_IO		0
 #define PCIBIOS_MIN_MEM		0
@@ -89,14 +88,20 @@ extern void __init sw64_init_arch(void);
 extern struct pci_ops sw64_pci_ops;
 extern int sw64_map_irq(const struct pci_dev *dev, u8 slot, u8 pin);
 extern struct pci_controller *hose_head;
+#ifdef CONFIG_PCI_SW64
+extern void __init setup_chip_pci_ops(void);
+#else
+#define setup_chip_pci_ops()	do { } while (0)
+#endif
 
-#ifdef CONFIG_SUNWAY_IOMMU
+extern struct pci_controller *pci_bus_to_pci_controller(const struct pci_bus *bus);
+extern struct pci_controller *bus_num_to_pci_controller(unsigned long bus_num);
+
+#if defined(CONFIG_SUNWAY_IOMMU) || defined(CONFIG_SUNWAY_IOMMU_V2)
 extern struct syscore_ops iommu_cpu_syscore_ops;
 #endif
 
 #ifdef CONFIG_PCI_DOMAINS
-static inline int pci_domain_nr(struct pci_bus *bus) { return 0; }
-
 static inline int pci_proc_domain(struct pci_bus *bus)
 {
 	struct pci_controller *hose = bus->sysdata;
@@ -147,7 +152,7 @@ extern void __init reserve_mem_for_pci(void);
 extern int chip_pcie_configure(struct pci_controller *hose);
 
 #define PCI_VENDOR_ID_JN		0x5656
-#define PCI_DEVICE_ID_CHIP3		0x3231
+#define PCI_DEVICE_ID_SW64_ROOT_BRIDGE	0x3231
 #define PCI_DEVICE_ID_JN_PCIESW		0x1000
 #define PCI_DEVICE_ID_JN_PCIEUSIP	0x1200
 #define PCI_DEVICE_ID_JN_PCIE2PCI	0x1314
