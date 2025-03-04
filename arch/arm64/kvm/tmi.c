@@ -5,6 +5,9 @@
 #include <linux/arm-smccc.h>
 #include <asm/kvm_tmi.h>
 #include <asm/memory.h>
+#include <asm/virtcca_cvm_host.h>
+#include <asm/virtcca_cvm_guest.h>
+#include <asm/kvm_emulate.h>
 
 /**
  * mmio_va_to_pa - To convert the virtual address of the mmio space
@@ -37,92 +40,35 @@ u64 mmio_va_to_pa(void *addr)
 }
 EXPORT_SYMBOL(mmio_va_to_pa);
 
-u64 tmi_version(void)
+int virtcca_io_mem_abort(struct kvm_vcpu *vcpu, unsigned long hva, phys_addr_t fault_ipa)
 {
-	struct arm_smccc_res res;
+	struct virtcca_cvm *cvm = vcpu->kvm->arch.virtcca_cvm;
 
-	arm_smccc_1_1_smc(TMI_TMM_VERSION_REQ, &res);
-	return res.a1;
+	if (!vcpu_is_tec(vcpu) || !(fault_ipa >= cvm->mmio_start && fault_ipa < cvm->mmio_end))
+		return -EPERM;
+	
+	if (kvm_is_error_hva(hva) && kvm_vcpu_dabt_is_cm(vcpu)) {
+		kvm_incr_pc(vcpu);
+		return 1;
+	}
+
+	fault_ipa |= kvm_vcpu_get_hfar(vcpu) & ((1 << 12) - 1);
+	return io_mem_abort(vcpu, fault_ipa);
 }
 
-u64 tmi_data_create(u64 numa_set, u64 rd, u64 map_addr, u64 src, u64 level)
+/**
+ * Mapping of IPA ranges without data.
+ * @rd: Confidential VM descriptor, which is a physical address.
+ * @map_addr: Starting address of the IPA range to be mapped.
+ * @size: Size of the IPA range to be mapped.
+ * @cur_node: Set the affinity of TTT.
+ * @target_node: Set the affinity of cvm PA.
+ */
+u64 tmi_ttt_map_range(u64 rd, u64 map_addr, u64 size, u64 cur_node, u64 target_node)
 {
 	struct arm_smccc_res res;
 
-	arm_smccc_1_1_smc(TMI_TMM_DATA_CREATE, numa_set, rd, map_addr, src, level, &res);
-	return res.a1;
-}
-
-
-u64 tmi_cvm_activate(u64 rd)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_CVM_ACTIVATE, rd, &res);
-	return res.a1;
-}
-
-u64 tmi_cvm_create(u64 params_ptr, u64 numa_set)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_CVM_CREATE, params_ptr, numa_set, &res);
-	return res.a1;
-}
-
-u64 tmi_cvm_destroy(u64 rd)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_CVM_DESTROY, rd, &res);
-	return res.a1;
-}
-
-u64 tmi_tec_create(u64 numa_set, u64 rd, u64 mpidr, u64 params_ptr)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_TEC_CREATE, numa_set, rd, mpidr, params_ptr, &res);
-	return res.a1;
-}
-
-u64 tmi_tec_destroy(u64 tec)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_TEC_DESTROY, tec, &res);
-	return res.a1;
-}
-
-u64 tmi_tec_enter(u64 tec, u64 run_ptr)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_TEC_ENTER, tec, run_ptr, &res);
-	return res.a1;
-}
-
-u64 tmi_ttt_create(u64 numa_set, u64 rd, u64 map_addr, u64 level)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_TTT_CREATE, numa_set, rd, map_addr, level, &res);
-	return res.a1;
-}
-
-u64 tmi_psci_complete(u64 calling_tec, u64 target_tec)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_PSCI_COMPLETE, calling_tec, target_tec, &res);
-	return res.a1;
-}
-
-u64 tmi_features(u64 index)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_FEATURES, index, &res);
+	arm_smccc_1_1_smc(TMI_TMM_TTT_MAP_RANGE, rd, map_addr, size, cur_node, target_node, &res);
 	return res.a1;
 }
 
@@ -135,14 +81,6 @@ u64 tmi_mem_info_show(u64 mem_info_addr)
 	return res.a1;
 }
 EXPORT_SYMBOL_GPL(tmi_mem_info_show);
-
-u64 tmi_ttt_map_range(u64 rd, u64 map_addr, u64 size, u64 cur_node, u64 target_node)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_TTT_MAP_RANGE, rd, map_addr, size, cur_node, target_node, &res);
-	return res.a1;
-}
 
 /* Used to create smmu command queue and event queue */
 u64 tmi_smmu_queue_create(u64 params_ptr)
@@ -332,21 +270,5 @@ u64 tmi_dev_ttt_create(u64 numa_set, u64 rd, u64 map_addr, u64 level)
 	struct arm_smccc_res res;
 
 	arm_smccc_1_1_smc(TMI_TMM_DEV_TTT_CREATE, numa_set, rd, map_addr, level, &res);
-	return res.a1;
-}
-
-u64 tmi_kae_init(void)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_KAE_INIT, &res);
-	return res.a1;
-}
-
-u64 tmi_kae_enable(u64 rd, u64 numa_set, u64 is_enable)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_1_1_smc(TMI_TMM_KAE_ENABLE, rd, numa_set, is_enable, &res);
 	return res.a1;
 }

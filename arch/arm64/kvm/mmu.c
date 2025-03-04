@@ -24,6 +24,9 @@
 #endif
 #include "trace.h"
 
+#define VIRT_PCIE_MMIO_START 0x10000000
+#define VIRT_PCIE_MMIO_SIZE 0x2eff0000
+
 static struct kvm_pgtable *hyp_pgtable;
 static DEFINE_MUTEX(kvm_hyp_pgd_mutex);
 
@@ -1524,7 +1527,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 		return 0;
 	}
 	if (is_error_noslot_pfn(pfn))
-		return -EFAULT;
+	    return -EFAULT;
 
 	if (kvm_is_device_pfn(pfn)) {
 		/*
@@ -1762,6 +1765,11 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu)
 		ret = io_mem_abort(vcpu, fault_ipa);
 		goto out_unlock;
 	}
+
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	if ((ret = virtcca_io_mem_abort(vcpu, hva, fault_ipa)) != -EPERM)
+		goto out_unlock;
+#endif
 
 	/* Userspace should not be able to register out-of-bounds IPAs */
 	VM_BUG_ON(fault_ipa >= kvm_phys_size(vcpu->kvm));
