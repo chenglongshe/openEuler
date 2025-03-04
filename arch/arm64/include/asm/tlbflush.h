@@ -250,6 +250,27 @@ static inline void flush_tlb_all(void)
 	isb();
 }
 
+#ifdef CONFIG_ARM64_TLBI_IPI
+
+void flush_tlb_mm(struct mm_struct *mm);
+void flush_tlb_page_nosync(struct vm_area_struct *vma,
+				unsigned long uaddr);
+void __flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
+		unsigned long end, unsigned long stride, bool last_level);
+bool test_tlbi_ipi_switch(void);
+
+static inline void local_flush_tlb_mm(struct mm_struct *mm)
+{
+	unsigned long asid = __TLBI_VADDR(0, ASID(mm));
+
+	dsb(nshst);
+	__tlbi(aside1, asid);
+	__tlbi_user(aside1, asid);
+	dsb(nsh);
+}
+
+#else /* CONFIG_ARM64_TLBI_IPI */
+
 static inline void flush_tlb_mm(struct mm_struct *mm)
 {
 	unsigned long asid;
@@ -280,6 +301,7 @@ static inline void flush_tlb_page_nosync(struct vm_area_struct *vma,
 {
 	return __flush_tlb_page_nosync(vma->vm_mm, uaddr);
 }
+#endif /* CONFIG_ARM64_TLBI_IPI */
 
 static inline void flush_tlb_page(struct vm_area_struct *vma,
 				  unsigned long uaddr)
