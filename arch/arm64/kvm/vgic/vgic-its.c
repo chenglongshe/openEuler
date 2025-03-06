@@ -2746,6 +2746,96 @@ static int vgic_its_has_attr(struct kvm_device *dev,
 	return -ENXIO;
 }
 
+/* we use ram just at offset 0x0 */
+#define PVSCHED_GPA_OFFSET 0x0
+static void pvsched_save_all_gpa(struct kvm *kvm)
+{
+	int i, ret;
+	struct kvm_vcpu *vcpu;
+	gpa_t pendbase, ptr, val;
+
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+		struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
+
+		/*
+		 * Quote the GIC spec - "Changing GICR_PENDBASER with
+		 * GICR_CTLR.EnableLPIs == 1 is UNPREDICTABLE." We're pretty
+		 * sure 'pendbaser' is valid with that.
+		 */
+		if (!vgic_cpu->lpis_enabled)
+			continue;
+
+		pendbase = GICR_PENDBASER_ADDRESS(vcpu->arch.vgic_cpu.pendbaser);
+		ptr = pendbase + PVSCHED_GPA_OFFSET;
+
+		ret = kvm_read_guest_lock(kvm, ptr, &val, sizeof(gpa_t));
+		if (ret) {
+			kvm_err("%s: read from addr[%p] failed. ret[%d]", __func__, (void *)ptr, ret);
+			continue;
+		}
+		/*
+		 * GIC spec states that "Behavior is UNPREDICTABLE if LPI
+		 * Pending tables contains none zeros. Feel free to
+		 * go ahead to corrupt the insane guest.
+		 */
+		if (val != 0) {
+			kvm_err("%s: read[%p] != 0 from addr[%p]", __func__, (void *)val, (void *)ptr);
+		}
+
+		kvm_debug("%s: origin addr[%p]", __func__, (void *)val);
+
+		/*
+		 * We save the 'pvsched.base' as a generic state, regardless of
+		 * whether it is valid or not.
+		 */
+		ret = kvm_write_guest_lock(kvm, ptr, &vcpu->arch.pvsched.base, sizeof(vcpu->arch.pvsched.base));
+		kvm_debug("%s: save pvsched.base[%p] into addr[%p], ret = %d\n", __func__, (void *)vcpu->arch.pvsched.base, (void *)ptr, ret);
+	}
+}
+
+static void pvsched_restore_all_gpa(struct kvm *kvm)
+{
+	int i, ret;
+	struct kvm_vcpu *vcpu;
+	gpa_t pendbase, ptr, val;
+
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+		struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
+
+		if (!vgic_cpu->lpis_enabled)
+			continue;
+
+		pendbase = GICR_PENDBASER_ADDRESS(vcpu->arch.vgic_cpu.pendbaser);
+		ptr = pendbase + PVSCHED_GPA_OFFSET;
+
+		ret = kvm_read_guest_lock(kvm, ptr, &val, sizeof(gpa_t));
+		if (ret) {
+			kvm_err("%s: read from addr[%p] failed. ret[%d]", __func__, (void *)ptr, ret);
+			continue;
+		}
+
+		kvm_debug("%s: restore [%p] into pvsched.base[%p] from addr[%p]", __func__, (void *)val, (void *)vcpu->arch.pvsched.base, (void *)ptr);
+
+		if (val == 0)
+			continue;
+
+		/* Here vcpu->arch.pvsched.pv_unhalted means pvsched info saved in pending tabls are valid. */
+		if (vcpu->arch.pvsched.pv_unhalted) {
+			vcpu->arch.pvsched.base = val;
+			kvm_debug("%s: migrate from new version, pending table's pvsched info is valid. Restore it .\n", __func__);
+		}
+
+		val = 0;
+		ret = kvm_write_guest_lock(kvm, ptr, &val, sizeof(vcpu->arch.pvsched.base));
+		if (ret)
+			kvm_err("%s: restore 0 into addr[%p] failed. ret[%d]", __func__, (void *)ptr, ret);
+	}
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+		/* Now vcpu->arch.pvsched.pv_unhalted mean original pvsched.pv_unhalted */
+		vcpu->arch.pvsched.pv_unhalted = false;
+	}
+}
+
 static int vgic_its_ctrl(struct kvm *kvm, struct vgic_its *its, u64 attr)
 {
 	const struct vgic_its_abi *abi = vgic_its_get_abi(its);
@@ -2769,9 +2859,11 @@ static int vgic_its_ctrl(struct kvm *kvm, struct vgic_its *its, u64 attr)
 		break;
 	case KVM_DEV_ARM_ITS_SAVE_TABLES:
 		ret = abi->save_tables(its);
+		pvsched_save_all_gpa(kvm);
 		break;
 	case KVM_DEV_ARM_ITS_RESTORE_TABLES:
 		ret = abi->restore_tables(its);
+		pvsched_restore_all_gpa(kvm);
 		break;
 	}
 

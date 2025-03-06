@@ -147,6 +147,7 @@
 
 #define GICR_WAKER_ProcessorSleep	(1U << 1)
 #define GICR_WAKER_ChildrenAsleep	(1U << 2)
+#define GICR_WAKER_PVSCHED_VALID	(1U << 31)
 
 #define GIC_BASER_CACHE_nCnB		0ULL
 #define GIC_BASER_CACHE_SameAsInner	0ULL
