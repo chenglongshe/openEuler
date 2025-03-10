@@ -32,6 +32,11 @@
 #include <linux/set_memory.h>
 #include <linux/slab.h>
 #include <linux/syscore_ops.h>
+#ifdef CONFIG_HISI_VIRTCCA_GUEST
+#include <linux/swiotlb.h>
+#include <asm/virtcca_cvm_guest.h>
+#include <linux/virtcca_cvm_domain.h>
+#endif
 
 #include <linux/irqchip.h>
 #include <linux/irqchip/arm-gic-v3.h>
@@ -387,11 +392,34 @@ static int alloc_devid_from_rsv_pools(struct rsv_devid_pool **devid_pool,
 #define gic_data_rdist_rd_base()	(gic_data_rdist()->rd_base)
 #define gic_data_rdist_vlpi_base()	(gic_data_rdist_rd_base() + SZ_128K)
 
+#ifdef CONFIG_HISI_VIRTCCA_GUEST
+static struct device cvm_alloc_device;
+
+static inline struct page *its_alloc_shared_pages_node(int node, gfp_t gfp,
+			unsigned int order)
+{
+	return swiotlb_alloc(&cvm_alloc_device, (1 << order) * PAGE_SIZE);
+}
+
+static void its_free_shared_pages(void *addr, int order)
+{
+	if (order < 0)
+		return;
+
+	swiotlb_free(&cvm_alloc_device, (struct page *)addr, (1 << order) * PAGE_SIZE);
+}
+
+#endif
+
 static struct page *its_alloc_pages_node(int node, gfp_t gfp,
 					 unsigned int order)
 {
 	struct page *page;
 	int ret = 0;
+#ifdef CONFIG_HISI_VIRTCCA_GUEST
+	if (is_virtcca_cvm_world())
+		return its_alloc_shared_pages_node(node, gfp, order);
+#endif
 
 	page = alloc_pages_node(node, gfp, order);
 
@@ -418,6 +446,12 @@ static struct page *its_alloc_pages(gfp_t gfp, unsigned int order)
 
 static void its_free_pages(void *addr, unsigned int order)
 {
+#ifdef CONFIG_HISI_VIRTCCA_GUEST
+	if (is_virtcca_cvm_world()) {
+		its_free_shared_pages(addr, order);
+		return;
+	}
+#endif
 	/*
 	 * If the memory cannot be encrypted again then we must leak the pages.
 	 * set_memory_encrypted will already have WARNed.
@@ -6123,6 +6157,13 @@ int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
 	bool has_vtimer_irqbypass = false;
 #endif
 	int err;
+
+#ifdef CONFIG_HISI_VIRTCCA_GUEST
+	if (is_virtcca_cvm_world()) {
+		device_initialize(&cvm_alloc_device);
+		enable_swiotlb_for_cvm_dev(&cvm_alloc_device, true);
+	}
+#endif
 
 	itt_pool = gen_pool_create(get_order(ITS_ITT_ALIGN), -1);
 	if (!itt_pool)
