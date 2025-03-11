@@ -419,6 +419,11 @@ struct task_group {
 	int			idle;
 
 #ifdef	CONFIG_SMP
+#ifdef CONFIG_ARCH_LLC_128_LINE_SIZE
+	/* load_avg is modified frequently, put it in a separate LLC cacheline. */
+	CACHELINE_PADDING(_pad1_);
+	u8			padding[1];
+#endif
 	/*
 	 * load_avg can be heavily contended at clock tick time, so put
 	 * it in its own cacheline separated from the fields above which
