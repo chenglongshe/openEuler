@@ -263,12 +263,6 @@ struct fuse_arg {
 	void *value;
 };
 
-/** FUSE page descriptor */
-struct fuse_page_desc {
-	unsigned int length;
-	unsigned int offset;
-};
-
 /** FUSE folio descriptor */
 struct fuse_folio_desc {
 	unsigned int length;
@@ -303,19 +297,9 @@ struct fuse_args {
 
 struct fuse_args_pages {
 	struct fuse_args args;
-	union {
-		struct {
-			struct page **pages;
-			struct fuse_page_desc *descs;
-			unsigned int num_pages;
-		};
-		struct {
-			struct folio **folios;
-			struct fuse_folio_desc *folio_descs;
-			unsigned int num_folios;
-		};
-	};
-	bool uses_folios;
+	struct folio **folios;
+	struct fuse_folio_desc *descs;
+	unsigned int num_folios;
 };
 
 #define FUSE_ARGS(args) struct fuse_args args = {}
