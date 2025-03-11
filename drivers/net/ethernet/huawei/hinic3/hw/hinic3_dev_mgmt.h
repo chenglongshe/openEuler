@@ -23,7 +23,9 @@
 #define BIFUR_RESOURCE_PF_SSID          0x05a1
 
 #define HINIC3_IS_VF_DEV(pdev)	((pdev)->device == HINIC3_DEV_ID_VF)
-#define HINIC3_IS_SPU_DEV(pdev)	((pdev)->device == HINIC3_DEV_ID_SPU)
+#define HINIC3_IS_SPU_DEV(pdev)	\
+	(((pdev)->device == HINIC3_DEV_ID_SPU) || ((pdev)->device == HINIC3_DEV_ID_SDI_5_0_PF) || \
+	(((pdev)->device == HINIC3_DEV_ID_DPU_PF)))
 
 enum {
 	HINIC3_NOT_PROBE = 1,
