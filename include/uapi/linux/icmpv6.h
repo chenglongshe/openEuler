@@ -143,6 +143,11 @@ struct icmp6hdr {
 /* Codes for EXT_ECHO (PROBE) */
 #define ICMPV6_EXT_ECHO_REQUEST		160
 #define ICMPV6_EXT_ECHO_REPLY		161
+
+/* Codes for LOOP_ECHO (LOOPBACK) */
+#define ICMPV6_LOOP_ECHO_REQUEST	162
+#define ICMPV6_LOOP_ECHO_REPLY		163
+
 /*
  *	constants for (set|get)sockopt
  */

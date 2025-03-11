@@ -730,6 +730,8 @@ static enum skb_drop_reason icmpv6_echo_reply(struct sk_buff *skb)
 	struct dst_entry *dst;
 	struct ipcm6_cookie ipc6;
 	u32 mark = IP6_REPLY_MARK(net, skb->mark);
+	struct ipv6hdr *hdr = ipv6_hdr(skb);
+        int len = skb->len;
 	SKB_DR(reason);
 	bool acast;
 	u8 type;
@@ -750,6 +752,8 @@ static enum skb_drop_reason icmpv6_echo_reply(struct sk_buff *skb)
 
 	if (icmph->icmp6_type == ICMPV6_EXT_ECHO_REQUEST)
 		type = ICMPV6_EXT_ECHO_REPLY;
+	else if (icmph->icmp6_type == ICMPV6_LOOP_ECHO_REQUEST)
+		type = ICMPV6_LOOP_ECHO_REPLY;
 	else
 		type = ICMPV6_ECHO_REPLY;
 
@@ -807,16 +811,27 @@ static enum skb_drop_reason icmpv6_echo_reply(struct sk_buff *skb)
 	if (icmph->icmp6_type == ICMPV6_EXT_ECHO_REQUEST)
 		if (!icmp_build_probe(skb, (struct icmphdr *)&tmp_hdr))
 			goto out_dst_release;
+	
+        if (icmph->icmp6_type == ICMPV6_LOOP_ECHO_REQUEST) {
+                msg.offset = skb_network_offset(skb);
+                len = skb->len - msg.offset;
+                len = min_t(int, len, IPV6_MIN_MTU - sizeof(struct ipv6hdr) - sizeof(struct icmp6hdr));
+                if (len < 0) {
+                    net_dbg_ratelimited("icmp: len problem [%pI6c > %pI6c]\n",
+                            &hdr->saddr, &hdr->daddr);
+                    goto out_dst_release;
+                }
+        }
 
 	if (ip6_append_data(sk, icmpv6_getfrag, &msg,
-			    skb->len + sizeof(struct icmp6hdr),
+                            len + sizeof(struct icmp6hdr),
 			    sizeof(struct icmp6hdr), &ipc6, &fl6,
 			    dst_rt6_info(dst), MSG_DONTWAIT)) {
 		__ICMP6_INC_STATS(net, idev, ICMP6_MIB_OUTERRORS);
 		ip6_flush_pending_frames(sk);
 	} else {
 		icmpv6_push_pending_frames(sk, &fl6, &tmp_hdr,
-					   skb->len + sizeof(struct icmp6hdr));
+					   len + sizeof(struct icmp6hdr));
 		reason = SKB_CONSUMED;
 	}
 out_dst_release:
@@ -943,6 +958,7 @@ static int icmpv6_rcv(struct sk_buff *skb)
 
 	switch (type) {
 	case ICMPV6_ECHO_REQUEST:
+	case ICMPV6_LOOP_ECHO_REQUEST:
 		if (!net->ipv6.sysctl.icmpv6_echo_ignore_all)
 			reason = icmpv6_echo_reply(skb);
 		break;
@@ -953,6 +969,7 @@ static int icmpv6_rcv(struct sk_buff *skb)
 		break;
 
 	case ICMPV6_ECHO_REPLY:
+	case ICMPV6_LOOP_ECHO_REPLY:
 		reason = ping_rcv(skb);
 		break;
 
