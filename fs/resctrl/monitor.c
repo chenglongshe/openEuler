@@ -727,6 +727,9 @@ static int dom_data_init(struct rdt_resource *r)
 	int err = 0, i;
 	u32 idx;
 
+	if (!idx_limit)
+		return -EOPNOTSUPP;
+
 	mutex_lock(&rdtgroup_mutex);
 	if (IS_ENABLED(CONFIG_RESCTRL_RMID_DEPENDS_ON_CLOSID)) {
 		u32 *tmp;
