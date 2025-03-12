@@ -1222,6 +1222,7 @@ static ssize_t fuse_fill_write_pages(struct fuse_io_args *ia,
 	struct fuse_args_pages *ap = &ia->ap;
 	struct fuse_conn *fc = get_fuse_conn(mapping->host);
 	unsigned offset = pos & (PAGE_SIZE - 1);
+	unsigned int nr_pages = 0;
 	size_t count = 0;
 	unsigned int num;
 	int err;
@@ -1270,6 +1271,7 @@ static ssize_t fuse_fill_write_pages(struct fuse_io_args *ia,
 		ap->descs[ap->num_folios].offset = folio_offset;
 		ap->descs[ap->num_folios].length = tmp;
 		ap->num_folios++;
+		nr_pages += 1 << folio_order(folio);
 
 		count += tmp;
 		pos += tmp;
@@ -1291,6 +1293,8 @@ static ssize_t fuse_fill_write_pages(struct fuse_io_args *ia,
 		if (!fc->big_writes)
 			break;
 		if (offset != 0)
+			break;
+		if (nr_pages >= max_pages)
 			break;
 	}
 
