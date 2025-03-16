@@ -279,6 +279,8 @@ int __init pv_sched_init(void)
 	static_call_update(pv_vcpu_preempted, kvm_vcpu_is_preempted);
 	pr_info("using PV sched preempted\n");
 
+	pv_qspinlock_init();
+
 	return 0;
 }
 early_initcall(pv_sched_init);
