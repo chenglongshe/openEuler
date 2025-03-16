@@ -33,6 +33,7 @@ static inline bool pv_vcpu_is_preempted(int cpu)
 #endif /* CONFIG_PARAVIRT_SCHED */
 
 #if defined(CONFIG_SMP) && defined(CONFIG_PARAVIRT_SPINLOCKS)
+void __init pv_qspinlock_init(void);
 bool pv_is_native_spin_unlock(void);
 
 void dummy_queued_spin_lock_slowpath(struct qspinlock *lock, u32 val);
@@ -63,6 +64,8 @@ static inline void pv_kick(int cpu)
 {
 	return static_call(pv_qspinlock_kick)(cpu);
 }
+#else
+#define pv_qspinlock_init() do {} while (0)
 #endif /* SMP && CONFIG_PARAVIRT_SPINLOCKS */
 
 #else
