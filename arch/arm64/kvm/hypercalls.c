@@ -362,6 +362,9 @@ int kvm_smccc_call_handler(struct kvm_vcpu *vcpu)
 		vcpu->arch.pvsched.base = INVALID_GPA;
 		val[0] = SMCCC_RET_SUCCESS;
 		break;
+	case ARM_SMCCC_HV_PV_SCHED_KICK_CPU:
+		val[0] = kvm_pvsched_kick_vcpu(vcpu);
+		break;
 #endif /* CONFIG_PARAVIRT_SCHED */
 	case ARM_SMCCC_VENDOR_HYP_CALL_UID_FUNC_ID:
 		val[0] = ARM_SMCCC_VENDOR_HYP_UID_KVM_REG_0;
