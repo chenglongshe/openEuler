@@ -45,6 +45,7 @@ struct thread_info {
 #endif
 #ifdef CONFIG_ARM64_MPAM
 	u64			mpam_partid_pmg;
+	u32			prefetch_dis;
 #endif
 	u32			cpu;
 

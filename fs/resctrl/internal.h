@@ -173,6 +173,7 @@ struct rdtgroup {
 	struct mongroup			mon;
 	enum rdtgrp_mode		mode;
 	struct pseudo_lock_region	*plr;
+	u32				prefetch_dis;
 };
 
 /* List of all resource groups */
