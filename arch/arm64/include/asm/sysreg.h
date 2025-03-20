@@ -270,6 +270,9 @@
 
 #define SYS_ACTLR_EL1			sys_reg(3, 0, 1, 0, 1)
 
+#define ACTLR_ELx_XCALL_SHIFT		20
+#define ACTLR_ELx_XCALL			(BIT(ACTLR_ELx_XCALL_SHIFT))
+
 #define ACTLR_ELx_XINT_SHIFT		21
 #define ACTLR_ELx_XINT			(BIT(ACTLR_ELx_XINT_SHIFT))
 

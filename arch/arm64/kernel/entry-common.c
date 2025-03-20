@@ -154,7 +154,7 @@ asmlinkage void noinstr asm_exit_to_user_mode(struct pt_regs *regs)
 	exit_to_user_mode(regs);
 }
 
-#if defined(CONFIG_FAST_SYSCALL) || defined(CONFIG_FAST_IRQ)
+#if defined(CONFIG_FAST_SYSCALL) || defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XCALL)
 /*
  * Copy from exit_to_user_mode_prepare
  */
@@ -818,7 +818,7 @@ static void noinstr el0_fpac(struct pt_regs *regs, unsigned long esr)
 	exit_to_user_mode(regs);
 }
 
-#ifdef CONFIG_FAST_SYSCALL
+#if defined(CONFIG_FAST_SYSCALL) || defined(CONFIG_ARCH_SUPPORTS_XCALL)
 /* Copy from el0_sync */
 static void noinstr el0_xcall(struct pt_regs *regs)
 {
