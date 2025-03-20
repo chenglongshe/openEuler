@@ -422,6 +422,35 @@ static void gic_irq_configure_nmi(struct irq_data *d, bool enable)
 	raw_spin_unlock(&irq_controller_lock);
 }
 
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+#define IPI_NMI_HWIRQ		7
+#define PERF_PMU_HWIRQ		23
+
+bool check_xint(unsigned long hwirq)
+{
+	if (hwirq == IPI_NMI_HWIRQ)
+		return true;
+
+#ifdef CONFIG_ARM_PMU
+	if (hwirq == PERF_PMU_HWIRQ)
+		return true;
+#endif
+
+	return false;
+}
+EXPORT_SYMBOL(check_xint);
+
+bool is_spi(unsigned long hwirq)
+{
+	if (__get_intid_range(hwirq) == SPI_RANGE ||
+	    __get_intid_range(hwirq) == ESPI_RANGE)
+		return true;
+
+	return false;
+}
+EXPORT_SYMBOL(is_spi);
+#endif
+
 static void gic_irq_enable_nmi(struct irq_data *d)
 {
 	gic_irq_configure_nmi(d, true);
@@ -828,10 +857,11 @@ static bool gic_rpr_is_nmi_prio(void)
 	return unlikely(gic_read_rpr() == GICD_INT_RPR_PRI(GICD_INT_NMI_PRI));
 }
 
-static bool gic_irqnr_is_special(u32 irqnr)
+bool gic_irqnr_is_special(u32 irqnr)
 {
 	return irqnr >= 1020 && irqnr <= 1023;
 }
+EXPORT_SYMBOL(gic_irqnr_is_special);
 
 static void __gic_handle_irq(u32 irqnr, struct pt_regs *regs)
 {
@@ -958,7 +988,7 @@ static void __gic_handle_irq_from_irqsoff(struct pt_regs *regs)
 }
 
 #ifdef CONFIG_ARM64
-static inline u64 gic_read_nmiar(void)
+inline u64 gic_read_nmiar(void)
 {
 	u64 irqstat;
 
@@ -968,6 +998,7 @@ static inline u64 gic_read_nmiar(void)
 
 	return irqstat;
 }
+EXPORT_SYMBOL(gic_read_nmiar);
 
 static asmlinkage void __exception_irq_entry gic_handle_nmi_irq(struct pt_regs *regs)
 {
@@ -2358,6 +2389,7 @@ static int __init gic_init_bases(phys_addr_t dist_phys_base,
 		goto out_free;
 	}
 
+	irq_set_default_host(gic_data.domain);
 	irq_domain_update_bus_token(gic_data.domain, DOMAIN_BUS_WIRED);
 
 	gic_data.has_rss = !!(typer & GICD_TYPER_RSS);

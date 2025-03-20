@@ -269,6 +269,10 @@
 #define SYS_REVIDR_EL1			sys_reg(3, 0, 0, 0, 6)
 
 #define SYS_ACTLR_EL1			sys_reg(3, 0, 1, 0, 1)
+
+#define ACTLR_ELx_XINT_SHIFT		21
+#define ACTLR_ELx_XINT			(BIT(ACTLR_ELx_XINT_SHIFT))
+
 #define SYS_RGSR_EL1			sys_reg(3, 0, 1, 0, 5)
 #define SYS_GCR_EL1			sys_reg(3, 0, 1, 0, 6)
 

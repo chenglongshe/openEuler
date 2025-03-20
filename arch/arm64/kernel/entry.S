@@ -565,7 +565,11 @@ SYM_CODE_START(vectors)
 	kernel_ventry	0, t, 64, error		// Error 64-bit EL0
 
 	kernel_ventry	0, t, 32, sync		// Synchronous 32-bit EL0
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+	kernel_ventry	0, t, 64, xint		// XINT 64-bit EL0
+#else
 	kernel_ventry	0, t, 32, irq		// IRQ 32-bit EL0
+#endif
 	kernel_ventry	0, t, 32, fiq		// FIQ 32-bit EL0
 	kernel_ventry	0, t, 32, error		// Error 32-bit EL0
 SYM_CODE_END(vectors)
@@ -696,7 +700,7 @@ SYM_CODE_END(__bad_stack)
 	kernel_entry 0, 64
 #endif
 	mov	x0, sp
-	bl	el0t_64_xint_handler
+	bl	el0t_64_sw_xint_handler
 #ifdef CONFIG_SECURITY_FEATURE_BYPASS
 	kernel_exit 0, xint
 #else
@@ -730,6 +734,18 @@ SYM_CODE_START_LOCAL(el\el\ht\()_\regsize\()_\label)
 .Lskip_check_xint\@:
 	.endif
 #endif
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+	.if \el == 0 && \regsize == 64 && \label == xint
+	alternative_if_not ARM64_HAS_HW_XINT
+		b .Lskip_hw_xint\@
+	alternative_else_nop_endif
+		kernel_entry 0, 64, xint
+		mov	x0, sp
+		bl	el0t_64_xint_handler
+		kernel_exit 0, xint
+.Lskip_hw_xint\@:
+	.endif
+#endif
 	kernel_entry \el, \regsize
 	mov	x0, sp
 	bl	el\el\ht\()_\regsize\()_\label\()_handler
@@ -760,7 +776,11 @@ SYM_CODE_END(el\el\ht\()_\regsize\()_\label)
 	entry_handler	0, t, 64, error
 
 	entry_handler	0, t, 32, sync
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+	entry_handler	0, t, 64, xint
+#else
 	entry_handler	0, t, 32, irq
+#endif
 	entry_handler	0, t, 32, fiq
 	entry_handler	0, t, 32, error
 
@@ -905,7 +925,14 @@ alternative_else_nop_endif
 	.rept	4
 	tramp_ventry	.Lvector_start\@, 64, \kpti, \bhb
 	.endr
-	.rept	4
+
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+	tramp_ventry	.Lvector_start\@, 64, \kpti, \bhb
+#else
+	tramp_ventry	.Lvector_start\@, 32, \kpti, \bhb
+#endif
+
+	.rept	3
 	tramp_ventry	.Lvector_start\@, 32, \kpti, \bhb
 	.endr
 	.endm
@@ -955,7 +982,14 @@ SYM_CODE_END(tramp_exit)
 	.rept	4
 	tramp_ventry	.Lvector_start\@, 64, 0, \bhb
 	.endr
-	.rept 4
+
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+	tramp_ventry	.Lvector_start\@, 64, 0, \bhb
+#else
+	tramp_ventry	.Lvector_start\@, 32, 0, \bhb
+#endif
+
+	.rept 3
 	tramp_ventry	.Lvector_start\@, 32, 0, \bhb
 	.endr
 	.endm
