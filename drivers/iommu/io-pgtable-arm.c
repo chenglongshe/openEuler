@@ -408,6 +408,12 @@ static arm_lpae_iopte arm_lpae_install_table(arm_lpae_iopte *table,
 	return old;
 }
 
+#ifdef CONFIG_ARCH_PHYTIUM
+#define IS_PHYTIUM_CPU (read_cpuid_implementor() == ARM_CPU_IMP_PHYTIUM)
+#else
+#define IS_PHYTIUM_CPU 0
+#endif
+
 static int __arm_lpae_map(struct arm_lpae_io_pgtable *data, unsigned long iova,
 			  phys_addr_t paddr, size_t size, size_t pgcount,
 			  arm_lpae_iopte prot, int lvl, arm_lpae_iopte *ptep,
@@ -450,7 +456,7 @@ static int __arm_lpae_map(struct arm_lpae_io_pgtable *data, unsigned long iova,
 			__arm_lpae_free_pages(cptep, tblsz, cfg, data->iop.cookie);
 
 #ifdef CONFIG_HISILICON_ERRATUM_162100602
-		if (lvl <= 2)
+		if (lvl <= 2 && !IS_PHYTIUM_CPU)
 			io_pgtable_tlb_flush_walk(&data->iop, iova, 0, ARM_LPAE_GRANULE(data));
 #endif
 	} else if (!cfg->coherent_walk && !(pte & ARM_LPAE_PTE_SW_SYNC)) {
