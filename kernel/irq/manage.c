@@ -560,7 +560,7 @@ irq_set_affinity_notifier(unsigned int irq, struct irq_affinity_notify *notify)
 	/* The release function is promised process context */
 	might_sleep();
 
-	if (!desc || desc->istate & IRQS_NMI)
+	if (!desc || irq_is_nmi(desc))
 		return -EINVAL;
 
 	/* Complete initialisation of *notify */
@@ -898,7 +898,7 @@ int irq_set_irq_wake(unsigned int irq, unsigned int on)
 		return -EINVAL;
 
 	/* Don't use NMIs as wake up interrupts please */
-	if (desc->istate & IRQS_NMI) {
+	if (irq_is_nmi(desc)) {
 		ret = -EINVAL;
 		goto out_unlock;
 	}
@@ -1627,7 +1627,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		 */
 		unsigned int oldtype;
 
-		if (desc->istate & IRQS_NMI) {
+		if (irq_is_nmi(desc)) {
 			pr_err("Invalid attempt to share NMI for %s (irq %d) on irqchip %s.\n",
 				new->name, irq, desc->irq_data.chip->name);
 			ret = -EINVAL;
@@ -2080,7 +2080,7 @@ const void *free_nmi(unsigned int irq, void *dev_id)
 	unsigned long flags;
 	const void *devname;
 
-	if (!desc || WARN_ON(!(desc->istate & IRQS_NMI)))
+	if (!desc || WARN_ON(!irq_is_nmi(desc)))
 		return NULL;
 
 	if (WARN_ON(irq_settings_is_per_cpu_devid(desc)))
@@ -2546,7 +2546,7 @@ void free_percpu_nmi(unsigned int irq, void __percpu *dev_id)
 	if (!desc || !irq_settings_is_per_cpu_devid(desc))
 		return;
 
-	if (WARN_ON(!(desc->istate & IRQS_NMI)))
+	if (WARN_ON(!irq_is_nmi(desc)))
 		return;
 
 	kfree(__free_percpu_irq(irq, dev_id));
@@ -2682,7 +2682,7 @@ int request_percpu_nmi(unsigned int irq, irq_handler_t handler,
 		return -EINVAL;
 
 	/* The line cannot already be NMI */
-	if (desc->istate & IRQS_NMI)
+	if (irq_is_nmi(desc))
 		return -EINVAL;
 
 	action = kzalloc(sizeof(struct irqaction), GFP_KERNEL);
@@ -2743,7 +2743,7 @@ int prepare_percpu_nmi(unsigned int irq)
 	if (!desc)
 		return -EINVAL;
 
-	if (WARN(!(desc->istate & IRQS_NMI),
+	if (WARN(!irq_is_nmi(desc),
 		 KERN_ERR "prepare_percpu_nmi called for a non-NMI interrupt: irq %u\n",
 		 irq)) {
 		ret = -EINVAL;
@@ -2785,7 +2785,7 @@ void teardown_percpu_nmi(unsigned int irq)
 	if (!desc)
 		return;
 
-	if (WARN_ON(!(desc->istate & IRQS_NMI)))
+	if (WARN_ON(!irq_is_nmi(desc)))
 		goto out;
 
 	irq_nmi_teardown(desc);

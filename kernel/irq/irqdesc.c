@@ -960,11 +960,6 @@ unsigned int kstat_irqs_cpu(unsigned int irq, int cpu)
 			*per_cpu_ptr(desc->kstat_irqs, cpu) : 0;
 }
 
-static bool irq_is_nmi(struct irq_desc *desc)
-{
-	return desc->istate & IRQS_NMI;
-}
-
 static unsigned int kstat_irqs(unsigned int irq)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
