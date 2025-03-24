@@ -144,7 +144,7 @@ void sdma_info_sync_cdev(struct hisi_sdma_core_device *p, u32 *share_chns, struc
 			 bool *safe_mode, struct mutex *mutex_lock);
 void sdma_info_sync_dbg(struct hisi_sdma_core_device *p, u32 *share_chns);
 
-static inline void chn_set_val(struct hisi_sdma_channel *pchan, int reg, u32 val, u32 mask)
+static inline void chn_set_val(struct hisi_sdma_channel *pchan, int reg, u32 val, u64 mask)
 {
 	u32 reg_val = readl(pchan->io_base + reg);
 
@@ -156,7 +156,7 @@ static inline void chn_set_val(struct hisi_sdma_channel *pchan, int reg, u32 val
 	writel(reg_val, pchan->io_base + reg);
 }
 
-static inline u32 chn_get_val(struct hisi_sdma_channel *pchan, int reg, u32 mask)
+static inline u32 chn_get_val(struct hisi_sdma_channel *pchan, int reg, u64 mask)
 {
 	u32 reg_val = readl(pchan->io_base + reg);
 
