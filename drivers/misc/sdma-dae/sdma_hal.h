@@ -20,7 +20,7 @@
 #define ALIGN_NUM		1
 #define HISI_SDMA_HAL_HASH_BUCKETS_BITS 8
 
-/* HISI_SDMA_POLL_TIMOUT_VAL */
+/* HISI_SDMA_POLL_TIMEOUT_VAL */
 #define SDMA_POLL_ERR_TIMEOUT	110
 #define SDMA_POLL_DELAY		1
 #define SDMA_POLL_TIMEOUT	80
@@ -144,7 +144,8 @@ void sdma_info_sync_cdev(struct hisi_sdma_core_device *p, u32 *share_chns, struc
 			 bool *safe_mode, struct mutex *mutex_lock);
 void sdma_info_sync_dbg(struct hisi_sdma_core_device *p, u32 *share_chns);
 
-static inline void chn_set_val(struct hisi_sdma_channel *pchan, int reg, u32 val, u32 mask)
+static inline void chn_set_val(struct hisi_sdma_channel *pchan, int reg, unsigned long const val,
+			       u32 mask)
 {
 	u32 reg_val = readl(pchan->io_base + reg);
 
@@ -156,7 +157,7 @@ static inline void chn_set_val(struct hisi_sdma_channel *pchan, int reg, u32 val
 	writel(reg_val, pchan->io_base + reg);
 }
 
-static inline u32 chn_get_val(struct hisi_sdma_channel *pchan, int reg, u32 mask)
+static inline u32 chn_get_val(struct hisi_sdma_channel *pchan, int reg, unsigned long const mask)
 {
 	u32 reg_val = readl(pchan->io_base + reg);
 
