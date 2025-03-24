@@ -35,7 +35,7 @@
 
 #include "irq-gic-common.h"
 
-#ifdef CONFIG_FAST_IRQ
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XINT)
 #include "../../../kernel/irq/internals.h"
 #endif
 
@@ -828,7 +828,7 @@ static bool gic_rpr_is_nmi_prio(void)
 	return unlikely(gic_read_rpr() == GICD_INT_RPR_PRI(GICD_INT_NMI_PRI));
 }
 
-static bool gic_irqnr_is_special(u32 irqnr)
+bool gic_irqnr_is_special(u32 irqnr)
 {
 	return irqnr >= 1020 && irqnr <= 1023;
 }
@@ -993,7 +993,11 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs
 		__gic_handle_irq_from_irqson(regs);
 }
 
-#ifdef CONFIG_FAST_IRQ
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+DECLARE_BITMAP(irqnr_nmi_map, 1024);
+#endif
+
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XINT)
 DECLARE_BITMAP(irqnr_xint_map, 1024);
 
 static bool can_set_xint(unsigned int hwirq)
@@ -1002,12 +1006,18 @@ static bool can_set_xint(unsigned int hwirq)
 	    __get_intid_range(hwirq) == SPI_RANGE)
 		return true;
 
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+	if (hw_xint_support && __get_intid_range(hwirq) == PPI_RANGE)
+		return true;
+#endif
+
 	return false;
 }
 
 static bool xint_transform(int irqno, enum xint_op op)
 {
 	struct irq_data *data = irq_get_irq_data(irqno);
+	struct irq_desc *desc;
 	int hwirq;
 
 	while (data->parent_data)
@@ -1018,14 +1028,29 @@ static bool xint_transform(int irqno, enum xint_op op)
 	if (!can_set_xint(hwirq))
 		return false;
 
+	desc = irq_data_to_desc(data);
+
 	switch (op) {
 	case IRQ_TO_XINT:
 		set_bit(hwirq, irqnr_xint_map);
 		xint_add_debugfs_entry(irqno);
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+		if (has_v3_3_nmi() && hw_xint_support && !irq_is_nmi(desc)) {
+			gic_irq_enable_nmi(data);
+			set_bit(hwirq, irqnr_nmi_map);
+		}
+#endif
 		return true;
 	case XINT_TO_IRQ:
 		clear_bit(hwirq, irqnr_xint_map);
 		xint_remove_debugfs_entry(irqno);
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+		if (has_v3_3_nmi() && hw_xint_support && irq_is_nmi(desc) &&
+		    test_bit(hwirq, irqnr_nmi_map)) {
+			gic_irq_disable_nmi(data);
+			clear_bit(hwirq, irqnr_nmi_map);
+		}
+#endif
 		return false;
 	case XINT_SET_CHECK:
 		return test_bit(hwirq, irqnr_xint_map);
@@ -1096,7 +1121,7 @@ static const struct proc_ops xint_proc_ops = {
 
 void register_irqchip_proc(struct irq_desc *desc, void *irqp)
 {
-	if (!is_xint_support)
+	if (!is_xint_support && !hw_xint_support)
 		return;
 
 	/* create /proc/irq/<irq>/xint */
@@ -1105,12 +1130,63 @@ void register_irqchip_proc(struct irq_desc *desc, void *irqp)
 
 void unregister_irqchip_proc(struct irq_desc *desc)
 {
-	if (!is_xint_support)
+	if (!is_xint_support && !hw_xint_support)
 		return;
 
 	remove_proc_entry("xint", desc->dir);
 }
-#endif /* CONFIG_FAST_IRQ */
+#endif
+
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+bool is_xint(unsigned long hwirq)
+{
+	return test_bit(hwirq, irqnr_xint_map);
+}
+
+static bool is_spi(unsigned long hwirq)
+{
+	if (__get_intid_range(hwirq) == SPI_RANGE ||
+	    __get_intid_range(hwirq) == ESPI_RANGE)
+		return true;
+
+	return false;
+}
+
+void fast_handle_xint(struct pt_regs *regs, u32 irqnr)
+{
+	struct pt_regs *old_regs;
+	struct irq_domain *domain;
+	struct irqaction *action;
+	struct irq_desc *desc;
+	struct irq_data *data;
+
+	arch_nmi_enter();
+	BUG_ON(in_nmi() == NMI_MASK);
+	__preempt_count_add(NMI_OFFSET + HARDIRQ_OFFSET);
+	old_regs = set_irq_regs(regs);
+
+	domain = irq_get_default_host();
+	data = radix_tree_lookup(&domain->revmap_tree, irqnr);
+
+	desc = irq_data_to_desc(data);
+	action = desc->action;
+
+	gic_read_nmiar();
+	write_gicreg(irqnr, ICC_EOIR1_EL1);
+	isb();
+
+	if (is_spi(irqnr))
+		action->handler(data->irq, action->dev_id);
+	else
+		action->handler(data->irq, raw_cpu_ptr(action->percpu_dev_id));
+	gic_write_dir(irqnr);
+
+	set_irq_regs(old_regs);
+	BUG_ON(!in_nmi());
+	__preempt_count_sub(NMI_OFFSET + HARDIRQ_OFFSET);
+	arch_nmi_exit();
+}
+#endif
 
 static u32 gic_get_pribits(void)
 {
@@ -2358,6 +2434,7 @@ static int __init gic_init_bases(phys_addr_t dist_phys_base,
 		goto out_free;
 	}
 
+	irq_set_default_host(gic_data.domain);
 	irq_domain_update_bus_token(gic_data.domain, DOMAIN_BUS_WIRED);
 
 	gic_data.has_rss = !!(typer & GICD_TYPER_RSS);

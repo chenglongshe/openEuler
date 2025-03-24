@@ -242,7 +242,7 @@ void irq_add_debugfs_entry(unsigned int irq, struct irq_desc *desc)
 						 &dfs_irq_ops);
 }
 
-#ifdef CONFIG_FAST_IRQ
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XINT)
 static struct dentry *xint_dir;
 
 void xint_add_debugfs_entry(unsigned int irq)
@@ -281,8 +281,8 @@ static int __init irq_debugfs_init(void)
 
 	irq_dir = debugfs_create_dir("irqs", root_dir);
 
-#ifdef CONFIG_FAST_IRQ
-	if (is_xint_support)
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XINT)
+	if (is_xint_support || hw_xint_support)
 		xint_dir = debugfs_create_dir("xints", root_dir);
 #endif
 

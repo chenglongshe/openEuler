@@ -721,8 +721,9 @@ static inline enum gic_intid_range __get_intid_range(irq_hw_number_t hwirq)
 	}
 }
 
-#ifdef CONFIG_FAST_IRQ
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XINT)
 extern bool is_xint_support;
+extern bool hw_xint_support;
 
 enum xint_op {
 	XINT_TO_IRQ,
@@ -733,6 +734,9 @@ enum xint_op {
 
 void register_irqchip_proc(struct irq_desc *desc, void *irqp);
 void unregister_irqchip_proc(struct irq_desc *desc);
+bool gic_irqnr_is_special(u32 irqnr);
+bool is_xint(unsigned long hwirq);
+void fast_handle_xint(struct pt_regs *regs, u32 irqnr);
 #endif
 #endif
 

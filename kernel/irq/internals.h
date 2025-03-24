@@ -503,8 +503,9 @@ static inline void irq_remove_debugfs_entry(struct irq_desc *desc)
 	kfree(desc->dev_name);
 }
 
-#ifdef CONFIG_FAST_IRQ
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XINT)
 extern bool is_xint_support;
+extern bool hw_xint_support;
 
 void xint_add_debugfs_entry(unsigned int irq);
 void xint_remove_debugfs_entry(unsigned int irq);
