@@ -90,7 +90,7 @@ static void sdma_channel_init(struct hisi_sdma_channel *pchan)
 	sdma_channel_enable(pchan);
 }
 
-void sdma_channel_reset_sq_cq(struct hisi_sdma_channel *pchan)
+static void sdma_channel_reset_sq_cq(struct hisi_sdma_channel *pchan)
 {
 	u32 cq_head, cq_tail;
 

@@ -248,6 +248,22 @@ static bool sdma_wait_cq_writeback(struct hisi_sdma_channel *pchannel)
 	return (cnt <= SDMA_POLL_TIMEOUT);
 }
 
+static void sdma_channel_reset_cq(struct hisi_sdma_channel *pchan)
+{
+	u32 cq_head, cq_tail;
+
+	cq_head = sdma_channel_get_cq_head(pchan);
+	cq_tail = sdma_channel_get_cq_tail(pchan);
+
+	while (cq_head != cq_tail) {
+		sdma_channel_set_cq_head(pchan, cq_tail);
+		msleep(SDMA_POLL_DELAY);
+
+		cq_head = sdma_channel_get_cq_head(pchan);
+		cq_tail = sdma_channel_get_cq_tail(pchan);
+	}
+}
+
 static void sdma_pause_single_channel(struct hisi_sdma_channel *pchannel,
 				      struct hisi_sdma_device *psdma_dev)
 {
@@ -259,12 +275,10 @@ static void sdma_pause_single_channel(struct hisi_sdma_channel *pchannel,
 
 	sdma_channel_set_pause(pchannel);
 	if (sdma_wait_cq_writeback(pchannel))
-		sdma_channel_reset_sq_cq(pchannel);
+		sdma_channel_reset_cq(pchannel);
 	else
 		pr_warn("SDMA %u chn %hu hardware not write back all cqes!\n",
 			psdma_dev->idx, idx);
-
-	return;
 }
 
 static void sdma_pause_channels(struct hisi_sdma_device *psdma_dev)
@@ -276,8 +290,6 @@ static void sdma_pause_channels(struct hisi_sdma_device *psdma_dev)
 		pchannel = psdma_dev->channels + i;
 		sdma_pause_single_channel(pchannel, psdma_dev);
 	}
-
-	return;
 }
 
 static void sdma_wait_channel_quiescent(struct hisi_sdma_device *psdma_dev)
@@ -291,13 +303,11 @@ static void sdma_wait_channel_quiescent(struct hisi_sdma_device *psdma_dev)
 			continue;
 
 		if (sdma_wait_cq_writeback(pchannel))
-			sdma_channel_reset_sq_cq(pchannel);
+			sdma_channel_reset_cq(pchannel);
 		else
 			pr_warn("SDMA %u chn %d hardware not write back all cqes!\n",
 				psdma_dev->idx, i);
 	}
-
-	return;
 }
 
 static void sdma_resume_channel(struct hisi_sdma_device *psdma_dev)
@@ -312,12 +322,10 @@ static void sdma_resume_channel(struct hisi_sdma_device *psdma_dev)
 			continue;
 		}
 		if (!sdma_channel_is_quiescent(pchannel))
-			sdma_channel_reset_sq_cq(pchannel);
+			sdma_channel_reset_cq(pchannel);
 		if (sdma_channel_is_paused(pchannel) && sdma_channel_is_quiescent(pchannel))
 			sdma_channel_write_resume(pchannel);
 	}
-
-	return;
 }
 
 static void sdma_mmu_release_pause(struct mmu_notifier *mn, struct mm_struct *mm)
@@ -343,8 +351,6 @@ static void sdma_mmu_release_pause(struct mmu_notifier *mn, struct mm_struct *mm
 			sdma_wait_channel_quiescent(psdma_dev);
 		}
 	}
-
-	return;
 }
 
 static void sdma_mmu_release_resume(struct mmu_notifier *mn, struct mm_struct *mm)
@@ -368,8 +374,6 @@ static void sdma_mmu_release_resume(struct mmu_notifier *mn, struct mm_struct *m
 		}
 		atomic_set(&exit_processes, 0);
 	}
-
-	return;
 }
 
 static void sdma_mmu_notifier_free(struct mmu_notifier *mn)
@@ -492,8 +496,6 @@ static void sdma_put_mmu_notifier(struct hisi_sdma_mn *sdma_mn)
 
 	list_del(&sdma_mn->list);
 	mmu_notifier_put(&sdma_mn->mn);
-
-	return;
 }
 
 static void sdma_put_resume_mmu_notifier(void)

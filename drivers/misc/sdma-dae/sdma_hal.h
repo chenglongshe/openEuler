@@ -135,7 +135,6 @@ struct hisi_sdma_global_info {
 	struct list_head sdma_resume_mm_list;
 };
 
-void sdma_channel_reset_sq_cq(struct hisi_sdma_channel *pchan);
 void sdma_clear_pid_ref(struct hisi_sdma_device *psdma_dev);
 void sdma_clear_ida_ref(struct hisi_sdma_channel *pchannel);
 int sdma_create_dbg_node(struct dentry *sdma_dbgfs_dir);
@@ -165,7 +164,7 @@ static inline u32 chn_get_val(struct hisi_sdma_channel *pchan, int reg, u32 mask
 
 static inline void sdma_channel_set_pause(struct hisi_sdma_channel *pchan)
 {
-	chn_set_val(pchan, HISI_SDMA_CH_TEST_REG, 1, HISI_SDMA_CH_PAUSE_MSK);
+	// chn_set_val(pchan, HISI_SDMA_CH_TEST_REG, 1, HISI_SDMA_CH_PAUSE_MSK);
 }
 
 static inline bool sdma_channel_is_paused(struct hisi_sdma_channel *pchan)
@@ -195,22 +194,22 @@ static inline bool sdma_channel_is_quiescent(struct hisi_sdma_channel *pchan)
 
 static inline void sdma_channel_write_reset(struct hisi_sdma_channel *pchan)
 {
-	chn_set_val(pchan, HISI_SDMA_CH_TEST_REG, 1, HISI_SDMA_CH_RESET_MSK);
+	// chn_set_val(pchan, HISI_SDMA_CH_TEST_REG, 1, HISI_SDMA_CH_RESET_MSK);
 }
 
 static inline void sdma_channel_write_resume(struct hisi_sdma_channel *pchan)
 {
-	chn_set_val(pchan, HISI_SDMA_CH_TEST_REG, 1, HISI_SDMA_CH_RESUME_MSK);
+	// chn_set_val(pchan, HISI_SDMA_CH_TEST_REG, 1, HISI_SDMA_CH_RESUME_MSK);
 }
 
 static inline void sdma_channel_enable(struct hisi_sdma_channel *pchan)
 {
-	chn_set_val(pchan, HISI_SDMA_CH_CTRL_REG, 1, HISI_SDMA_CH_ENABLE_MSK);
+	// chn_set_val(pchan, HISI_SDMA_CH_CTRL_REG, 1, HISI_SDMA_CH_ENABLE_MSK);
 }
 
 static inline void sdma_channel_disable(struct hisi_sdma_channel *pchan)
 {
-	chn_set_val(pchan, HISI_SDMA_CH_CTRL_REG, 0, HISI_SDMA_CH_ENABLE_MSK);
+	// chn_set_val(pchan, HISI_SDMA_CH_CTRL_REG, 0, HISI_SDMA_CH_ENABLE_MSK);
 }
 
 static inline void sdma_channel_set_sq_size(struct hisi_sdma_channel *pchan, u32 size)
@@ -242,7 +241,7 @@ static inline u32 sdma_channel_get_sq_tail(struct hisi_sdma_channel *pchan)
 
 static inline void sdma_channel_set_sq_tail(struct hisi_sdma_channel *pchan, u32 val)
 {
-	chn_set_val(pchan, HISI_SDMA_CH_SQTDBR_REG, val, HISI_SDMA_U32_MSK);
+	// chn_set_val(pchan, HISI_SDMA_CH_SQTDBR_REG, val, HISI_SDMA_U32_MSK);
 }
 
 static inline u32 sdma_channel_get_sq_head(struct hisi_sdma_channel *pchan)
@@ -252,7 +251,7 @@ static inline u32 sdma_channel_get_sq_head(struct hisi_sdma_channel *pchan)
 
 static inline void sdma_channel_set_cq_head(struct hisi_sdma_channel *pchan, u32 val)
 {
-	chn_set_val(pchan, HISI_SDMA_CH_CQHDBR_REG, val, HISI_SDMA_U32_MSK);
+	// chn_set_val(pchan, HISI_SDMA_CH_CQHDBR_REG, val, HISI_SDMA_U32_MSK);
 }
 
 static inline u32 sdma_channel_get_cq_tail(struct hisi_sdma_channel *pchan)
