@@ -42,6 +42,37 @@ struct inet_timewait_death_row {
 struct tcp_fastopen_context;
 
 struct netns_ipv4 {
+	/* Cacheline organization can be found documented in
+	 * Documentation/networking/net_cachelines/netns_ipv4_sysctl.rst.
+	 * Please update the document when adding new fields.
+	 */
+
+	/* TX readonly hotpath cache lines */
+	__cacheline_group_begin(netns_ipv4_read_tx);
+	u8 sysctl_tcp_early_retrans;
+	u8 sysctl_tcp_tso_win_divisor;
+	u8 sysctl_tcp_autocorking;
+	int sysctl_tcp_min_snd_mss;
+	unsigned int sysctl_tcp_notsent_lowat;
+	int sysctl_tcp_limit_output_bytes;
+	int sysctl_tcp_min_rtt_wlen;
+	int sysctl_tcp_wmem[3];
+	u8 sysctl_ip_fwd_use_pmtu;
+	__cacheline_group_end(netns_ipv4_read_tx);
+
+	/* TXRX readonly hotpath cache lines */
+	__cacheline_group_begin(netns_ipv4_read_txrx);
+	u8 sysctl_tcp_moderate_rcvbuf;
+	__cacheline_group_end(netns_ipv4_read_txrx);
+
+	/* RX readonly hotpath cache line */
+	__cacheline_group_begin(netns_ipv4_read_rx);
+	u8 sysctl_ip_early_demux;
+	u8 sysctl_tcp_early_demux;
+	int sysctl_tcp_reordering;
+	int sysctl_tcp_rmem[3];
+	__cacheline_group_end(netns_ipv4_read_rx);
+
 #ifdef CONFIG_SYSCTL
 	struct ctl_table_header	*forw_hdr;
 	struct ctl_table_header	*frags_hdr;
@@ -99,17 +130,14 @@ struct netns_ipv4 {
 
 	int sysctl_ip_default_ttl;
 	int sysctl_ip_no_pmtu_disc;
-	int sysctl_ip_fwd_use_pmtu;
 	int sysctl_ip_fwd_update_priority;
 	int sysctl_ip_nonlocal_bind;
 	int sysctl_ip_autobind_reuse;
 	/* Shall we try to damage output packets if routing dev changes? */
 	int sysctl_ip_dynaddr;
-	int sysctl_ip_early_demux;
 #ifdef CONFIG_NET_L3_MASTER_DEV
 	int sysctl_raw_l3mdev_accept;
 #endif
-	int sysctl_tcp_early_demux;
 	int sysctl_udp_early_demux;
 
 	int sysctl_nexthop_compat_mode;
@@ -122,7 +150,6 @@ struct netns_ipv4 {
 	int sysctl_tcp_mtu_probing;
 	int sysctl_tcp_mtu_probe_floor;
 	int sysctl_tcp_base_mss;
-	int sysctl_tcp_min_snd_mss;
 	int sysctl_tcp_probe_threshold;
 	u32 sysctl_tcp_probe_interval;
 
@@ -133,17 +160,14 @@ struct netns_ipv4 {
 	int sysctl_tcp_syn_retries;
 	int sysctl_tcp_synack_retries;
 	int sysctl_tcp_syncookies;
-	int sysctl_tcp_reordering;
 	int sysctl_tcp_retries1;
 	int sysctl_tcp_retries2;
 	int sysctl_tcp_orphan_retries;
 	int sysctl_tcp_fin_timeout;
-	unsigned int sysctl_tcp_notsent_lowat;
 	int sysctl_tcp_tw_reuse;
 	int sysctl_tcp_sack;
 	int sysctl_tcp_window_scaling;
 	int sysctl_tcp_timestamps;
-	int sysctl_tcp_early_retrans;
 	int sysctl_tcp_recovery;
 	int sysctl_tcp_thin_linear_timeouts;
 	int sysctl_tcp_slow_start_after_idle;
@@ -159,19 +183,12 @@ struct netns_ipv4 {
 	int sysctl_tcp_frto;
 	int sysctl_tcp_nometrics_save;
 	int sysctl_tcp_no_ssthresh_metrics_save;
-	int sysctl_tcp_moderate_rcvbuf;
-	int sysctl_tcp_tso_win_divisor;
 	int sysctl_tcp_workaround_signed_windows;
-	int sysctl_tcp_limit_output_bytes;
 	int sysctl_tcp_challenge_ack_limit;
 	int sysctl_tcp_min_tso_segs;
-	int sysctl_tcp_min_rtt_wlen;
-	int sysctl_tcp_autocorking;
 	int sysctl_tcp_invalid_ratelimit;
 	int sysctl_tcp_pacing_ss_ratio;
 	int sysctl_tcp_pacing_ca_ratio;
-	int sysctl_tcp_wmem[3];
-	int sysctl_tcp_rmem[3];
 	int sysctl_tcp_comp_sack_nr;
 	unsigned long sysctl_tcp_comp_sack_delay_ns;
 	unsigned long sysctl_tcp_comp_sack_slack_ns;
