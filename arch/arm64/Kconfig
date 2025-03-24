@@ -1724,6 +1724,11 @@ config ARCH_SUPPORTS_XINT
 	depends on ARM_GIC_V3
 	depends on !COMPAT
 
+config ARCH_SUPPORTS_XCALL
+	bool "Hardware xcall support"
+	depends on !COMPAT
+	default n
+
 config TRANS_TABLE
 	def_bool y
 	depends on HIBERNATION || KEXEC_CORE
