@@ -194,6 +194,9 @@ void udl_gem_free_object(struct drm_gem_object *gem_obj)
 		udl_gem_put_pages(obj);
 
 	drm_gem_free_mmap_offset(gem_obj);
+
+	drm_gem_object_release(&obj->base);
+	kfree(obj);
 }
 
 /* the dumb interface doesn't work with the GEM straight MMAP
