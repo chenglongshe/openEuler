@@ -103,8 +103,8 @@ struct dentry {
 		struct list_head d_lru;		/* LRU list */
 		wait_queue_head_t *d_wait;	/* in-lookup ones only */
 	};
-	struct list_head d_child;	/* child of parent list */
-	struct list_head d_subdirs;	/* our children */
+	KABI_REPLACE(struct list_head d_child, struct hlist_node d_sib) /* child of parent list */
+	KABI_REPLACE2(struct list_head d_subdirs, struct hlist_head d_children, KABI_RESERVE(3))        /* our children */
 	/*
 	 * d_alias and d_rcu can share memory
 	 */
@@ -610,5 +610,15 @@ struct name_snapshot {
 };
 void take_dentry_name_snapshot(struct name_snapshot *, struct dentry *);
 void release_dentry_name_snapshot(struct name_snapshot *);
+
+static inline struct dentry *d_first_child(const struct dentry *dentry)
+{
+	return hlist_entry_safe(dentry->d_children.first, struct dentry, d_sib);
+}
+
+static inline struct dentry *d_next_sibling(const struct dentry *dentry)
+{
+	return hlist_entry_safe(dentry->d_sib.next, struct dentry, d_sib);
+}
 
 #endif	/* __LINUX_DCACHE_H */
