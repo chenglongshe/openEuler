@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef _PS3_DRIVER_LOG_H_
 #define _PS3_DRIVER_LOG_H_
 
@@ -89,17 +88,17 @@ int ps3_level_get(void);
 	do {                                                                   \
 		if (level <= ps3_level_get()) {                                \
 			if (level == LEVEL_INFO) {                             \
-				printk_ratelimited(KERN_INFO                  \
+				pr_info_ratelimited(                           \
 						    "[PS3STOR][%u]%d;" fmt,    \
 						    current->pid, __LINE__,    \
 						    ##__VA_ARGS__);            \
 			} else if (level == LEVEL_WARN) {                      \
-				printk_ratelimited(KERN_WARNING                \
+				pr_warn_ratelimited(                           \
 						   "[PS3STOR][%u]%d;" fmt,     \
 						   current->pid, __LINE__,     \
 						   ##__VA_ARGS__);             \
 			} else if (level == LEVEL_ERROR) {                     \
-				printk_ratelimited(KERN_ERR                    \
+				pr_err_ratelimited(                            \
 						   "[PS3STOR][%u]%d;" fmt,     \
 						   current->pid, __LINE__,     \
 						   ##__VA_ARGS__);             \

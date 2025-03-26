@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #ifndef _WINDOWS
 
 #include <scsi/scsi_host.h>
@@ -879,36 +878,6 @@ ssize_t ps3_dump_dir_show(struct device *cdev, struct device_attribute *attr,
 
 l_out:
 	return ret;
-}
-
-int ps3_dump_dir_length(const char *buf, size_t count)
-{
-	int i = 0;
-	char c;
-
-	while ((size_t)i++ < count) {
-		c = buf[i];
-
-		if (isdigit(c))
-			continue;
-
-		if (isalpha(c))
-			continue;
-
-		switch (c) {
-		case '-':
-		case '_':
-		case '/':
-		case '~':
-			continue;
-			break;
-		default:
-			goto l_out;
-		}
-	}
-
-l_out:
-	return i;
 }
 
 ssize_t ps3_dump_type_show(struct device *cdev, struct device_attribute *attr,

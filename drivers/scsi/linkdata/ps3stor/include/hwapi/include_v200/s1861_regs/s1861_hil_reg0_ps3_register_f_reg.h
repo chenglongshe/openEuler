@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef __S1861_HIL_REG0_PS3_REGISTER_F_REG_H__
 #define __S1861_HIL_REG0_PS3_REGISTER_F_REG_H__
 #include "s1861_global_baseaddr.h"

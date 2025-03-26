@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef __PS3_R1X_WRITE_LOCK_H__
 #define __PS3_R1X_WRITE_LOCK_H__
 

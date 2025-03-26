@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/delay.h>
@@ -26,7 +25,7 @@
 static inline void ps3_dump_status_set(struct ps3_instance *instance,
 				       unsigned long long value);
 
-int ps3_dump_local_time(struct rtc_time *tm)
+static int ps3_dump_local_time(struct rtc_time *tm)
 {
 #if defined(PS3_DUMP_TIME_32)
 	struct timeval time;
@@ -48,7 +47,7 @@ int ps3_dump_local_time(struct rtc_time *tm)
 	return 0;
 }
 
-int ps3_dump_filename_build(struct ps3_instance *instance, char *filename,
+static int ps3_dump_filename_build(struct ps3_instance *instance, char *filename,
 			    unsigned int len, unsigned char *prefix)
 {
 	struct ps3_dump_context *ctxt = &instance->dump_context;
@@ -74,7 +73,7 @@ int ps3_dump_filename_build(struct ps3_instance *instance, char *filename,
 	return 0;
 }
 
-int ps3_dump_file_open(struct ps3_dump_context *ctxt, unsigned int dump_type)
+static int ps3_dump_file_open(struct ps3_dump_context *ctxt, unsigned int dump_type)
 {
 	struct ps3_dump_file_info *file_info = &ctxt->dump_out_file;
 	unsigned char filename[PS3_DUMP_FILE_NAME_LEN] = { 0 };
@@ -157,7 +156,8 @@ l_out:
 	return ret;
 }
 
-int ps3_dump_file_write(struct ps3_dump_file_info *file_info, unsigned char *buf, unsigned int len)
+static int ps3_dump_file_write(struct ps3_dump_file_info *file_info,
+				unsigned char *buf, unsigned int len)
 {
 	struct file *fp = NULL;
 #if defined(PS3_SUPPORT_FS)
@@ -198,7 +198,7 @@ int ps3_dump_file_write(struct ps3_dump_file_info *file_info, unsigned char *buf
 	return ret;
 }
 
-int ps3_dump_file_close(struct ps3_dump_file_info *file_info)
+static int ps3_dump_file_close(struct ps3_dump_file_info *file_info)
 {
 #if defined(PS3_SUPPORT_FS)
 	mm_segment_t old_fs;
@@ -914,7 +914,7 @@ void ps3_dump_exit(struct ps3_instance *instance)
 	spin_unlock_irqrestore(&ctxt->dump_irq_handler_lock, flags);
 
 	if (ctxt->dump_irq_handler_work_queue != NULL) {
-		if (!cancel_work_sync(&ctxt->dump_irq_handler_work)) {
+		if (!ps3_cancel_work_sync(&ctxt->dump_irq_handler_work)) {
 			flush_workqueue(ctxt->dump_irq_handler_work_queue);
 		} else {
 			ctxt->dump_irq_handler_work_status =
@@ -954,7 +954,7 @@ void ps3_dump_work_stop(struct ps3_instance *instance)
 	spin_unlock_irqrestore(&ctxt->dump_irq_handler_lock, flags);
 
 	if (ctxt->dump_irq_handler_work_queue != NULL) {
-		if (!cancel_work_sync(&ctxt->dump_irq_handler_work)) {
+		if (!ps3_cancel_work_sync(&ctxt->dump_irq_handler_work)) {
 			flush_workqueue(ctxt->dump_irq_handler_work_queue);
 		} else {
 			ctxt->dump_irq_handler_work_status =

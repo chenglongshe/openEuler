@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/errno.h>
@@ -16,6 +15,7 @@
 #include "ps3_cli.h"
 #include "ps3_instance_manager.h"
 #include "ps3_kernel_version.h"
+#include "ps3_util.h"
 
 #define PS3_CLI_STATIC_MINOR 26
 #define PS3_CLI_DYNAMIC_MINOR MISC_DYNAMIC_MINOR
@@ -159,8 +159,8 @@ int ps3stor_cli_register(void (*func)(int argc, char *argv[]), const char *cmd_s
 
 	memset(cmd, 0, sizeof(struct ps3_cli_cmd_s));
 
-	strncpy(cmd->cmd, cmd_str, PS3_CLI_CMD_MAXLEN - 1);
-	strncpy(cmd->help, help, PS3_CLI_HELP_LEN - 1);
+	PS3_STRCPY(cmd->cmd, cmd_str, PS3_CLI_CMD_MAXLEN - 1);
+	PS3_STRCPY(cmd->help, help, PS3_CLI_HELP_LEN - 1);
 
 	cmd->func = func;
 

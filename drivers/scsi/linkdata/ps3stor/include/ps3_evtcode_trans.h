@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef __PS3_EVTCODE_TRANS_H__
 #define __PS3_EVTCODE_TRANS_H__
 
@@ -13,7 +12,7 @@ static inline char const *mgrEvtCodeTrans(unsigned int opCode)
 	unsigned int typeIndex = 0;
 	unsigned int codeIndex = 0;
 	const char *pEvtTransStr = NULL;
-	static char const *pEvtCodeInfo[MGR_EVT_EXTEND_TYPE_START][MGR_EVT_TYPE_OFFSET] = {
+	static const char *pEvtCodeInfo[MGR_EVT_EXTEND_TYPE_START][MGR_EVT_TYPE_OFFSET] = {
 		{
 			"MGR_EVT_SAS_START",
 			"MGR_EVT_SAS_EXPANDER_IN",
@@ -408,7 +407,7 @@ static inline char const *mgrEvtCodeTrans(unsigned int opCode)
 		},
 	};
 
-	static char const *pEvtCodeExtInfo[PS3_EVT_EXT_NR][MGR_EVT_TYPE_EXTEND_OFFSET] = {
+	static const char *pEvtCodeExtInfo[PS3_EVT_EXT_NR][MGR_EVT_TYPE_EXTEND_OFFSET] = {
 		{
 			"MGR_EVT_PD_ATTR_EXTEND_START_START",
 			"MGR_EVT_PD_ERASE_ABORT",

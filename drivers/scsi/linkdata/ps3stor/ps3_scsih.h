@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef _PS3_SCSIH_H_
 #define _PS3_SCSIH_H_
 

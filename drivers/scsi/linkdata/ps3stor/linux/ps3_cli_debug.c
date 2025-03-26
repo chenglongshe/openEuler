@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #include <linux/pci.h>
 #include <linux/delay.h>
 #include <linux/dmi.h>
@@ -1057,7 +1056,7 @@ l_out:
 	return;
 }
 
-int ps3_dump_context_show(const char *prefix, struct ps3_instance *instance)
+static int ps3_dump_context_show(const char *prefix, struct ps3_instance *instance)
 {
 	int ret = PS3_SUCCESS;
 	struct ps3_dump_context *ctxt = &instance->dump_context;

@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef _PS3_TRACE_ID_ALLOC_H_
 #define _PS3_TRACE_ID_ALLOC_H_
 

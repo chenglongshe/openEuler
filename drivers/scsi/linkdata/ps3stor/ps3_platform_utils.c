@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #include "ps3_platform_utils.h"
 #include "ps3_instance_manager.h"
 #include "ps3_mgr_channel.h"

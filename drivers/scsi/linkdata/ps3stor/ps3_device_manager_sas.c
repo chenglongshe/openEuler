@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #ifndef _WINDOWS
 
 #include <linux/kernel.h>
@@ -1630,7 +1629,7 @@ static void ps3_sas_expander_port_clean(struct ps3_instance *instance,
 	}
 }
 
-int ps3_sas_expander_phys_refresh(struct ps3_instance *instance,
+static int ps3_sas_expander_phys_refresh(struct ps3_instance *instance,
 				  struct ps3_sas_node *sas_node)
 {
 	int ret = -PS3_FAILED;

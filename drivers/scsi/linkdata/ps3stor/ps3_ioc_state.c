@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #ifndef _WINDOWS
 #include <linux/kernel.h>
 #include <linux/pci.h>

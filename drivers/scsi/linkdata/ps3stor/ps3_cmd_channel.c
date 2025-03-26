@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #ifndef _WINDOWS
 #include <linux/types.h>
 #include <linux/slab.h>
