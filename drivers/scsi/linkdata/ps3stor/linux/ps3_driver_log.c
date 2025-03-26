@@ -641,10 +641,10 @@ void ps3_log_string(enum debug_level level, const char *file, int line,
 
 	if (ps3_log_tty_query()) {
 		if (buf[0] == 'I' || buf[0] == 'W') {
-			printk_ratelimited(KERN_WARNING "%s",
+			pr_warn_ratelimited("%s",
 					   buf + LOG_INFO_PREFIX_LEN);
 		} else if (buf[0] == 'E') {
-			printk_ratelimited(KERN_WARNING "%s",
+			pr_warn_ratelimited("%s",
 					   buf + LOG_ERROR_PREFIX_LEN);
 		}
 	}

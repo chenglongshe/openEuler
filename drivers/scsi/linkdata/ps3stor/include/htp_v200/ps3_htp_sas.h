@@ -96,8 +96,12 @@ union IoDmaCfg {
 	unsigned char byte;
 };
 
-
+#ifdef __KERNEL__
 struct __packed SspTaskFrameIu {
+#else
+struct __attribute((packed)) SspTaskFrameIu {
+#endif
+
 	unsigned long long LUN;
 	unsigned short reserved0;
 	unsigned char function;
@@ -106,8 +110,11 @@ struct __packed SspTaskFrameIu {
 	unsigned char reserved2[14];
 };
 
-
+#ifdef __KERNEL__
+union __attribute((packed)) SmpFrameIu {
+#else
 union __packed SmpFrameIu {
+#endif
 	struct {
 		unsigned char frameType;
 		unsigned char reqestBytes[31];

@@ -408,7 +408,7 @@ static inline char const *mgrEvtCodeTrans(unsigned int opCode)
 		},
 	};
 
-	static char const *pEvtCodeExtInfo[PS3_EVT_EXT_NR][MGR_EVT_TYPE_EXTEND_OFFSET] = {
+	static const char *pEvtCodeExtInfo[PS3_EVT_EXT_NR][MGR_EVT_TYPE_EXTEND_OFFSET] = {
 		{
 			"MGR_EVT_PD_ATTR_EXTEND_START_START",
 			"MGR_EVT_PD_ERASE_ABORT",
