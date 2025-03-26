@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
+
 #ifndef _PS3_WATCHDOG_H_
 #define _PS3_WATCHDOG_H_
 
@@ -13,7 +12,7 @@
 
 #include "ps3_htp_def.h"
 #include "ps3_instance_manager.h"
-#define PS3_WATCHDOG_INTERVAL (1000)
+#define PS3_WATCHDOG_INTERVAL			(1000)
 
 struct ps3_watchdog_context {
 #ifndef _WINDOWS
@@ -23,11 +22,11 @@ struct ps3_watchdog_context {
 #else
 	struct ps3_delay_worker watchdog_work;
 #endif
-	unsigned char is_stop;
-	unsigned char is_halt;
+	Bool is_stop;
+	Bool is_halt;
 };
 
-int ps3_watchdog_start(struct ps3_instance *instance);
+S32 ps3_watchdog_start(struct ps3_instance *instance);
 void ps3_watchdog_stop(struct ps3_instance *instance);
 
 #endif

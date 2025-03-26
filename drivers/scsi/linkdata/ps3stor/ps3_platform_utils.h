@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
+
 #ifndef _PS3_PLATFORM_UTILS_H_
 #define _PS3_PLATFORM_UTILS_H_
 
@@ -10,7 +9,7 @@
 #include <linux/atomic.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
-#include "linux/kernel.h"
+
 #endif
 
 #include "ps3_err_def.h"
@@ -22,97 +21,93 @@ struct ps3_cmd;
 #define scsi_cmnd_cdb(scmnd) ((scmnd)->cmnd)
 #define scsi_device_private_data(scmnd) (PS3_SDEV_PRI_DATA((scmnd)->device))
 #ifdef _WINDOWS
-#define scsi_host_data(scmnd) ((struct ps3_instance *)((scmnd)->instance))
+#define scsi_host_data(scmnd) (struct ps3_instance*)((scmnd)->instance)
 #else
-#define scsi_host_data(scmnd)                                                  \
-	((struct ps3_instance *)((scmnd)->device->host->hostdata))
+#define scsi_host_data(scmnd) (struct ps3_instance*)((scmnd)->device->host->hostdata)
 #endif
 
 #ifdef _WINDOWS
-#define ps3_container_of(ptr, type, member)                                    \
-	((type *)((char *)ptr - offsetof(type, member)))
+#define ps3_container_of(ptr, type, member) \
+	((type*)((char*)ptr - offsetof(type,member)))
 #else
 #define ps3_container_of container_of
 #endif
 #define MAX_MDELAY (1)
-#ifndef PS3_FALSE
-#define PS3_FALSE (0)
-#endif
-#ifndef PS3_TRUE
-#define PS3_TRUE (1)
-#endif
-#ifndef PS3_MAX
-#define PS3_MAX(a, b) (((a) > (b)) ? (a) : (b))
-#endif
-#ifndef PS3_MIN
-#define PS3_MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-#ifndef PS3_DESC
-#define PS3_DESC(a) 1
+
+#ifdef _WINDOWS
+typedef struct {
+    FAST_MUTEX mutex;
+}ps3_mutex, *pps3_mutex;
+#else
+
+typedef struct mutex ps3_mutex;
+
 #endif
 
-static inline void ps3_mutex_init(struct mutex *mutex_lock)
+static inline void ps3_mutex_init(ps3_mutex *mutex_lock)
 {
 #ifdef _WINDOWS
-	ExInitializeFastMutex(&mutex_lock->mutex);
+    ExInitializeFastMutex(&mutex_lock->mutex);
 #else
 	mutex_init(mutex_lock);
 #endif
 }
 
-static inline void ps3_mutex_destroy(struct mutex *mutex_lock)
+static inline void ps3_mutex_destroy(ps3_mutex *mutex_lock)
 {
 #ifdef _WINDOWS
-	(void)mutex_lock;
+    (void)mutex_lock;
 #else
 	mutex_destroy(mutex_lock);
 #endif
+    return;
 }
 
-static inline int ps3_mutex_lock(struct mutex *mtx_lock)
+static inline S32 ps3_mutex_lock(ps3_mutex *mtx_lock)
 {
-#ifdef _WINDOWS
-	if (KeGetCurrentIrql() <= APC_LEVEL) {
-		ExAcquireFastMutex(&mtx_lock->mutex);
 
-		return PS3_SUCCESS;
-	}
-	return -PS3_FAILED;
+#ifdef _WINDOWS
+    if (KeGetCurrentIrql() <= APC_LEVEL) {
+        ExAcquireFastMutex(&mtx_lock->mutex);
+
+        return PS3_SUCCESS;
+    }
+    return -PS3_FAILED;
 #else
 	mutex_lock(mtx_lock);
 	return PS3_SUCCESS;
 #endif
 }
-static inline int ps3_mutex_trylock(struct mutex *mutex_lock)
+static inline S32 ps3_mutex_trylock(ps3_mutex *mutex_lock)
 {
-	int ret = PS3_SUCCESS;
+    S32 ret = PS3_SUCCESS;
 #ifdef _WINDOWS
-	if (KeGetCurrentIrql() > APC_LEVEL) {
-		ret = -PS3_FAILED;
-		goto l_out;
-	}
+    if (KeGetCurrentIrql() > APC_LEVEL) {
+        ret = -PS3_FAILED;
+        goto l_out;
+    }
 
-	if (!ExTryToAcquireFastMutex(&mutex_lock->mutex)) {
-		ret = -PS3_FAILED;
-		goto l_out;
-	}
+    if (!ExTryToAcquireFastMutex(&mutex_lock->mutex)) {
+        ret = -PS3_FAILED;
+        goto l_out;
+    }
 l_out:
 #else
 	ret = mutex_trylock(mutex_lock);
 #endif
-	return ret;
+    return ret;
 }
 
-static inline int ps3_mutex_unlock(struct mutex *mutex_lock)
+static inline S32 ps3_mutex_unlock(ps3_mutex *mutex_lock)
 {
 #ifdef _WINDOWS
-	if (KeGetCurrentIrql() <= APC_LEVEL) {
-		ExReleaseFastMutex(&mutex_lock->mutex);
+    if (KeGetCurrentIrql() <= APC_LEVEL) {
+        ExReleaseFastMutex(&mutex_lock->mutex);
 
-		return PS3_SUCCESS;
-	}
+        return PS3_SUCCESS;
+    }
 
-	return -PS3_FAILED;
+    return -PS3_FAILED;
 #else
 	mutex_unlock(mutex_lock);
 	return PS3_SUCCESS;
@@ -120,121 +115,123 @@ static inline int ps3_mutex_unlock(struct mutex *mutex_lock)
 #endif
 }
 
-static inline int ps3_atomic_read(atomic_t *value)
-{
 #ifdef _WINDOWS
-	return value->value;
+typedef struct {
+    volatile S32 value;
+}ps3_atomic32, *pps3_atomic32;
+
+typedef struct {
+    volatile S64 value;
+}ps3_atomic64, *pps3_atomic64;
+#else
+typedef atomic_t ps3_atomic32;
+typedef atomic64_t ps3_atomic64;
+#endif
+
+static inline S32 ps3_atomic_read(ps3_atomic32 *value) {
+#ifdef _WINDOWS
+    return value->value;
 #else
 	return atomic_read(value);
 #endif
 }
 
-static inline int ps3_atomic_dec(atomic_t *value)
-{
+static inline S32 ps3_atomic_dec(ps3_atomic32 *value) {
 #ifdef _WINDOWS
-	return (int)InterlockedDecrement((LONG *)(&value->value));
+    return (S32)InterlockedDecrement((LONG*)(&value->value));
 #else
 	atomic_dec(value);
 	return PS3_SUCCESS;
 #endif
 }
 
-static inline int ps3_atomic_add(int i, atomic_t *value)
-{
+static inline S32 ps3_atomic_add(S32 i, ps3_atomic32 *value) {
 #ifdef _WINDOWS
-	return (int)_InlineInterlockedAdd((LONG *)&value->value, (LONG)i);
+	return (S32)_InlineInterlockedAdd((LONG*)&value->value, (LONG)i);
 #else
 	atomic_add(i, value);
 	return PS3_SUCCESS;
 #endif
 }
 
-static inline int ps3_atomic_sub(int i, atomic_t *value)
-{
+static inline S32 ps3_atomic_sub(S32 i, ps3_atomic32 *value) {
 #ifdef _WINDOWS
-	return (int)_InlineInterlockedAdd((LONG *)&value->value, (LONG)-i);
+	return (S32)_InlineInterlockedAdd((LONG*)&value->value, (LONG)-i);
 #else
 	atomic_sub(i, value);
 	return PS3_SUCCESS;
 #endif
 }
 
-static inline int ps3_atomic_cmpxchg(atomic_t *value, int old, int cur)
+static inline S32 ps3_atomic_cmpxchg(ps3_atomic32 *value, S32 old, S32 cur)
 {
 #ifdef _WINDOWS
-	return (int)InterlockedCompareExchange((LONG *)&value->value, (LONG)cur,
-					       (LONG)old);
+    return (S32)InterlockedCompareExchange((LONG*)&value->value, (LONG)cur, (LONG)old);
 #else
 	return atomic_cmpxchg(value, cur, old);
 #endif
 }
 
-static inline unsigned char ps3_atomic_add_unless(atomic_t *value, int a, int u)
-{
+static inline Bool ps3_atomic_add_unless(ps3_atomic32 *value, S32 a, S32 u) {
 #ifdef _WINDOWS
 
-	int c = 0;
-	int old = 0;
+    S32 c = 0;
+    S32 old = 0;
+    c = value->value;
+    while (c != u &&
+        (old = ps3_atomic_cmpxchg(value, c, c + a)) != c) {
+        c = old;
+    }
 
-	c = value->value;
-	while (c != u && (old = ps3_atomic_cmpxchg(value, c, c + a)) != c)
-		c = old;
-
-	return c != u;
+    return c != u;
 #else
 	return atomic_add_unless(value, a, u);
 #endif
 }
 
-static inline int ps3_atomic_inc(atomic_t *value)
-{
+static inline S32 ps3_atomic_inc(ps3_atomic32 *value) {
 #ifdef _WINDOWS
-	return (int)InterlockedIncrement((LONG *)(&value->value));
+    return (S32)InterlockedIncrement((LONG*)(&value->value));
 #else
 	atomic_inc(value);
 	return PS3_SUCCESS;
 #endif
 }
 
-static inline int ps3_atomic_inc_return(atomic_t *value)
-{
+static inline S32 ps3_atomic_inc_return(ps3_atomic32 *value) {
 #ifdef _WINDOWS
-	return (int)InterlockedIncrement((LONG *)(&value->value));
+    return (S32)InterlockedIncrement((LONG*)(&value->value));
 #else
 	return atomic_inc_return(value);
 #endif
 }
 
-static inline int ps3_atomic_dec_return(atomic_t *value)
-{
+static inline S32 ps3_atomic_dec_return(ps3_atomic32 *value) {
 #ifdef _WINDOWS
-	return (int)InterlockedDecrement((LONG *)(&value->value));
+    return (S32)InterlockedDecrement((LONG*)(&value->value));
 #else
 	return atomic_dec_return(value);
 #endif
 }
 
-static inline long long ps3_atomic64_inc(atomic64_t *value)
-{
+static inline S64 ps3_atomic64_inc(ps3_atomic64 *value) {
 #ifdef _WINDOWS
-	return (long long)InterlockedIncrement64((LONG64 *)(&value->value));
+    return (S64)InterlockedIncrement64((LONG64*)(&value->value));
 #else
 	atomic64_inc(value);
 	return PS3_SUCCESS;
 #endif
 }
 
-static inline long long ps3_atomic64_inc_return(atomic64_t *value)
-{
+static inline S64 ps3_atomic64_inc_return(ps3_atomic64 *value) {
 #ifdef _WINDOWS
-	return (long long)InterlockedIncrement64((LONG64 *)(&value->value));
+    return (S64)InterlockedIncrement64((LONG64*)(&value->value));
 #else
 	return atomic64_inc_return(value);
 #endif
 }
 
-static inline long long ps3_atomic64_read(atomic64_t *value)
-{
+static inline S64 ps3_atomic64_read(ps3_atomic64 *value) {
 #ifdef _WINDOWS
 	return value->value;
 #else
@@ -242,8 +239,7 @@ static inline long long ps3_atomic64_read(atomic64_t *value)
 #endif
 }
 
-static inline void ps3_atomic64_set(atomic64_t *value, long long i)
-{
+static inline void ps3_atomic64_set(ps3_atomic64 *value, S64 i) {
 #ifdef _WINDOWS
 	value->value = i;
 #else
@@ -251,8 +247,7 @@ static inline void ps3_atomic64_set(atomic64_t *value, long long i)
 #endif
 }
 
-static inline void ps3_atomic_set(atomic_t *value, int i)
-{
+static inline void ps3_atomic_set(ps3_atomic32 *value, S32 i) {
 #ifdef _WINDOWS
 	value->value = i;
 #else
@@ -260,267 +255,279 @@ static inline void ps3_atomic_set(atomic_t *value, int i)
 #endif
 }
 
-static inline long long ps3_atomic64_add(long long i, atomic64_t *value)
-{
+static inline S64 ps3_atomic64_add(S64 i, ps3_atomic64 *value) {
 #ifdef _WINDOWS
-	return (long long)_InlineInterlockedAdd64((LONG64 *)&value->value,
-						  (LONG64)i);
+	return (S64)_InlineInterlockedAdd64((LONG64*)&value->value, (LONG64)i);
 #else
 	atomic64_add(i, value);
 	return PS3_SUCCESS;
 #endif
 }
 
-static inline long long ps3_atomic64_dec(atomic64_t *value)
-{
+static inline S64 ps3_atomic64_dec(ps3_atomic64 *value) {
 #ifdef _WINDOWS
-	return (long long)InterlockedDecrement64((LONG64 *)&value->value);
+	return (S64)InterlockedDecrement64((LONG64*)&value->value);
 #else
 	atomic64_dec(value);
 	return PS3_SUCCESS;
 #endif
 }
 
-static inline void ps3_spin_lock_init(spinlock_t *lock)
+#ifdef _WINDOWS
+typedef struct {
+    KSPIN_LOCK lock;
+}ps3_spinlock, *pps3_spinlock;
+#else
+typedef spinlock_t ps3_spinlock;
+#endif
+
+static inline void ps3_spin_lock_init(ps3_spinlock *lock)
 {
 #ifdef _WINDOWS
-	KeInitializeSpinLock(&lock->lock);
+    KeInitializeSpinLock(&lock->lock);
 #else
 	spin_lock_init(lock);
 #endif
 }
 
-static inline void ps3_spin_lock(spinlock_t *lock, unsigned long *flag)
+static inline void ps3_spin_lock(ps3_spinlock *lock, ULong*flag)
 {
 #ifdef _WINDOWS
-	KeAcquireSpinLock(&lock->lock, (PKIRQL)flag);
+    KeAcquireSpinLock(&lock->lock, (PKIRQL)flag);
 #else
 	(void)flag;
-	spin_lock(lock);
+    spin_lock(lock);
 #endif
 }
 
-static inline void ps3_spin_lock_irqsave(spinlock_t *lock, unsigned long *flag)
+static inline void ps3_spin_lock_irqsave(ps3_spinlock *lock, ULong *flag)
 {
 #ifdef _WINDOWS
-	KeAcquireSpinLock(&lock->lock, (PKIRQL)flag);
+    KeAcquireSpinLock(&lock->lock, (PKIRQL)flag);
 #else
-	spin_lock_irqsave(lock, *flag);
+    spin_lock_irqsave(lock, *flag);
 #endif
 }
 
-static inline void ps3_spin_unlock(spinlock_t *lock, unsigned long flag)
+static inline void ps3_spin_unlock(ps3_spinlock *lock, ULong flag)
 {
 #ifdef _WINDOWS
-	KeReleaseSpinLock(&lock->lock, (KIRQL)flag);
+    KeReleaseSpinLock(&lock->lock, (KIRQL)flag);
 #else
 	(void)flag;
-	spin_unlock(lock);
+    spin_unlock(lock);
 #endif
 }
 
-static inline void ps3_spin_unlock_irqrestore(spinlock_t *lock,
-					      unsigned long flag)
+static inline void ps3_spin_unlock_irqrestore(ps3_spinlock *lock, ULong flag)
 {
 #ifdef _WINDOWS
-	KeReleaseSpinLock(&lock->lock, (KIRQL)flag);
+    KeReleaseSpinLock(&lock->lock, (KIRQL)flag);
 #else
-	spin_unlock_irqrestore(lock, flag);
+    spin_unlock_irqrestore(lock, flag);
 #endif
 }
 
-int ps3_wait_for_completion_timeout(void *sync_done, unsigned long Timeout);
-int ps3_wait_cmd_for_completion_timeout(struct ps3_instance *instance,
-					struct ps3_cmd *cmd,
-					unsigned long timeout);
+S32 ps3_wait_for_completion_timeout(void *sync_done, ULong Timeout);
+S32 ps3_wait_cmd_for_completion_timeout(struct ps3_instance *instance,
+	struct ps3_cmd *cmd, ULong timeout);
+
+#ifdef _WINDOWS
+typedef LIST_ENTRY ps3_list_head;
+#else
+typedef struct list_head ps3_list_head;
+#endif
 
 #ifdef _WINDOWS
 
-#define complete(x) KeSetEvent(x, IO_NO_INCREMENT, FALSE)
-#define init_completion(x) KeInitializeEvent(x, SynchronizationEvent, FALSE)
+#define complete(x) KeSetEvent(x, IO_NO_INCREMENT, FALSE);
+#define init_completion(x) KeInitializeEvent(x, SynchronizationEvent, FALSE);
 
-static inline int list_empty(const struct list_head *head)
+static inline int list_empty(const ps3_list_head* head)
 {
-	return head->Blink == head;
+    return head->Blink == head;
 }
 
-#define list_entry(ptr, type, member) CONTAINING_RECORD(ptr, type, member)
+#define list_entry(ptr, type, member) \
+	CONTAINING_RECORD(ptr, type, member)
 
-#define list_for_each(pos, head)                                               \
+#define list_for_each(pos, head) \
 	for (pos = (head)->Blink; pos != (head); pos = pos->Blink)
 
-#define list_first_entry(ptr, type, member)                                    \
-	list_entry((ptr)->Blink, type, member)
-#define list_next_entry(pos, type, member)                                     \
-	list_entry((pos)->member.Blink, type, member)
-#define list_for_each_entry(pos, type, head, member)                           \
-	for (pos = list_first_entry(head, type, member);                       \
-	     &pos->member != (head); pos = list_next_entry(pos, type, member))
-#define list_for_each_entry_safe(pos, type, tmp, head, member)                 \
-	for (pos = list_first_entry(head, type, member),                       \
-	    tmp = list_next_entry(pos, type, member);                          \
-	     &pos->member != (head);                                           \
-	     pos = tmp, tmp = list_next_entry(tmp, type, member))
+#define list_first_entry(ptr, type, member) \
+		list_entry((ptr)->Blink, type, member)
 
-static inline void INIT_LIST_HEAD(struct list_head *list)
+#define list_next_entry(pos, type, member) \
+		list_entry((pos)->member.Blink, type, member)
+
+#define list_for_each_entry(pos, type, head, member)				\
+	for (pos = list_first_entry(head, type, member);	\
+	     &pos->member != (head);					\
+	     pos = list_next_entry(pos, type, member))
+
+#define list_for_each_entry_safe(pos, type, tmp, head, member)			\
+	for (pos = list_first_entry(head, type, member),		\
+		tmp = list_next_entry(pos, type, member);	\
+		&pos->member != (head);						\
+		pos = tmp, tmp = list_next_entry(tmp, type, member))
+
+static inline void INIT_LIST_HEAD(ps3_list_head* list)
 {
-	InitializeListHead((PLIST_ENTRY)list);
+    InitializeListHead((PLIST_ENTRY)list);
 }
 
-static inline void list_del(struct list_head *entry)
+static inline void list_del(ps3_list_head* entry)
 {
-	RemoveEntryList((PLIST_ENTRY)entry);
+    RemoveEntryList((PLIST_ENTRY)entry);
 }
 
-static inline void list_del_init(struct list_head *entry)
+static inline void list_del_init(ps3_list_head* entry)
 {
-	list_del(entry);
-	INIT_LIST_HEAD(entry);
+    list_del(entry);
+    INIT_LIST_HEAD(entry);
 }
 
-static inline void list_add_tail(struct list_head *entry,
-				 struct list_head *head)
+static inline void list_add_tail(ps3_list_head* entry, ps3_list_head* head)
 {
-	InsertTailList((PLIST_ENTRY)head, (PLIST_ENTRY)entry);
+    InsertTailList((PLIST_ENTRY)head, (PLIST_ENTRY)entry);
 }
 
-static inline struct list_head *list_remove_head(struct list_head *head)
+static inline ps3_list_head* list_remove_head(ps3_list_head* head)
 {
-	return (struct list_head *)RemoveHeadList((PLIST_ENTRY)head);
+    return (ps3_list_head*)RemoveHeadList((PLIST_ENTRY)head);
 }
 
-inline int kstrtou16(const char *s, unsigned int base, unsigned short *res)
+inline S32 kstrtou16(const S8 *s, U32 base, U16 *res)
 {
-	unsigned long tmp = 0;
-	int ret = RtlCharToInteger(s, base, &tmp);
+    ULong tmp = 0;
+    int ret = RtlCharToInteger(s, base, &tmp);
+    if (ret != STATUS_SUCCESS) {
+        goto l_out;
+    }
 
-	if (ret != STATUS_SUCCESS)
-		goto l_out;
+    if (tmp != (U64)(U16)tmp) {
+        ret = -34;
+        goto l_out;
+    }
 
-	if (tmp != (unsigned long long)(unsigned short)tmp) {
-		ret = -34;
-		goto l_out;
-	}
-
-	*res = (unsigned short)tmp;
+    *res = (U16)tmp;
 l_out:
-	return ret;
+    return ret;
 }
 
-inline int kstrtoint(const char *s, unsigned int base, int *res)
+inline S32 kstrtoint(const S8 *s, U32 base, S32* res)
 {
-	unsigned long tmp = 0;
-	int ret = RtlCharToInteger(s, base, &tmp);
+    ULong tmp = 0;
+    int ret = RtlCharToInteger(s, base, &tmp);
+    if (ret != STATUS_SUCCESS) {
 
-	if (ret != STATUS_SUCCESS)
-		goto l_out;
+    }
 
-	if (tmp != (unsigned long long)(int)tmp) {
-		ret = -34;
-		goto l_out;
-	}
+    if (tmp != (U64)(int)tmp) {
+        ret = -34;
+        goto l_out;
+    }
 
-	*res = (int)tmp;
+    *res = (int)tmp;
 l_out:
-	return ret;
+    return ret;
 }
 
-inline int kstrtouint(const char *s, unsigned int base, unsigned int *res)
+inline S32 kstrtouint(const S8 *s, U32 base, U32* res)
 {
-	unsigned long tmp = 0;
-	int ret = RtlCharToInteger(s, base, &tmp);
+    ULong tmp = 0;
+    int ret = RtlCharToInteger(s, base, &tmp);
+    if (ret != STATUS_SUCCESS) {
+        goto l_out;
+    }
 
-	if (ret != STATUS_SUCCESS)
-		goto l_out;
+    if (tmp != (U64)(U32)tmp) {
+        ret = -34;
+        goto l_out;
+    }
 
-	if (tmp != (unsigned long long)(unsigned int)tmp) {
-		ret = -34;
-		goto l_out;
-	}
-
-	*res = (unsigned int)tmp;
+    *res = (unsigned int)tmp;
 l_out:
-	return ret;
+    return ret;
 }
 
-inline int kstrtou64(const char *s, unsigned long long base,
-		     unsigned long long *res)
+inline S32 kstrtou64(const S8 *s, U64 base, U64* res)
 {
-	unsigned long tmp = 0;
-	int ret = RtlCharToInteger(s, base, &tmp);
+    ULong tmp = 0;
+    int ret = RtlCharToInteger(s, base, &tmp);
+    if (ret != STATUS_SUCCESS) {
+        goto l_out;
+    }
 
-	if (ret != STATUS_SUCCESS)
-		goto l_out;
+    if (tmp != (U64)tmp) {
+        ret = -34;
+        goto l_out;
+    }
 
-	if (tmp != (unsigned long long)tmp) {
-		ret = -34;
-		goto l_out;
-	}
-
-	*res = (unsigned long)tmp;
+    *res = (ULong)tmp;
 l_out:
-	return ret;
+    return ret;
 }
 
-int ps3_dma_free(struct ps3_instance *instance, size_t length, void *buffer);
+S32 ps3_dma_free(
+    struct ps3_instance *instance,
+    size_t   length,
+    void *buffer
+);
 
-int ps3_dma_alloc(struct ps3_instance *instance, size_t length, void **buffer,
-		  unsigned long long *phy_addr);
+S32 ps3_dma_alloc(
+    struct ps3_instance *instance,
+    size_t   length,
+    void **buffer,
+    U64 *phy_addr
+);
 
 #endif
 
-static inline void ps3_msleep(unsigned int ms)
+static inline void ps3_msleep(U32 ms)
 {
 #ifdef _WINDOWS
-	StorPortStallExecution((unsigned long)ms * 1000);
+    StorPortStallExecution((ULong)ms*1000);
 #else
 	msleep(ms);
 #endif
 }
 
-static inline void ps3_mdelay(unsigned int ms)
+static inline void ps3_mdelay(U32 ms)
 {
 #ifndef _WINDOWS
-	unsigned int count = (ms / MAX_MDELAY);
-	unsigned int remain = (ms % MAX_MDELAY);
-
+	U32 count = (ms/MAX_MDELAY);
+	U32 remain = (ms%MAX_MDELAY);
 	do {
-		udelay(1000 * MAX_MDELAY);
+		udelay(1000*MAX_MDELAY);
 		count--;
-	} while (count);
+	} while(count);
 
-	if (remain != 0)
+	if(remain != 0){
 		udelay(remain * 1000);
+	}
 #else
-	StorPortStallExecution((unsigned long)ms * 1000);
+    StorPortStallExecution((ULong)ms*1000);
 #endif
 }
-void *ps3_kcalloc(struct ps3_instance *instance, unsigned int blocks,
-		  unsigned int block_size);
+void *ps3_kcalloc(struct ps3_instance *instance, U32 blocks, U32 block_size);
 void ps3_kfree(struct ps3_instance *instance, void *buffer);
-void *ps3_kzalloc(struct ps3_instance *instance, unsigned int size);
+void *ps3_kzalloc(struct ps3_instance *instance, U32 size);
 
 void ps3_vfree(struct ps3_instance *instance, void *buffer);
-void *ps3_vzalloc(struct ps3_instance *instance, unsigned int size);
+void *ps3_vzalloc(struct ps3_instance *instance, U32 size);
 
-int ps3_scsi_device_get(struct ps3_instance *instance,
-			struct scsi_device *sdev);
-void ps3_scsi_device_put(struct ps3_instance *instance,
-			 struct scsi_device *sdev);
-struct scsi_device *ps3_scsi_device_lookup(struct ps3_instance *instance,
-					   unsigned char channel,
-					   unsigned short target_id,
-					   unsigned char lun);
-void ps3_scsi_remove_device(struct ps3_instance *instance,
-			    struct scsi_device *sdev);
-int ps3_scsi_add_device(struct ps3_instance *instance, unsigned char channel,
-			unsigned short target_id, unsigned char lun);
+int ps3_scsi_device_get(struct ps3_instance *instance, struct scsi_device *sdev);
+void ps3_scsi_device_put(struct ps3_instance *instance, struct scsi_device *sdev);
+struct scsi_device *ps3_scsi_device_lookup(struct ps3_instance *instance, U8 channel, U16 target_id, U8 lun);
+void ps3_scsi_remove_device(struct ps3_instance *instance, struct scsi_device *sdev);
+S32 ps3_scsi_add_device(struct ps3_instance *instance, U8 channel, U16 target_id, U8 lun);
 
-unsigned long long ps3_now_ms_get(void);
+U64 ps3_now_ms_get(void);
 #ifdef _WINDOWS
-int ps3_now_format_get(char *buff, int buf_len);
+S32 ps3_now_format_get(char *buff, S32 buf_len);
 #endif
-unsigned long long ps3_1970_now_ms_get(void);
-unsigned long long ps3_tick_count_get(void);
+U64 ps3_1970_now_ms_get(void);
+U64 ps3_tick_count_get(void);
 
 #endif

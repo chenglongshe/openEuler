@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
+
 #ifndef _PS3_LOAD_H_
 #define _PS3_LOAD_H_
 
@@ -9,7 +8,7 @@
 
 struct ps3_instance;
 
-int ps3_firmware_init(struct ps3_instance *instance);
+S32 ps3_firmware_init(struct ps3_instance *instance);
 
 void ps3_firmware_exit(struct ps3_instance *instance);
 
