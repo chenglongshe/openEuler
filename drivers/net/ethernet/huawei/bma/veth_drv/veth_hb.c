@@ -1600,11 +1600,11 @@ void veth_skbtimer_init(void)
 void veth_netdev_exit(void)
 {
 	if (g_bspveth_dev.pnetdev) {
+		VETH_LOG(DLOG_DEBUG, "veth netdev exit OK.\n");
+
 		netif_stop_queue(g_bspveth_dev.pnetdev);
 		unregister_netdev(g_bspveth_dev.pnetdev);
 		free_netdev(g_bspveth_dev.pnetdev);
-
-		VETH_LOG(DLOG_DEBUG, "veth netdev exit OK.\n");
 	} else {
 		VETH_LOG(DLOG_DEBUG, "veth_dev.pnetdev NULL.\n");
 	}
