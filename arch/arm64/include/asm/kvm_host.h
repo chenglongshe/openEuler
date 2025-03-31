@@ -1301,6 +1301,8 @@ static inline u64 *__vm_id_reg(struct kvm_arch *ka, u32 reg)
 #define kvm_read_vm_id_reg(kvm, reg)					\
 	({ u64 __val = *__vm_id_reg(&(kvm)->arch, reg); __val; })
 
+void kvm_set_vm_id_reg(struct kvm *kvm, u32 reg, u64 val);
+
 extern bool force_wfi_trap;
 extern bool kvm_ncsnp_support;
 extern bool kvm_dvmbm_support;
