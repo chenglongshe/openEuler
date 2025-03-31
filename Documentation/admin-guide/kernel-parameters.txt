@@ -2712,6 +2712,11 @@
 	kvm-arm.ipiv_enabled=
 			[KVM,ARM] Allow use of HiSilicon ipiv on GICv4.1
 
+	kvm-arm.ipiv_direct=
+			[KVM,ARM] Use different modes of ipiv if ipiv enabled
+			Default is 0 which using vmtable in memory to retrieve aff-vpeid
+			Directly calculate vpeid according to aff if set 1
+
 	kvm-arm.dvmbm_enabled=
 			[KVM,ARM] Allow use of HiSilicon DVMBM capability.
 			Default: 0

@@ -1526,7 +1526,7 @@ bool is_gicv4p1(void)
 }
 EXPORT_SYMBOL(is_gicv4p1);
 
-void gic_dist_enable_ipiv(void)
+void gic_dist_enable_ipiv(bool direct)
 {
 	u32 val;
 
@@ -1535,11 +1535,17 @@ void gic_dist_enable_ipiv(void)
 	writel_relaxed(val, gic_data.dist_base + GICD_MISC_CTRL);
 	static_branch_enable(&ipiv_enable);
 
-	val = (0 << GICD_IPIV_CTRL_AFF_DIRECT_VPEID_SHIFT) |
-		(0 << GICD_IPIV_CTRL_AFF1_LEFT_SHIFT_SHIFT) |
-		(4 << GICD_IPIV_CTRL_AFF2_LEFT_SHIFT_SHIFT) |
-		(7 << GICD_IPIV_CTRL_VM_TABLE_INNERCACHE_SHIFT) |
-		(2 << GICD_IPIV_CTRL_VM_TABLE_SHAREABILITY_SHIFT);
+	val = readl_relaxed(gic_data.dist_base + GICD_IPIV_CTRL);
+	if (direct) {
+		val |= (1U << GICD_IPIV_CTRL_AFF_DIRECT_VPEID_SHIFT);
+		static_branch_enable(&ipiv_direct);
+	} else {
+		val = (0 << GICD_IPIV_CTRL_AFF_DIRECT_VPEID_SHIFT) |
+			(0 << GICD_IPIV_CTRL_AFF1_LEFT_SHIFT_SHIFT) |
+			(4 << GICD_IPIV_CTRL_AFF2_LEFT_SHIFT_SHIFT) |
+			(7 << GICD_IPIV_CTRL_VM_TABLE_INNERCACHE_SHIFT) |
+			(2 << GICD_IPIV_CTRL_VM_TABLE_SHAREABILITY_SHIFT);
+	}
 	writel_relaxed(val, gic_data.dist_base + GICD_IPIV_CTRL);
 
 	/* Set target ITS address of IPIV feature */
