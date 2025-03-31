@@ -4997,15 +4997,17 @@ static const struct irq_domain_ops its_sgi_domain_ops = {
 	.deactivate	= its_sgi_irq_domain_deactivate,
 };
 
-static int its_vpe_id_alloc(void)
+int its_vpe_id_alloc(void)
 {
 	return ida_simple_get(&its_vpeid_ida, 0, ITS_MAX_VPEID, GFP_KERNEL);
 }
+EXPORT_SYMBOL(its_vpe_id_alloc);
 
-static void its_vpe_id_free(u16 id)
+void its_vpe_id_free(u16 id)
 {
 	ida_simple_remove(&its_vpeid_ida, id);
 }
+EXPORT_SYMBOL(its_vpe_id_free);
 
 static int its_vpe_init(struct its_vpe *vpe)
 {
@@ -5013,9 +5015,13 @@ static int its_vpe_init(struct its_vpe *vpe)
 	int vpe_id;
 
 	/* Allocate vpe_id */
-	vpe_id = its_vpe_id_alloc();
-	if (vpe_id < 0)
-		return vpe_id;
+	if (!vpe->vpe_id_allocated) {
+		vpe_id = its_vpe_id_alloc();
+		if (vpe_id < 0)
+			return vpe_id;
+	} else {
+		vpe_id = vpe->vpe_id;
+	}
 
 	/* Allocate VPT */
 	vpt_page = its_allocate_pending_table(GFP_KERNEL);
@@ -5032,6 +5038,7 @@ static int its_vpe_init(struct its_vpe *vpe)
 
 	raw_spin_lock_init(&vpe->vpe_lock);
 	vpe->vpe_id = vpe_id;
+	vpe->vpe_id_allocated = true;
 	vpe->vpt_page = vpt_page;
 	atomic_set(&vpe->vmapp_count, 0);
 	if (!gic_rdists->has_rvpeid)
@@ -5044,6 +5051,7 @@ static void its_vpe_teardown(struct its_vpe *vpe)
 {
 	its_vpe_db_proxy_unmap(vpe);
 	its_vpe_id_free(vpe->vpe_id);
+	vpe->vpe_id_allocated = false;
 	its_free_pending_table(vpe->vpt_page);
 }
 

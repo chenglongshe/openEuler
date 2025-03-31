@@ -694,3 +694,43 @@ out_unregister_gsi:
 		acpi_unregister_gsi(18);
 	return ret;
 }
+
+extern int its_vpe_id_alloc(void);
+extern void its_vpe_id_free(u16 id);
+int kvm_vgic_vpe_id_alloc(struct kvm_vcpu *vcpu)
+{
+	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
+	int vpe_id;
+
+	if (vgic_cpu->vgic_v3.its_vpe.vpe_id_allocated) {
+		kvm_err("[%s]vpe_id already allocated\n", __func__);
+		return -1;
+	}
+
+	vpe_id = its_vpe_id_alloc();
+	if (vpe_id < 0) {
+		kvm_err("[%s]alloc vpe id fail: vpe_id=%d\n", __func__, vpe_id);
+		return vpe_id;
+	}
+
+	vgic_cpu->vgic_v3.its_vpe.vpe_id = vpe_id;
+	vgic_cpu->vgic_v3.its_vpe.vpe_id_allocated = true;
+
+	return 0;
+}
+
+int kvm_vgic_vpe_id_free(struct kvm_vcpu *vcpu)
+{
+	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
+	int vpe_id;
+
+	vpe_id = vgic_cpu->vgic_v3.its_vpe.vpe_id;
+
+	if (!vgic_cpu->vgic_v3.its_vpe.vpe_id_allocated)
+		return 0;
+
+	its_vpe_id_free(vpe_id);
+	vgic_cpu->vgic_v3.its_vpe.vpe_id_allocated = false;
+
+	return 0;
+}
