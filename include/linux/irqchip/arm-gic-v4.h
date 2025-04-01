@@ -34,6 +34,7 @@ struct its_vm {
 	 */
 	raw_spinlock_t		vmapp_lock;
 	u32			vlpi_count[GICv4_ITS_LIST_MAX];
+	KABI_EXTEND(struct page		*vpe_page)
 };
 
 /* Embedded in kvm_vcpu.arch */
