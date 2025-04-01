@@ -95,6 +95,7 @@ struct its_vpe {
 	u16			vpe_id;
 	/* Pending VLPIs on schedule out? */
 	bool			pending_last;
+	KABI_EXTEND(bool	vpe_id_allocated)
 };
 
 /*
