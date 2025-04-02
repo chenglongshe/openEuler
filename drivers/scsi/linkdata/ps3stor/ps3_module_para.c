@@ -606,10 +606,12 @@ unsigned int ps3_pci_irq_mode_query(void)
 	return g_pci_irq_mode;
 }
 
+#ifdef PS3_UT
 unsigned int ps3_cli_ver_query(void)
 {
 	return cli_ver;
 }
+#endif
 #if defined(PS3_TAGSET_SUPPORT)
 
 void ps3_tagset_enable_modify(unsigned char enable)

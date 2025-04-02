@@ -33,7 +33,7 @@ struct ps3_ioc_adp_temp_entry {
 	struct ps3_ioc_adp_template *adp_template;
 };
 
-void ps3_ioc_resource_prepare_switch(struct ps3_instance *instance)
+static void ps3_ioc_resource_prepare_switch(struct ps3_instance *instance)
 {
 	struct PS3MgrEvent *event_req_info = &instance->event_req_info;
 
@@ -85,7 +85,7 @@ void ps3_ioc_resource_prepare_switch(struct ps3_instance *instance)
 	ps3_mutex_init(&instance->task_abort_lock);
 }
 
-void ps3_ioc_resource_prepare_raid(struct ps3_instance *instance)
+static void ps3_ioc_resource_prepare_raid(struct ps3_instance *instance)
 {
 	struct PS3MgrEvent *event_req_info = &instance->event_req_info;
 
@@ -144,7 +144,7 @@ void ps3_ioc_resource_prepare_raid(struct ps3_instance *instance)
 	ps3_raid_qos_prepare(instance);
 }
 
-void ps3_ioc_resource_prepare_hba(struct ps3_instance *instance)
+static void ps3_ioc_resource_prepare_hba(struct ps3_instance *instance)
 {
 	struct PS3MgrEvent *event_req_info = &instance->event_req_info;
 

@@ -873,6 +873,7 @@ l_out:
 	return -PS3_FAILED;
 }
 
+#ifdef PS3_UT
 void ps3_set_task_manager_busy(struct ps3_instance *instance,
 			       unsigned int channel, unsigned int id,
 			       unsigned int state)
@@ -895,7 +896,7 @@ void ps3_set_task_manager_busy(struct ps3_instance *instance,
 l_out:
 	return;
 }
-
+#endif
 int ps3_err_scsi_task_mgr_reset(struct scsi_cmnd *scmd)
 {
 	int ret = PS3_SUCCESS;
@@ -1107,7 +1108,7 @@ static int ps3_host_reset_pre_check(struct ps3_instance *instance)
 l_out:
 	return ret;
 }
-int ps3_wait_for_outstanding_complete(struct ps3_instance *instance)
+static int ps3_wait_for_outstanding_complete(struct ps3_instance *instance)
 {
 	unsigned int i = 0;
 	unsigned int ioc_state = PS3_FW_STATE_UNDEFINED;
@@ -1193,7 +1194,7 @@ int ps3_reset_host(struct ps3_instance *instance)
 				continue;
 			} else {
 				ps3_mutex_unlock(&instance->state_machine.lock);
-				cancel_work_sync(&instance->recovery_context
+				ps3_cancel_work_sync(&instance->recovery_context
 							  ->recovery_work);
 				goto wait_hard_reset;
 			}
@@ -1201,7 +1202,7 @@ int ps3_reset_host(struct ps3_instance *instance)
 	} else if (instance->recovery_context->recovery_state ==
 		   PS3_HARD_RECOVERY_SHALLOW) {
 		ps3_mutex_unlock(&instance->state_machine.lock);
-		cancel_work_sync(&instance->recovery_context->recovery_work);
+		ps3_cancel_work_sync(&instance->recovery_context->recovery_work);
 	} else {
 		ps3_mutex_unlock(&instance->state_machine.lock);
 	}
