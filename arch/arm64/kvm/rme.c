@@ -548,15 +548,17 @@ void kvm_realm_unmap_range(struct kvm *kvm, unsigned long start, u64 size,
 
 static int realm_create_protected_data_page(struct realm *realm,
 					    unsigned long ipa,
-					    kvm_pfn_t dst_pfn,
-					    kvm_pfn_t src_pfn,
+					    struct page *dst_page,
+					    struct page *src_page,
 					    unsigned long flags)
 {
 	phys_addr_t dst_phys, src_phys;
 	int ret;
 
-	dst_phys = __pfn_to_phys(dst_pfn);
-	src_phys = __pfn_to_phys(src_pfn);
+	copy_page(page_address(src_page), page_address(dst_page));
+
+	dst_phys = page_to_phys(dst_page);
+	src_phys = page_to_phys(src_page);
 
 	if (rmi_granule_delegate(dst_phys))
 		return -ENXIO;
@@ -583,7 +585,7 @@ static int realm_create_protected_data_page(struct realm *realm,
 err:
 	if (WARN_ON(rmi_granule_undelegate(dst_phys))) {
 		/* Page can't be returned to NS world so is lost */
-		get_page(pfn_to_page(dst_pfn));
+		get_page(dst_page);
 	}
 	return -ENXIO;
 }
@@ -613,6 +615,7 @@ static int populate_par_region(struct kvm *kvm,
 	int idx;
 	phys_addr_t ipa;
 	int ret = 0;
+	struct page *tmp_page;
 	unsigned long data_flags = 0;
 
 	base_gfn = gpa_to_gfn(ipa_base);
@@ -634,12 +637,13 @@ static int populate_par_region(struct kvm *kvm,
 		goto out;
 	}
 
-	if (!kvm_slot_can_be_private(memslot)) {
-		ret = -EINVAL;
+	tmp_page = alloc_page(GFP_KERNEL);
+	if (!tmp_page) {
+		ret = -ENOMEM;
 		goto out;
 	}
 
-	write_lock(&kvm->mmu_lock);
+	mmap_read_lock(current->mm);
 
 	ipa = ipa_base;
 	while (ipa < ipa_end) {
@@ -649,9 +653,8 @@ static int populate_par_region(struct kvm *kvm,
 		unsigned long offset;
 		unsigned long hva;
 		struct page *page;
-		bool writeable;
 		kvm_pfn_t pfn;
-		int level, i;
+		int level;
 
 		hva = gfn_to_hva_memslot(memslot, gpa_to_gfn(ipa));
 		vma = vma_lookup(current->mm, hva);
@@ -680,8 +683,7 @@ static int populate_par_region(struct kvm *kvm,
 			break;
 		}
 
-		pfn = __kvm_faultin_pfn(memslot, gpa_to_gfn(ipa), FOLL_WRITE,
-					&writeable, &page);
+		pfn = gfn_to_pfn_memslot(memslot, gpa_to_gfn(ipa));
 
 		if (is_error_pfn(pfn)) {
 			ret = -EFAULT;
@@ -699,38 +701,36 @@ static int populate_par_region(struct kvm *kvm,
 						RMM_RTT_MAX_LEVEL, NULL);
 		}
 
-		for (offset = 0, i = 0; offset < map_size && !ret;
-		     offset += PAGE_SIZE, i++) {
-			phys_addr_t page_ipa = ipa + offset;
-			kvm_pfn_t priv_pfn;
-			struct page *gmem_page;
-			int order;
+		page = pfn_to_page(pfn);
 
-			ret = kvm_gmem_get_pfn(kvm, memslot,
-					       page_ipa >> PAGE_SHIFT,
-					       &priv_pfn, &gmem_page, &order);
-			if (ret)
-				break;
+		for (offset = 0; offset < map_size && !ret;
+		     offset += PAGE_SIZE, page++) {
+			phys_addr_t page_ipa = ipa + offset;
 
 			ret = realm_create_protected_data_page(realm, page_ipa,
-							       priv_pfn,
-							       pfn + i,
+							       page, tmp_page,
 							       data_flags);
 		}
-
-		kvm_release_faultin_page(kvm, page, false, false);
-
 		if (ret)
-			break;
+			goto err_release_pfn;
 
-		if (level == 2)
-			fold_rtt(realm, ipa, level);
+		if (level == 2) {
+			ret = fold_rtt(realm, ipa, level);
+			if (ret)
+				goto err_release_pfn;
+		}
 
 		ipa += map_size;
+		kvm_release_pfn_dirty(pfn);
+err_release_pfn:
+		if (ret) {
+			kvm_release_pfn_clean(pfn);
+			break;
+		}
 	}
 
-	write_unlock(&kvm->mmu_lock);
-
+	mmap_read_unlock(current->mm);
+	__free_page(tmp_page);
 out:
 	srcu_read_unlock(&kvm->srcu, idx);
 	return ret;
