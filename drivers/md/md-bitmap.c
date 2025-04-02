@@ -2120,8 +2120,6 @@ void md_bitmap_status(struct seq_file *seq, struct bitmap *bitmap)
 
 	if (!bitmap)
 		return;
-	if (bitmap->mddev->bitmap_info.external)
-		return;
 	if (!bitmap->storage.sb_page) /* no superblock */
 		return;
 	counts = &bitmap->counts;
