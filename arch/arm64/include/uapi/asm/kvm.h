@@ -431,6 +431,7 @@ enum {
 /* List of configuration items accepted for KVM_CAP_ARM_RME_CONFIG_REALM */
 #define KVM_CAP_ARM_RME_CFG_RPV			0
 #define KVM_CAP_ARM_RME_CFG_HASH_ALGO		1
+#define KVM_CAP_ARM_RME_CFG_DBG			3
 #define KVM_CAP_ARM_RME_CFG_PMU			4
 
 struct kvm_cap_arm_rme_config_item {
@@ -444,6 +445,12 @@ struct kvm_cap_arm_rme_config_item {
 		/* cfg == KVM_CAP_ARM_RME_CFG_HASH_ALGO */
 		struct {
 			__u32	hash_algo;
+		};
+
+		/* cfg == KVM_CAP_ARM_RME_CFG_DBG */
+		struct {
+			__u32	num_brps;
+			__u32	num_wrps;
 		};
 
 		/* cfg == KVM_CAP_ARM_RME_CFG_PMU */

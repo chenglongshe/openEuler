@@ -63,6 +63,16 @@ u32 kvm_realm_vgic_nr_lr(void)
 	return u64_get_bits(rmm_feat_reg0, RMI_FEATURE_REGISTER_0_GICV3_NUM_LRS);
 }
 
+u32 kvm_realm_get_num_brps(void)
+{
+	return u64_get_bits(rmm_feat_reg0, RMI_FEATURE_REGISTER_0_NUM_BPS);
+}
+
+u32 kvm_realm_get_num_wrps(void)
+{
+	return u64_get_bits(rmm_feat_reg0, RMI_FEATURE_REGISTER_0_NUM_WPS);
+}
+
 u64 kvm_realm_reset_id_aa64dfr0_el1(const struct kvm_vcpu *vcpu, u64 val)
 {
 	u32 bps = u64_get_bits(rmm_feat_reg0, RMI_FEATURE_REGISTER_0_NUM_BPS);
@@ -1190,6 +1200,21 @@ static int config_realm_pmu(struct realm *realm,
 	return 0;
 }
 
+static int config_realm_debug(struct realm *realm,
+			      struct kvm_cap_arm_rme_config_item *cfg)
+{
+	if (cfg->num_brps > kvm_realm_get_num_brps())
+		return -EINVAL;
+
+	if (cfg->num_wrps > kvm_realm_get_num_wrps())
+		return -EINVAL;
+
+	realm->params->num_bps = cfg->num_brps;
+	realm->params->num_wps = cfg->num_wrps;
+
+	return 0;
+}
+
 static int kvm_rme_config_realm(struct kvm *kvm, struct kvm_enable_cap *cap)
 {
 	struct kvm_cap_arm_rme_config_item cfg;
@@ -1211,6 +1236,9 @@ static int kvm_rme_config_realm(struct kvm *kvm, struct kvm_enable_cap *cap)
 		break;
 	case KVM_CAP_ARM_RME_CFG_PMU:
 		r = config_realm_pmu(realm, &cfg);
+		break;
+	case KVM_CAP_ARM_RME_CFG_DBG:
+		r = config_realm_debug(realm, &cfg);
 		break;
 	default:
 		r = -EINVAL;
