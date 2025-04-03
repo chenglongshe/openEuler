@@ -1187,6 +1187,24 @@ static int config_realm_hash_algo(struct realm *realm,
 	return 0;
 }
 
+static int config_realm_sve(struct realm *realm,
+			    struct kvm_cap_arm_rme_config_item *cfg)
+{
+	int max_sve_vq = u64_get_bits(rmm_feat_reg0,
+				      RMI_FEATURE_REGISTER_0_SVE_VL);
+
+	if (!kvm_rme_supports_sve())
+		return -EINVAL;
+
+	if (cfg->sve_vq > max_sve_vq)
+		return -EINVAL;
+
+	realm->params->sve_vl = cfg->sve_vq;
+	realm->params->flags |= RMI_REALM_PARAM_FLAG_SVE;
+
+	return 0;
+}
+
 static int config_realm_pmu(struct realm *realm,
 			    struct kvm_cap_arm_rme_config_item *cfg)
 {
@@ -1239,6 +1257,9 @@ static int kvm_rme_config_realm(struct kvm *kvm, struct kvm_enable_cap *cap)
 		break;
 	case KVM_CAP_ARM_RME_CFG_HASH_ALGO:
 		r = config_realm_hash_algo(realm, &cfg);
+		break;
+	case KVM_CAP_ARM_RME_CFG_SVE:
+		r = config_realm_sve(realm, &cfg);
 		break;
 	case KVM_CAP_ARM_RME_CFG_PMU:
 		r = config_realm_pmu(realm, &cfg);
