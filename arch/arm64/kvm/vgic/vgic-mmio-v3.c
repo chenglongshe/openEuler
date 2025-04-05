@@ -342,6 +342,7 @@ static unsigned long vgic_mmio_read_v3r_typer(struct kvm_vcpu *vcpu,
 	u64 value;
 
 	value = (u64)(mpidr & GENMASK(23, 0)) << 32;
+	value |= MPIDR_AFFINITY_LEVEL(mpidr, 3) << 56;
 	value |= ((target_vcpu_id & 0xffff) << 8);
 
 	if (vgic_has_its(vcpu->kvm))
