@@ -13,6 +13,7 @@
 #include <asm/kvm_emulate.h>
 #include <asm/kvm_hyp.h>
 #include <asm/kvm_rme.h>
+#include <asm/kvm_tmi.h>
 
 #include "vgic.h"
 
@@ -912,8 +913,16 @@ static inline void vgic_rmm_save_state(struct kvm_vcpu *vcpu)
 	int i;
 
 	for (i = 0; i < kvm_vcpu_vgic_nr_lr(vcpu); i++) {
-		cpu_if->vgic_lr[i] = vcpu->arch.rec.run->exit.gicv3_lrs[i];
-		vcpu->arch.rec.run->enter.gicv3_lrs[i] = 0;
+		if (_vcpu_is_rec(vcpu)) {
+			cpu_if->vgic_lr[i] = vcpu->arch.rec.run->exit.gicv3_lrs[i];
+			vcpu->arch.rec.run->enter.gicv3_lrs[i] = 0;
+		}
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		if (vcpu_is_tec(vcpu)) {
+			cpu_if->vgic_lr[i] = vcpu->arch.tec.run->exit.gicv3_lrs[i];
+			vcpu->arch.tec.run->enter.gicv3_lrs[i] = 0;
+		}
+#endif
 	}
 }
 
@@ -955,13 +964,21 @@ static inline void vgic_rmm_restore_state(struct kvm_vcpu *vcpu)
 	int i;
 
 	for (i = 0; i < kvm_vcpu_vgic_nr_lr(vcpu); i++) {
-		vcpu->arch.rec.run->enter.gicv3_lrs[i] = cpu_if->vgic_lr[i];
-		/*
-		 * Also populate the rec.run->exit copies so that a late
-		 * decision to back out from entering the realm doesn't cause
-		 * the state to be lost
-		 */
-		vcpu->arch.rec.run->exit.gicv3_lrs[i] = cpu_if->vgic_lr[i];
+		if (_vcpu_is_rec(vcpu)) {
+			vcpu->arch.rec.run->enter.gicv3_lrs[i] = cpu_if->vgic_lr[i];
+			/*
+			 * Also populate the rec.run->exit copies so that a late
+			 * decision to back out from entering the realm doesn't cause
+			 * the state to be lost
+			 */
+			vcpu->arch.rec.run->exit.gicv3_lrs[i] = cpu_if->vgic_lr[i];
+		}
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		if (vcpu_is_tec(vcpu)) {
+			vcpu->arch.tec.run->enter.gicv3_lrs[i] = cpu_if->vgic_lr[i];
+			vcpu->arch.tec.run->exit.gicv3_lrs[i] = cpu_if->vgic_lr[i];
+		}
+#endif
 	}
 }
 

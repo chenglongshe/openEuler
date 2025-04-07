@@ -1475,6 +1475,8 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	 */
 	if (vcpu_is_rec(vcpu))
 		write_fault = true;
+	if (vcpu_is_tec(vcpu))
+		prot = KVM_PGTABLE_PROT_R | KVM_PGTABLE_PROT_W;
 
 	exec_fault = kvm_vcpu_trap_is_exec_fault(vcpu);
 	VM_BUG_ON(write_fault && exec_fault);
