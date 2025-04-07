@@ -12,6 +12,7 @@
 #include <asm/virt.h>
 
 #include <asm/kvm_pgtable.h>
+#include <asm/cca_base.h>
 
 static unsigned long rmm_feat_reg0;
 
@@ -58,7 +59,7 @@ u32 kvm_realm_ipa_limit(void)
 	return u64_get_bits(rmm_feat_reg0, RMI_FEATURE_REGISTER_0_S2SZ);
 }
 
-u32 kvm_realm_vgic_nr_lr(void)
+u32 _kvm_realm_vgic_nr_lr(void)
 {
 	return u64_get_bits(rmm_feat_reg0, RMI_FEATURE_REGISTER_0_GICV3_NUM_LRS);
 }
@@ -161,7 +162,7 @@ static void free_delegated_granule(phys_addr_t phys)
 	free_page((unsigned long)phys_to_virt(phys));
 }
 
-int realm_psci_complete(struct kvm_vcpu *calling, struct kvm_vcpu *target,
+int _realm_psci_complete(struct kvm_vcpu *calling, struct kvm_vcpu *target,
 			unsigned long status)
 {
 	int ret;
@@ -1288,7 +1289,7 @@ static int kvm_rme_config_realm(struct kvm *kvm, struct kvm_enable_cap *cap)
 	return r;
 }
 
-int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
+int _kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
 {
 	int r = 0;
 
@@ -1337,7 +1338,7 @@ int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
 	return r;
 }
 
-void kvm_destroy_realm(struct kvm *kvm)
+void _kvm_destroy_realm(struct kvm *kvm)
 {
 	struct realm *realm = &kvm->arch.realm;
 	size_t pgd_size = kvm_pgtable_stage2_pgd_size(kvm->arch.vtcr);
@@ -1403,7 +1404,7 @@ static void kvm_complete_ripas_change(struct kvm_vcpu *vcpu)
 	} while (top_ipa < top);
 }
 
-int kvm_rec_enter(struct kvm_vcpu *vcpu)
+int _kvm_rec_enter(struct kvm_vcpu *vcpu)
 {
 	struct realm_rec *rec = &vcpu->arch.rec;
 
@@ -1466,7 +1467,7 @@ out_err:
 	return ret;
 }
 
-int kvm_create_rec(struct kvm_vcpu *vcpu)
+int _kvm_create_rec(struct kvm_vcpu *vcpu)
 {
 	struct user_pt_regs *vcpu_regs = vcpu_gp_regs(vcpu);
 	unsigned long mpidr = kvm_vcpu_get_mpidr_aff(vcpu);
@@ -1546,7 +1547,7 @@ out_free_pages:
 	return r;
 }
 
-void kvm_destroy_rec(struct kvm_vcpu *vcpu)
+void _kvm_destroy_rec(struct kvm_vcpu *vcpu)
 {
 	struct realm *realm = &vcpu->kvm->arch.realm;
 	struct realm_rec *rec = &vcpu->arch.rec;
@@ -1572,7 +1573,7 @@ void kvm_destroy_rec(struct kvm_vcpu *vcpu)
 	free_delegated_granule(rec_page_phys);
 }
 
-int kvm_init_realm_vm(struct kvm *kvm)
+int _kvm_init_realm_vm(struct kvm *kvm)
 {
 	struct realm_params *params;
 
@@ -1584,7 +1585,7 @@ int kvm_init_realm_vm(struct kvm *kvm)
 	return 0;
 }
 
-void kvm_init_rme(void)
+void _kvm_init_rme(void)
 {
 	if (PAGE_SIZE != SZ_4K)
 		/* Only 4k page size on the host is supported */
@@ -1602,3 +1603,22 @@ void kvm_init_rme(void)
 
 	static_branch_enable(&kvm_rme_is_available);
 }
+
+static struct cca_operations armcca_operations = {
+	.enable_cap = _kvm_realm_enable_cap,
+	.init_realm_vm = _kvm_init_realm_vm,
+	.realm_vm_enter = _kvm_rec_enter,
+	.realm_vm_exit = _handle_rec_exit,
+	.init_sel2_hypervisor = _kvm_init_rme,
+	.psci_complete = _realm_psci_complete,
+	.destroy_vm = _kvm_destroy_realm,
+	.create_vcpu = _kvm_create_rec,
+	.destroy_vcpu = _kvm_destroy_rec,
+	.vgic_nr_lr = _kvm_realm_vgic_nr_lr,
+};
+
+static int __init armcca_register(void)
+{
+	return cca_operations_register(ARMCCA_CVM, &armcca_operations);
+}
+core_initcall(armcca_register);

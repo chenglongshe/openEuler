@@ -884,7 +884,7 @@ int kvm_init_stage2_mmu(struct kvm *kvm, struct kvm_s2_mmu *mmu, unsigned long t
 	u64 mmfr0, mmfr1;
 	u32 phys_shift;
 
-	if (kvm_is_realm(kvm))
+	if (_kvm_is_realm(kvm))
 		kvm_ipa_limit = kvm_realm_ipa_limit();
 
 	phys_shift = KVM_VM_TYPE_ARM_IPA_SIZE(type);
@@ -1518,7 +1518,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	if (logging_active) {
 		force_pte = true;
 		vma_shift = PAGE_SHIFT;
-	} else if (kvm_is_realm(kvm)) {
+	} else if (_kvm_is_realm(kvm)) {
 		// Force PTE level mappings for realms
 		force_pte = true;
 		vma_shift = PAGE_SHIFT;
@@ -1622,7 +1622,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	 * backed by a THP and thus use block mapping if possible.
 	 */
 	/* FIXME: We shouldn't need to disable this for realms */
-	if (vma_pagesize == PAGE_SIZE && !(force_pte || device || kvm_is_realm(kvm))) {
+	if (vma_pagesize == PAGE_SIZE && !(force_pte || device || _kvm_is_realm(kvm))) {
 		if (fault_status ==  ESR_ELx_FSC_PERM &&
 		    fault_granule > PAGE_SIZE)
 			vma_pagesize = fault_granule;
@@ -1670,7 +1670,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	 */
 	if (fault_status == ESR_ELx_FSC_PERM && vma_pagesize == fault_granule)
 		ret = kvm_pgtable_stage2_relax_perms(pgt, fault_ipa, prot);
-	else if (kvm_is_realm(kvm))
+	else if (_kvm_is_realm(kvm))
 		ret = realm_map_ipa(kvm, fault_ipa, pfn, vma_pagesize,
 				    prot, memcache);
 	else

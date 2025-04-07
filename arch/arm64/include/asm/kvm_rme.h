@@ -83,9 +83,9 @@ struct realm_rec {
 	struct rec_run *run;
 };
 
-void kvm_init_rme(void);
+void _kvm_init_rme(void);
 u32 kvm_realm_ipa_limit(void);
-u32 kvm_realm_vgic_nr_lr(void);
+u32 _kvm_realm_vgic_nr_lr(void);
 u32 kvm_realm_get_num_brps(void);
 u32 kvm_realm_get_num_wrps(void);
 unsigned int kvm_realm_sve_max_vl(void);
@@ -94,15 +94,15 @@ u64 kvm_realm_reset_id_aa64dfr0_el1(const struct kvm_vcpu *vcpu, u64 val);
 
 bool kvm_rme_supports_sve(void);
 
-int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap);
-int kvm_init_realm_vm(struct kvm *kvm);
-void kvm_destroy_realm(struct kvm *kvm);
+int _kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap);
+int _kvm_init_realm_vm(struct kvm *kvm);
+void _kvm_destroy_realm(struct kvm *kvm);
 void kvm_realm_destroy_rtts(struct kvm *kvm, u32 ia_bits);
-int kvm_create_rec(struct kvm_vcpu *vcpu);
-void kvm_destroy_rec(struct kvm_vcpu *vcpu);
+int _kvm_create_rec(struct kvm_vcpu *vcpu);
+void _kvm_destroy_rec(struct kvm_vcpu *vcpu);
 
-int kvm_rec_enter(struct kvm_vcpu *vcpu);
-int handle_rec_exit(struct kvm_vcpu *vcpu, int rec_run_status);
+int _kvm_rec_enter(struct kvm_vcpu *vcpu);
+int _handle_rec_exit(struct kvm_vcpu *vcpu, int rec_run_status);
 
 void kvm_realm_unmap_range(struct kvm *kvm,
 			   unsigned long ipa,
@@ -122,7 +122,7 @@ int realm_set_ipa_state(struct kvm_vcpu *vcpu,
 			unsigned long addr, unsigned long end,
 			unsigned long ripas,
 			unsigned long *top_ipa);
-int realm_psci_complete(struct kvm_vcpu *calling,
+int _realm_psci_complete(struct kvm_vcpu *calling,
 			struct kvm_vcpu *target,
 			unsigned long status);
 
