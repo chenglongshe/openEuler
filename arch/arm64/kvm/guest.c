@@ -870,7 +870,7 @@ int kvm_arm_set_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 	if ((reg->id & ~KVM_REG_SIZE_MASK) >> 32 != KVM_REG_ARM64 >> 32)
 		return -EINVAL;
 
-	if (kvm_is_realm(vcpu->kvm) && !validate_realm_set_reg(vcpu, reg))
+	if (_kvm_is_realm(vcpu->kvm) && !validate_realm_set_reg(vcpu, reg))
 		return -EINVAL;
 
 	switch (reg->id & KVM_REG_ARM_COPROC_MASK) {
@@ -924,29 +924,8 @@ int __kvm_arm_vcpu_set_events(struct kvm_vcpu *vcpu,
 	bool has_esr = events->exception.serror_has_esr;
 	bool ext_dabt_pending = events->exception.ext_dabt_pending;
 
-	if (vcpu_is_rec(vcpu)) {
-		/* Cannot inject SError into a Realm. */
-		if (serror_pending)
-			return -EINVAL;
-
-		/*
-		 * If a data abort is pending, set the flag and let the RMM
-		 * inject an SEA when the REC is scheduled to be run.
-		 */
-		if (ext_dabt_pending) {
-			/*
-			 * Can only inject SEA into a Realm if the previous exit
-			 * was due to a data abort of an Unprotected IPA.
-			 */
-			if (!(vcpu->arch.rec.run->enter.flags & REC_ENTER_EMULATED_MMIO))
-				return -EINVAL;
-
-			vcpu->arch.rec.run->enter.flags &= ~REC_ENTER_EMULATED_MMIO;
-			vcpu->arch.rec.run->enter.flags |= REC_ENTER_INJECT_SEA;
-		}
-
-		return 0;
-	}
+	if (vcpu_is_rec(vcpu))
+		return kvm_realm_vcpu_set_events(vcpu, serror_pending, ext_dabt_pending);
 
 	if (serror_pending && has_esr) {
 		if (!cpus_have_const_cap(ARM64_HAS_RAS_EXTN))

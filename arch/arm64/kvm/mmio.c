@@ -139,7 +139,7 @@ int kvm_handle_mmio_return(struct kvm_vcpu *vcpu)
 		data = vcpu_data_host_to_guest(vcpu, data, len);
 
 		if (vcpu_is_rec(vcpu))
-			vcpu->arch.rec.run->enter.gprs[0] = data;
+			(kvm_get_rec_run(vcpu))->enter.gprs[0] = data;
 		else
 			vcpu_set_reg(vcpu, kvm_vcpu_dabt_get_rd(vcpu), data);
 	}
@@ -149,7 +149,7 @@ int kvm_handle_mmio_return(struct kvm_vcpu *vcpu)
 	 * in the guest.
 	 */
 	if (vcpu_is_rec(vcpu))
-		vcpu->arch.rec.run->enter.flags |= REC_ENTER_EMULATED_MMIO;
+		(kvm_get_rec_run(vcpu))->enter.flags |= REC_ENTER_EMULATED_MMIO;
 	else
 		kvm_incr_pc(vcpu);
 

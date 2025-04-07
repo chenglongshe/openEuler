@@ -772,7 +772,7 @@ void vgic_v3_put(struct kvm_vcpu *vcpu)
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.vgic_v3;
 
 	if (vcpu_is_rec(vcpu))
-		cpu_if->vgic_vmcr = vcpu->arch.rec.run->exit.gicv3_vmcr;
+		cpu_if->vgic_vmcr = (kvm_get_rec_run(vcpu))->exit.gicv3_vmcr;
 
 	WARN_ON(vgic_v4_put(vcpu));
 

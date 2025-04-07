@@ -909,11 +909,12 @@ static inline bool can_access_vgic_from_kernel(void)
 static inline void vgic_rmm_save_state(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.vgic_v3;
+	struct rec_run *run = kvm_get_rec_run(vcpu);
 	int i;
 
 	for (i = 0; i < kvm_vcpu_vgic_nr_lr(vcpu); i++) {
-		cpu_if->vgic_lr[i] = vcpu->arch.rec.run->exit.gicv3_lrs[i];
-		vcpu->arch.rec.run->enter.gicv3_lrs[i] = 0;
+		cpu_if->vgic_lr[i] = run->exit.gicv3_lrs[i];
+		run->enter.gicv3_lrs[i] = 0;
 	}
 }
 
@@ -953,15 +954,16 @@ static inline void vgic_rmm_restore_state(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.vgic_v3;
 	int i;
+	struct rec_run *rec_run = kvm_get_rec_run(vcpu);
 
 	for (i = 0; i < kvm_vcpu_vgic_nr_lr(vcpu); i++) {
-		vcpu->arch.rec.run->enter.gicv3_lrs[i] = cpu_if->vgic_lr[i];
+		rec_run->enter.gicv3_lrs[i] = cpu_if->vgic_lr[i];
 		/*
 		 * Also populate the rec.run->exit copies so that a late
 		 * decision to back out from entering the realm doesn't cause
 		 * the state to be lost
 		 */
-		vcpu->arch.rec.run->exit.gicv3_lrs[i] = cpu_if->vgic_lr[i];
+		rec_run->exit.gicv3_lrs[i] = cpu_if->vgic_lr[i];
 	}
 }
 

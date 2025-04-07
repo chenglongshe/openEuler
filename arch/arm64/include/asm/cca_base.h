@@ -63,6 +63,4 @@ struct rec_run *kvm_get_rec_run(struct kvm_vcpu *vcpu);
 
 u32 kvm_realm_vgic_nr_lr(void);
 
-bool _kvm_is_realm(struct kvm *kvm);
-
 #endif /* __CCA_BASE_H */
