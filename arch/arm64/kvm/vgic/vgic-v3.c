@@ -12,6 +12,7 @@
 #include <asm/kvm_mmu.h>
 #include <asm/kvm_asm.h>
 #include <asm/rmi_smc.h>
+#include <asm/kvm_tmi.h>
 
 #include "vgic.h"
 
@@ -763,6 +764,11 @@ void vgic_v3_vmcr_sync(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.vgic_v3;
 
+	if (vcpu_is_tec(vcpu)) {
+		cpu_if->vgic_vmcr = (KVM_GET_TEC_RUN(vcpu))->exit.gicv3_vmcr;
+		return;
+	}
+
 	if (likely(cpu_if->vgic_sre))
 		cpu_if->vgic_vmcr = kvm_call_hyp_ret(__vgic_v3_read_vmcr);
 }
@@ -771,8 +777,10 @@ void vgic_v3_put(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.vgic_v3;
 
-	if (vcpu_is_rec(vcpu))
-		cpu_if->vgic_vmcr = (kvm_get_rec_run(vcpu))->exit.gicv3_vmcr;
+	if (vcpu_is_tec(vcpu))
+		cpu_if->vgic_vmcr = (KVM_GET_TEC_RUN(vcpu))->exit.gicv3_vmcr;
+	else if (vcpu_is_rec(vcpu))
+		cpu_if->vgic_vmcr = (KVM_GET_REC_RUN(vcpu))->exit.gicv3_vmcr;
 
 	WARN_ON(vgic_v4_put(vcpu));
 

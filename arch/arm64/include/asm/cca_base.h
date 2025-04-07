@@ -28,7 +28,7 @@ struct cca_operations {
 	void (*destroy_vm)(struct kvm *kvm);
 	int (*enable_realm)(struct kvm *kvm);
 	int (*vcpu_set_events)(struct kvm_vcpu *cpu, bool s_pending, bool e_pending);
-	struct rec_run *(*get_rec_run)(struct kvm_vcpu *vcpu);
+	void *(*get_rec_run)(struct kvm_vcpu *vcpu);
 	u32 (*vgic_nr_lr)(void);
 } ____cacheline_aligned;
 
@@ -36,6 +36,9 @@ struct cca_share_pages_operations {
 	int (*alloc_shared_pages)(int p1, gfp_t p2, unsigned int p3);
 	void (*free_shared_pages)(void *p1, unsigned int p2);
 } ____cacheline_aligned;
+
+struct tmi_tec_run;
+struct rec_run;
 
 int __init cca_operations_register(enum cca_cvm_type type, struct cca_operations *ops);
 int __init cca_share_pages_ops_register(enum cca_cvm_type type,
@@ -59,8 +62,11 @@ int realm_psci_complete(struct kvm_vcpu *calling, struct kvm_vcpu *target, unsig
 
 int kvm_realm_vcpu_set_events(struct kvm_vcpu *vcpu, bool serror_pending, bool ext_dabt_pending);
 
-struct rec_run *kvm_get_rec_run(struct kvm_vcpu *vcpu);
+void *kvm_get_rec_run(struct kvm_vcpu *vcpu);
 
 u32 kvm_realm_vgic_nr_lr(void);
+
+#define KVM_GET_TEC_RUN(vcpu) ((struct tmi_tec_run *)kvm_get_rec_run(vcpu))
+#define KVM_GET_REC_RUN(vcpu) ((struct rec_run *)kvm_get_rec_run(vcpu))
 
 #endif /* __CCA_BASE_H */

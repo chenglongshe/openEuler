@@ -123,7 +123,7 @@ int kvm_realm_vcpu_set_events(struct kvm_vcpu *vcpu, bool serror_pending, bool e
 	return 0;
 }
 
-struct rec_run *kvm_get_rec_run(struct kvm_vcpu *vcpu)
+void *kvm_get_rec_run(struct kvm_vcpu *vcpu)
 {
 	if (g_cca_operations[cca_cvm_type]->get_rec_run)
 		return g_cca_operations[cca_cvm_type]->get_rec_run(vcpu);

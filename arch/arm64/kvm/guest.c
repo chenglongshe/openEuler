@@ -171,7 +171,7 @@ static int core_reg_size_from_offset(const struct kvm_vcpu *vcpu, u64 off)
 	if (vcpu_has_sve(vcpu) && core_reg_offset_is_vreg(off))
 		return -EINVAL;
 
-	if (kvm_is_realm(vcpu->kvm) && !kvm_realm_validate_core_reg(off))
+	if (_kvm_is_realm(vcpu->kvm) && !kvm_realm_validate_core_reg(off))
 		return -EPERM;
 
 	return size;

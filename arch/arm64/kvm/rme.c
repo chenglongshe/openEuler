@@ -1629,7 +1629,7 @@ static int realm_vcpu_set_events(struct kvm_vcpu *vcpu, bool serror_pending, boo
 	return 0;
 }
 
-static struct rec_run *_kvm_get_rec_run(struct kvm_vcpu *vcpu)
+static void *_kvm_get_rec_run(struct kvm_vcpu *vcpu)
 {
 	return vcpu->arch.rec.run;
 }
