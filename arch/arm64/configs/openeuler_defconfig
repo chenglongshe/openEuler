@@ -602,7 +602,9 @@ CONFIG_DMI=y
 # end of Boot options
 
 CONFIG_COMPAT=y
+CONFIG_HISI_VIRTCCA_HOST=y
 CONFIG_HISI_VIRTCCA_GUEST=y
+CONFIG_HISI_VIRTCCA_CODA=y
 
 #
 # Power management options
