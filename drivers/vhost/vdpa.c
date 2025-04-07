@@ -581,7 +581,7 @@ static long vhost_vdpa_bind_iommufd(struct vhost_vdpa *v, int __user *argp)
 	struct iommufd_device *idev;
 	struct device *dma_dev = vdpa_get_dma_dev(v->vdpa);
 	struct iommu_group *iommu_group = iommu_group_get(dma_dev);
-	int ret;
+	int ret = 0;
 
 	if (copy_from_user(&bind, argp, sizeof(bind)))
 		return -EFAULT;
@@ -602,34 +602,33 @@ static long vhost_vdpa_bind_iommufd(struct vhost_vdpa *v, int __user *argp)
 		dma_dev->bus->dma_cleanup(dma_dev);
 	ret = iommu_group_claim_dma_owner(iommu_group, iommufd_ctx);
 	if (ret)
-		return ret;
+		goto dma_configure;
 
 	idev = iommufd_device_bind(iommufd_ctx, dma_dev, &bind.out_devid);
-	if (IS_ERR(idev))
-		return PTR_ERR(idev);
+	if (IS_ERR(idev)) {
+		ret = PTR_ERR(idev);
+		goto release_owner;
+	}
 	v->iommufd_dev = idev;
 
-	if (copy_to_user(argp, &bind, sizeof(bind)))
-		return -EFAULT;
-	return 0;
-}
+	if (copy_to_user(argp, &bind, sizeof(bind))) {
+		ret = -EFAULT;
+		goto unbind;
+	}
 
-static long vhost_vdpa_attach_iommufd_pt(struct vhost_vdpa *v, u32 __user *argp)
-{
-	u32 pt_id = 0;
-	int ret;
+	goto out;
 
-	if (copy_from_user(&pt_id, argp, sizeof(pt_id)))
-		return -EFAULT;
-
-	ret = iommufd_device_attach(v->iommufd_dev, &pt_id);
-	if (ret)
-		return ret;
-	v->iommufd_attached = true;
-
-	if (copy_to_user(argp, &pt_id, sizeof(pt_id)))
-		return -EFAULT;
-	return 0;
+unbind:
+	iommufd_device_unbind(v->iommufd_dev);
+	v->iommufd_dev = NULL;
+release_owner:
+	iommu_group_release_dma_owner(iommu_group);
+dma_configure:
+	if (dma_dev->bus && dma_dev->bus->dma_configure)
+		dma_dev->bus->dma_configure(dma_dev);
+out:
+	iommufd_ctx_put(iommufd_ctx);
+	return ret;
 }
 
 static void vhost_vdpa_detach_iommufd_pt(struct vhost_vdpa *v)
@@ -639,6 +638,32 @@ static void vhost_vdpa_detach_iommufd_pt(struct vhost_vdpa *v)
 
 	iommufd_device_detach(v->iommufd_dev);
 	v->iommufd_attached = false;
+}
+
+static long vhost_vdpa_attach_iommufd_pt(struct vhost_vdpa *v, u32 __user *argp)
+{
+	u32 pt_id = 0;
+	int ret = 0;
+
+	if (copy_from_user(&pt_id, argp, sizeof(pt_id)))
+		return -EFAULT;
+
+	ret = iommufd_device_attach(v->iommufd_dev, &pt_id);
+	if (ret)
+		return ret;
+	v->iommufd_attached = true;
+
+	if (copy_to_user(argp, &pt_id, sizeof(pt_id))) {
+		ret = -EFAULT;
+		goto detach;
+	}
+
+	goto out;
+
+detach:
+	vhost_vdpa_detach_iommufd_pt(v);
+out:
+	return ret;
 }
 
 static void vhost_vdpa_unbind_iommufd(struct vhost_vdpa *v)
