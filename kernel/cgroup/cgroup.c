@@ -3390,6 +3390,12 @@ static ssize_t cgroup_type_write(struct kernfs_open_file *of, char *buf,
 	if (strcmp(strstrip(buf), "threaded"))
 		return -EINVAL;
 
+	/* This is forbidden in 4.18/4.19 */
+	pr_warn_once("cgroup.type is forbidden to be set to threaded, "
+		     "which is only used in cgroup v2, but cgroup v2 is "
+		     "not supported this OS version.\n");
+	return -EPERM;
+
 	/* drain dying csses before we re-apply (threaded) subtree control */
 	cgrp = cgroup_kn_lock_live(of->kn, true);
 	if (!cgrp)
