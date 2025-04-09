@@ -1548,11 +1548,11 @@ static int rdtgroup_size_show(struct kernfs_open_file *of,
 								       closid,
 								       type,
 								       feat);
-				if (r->rid == RDT_RESOURCE_MBA ||
-				    r->rid == RDT_RESOURCE_SMBA)
-					size = ctrl;
-				else
+				if ((r->fflags & RFTYPE_RES_CACHE) &&
+				     feat == FEAT_PBM)
 					size = rdtgroup_cbm_to_size(r, d, ctrl);
+				else
+					size = ctrl;
 			}
 			seq_printf(s, "%d=%u", d->id, size);
 			sep = true;
