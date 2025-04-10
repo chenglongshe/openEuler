@@ -491,7 +491,7 @@ static void __arm_spe_dev_probe(void *data)
 		break;
 	default:
 		pr_warn("unknown PMSIDR_EL1.Interval [%d]; assuming 8\n", fld);
-		fallthrough;
+		break;
 	}
 
 	/* Maximum record size. If it's out-of-range, then fail the probe */
@@ -513,7 +513,7 @@ static void __arm_spe_dev_probe(void *data)
 		break;
 	default:
 		pr_warn("unknown PMSIDR_EL1.CountSize [%d]; assuming 2\n", fld);
-		fallthrough;
+		break;
 	}
 
 	pr_info("probed SPEv1.%d for CPUs %*pbl [max_record_sz %u, min_period %u, align %u, features 0x%llx]\n",
