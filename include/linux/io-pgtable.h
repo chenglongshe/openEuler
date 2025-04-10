@@ -267,4 +267,11 @@ extern struct io_pgtable_init_fns io_pgtable_arm_64_lpae_s2_init_fns;
 extern struct io_pgtable_init_fns io_pgtable_arm_v7s_init_fns;
 extern struct io_pgtable_init_fns io_pgtable_arm_mali_lpae_init_fns;
 
+#ifdef CONFIG_HISILICON_ERRATUM_162100602
+void arm_smmu_tlb_flush_hisilicon_errata(void *cookie, unsigned long iova, size_t granule);
+#else
+static inline void arm_smmu_tlb_flush_hisilicon_errata(void *cookie,
+						       unsigned long iova, size_t granule) {}
+#endif
+
 #endif /* __IO_PGTABLE_H */

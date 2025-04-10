@@ -2281,6 +2281,16 @@ static void arm_smmu_tlb_inv_range_domain(unsigned long iova, size_t size,
 		arm_smmu_atc_inv_domain(smmu_domain, 0, iova, size);
 }
 
+#ifdef CONFIG_HISILICON_ERRATUM_162100602
+void arm_smmu_tlb_flush_hisilicon_errata(void *cookie, unsigned long iova, size_t granule)
+{
+	struct arm_smmu_domain *smmu_domain = cookie;
+
+	if (smmu_domain->smmu->options & ARM_SMMU_OPT_SYNC_BATCH)
+		arm_smmu_tlb_inv_range_domain(iova, granule, granule, true, cookie);
+}
+#endif
+
 void arm_smmu_tlb_inv_range_asid(unsigned long iova, size_t size, int asid,
 				 size_t granule, bool leaf,
 				 struct arm_smmu_domain *smmu_domain)
@@ -2310,14 +2320,6 @@ static void arm_smmu_tlb_inv_page_nosync(struct iommu_iotlb_gather *gather,
 static void arm_smmu_tlb_inv_walk(unsigned long iova, size_t size,
 				  size_t granule, void *cookie)
 {
-#ifdef CONFIG_HISILICON_ERRATUM_162100602
-	struct arm_smmu_domain *smmu_domain = cookie;
-
-	if (!size && smmu_domain->smmu->options & ARM_SMMU_OPT_SYNC_BATCH) {
-		arm_smmu_tlb_inv_range_domain(iova, granule, granule, true, cookie);
-		return;
-	}
-#endif
 	arm_smmu_tlb_inv_range_domain(iova, size, granule, false, cookie);
 }
 
