@@ -641,6 +641,8 @@ struct kvm_vcpu_arch {
 #ifdef CONFIG_HISI_VIRTCCA_HOST
 	struct virtcca_cvm_tec tec;
 #endif
+	KABI_RESERVE(1)
+	KABI_RESERVE(2)
 };
 
 /*
