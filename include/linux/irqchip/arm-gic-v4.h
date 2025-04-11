@@ -34,6 +34,8 @@ struct its_vm {
 	 */
 	raw_spinlock_t		vmapp_lock;
 	u32			vlpi_count[GICv4_ITS_LIST_MAX];
+	KABI_EXTEND(struct page		*vpe_page)
+	KABI_EXTEND(bool			nassgireq)
 };
 
 /* Embedded in kvm_vcpu.arch */
@@ -93,6 +95,7 @@ struct its_vpe {
 	u16			vpe_id;
 	/* Pending VLPIs on schedule out? */
 	bool			pending_last;
+	KABI_EXTEND(bool	vpe_id_allocated)
 };
 
 /*
