@@ -842,6 +842,7 @@ struct kvm {
 	struct notifier_block pm_notifier;
 #endif
 	char stats_id[KVM_STATS_NAME_SIZE];
+	KABI_RESERVE(1)
 };
 
 #define kvm_err(fmt, ...) \
