@@ -136,6 +136,7 @@ static void vgic_mmio_write_v3_misc(struct kvm_vcpu *vcpu,
 
 		/* Switching HW SGIs? */
 		dist->nassgireq = val & GICD_CTLR_nASSGIreq;
+		dist->its_vm.nassgireq = dist->nassgireq;
 		if (is_hwsgi != dist->nassgireq)
 			vgic_v4_configure_vsgis(vcpu->kvm);
 
@@ -341,6 +342,7 @@ static unsigned long vgic_mmio_read_v3r_typer(struct kvm_vcpu *vcpu,
 	u64 value;
 
 	value = (u64)(mpidr & GENMASK(23, 0)) << 32;
+	value |= MPIDR_AFFINITY_LEVEL(mpidr, 3) << 56;
 	value |= ((target_vcpu_id & 0xffff) << 8);
 
 	if (vgic_has_its(vcpu->kvm))
