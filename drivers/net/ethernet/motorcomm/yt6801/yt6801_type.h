@@ -181,7 +181,6 @@
 #define MAC_HWF2R_AUXSNAPNUM		GENMASK(30, 28)
 
 #define MAC_HWF3R			0x2128
-
 #define MAC_MDIO_ADDR			0x2200
 #define MAC_MDIO_ADDR_BUSY		BIT(0)
 #define MAC_MDIO_ADDR_GOC		GENMASK(3, 2)
@@ -235,6 +234,20 @@
 #define DMA_CH_RCR_SR			BIT(0)
 #define DMA_CH_RCR_RBSZ			GENMASK(14, 1)
 #define DMA_CH_RCR_PBL			GENMASK(21, 16)
+
+struct fxgmac_ring_buf {
+	struct sk_buff *skb;
+	dma_addr_t skb_dma;
+	unsigned int skb_len;
+};
+
+/* Common Tx and Rx DMA hardware descriptor */
+struct fxgmac_dma_desc {
+	__le32 desc0;
+	__le32 desc1;
+	__le32 desc2;
+	__le32 desc3;
+};
 
 /* Page allocation related values */
 struct fxgmac_page_alloc {
@@ -447,6 +460,8 @@ struct fxgmac_pdata {
 	unsigned int tx_pause;
 	unsigned int rx_pause;
 
+	unsigned int rx_buf_size;	/* Current Rx buffer size */
+
 	/* Device interrupt */
 	int dev_irq;
 	unsigned int per_channel_irq;
@@ -478,6 +493,8 @@ struct fxgmac_pdata {
 
 	u32 msg_enable;
 	u32 reg_nonstick[(MSI_PBA - GLOBAL_CTRL0) >> 2];
+
+	struct work_struct restart_work;
 	enum fxgmac_dev_state dev_state;
 #define FXGMAC_POWER_STATE_DOWN			0
 #define FXGMAC_POWER_STATE_UP			1

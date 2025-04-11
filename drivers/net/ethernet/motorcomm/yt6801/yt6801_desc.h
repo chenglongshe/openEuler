@@ -16,4 +16,6 @@
 void fxgmac_desc_data_unmap(struct fxgmac_pdata *priv,
 			    struct fxgmac_desc_data *desc_data);
 
+int fxgmac_channels_rings_alloc(struct fxgmac_pdata *priv);
+void fxgmac_channels_rings_free(struct fxgmac_pdata *priv);
 #endif /* YT6801_DESC_H */
