@@ -388,6 +388,9 @@ static int alloc_devid_from_rsv_pools(struct rsv_devid_pool **devid_pool,
 #define gic_data_rdist_rd_base()	(gic_data_rdist()->rd_base)
 #define gic_data_rdist_vlpi_base()	(gic_data_rdist_rd_base() + SZ_128K)
 
+extern struct static_key_false ipiv_enable;
+extern struct static_key_false ipiv_direct;
+
 #ifdef CONFIG_VIRT_PLAT_DEV
 /*
  * Currently we only build *one* devid pool.
@@ -4566,10 +4569,54 @@ static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 				 struct its_cmd_info *info)
 {
 	void __iomem *vlpi_base = gic_data_rdist_vlpi_base();
+	struct its_vm *vm = vpe->its_vm;
+	unsigned long vpe_addr;
 	u64 val = 0;
+	u32 nr_vpes;
+
+	if (static_branch_unlikely(&ipiv_enable) &&
+	    vm->nassgireq) {
+		/* wait gicr_ipiv_busy */
+		WARN_ON_ONCE(readl_relaxed_poll_timeout_atomic(
+			     vlpi_base + GICR_IPIV_ST,
+			     val,
+			     !(val & GICR_IPIV_ST_IPIV_BUSY),
+			     1, 500));
+		if (!static_branch_unlikely(&ipiv_direct)) {
+			/* setup vm table */
+			vpe_addr = virt_to_phys(page_address(vm->vpe_page));
+			writel_relaxed(vpe_addr & 0xffffffff,
+			       vlpi_base + GICR_VM_TABLE_BAR_L);
+			writel_relaxed((vpe_addr >> 32) & 0xffffffff,
+				vlpi_base + GICR_VM_TABLE_BAR_H);
+
+			/* setup gicr_vcpu_entry_num_max and gicr_ipiv_its_ta_sel */
+			nr_vpes = vpe->its_vm->nr_vpes;
+			val = ((nr_vpes - 1) << GICR_IPIV_CTRL_VCPU_ENTRY_NUM_MAX_SHIFT) |
+				(0 << GICR_IPIV_CTRL_IPIV_ITS_TA_SEL_SHIFT);
+			writel_relaxed(val, vlpi_base + GICR_IPIV_CTRL);
+		} else {
+			/* setup gicr_ipiv_its_ta_sel */
+			val = (0 << GICR_IPIV_CTRL_IPIV_ITS_TA_SEL_SHIFT);
+			writel_relaxed(val, vlpi_base + GICR_IPIV_CTRL);
+		}
+
+		/* disable guest access ICC_SGI1R_EL1 trap */
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+		val |= 1ULL;
+		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+
+	} else if (static_branch_unlikely(&ipiv_enable)) {
+		/* enable guest access ICC_SGI1R_EL1 trap, disable ipiv */
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+		val &= ~1UL;
+		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+	}
 
 	/* Schedule the VPE */
-	val |= GICR_VPENDBASER_Valid;
+	val = GICR_VPENDBASER_Valid;
 	val |= info->g0en ? GICR_VPENDBASER_4_1_VGRP0EN : 0;
 	val |= info->g1en ? GICR_VPENDBASER_4_1_VGRP1EN : 0;
 	val |= FIELD_PREP(GICR_VPENDBASER_4_1_VPEID, vpe->vpe_id);
@@ -4581,6 +4628,7 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 				   struct its_cmd_info *info)
 {
 	void __iomem *vlpi_base = gic_data_rdist_vlpi_base();
+	struct its_vm *vm = vpe->its_vm;
 	u64 val;
 
 	if (info->req_db) {
@@ -4611,6 +4659,23 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 					    0,
 					    GICR_VPENDBASER_PendingLast);
 		vpe->pending_last = true;
+	}
+
+	if (static_branch_unlikely(&ipiv_enable) &&
+	    vm->nassgireq) {
+		if (!static_branch_unlikely(&ipiv_direct)) {
+
+			/* wait gicr_ipiv_busy */
+			WARN_ON_ONCE(readl_relaxed_poll_timeout_atomic(vlpi_base + GICR_IPIV_ST,
+					val, !(val & GICR_IPIV_ST_IPIV_BUSY), 1, 500));
+			writel_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_L);
+			writel_relaxed(0, vlpi_base + GICR_VM_TABLE_BAR_H);
+		}
+		/* enable guest access ICC_SGI1R_EL1 trap, disable ipiv */
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
+		val &= ~1UL;
+		asm volatile("msr s3_4_c15_c7_2, %0" : : "r" (val));
+		asm volatile("mrs %0, s3_4_c15_c7_2" : "=r" (val));
 	}
 }
 
@@ -4940,15 +5005,17 @@ static const struct irq_domain_ops its_sgi_domain_ops = {
 	.deactivate	= its_sgi_irq_domain_deactivate,
 };
 
-static int its_vpe_id_alloc(void)
+int its_vpe_id_alloc(void)
 {
 	return ida_simple_get(&its_vpeid_ida, 0, ITS_MAX_VPEID, GFP_KERNEL);
 }
+EXPORT_SYMBOL(its_vpe_id_alloc);
 
-static void its_vpe_id_free(u16 id)
+void its_vpe_id_free(u16 id)
 {
 	ida_simple_remove(&its_vpeid_ida, id);
 }
+EXPORT_SYMBOL(its_vpe_id_free);
 
 static int its_vpe_init(struct its_vpe *vpe)
 {
@@ -4956,9 +5023,13 @@ static int its_vpe_init(struct its_vpe *vpe)
 	int vpe_id;
 
 	/* Allocate vpe_id */
-	vpe_id = its_vpe_id_alloc();
-	if (vpe_id < 0)
-		return vpe_id;
+	if (!vpe->vpe_id_allocated) {
+		vpe_id = its_vpe_id_alloc();
+		if (vpe_id < 0)
+			return vpe_id;
+	} else {
+		vpe_id = vpe->vpe_id;
+	}
 
 	/* Allocate VPT */
 	vpt_page = its_allocate_pending_table(GFP_KERNEL);
@@ -4975,6 +5046,7 @@ static int its_vpe_init(struct its_vpe *vpe)
 
 	raw_spin_lock_init(&vpe->vpe_lock);
 	vpe->vpe_id = vpe_id;
+	vpe->vpe_id_allocated = true;
 	vpe->vpt_page = vpt_page;
 	atomic_set(&vpe->vmapp_count, 0);
 	if (!gic_rdists->has_rvpeid)
@@ -4987,6 +5059,7 @@ static void its_vpe_teardown(struct its_vpe *vpe)
 {
 	its_vpe_db_proxy_unmap(vpe);
 	its_vpe_id_free(vpe->vpe_id);
+	vpe->vpe_id_allocated = false;
 	its_free_pending_table(vpe->vpt_page);
 }
 
@@ -5014,6 +5087,11 @@ static void its_vpe_irq_domain_free(struct irq_domain *domain,
 	if (bitmap_empty(vm->db_bitmap, vm->nr_db_lpis)) {
 		its_lpi_free(vm->db_bitmap, vm->db_lpi_base, vm->nr_db_lpis);
 		its_free_prop_table(vm->vprop_page);
+		if (static_branch_unlikely(&ipiv_enable) &&
+		    !static_branch_unlikely(&ipiv_direct)) {
+			free_pages((unsigned long)page_address(vm->vpe_page),
+				    get_order(nr_irqs * 2));
+		}
 	}
 }
 
@@ -5023,8 +5101,10 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 	struct irq_chip *irqchip = &its_vpe_irq_chip;
 	struct its_vm *vm = args;
 	unsigned long *bitmap;
-	struct page *vprop_page;
+	struct page *vprop_page, *vpe_page;
 	int base, nr_ids, i, err = 0;
+	void *vpe_table_va;
+	u16 *vpe_entry;
 
 	bitmap = its_lpi_alloc(roundup_pow_of_two(nr_irqs), &base, &nr_ids);
 	if (!bitmap)
@@ -5047,14 +5127,31 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 	vm->vprop_page = vprop_page;
 	raw_spin_lock_init(&vm->vmapp_lock);
 
-	if (gic_rdists->has_rvpeid)
+	if (gic_rdists->has_rvpeid) {
 		irqchip = &its_vpe_4_1_irq_chip;
+		if (static_branch_unlikely(&ipiv_enable) &&
+		    !static_branch_unlikely(&ipiv_direct)) {
+			vpe_page = alloc_pages(GFP_KERNEL, get_order(nr_irqs * 2));
+			if (!vpe_page) {
+				its_lpi_free(vm->db_bitmap, vm->db_lpi_base, vm->nr_db_lpis);
+				its_free_prop_table(vm->vprop_page);
+				return -ENOMEM;
+			}
+			vm->vpe_page = vpe_page;
+			vpe_table_va = page_address(vm->vpe_page);
+		}
+	}
 
 	for (i = 0; i < nr_irqs; i++) {
 		vm->vpes[i]->vpe_db_lpi = base + i;
 		err = its_vpe_init(vm->vpes[i]);
 		if (err)
 			break;
+		if (static_branch_unlikely(&ipiv_enable) &&
+		    !static_branch_unlikely(&ipiv_direct)) {
+			vpe_entry = (u16 *)vpe_table_va + i;
+			*(u16 *)vpe_entry = vm->vpes[i]->vpe_id;
+		}
 		err = its_irq_gic_domain_alloc(domain, virq + i,
 					       vm->vpes[i]->vpe_db_lpi);
 		if (err)
@@ -5065,8 +5162,14 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 		irqd_set_resend_when_in_progress(irq_get_irq_data(virq + i));
 	}
 
-	if (err)
+	if (err) {
 		its_vpe_irq_domain_free(domain, virq, i);
+		if (static_branch_unlikely(&ipiv_enable) &
+		    !static_branch_unlikely(&ipiv_direct)) {
+			free_pages((unsigned long)page_address(vm->vpe_page),
+				    get_order(nr_irqs * 2));
+		}
+	}
 
 	return err;
 }

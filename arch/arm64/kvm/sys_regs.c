@@ -711,20 +711,37 @@ static u64 reset_actlr(struct kvm_vcpu *vcpu, const struct sys_reg_desc *r)
 	return actlr;
 }
 
+extern struct static_key_false ipiv_enable;
+extern struct static_key_false ipiv_direct;
+
 static u64 reset_mpidr(struct kvm_vcpu *vcpu, const struct sys_reg_desc *r)
 {
+	struct its_vpe *vpe = &vcpu->arch.vgic_cpu.vgic_v3.its_vpe;
 	u64 mpidr;
 
 	/*
-	 * Map the vcpu_id into the first three affinity level fields of
-	 * the MPIDR. We limit the number of VCPUs in level 0 due to a
-	 * limitation to 16 CPUs in that level in the ICC_SGIxR registers
-	 * of the GICv3 to be able to address each CPU directly when
-	 * sending IPIs.
+	 * For direct ipiv mode, use vpeid as aff2/aff3
+	 * For indirect ipiv mode, use vcpu_id to index vpeid. To
+	 * avoid sending multi-SGIs in guest OS, make aff1/aff2 unique
 	 */
-	mpidr = (vcpu->vcpu_id & 0x0f) << MPIDR_LEVEL_SHIFT(0);
-	mpidr |= ((vcpu->vcpu_id >> 4) & 0xff) << MPIDR_LEVEL_SHIFT(1);
-	mpidr |= ((vcpu->vcpu_id >> 12) & 0xff) << MPIDR_LEVEL_SHIFT(2);
+	if (static_branch_unlikely(&ipiv_enable)) {
+		if (static_branch_unlikely(&ipiv_direct)) {
+			u64 vpe_id_aff3, vpe_id_aff2;
+
+			vpe_id_aff2 = (vpe->vpe_id >> 8) & 0xff;
+			vpe_id_aff3 = (vpe->vpe_id & 0xff);
+
+			mpidr |= vpe_id_aff2 << MPIDR_LEVEL_SHIFT(2);
+			mpidr |= vpe_id_aff3 << MPIDR_LEVEL_SHIFT(3);
+		} else {
+			mpidr = (vcpu->vcpu_id & 0x0f) << MPIDR_LEVEL_SHIFT(1);
+			mpidr |= ((vcpu->vcpu_id >> 4) & 0xff) << MPIDR_LEVEL_SHIFT(2);
+		}
+	} else {
+		mpidr = (vcpu->vcpu_id & 0x0f) << MPIDR_LEVEL_SHIFT(0);
+		mpidr |= ((vcpu->vcpu_id >> 4) & 0xff) << MPIDR_LEVEL_SHIFT(1);
+		mpidr |= ((vcpu->vcpu_id >> 12) & 0xff) << MPIDR_LEVEL_SHIFT(2);
+	}
 	mpidr |= (1ULL << 31);
 	vcpu_write_sys_reg(vcpu, mpidr, MPIDR_EL1);
 

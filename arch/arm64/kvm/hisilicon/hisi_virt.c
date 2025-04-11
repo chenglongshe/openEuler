@@ -12,6 +12,8 @@
 static enum hisi_cpu_type cpu_type = UNKNOWN_HI_TYPE;
 
 static bool dvmbm_enabled;
+static bool ipiv_enabled;
+static bool ipiv_direct;
 
 static const char * const hisi_cpu_type_str[] = {
 	"Hisi1612",
@@ -155,6 +157,41 @@ static void hardware_disable_dvmbm(void *data)
 	val  = read_sysreg_s(SYS_LSUDVM_CTRL_EL2);
 	val &= ~LSUDVM_CTLR_EL2_MASK;
 	write_sysreg_s(val, SYS_LSUDVM_CTRL_EL2);
+}
+
+static int __init early_ipiv_enable(char *buf)
+{
+	return strtobool(buf, &ipiv_enabled);
+}
+early_param("kvm-arm.ipiv_enabled", early_ipiv_enable);
+
+static int __init early_ipiv_direct(char *buf)
+{
+	return kstrtobool(buf, &ipiv_direct);
+}
+early_param("kvm-arm.ipiv_direct", early_ipiv_direct);
+
+bool hisi_ipiv_supported(void)
+{
+	/* Determine whether IPIV is supported by the hardware */
+	if (!(read_sysreg(aidr_el1) & AIDR_EL1_IPIV_MASK)) {
+		kvm_info("Hisi ipiv not supported by the hardware\n");
+		return false;
+	} else
+		kvm_info("Hisi ipiv detected on the hardware\n");
+
+	/* User provided kernel command-line parameter */
+	if (!ipiv_enabled || !is_kernel_in_hyp_mode())
+		return false;
+
+	/* Enable IPIV feature if necessary */
+	if (!gic_dist_enable_ipiv(ipiv_direct)) {
+		kvm_info("Need to enable GICv4p1!\n");
+		return false;
+	}
+
+	kvm_info("Enable Hisi ipiv with %s mode\n", ipiv_direct ? "direct" : "indirect");
+	return true;
 }
 
 bool hisi_dvmbm_supported(void)

@@ -34,6 +34,10 @@ struct its_vm {
 	 */
 	raw_spinlock_t		vmapp_lock;
 	u32			vlpi_count[GICv4_ITS_LIST_MAX];
+#ifndef __GENKSYMS__
+	struct page		*vpe_page;
+	bool			nassgireq;
+#endif
 };
 
 /* Embedded in kvm_vcpu.arch */
@@ -93,6 +97,9 @@ struct its_vpe {
 	u16			vpe_id;
 	/* Pending VLPIs on schedule out? */
 	bool			pending_last;
+#ifndef __GENKSYMS__
+	bool			vpe_id_allocated;
+#endif
 };
 
 /*

@@ -67,6 +67,9 @@ bool kvm_ncsnp_support;
 /* Capability of DVMBM */
 bool kvm_dvmbm_support;
 
+/* Capability of IPIV */
+bool kvm_ipiv_support;
+
 static DEFINE_PER_CPU(unsigned char, kvm_hyp_initialized);
 
 bool is_kvm_arm_initialised(void)
@@ -312,6 +315,8 @@ void kvm_arch_destroy_vm(struct kvm *kvm)
 #endif
 }
 
+extern struct static_key_false ipiv_enable;
+extern struct static_key_false ipiv_direct;
 int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 {
 	int r;
@@ -436,6 +441,16 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 		r = static_key_enabled(&virtcca_cvm_is_available);
 		break;
 #endif
+	case KVM_CAP_ARM_IPIV_MODE:
+		if (static_branch_unlikely(&ipiv_enable)) {
+			if (static_branch_unlikely(&ipiv_direct))
+				r = 2; /* direct mode */
+			else
+				r = 1; /* indirect mode */
+		} else {
+			r = 0; /* don't enable IPIV */
+		}
+		break;
 	default:
 		r = 0;
 	}
@@ -511,6 +526,10 @@ int kvm_arch_vcpu_create(struct kvm_vcpu *vcpu)
 	if (err)
 		return err;
 
+	err = kvm_vgic_vpe_id_alloc(vcpu);
+	if (err)
+		return err;
+
 	return kvm_share_hyp(vcpu, vcpu + 1);
 }
 
@@ -527,6 +546,8 @@ void kvm_arch_vcpu_destroy(struct kvm_vcpu *vcpu)
 	kvm_arm_vcpu_destroy(vcpu);
 
 	kvm_sched_affinity_vcpu_destroy(vcpu);
+
+	kvm_vgic_vpe_id_free(vcpu);
 }
 
 void kvm_arch_vcpu_blocking(struct kvm_vcpu *vcpu)
@@ -2693,8 +2714,10 @@ static __init int kvm_arm_init(void)
 	probe_hisi_cpu_type();
 	kvm_ncsnp_support = hisi_ncsnp_supported();
 	kvm_dvmbm_support = hisi_dvmbm_supported();
+	kvm_ipiv_support = hisi_ipiv_supported();
 	kvm_info("KVM ncsnp %s\n", kvm_ncsnp_support ? "enabled" : "disabled");
 	kvm_info("KVM dvmbm %s\n", kvm_dvmbm_support ? "enabled" : "disabled");
+	kvm_info("KVM ipiv %s\n", kvm_ipiv_support ? "enabled" : "disabled");
 
 	if (kvm_dvmbm_support)
 		kvm_get_pg_cfg();
