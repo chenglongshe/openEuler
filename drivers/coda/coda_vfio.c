@@ -283,7 +283,7 @@ bool virtcca_iommu_domain_get_kvm(struct iommu_domain *domain, struct kvm **kvm)
 	arm_smmu_domain = to_smmu_domain(domain);
 	*kvm = virtcca_arm_smmu_get_kvm(arm_smmu_domain);
 	if (*kvm)
-		return (*kvm)->arch.is_virtcca_cvm;
+		return (*kvm)->arch.is_realm;
 
 	return false;
 }
