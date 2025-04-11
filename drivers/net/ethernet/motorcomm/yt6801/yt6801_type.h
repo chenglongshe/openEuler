@@ -135,6 +135,33 @@
 #define MAC_CR_IPC			BIT(27)
 #define MAC_CR_ARPEN			BIT(31)
 
+#define MAC_ECR				0x2004
+#define MAC_ECR_DCRCC			BIT(16)
+#define MAC_ECR_HDSMS			GENMASK(22, 20)
+#define  MAC_ECR_HDSMS_64B		0
+#define  MAC_ECR_HDSMS_128B		1
+#define  MAC_ECR_HDSMS_256B		2
+#define  MAC_ECR_HDSMS_512B		3
+#define  MAC_ECR_HDSMS_1023B		4
+
+#define MAC_PFR				0x3008
+#define MAC_PFR_PR			BIT(0) /*  Promiscuous Mode. */
+#define MAC_PFR_HUC			BIT(1) /*  Hash Unicast Mode. */
+#define MAC_PFR_HMC			BIT(2)
+#define MAC_PFR_PM			BIT(4) /* Pass all Multicast. */
+#define MAC_PFR_DBF			BIT(5) /* Disable Broadcast Packets. */
+#define MAC_PFR_HPF			BIT(10)
+#define MAC_PFR_VTFE			BIT(16)
+
+#define MAC_Q0TFCR			0x2070
+#define MAC_Q0TFCR_TFE			BIT(1)
+#define MAC_Q0TFCR_PT			GENMASK(31, 16)
+
+#define MAC_RFCR			0x2090
+#define MAC_RFCR_RFE			BIT(0)
+#define MAC_RFCR_UP			BIT(1)
+#define MAC_RFCR_PFCE			BIT(8)
+
 #define MAC_RQC0R			0x20a0
 #define MAC_RQC1R			0x20a4
 #define MAC_RQC2R			0x20a8
@@ -231,6 +258,60 @@
 #define MAC_MDIO_DATA_GD		GENMASK(15, 0)
 #define MAC_MDIO_DATA_RA		GENMASK(31, 16)
 
+#define MAC_GPIO_CR			0x2208
+#define MAC_GPIO_SR			0x220c
+#define MAC_ARP_PROTO_ADDR		0x2210
+#define MAC_CSR_SW_CTRL			0x2230
+#define MAC_MACA0HR			0x2300
+#define MAC_MACA0LR			0x2304
+#define MAC_MACA1HR			0x2308
+#define MAC_MACA1LR			0x230c
+
+/* MMC registers */
+#define MMC_CR				0x2700
+#define MMC_CR_CR			BIT(0)
+#define MMC_CR_CSR			BIT(1)
+#define MMC_CR_ROR			BIT(2)
+#define MMC_CR_MCF			BIT(3)
+
+#define MMC_RISR			0x2704
+#define MMC_TISR			0x2708
+
+#define MMC_RIER			0x270c
+#define MMC_RIER_ALL_INTERRUPTS		GENMASK(27, 0)
+
+#define MMC_TIER			0x2710
+#define MMC_TIER_ALL_INTERRUPTS		GENMASK(27, 0)
+
+#define MMC_IPC_RXINT_MASK		0x2800
+#define MMC_IPC_RXINT			0x2808
+
+/* MTL registers */
+#define MTL_OMR				0x2c00
+#define MTL_OMR_RAA			BIT(2)
+#define MTL_OMR_ETSALG			GENMASK(6, 5)
+
+#define MTL_FDCR			0x2c08
+#define MTL_FDSR			0x2c0c
+#define MTL_FDDR			0x2c10
+#define MTL_INT_SR			0x2c20
+
+#define MTL_RQDCM_INC			4
+#define MTL_RQDCM_Q_PER_REG		4
+
+#define MTL_RQDCM0R			0x2c30
+#define MTL_RQDCM0R_Q0MDMACH		0x0
+#define MTL_RQDCM0R_Q1MDMACH		0x00000100
+#define MTL_RQDCM0R_Q2MDMACH		0x00020000
+#define MTL_RQDCM0R_Q3MDMACH		0x03000000
+
+#define MTL_ECC_INT_SR			0x2ccc
+
+#define MTL_RQDCM1R_Q4MDMACH		0x00000004
+#define MTL_RQDCM1R_Q5MDMACH		0x00000500
+#define MTL_RQDCM1R_Q6MDMACH		0x00060000
+#define MTL_RQDCM1R_Q7MDMACH		0x07000000
+
 /* MTL queue registers */
 #define MTL_Q_BASE			0x2d00
 #define MTL_Q_INC			0x40
@@ -243,10 +324,68 @@
 #define MTL_Q_EN_IF_AV			0x01
 #define MTL_Q_ENABLED			0x02
 
+#define MTL_Q_TQOMR_TTC			GENMASK(6, 4)
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_32	0x00
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_64	0x01
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_96	0x02
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_128	0x03
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_192	0x04
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_256	0x05
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_384	0x06
+#define  MTL_Q_TQOMR_TTC_THRESHOLD_512	0x07
+
+#define MTL_Q_TQOMR_TQS			GENMASK(22, 16)
+
+#define MTL_Q_TQUR			0x04
+#define MTL_Q_TXDEG			0x08 /* Transmit debug */
 #define MTL_Q_IR			0x2c /* Interrupt control status */
+
+#define MTL_Q_RQOMR			0x30
+#define MTL_Q_RQOMR_RTC			GENMASK(1, 0)
+#define  MTL_Q_RQOMR_RTC_THRESHOLD_64	0x00
+#define  MTL_Q_RQOMR_RTC_THRESHOLD_32	0x01
+#define  MTL_Q_RQOMR_RTC_THRESHOLD_96	0x02
+#define  MTL_Q_RQOMR_RTC_THRESHOLD_128	0x03
+
+#define MTL_Q_RQOMR_FUP			BIT(3)
+#define MTL_Q_RQOMR_FEP			BIT(4)
+#define MTL_Q_RQOMR_RSF			BIT(5)
+#define MTL_Q_RQOMR_EHFC		BIT(7)
+#define MTL_Q_RQOMR_RFA			GENMASK(13, 8)
+#define MTL_Q_RQOMR_RFD			GENMASK(19, 14)
+#define MTL_Q_RQOMR_RQS			GENMASK(28, 20)
+
+#define MTL_Q_RQMPOCR			0x34
+
 #define MTL_Q_RQDR			0x38
 #define MTL_Q_RQDR_RXQSTS		GENMASK(5, 4)
 #define MTL_Q_RQDR_PRXQ			GENMASK(29, 16)
+
+#define MTL_Q_RQCR			0x3c
+
+/* MTL queue registers */
+#define MTL_ETSALG_WRR				0x00
+#define MTL_ETSALG_WFQ				0x01
+#define MTL_ETSALG_DWRR				0x02
+#define MTL_ETSALG_SP				0x03
+
+#define MTL_RAA_SP				0x00
+#define MTL_RAA_WSP				0x01
+
+/* MTL traffic class registers */
+#define MTL_TC_BASE				MTL_Q_BASE
+#define MTL_TC_INC				MTL_Q_INC
+
+#define MTL_TC_TQDR				0x08
+#define MTL_TC_TQDR_TRCSTS			GENMASK(2, 1)
+#define MTL_TC_TQDR_TXQSTS			BIT(4)
+
+#define MTL_TC_ETSCR				0x10
+#define MTL_TC_ETSCR_TSA			GENMASK(1, 0)
+
+#define MTL_TC_ETSSR				0x14
+#define MTL_TC_QWR				0x18
+#define MTL_TC_QWR_QW				GENMASK(20, 0)
 
 /* DMA registers */
 #define DMA_MR					0x3000
@@ -257,15 +396,49 @@
 #define DMA_MR_TNDF				GENMASK(21, 20)
 #define DMA_MR_RNDF				GENMASK(23, 22)
 
+#define DMA_SBMR				0x3004
+#define DMA_SBMR_FB				BIT(0)
+#define DMA_SBMR_BLEN_4				BIT(1)
+#define DMA_SBMR_BLEN_8				BIT(2)
+#define DMA_SBMR_BLEN_16			BIT(3)
+#define DMA_SBMR_BLEN_32			BIT(4)
+#define DMA_SBMR_BLEN_64			BIT(5)
+#define DMA_SBMR_BLEN_128			BIT(6)
+#define DMA_SBMR_BLEN_256			BIT(7)
+#define DMA_SBMR_AALE				BIT(10)
+#define DMA_SBMR_EAME				BIT(11)
+#define DMA_SBMR_AAL				BIT(12)
+#define DMA_SBMR_RD_OSR_LMT			GENMASK(23, 16)
+#define DMA_SBMR_WR_OSR_LMT			GENMASK(29, 24)
+#define DMA_SBMR_LPI_XIT_PKT			BIT(30)
+#define DMA_SBMR_EN_LPI				BIT(31)
+
+#define DMA_ISR					0x3008
+#define DMA_ISR_MTLIS				BIT(16)
+#define DMA_ISR_MACIS				BIT(17)
+
 #define DMA_DSRX_INC				4
 #define DMA_DSR0				0x300c
 #define DMA_DSR0_TPS				GENMASK(15, 12)
 #define  DMA_TPS_STOPPED			0x00
 #define  DMA_TPS_SUSPENDED			0x06
 
+#define DMA_DSR1				0x3010
+#define DMA_DSR2				0x3014
+#define DMA_AXIARCR				0x3020
+#define DMA_AXIAWCR				0x3024
+#define DMA_AXIAWRCR				0x3028
+#define DMA_SAFE_ISR				0x3080
+#define DMA_ECC_IE				0x3084
+#define DMA_ECC_INT_SR				0x3088
+
 /* DMA channel registers */
 #define DMA_CH_BASE			0x3100
 #define DMA_CH_INC			0x80
+
+#define DMA_CH_CR			0x00
+#define DMA_CH_CR_PBLX8			BIT(16)
+#define DMA_CH_CR_SPH			BIT(24)
 
 #define DMA_CH_TCR			0x04
 #define DMA_CH_TCR_ST			BIT(0)
@@ -287,6 +460,15 @@
 #define DMA_CH_RCR_RBSZ			GENMASK(14, 1)
 #define DMA_CH_RCR_PBL			GENMASK(21, 16)
 
+#define DMA_CH_TDLR_HI			0x10
+#define DMA_CH_TDLR_LO			0x14
+#define DMA_CH_RDLR_HI			0x18
+#define DMA_CH_RDLR_LO			0x1c
+#define DMA_CH_TDTR_LO			0x20
+#define DMA_CH_RDTR_LO			0x28
+#define DMA_CH_TDRLR			0x2c
+#define DMA_CH_RDRLR			0x30
+
 #define DMA_CH_IER			0x34
 #define DMA_CH_IER_TIE			BIT(0)
 #define DMA_CH_IER_TXSE			BIT(1)
@@ -297,6 +479,16 @@
 #define DMA_CH_IER_FBEE			BIT(12)
 #define DMA_CH_IER_AIE			BIT(14)
 #define DMA_CH_IER_NIE			BIT(15)
+
+#define DMA_CH_RIWT			0x38
+#define DMA_CH_RIWT_RWT			GENMASK(7, 0)
+
+#define DMA_CH_CATDR_LO			0x44
+#define DMA_CH_CARDR_LO			0x4c
+#define DMA_CH_CATBR_HI			0x50
+#define DMA_CH_CATBR_LO			0x54
+#define DMA_CH_CARBR_HI			0x58
+#define DMA_CH_CARBR_LO			0x5c
 
 #define DMA_CH_SR			0x60
 #define DMA_CH_SR_TI			BIT(0)
@@ -559,6 +751,7 @@ struct fxgmac_pdata {
 
 	/* ndev related settings */
 	unsigned char mac_addr[ETH_ALEN];
+	struct napi_struct napi;
 
 	int mac_speed;
 	int mac_duplex;
