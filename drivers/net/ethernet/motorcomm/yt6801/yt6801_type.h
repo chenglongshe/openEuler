@@ -35,6 +35,14 @@
 #define EPHY_CTRL_STA_DUPLEX			BIT(2)
 #define EPHY_CTRL_STA_SPEED			GENMASK(4, 3)
 
+#define MAC_MDIO_ADDR			0x2200
+#define MAC_MDIO_ADDR_BUSY		BIT(0)
+#define MAC_MDIO_ADDR_GOC		GENMASK(3, 2)
+
+#define MAC_MDIO_DATA			0x2204
+#define MAC_MDIO_DATA_GD		GENMASK(15, 0)
+#define MAC_MDIO_DATA_RA		GENMASK(31, 16)
+
 struct fxgmac_resources {
 	void __iomem *addr;
 	int irq;
