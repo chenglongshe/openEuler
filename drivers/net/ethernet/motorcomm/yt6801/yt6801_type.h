@@ -499,6 +499,63 @@
 #define DMA_CH_SR_RPS			BIT(8)
 #define DMA_CH_SR_FBE			BIT(12)
 
+/* Receive Normal Descriptor (Read Format) */
+#define RX_DESC0_OVT	GENMASK(15, 0)	/* Outer VLAN Tag */
+
+#define RX_DESC2_HL	GENMASK(9, 0)	/* L3/L4 Header Length */
+
+#define RX_DESC3_PL	GENMASK(14, 0)	/* Packet Length */
+#define RX_DESC3_ES	BIT(15)		/* Error Summary */
+#define RX_DESC3_ETLT	GENMASK(18, 16)	/* Length/Type Field */
+#define RX_DESC3_BUF1V	BIT(24)		/* Receive Status RDES1 Valid */
+#define RX_DESC3_BUF2V	BIT(25)		/* Receive Status RDES2 Valid */
+#define RX_DESC3_LD	BIT(28)		/* Last Descriptor */
+#define RX_DESC3_FD	BIT(29)		/* First Descriptor */
+#define RX_DESC3_INTE	BIT(30)
+#define RX_DESC3_OWN	BIT(31)		/* Own Bit */
+
+/* Transmit Normal Descriptor (Read Format) */
+#define TX_DESC2_HL_B1L	GENMASK(13, 0)	/* Header Length or Buffer 1 Length */
+#define TX_DESC2_VTIR	GENMASK(15, 14)	/* VLAN Tag Insertion/Replacement */
+#define TX_DESC2_TTSE		BIT(30)		/* Transmit Timestamp Enable */
+#define TX_DESC2_IC		BIT(31)		/* Interrupt on Completion. */
+#define TX_DESC3_TCPPL		GENMASK(17, 0)	/* TCP Packet Length.*/
+#define TX_DESC3_FL		GENMASK(14, 0)	/* Frame Length */
+#define TX_DESC3_CIC		GENMASK(17, 16)	/* Checksum Insertion Control */
+#define TX_DESC3_TSE		BIT(18)		/* TCP Segmentation Enable */
+#define TX_DESC3_TCPHDRLEN	GENMASK(22, 19)	/* TCP/UDP Header Length. */
+#define TX_DESC3_CPC		GENMASK(27, 26)	/* CRC Pad Control */
+#define TX_DESC3_LD		BIT(28)		/* Last Descriptor */
+#define TX_DESC3_FD		BIT(29)		/* First Descriptor */
+#define TX_DESC3_CTXT		BIT(30)		/* Context Type */
+#define TX_DESC3_OWN		BIT(31)		/* Own Bit */
+
+/* Transmit Context Descriptor */
+#define TX_CONTEXT_DESC2_MSS	GENMASK(13, 0)	/* Maximum Segment Size */
+#define TX_CONTEXT_DESC2_IVLTV	GENMASK(31, 16)	/* Inner VLAN Tag. */
+
+#define TX_CONTEXT_DESC3_VT	GENMASK(15, 0)	/* VLAN Tag */
+#define TX_CONTEXT_DESC3_VLTV	BIT(16)		/* Inner VLAN Tag Valid */
+#define TX_CONTEXT_DESC3_IVLTV	BIT(17)		/* Inner VLAN TAG valid. */
+/* Inner VLAN Tag Insert/Replace */
+#define TX_CONTEXT_DESC3_IVTIR	GENMASK(19, 18)
+#define TX_CONTEXT_DESC3_TCMSSV	BIT(26)	/* Timestamp correct or MSS Valid */
+#define TX_CONTEXT_DESC3_CTXT	BIT(30)	/* Context Type */
+
+/* Receive Normal Descriptor (Write-Back Format) */
+#define RX_DESC0_WB_OVT		GENMASK(15, 0)	/* Outer VLAN Tag. */
+#define RX_DESC0_WB_IVT		GENMASK(31, 16)	/* Inner VLAN Tag. */
+
+#define RX_DESC1_WB_PT		GENMASK(2, 0)	/* Payload Type */
+#define RX_DESC1_WB_IPHE	BIT(3)		/* IP Header Error. */
+#define RX_DESC1_WB_IPV4	BIT(4)		/* IPV4 Header Present */
+#define RX_DESC1_WB_IPV6	BIT(5)		/* IPV6 Header Present. */
+#define RX_DESC1_WB_IPCE	BIT(7)		/* IP Payload Error. */
+
+#define RX_DESC2_WB_RAPARSER	GENMASK(13, 11)	/* Parse error */
+#define RX_DESC2_WB_DAF		BIT(17)		/* DA Filter Fail */
+#define RX_DESC2_WB_HF		BIT(18)		/* Hash Filter Status. */
+
 struct fxgmac_ring_buf {
 	struct sk_buff *skb;
 	dma_addr_t skb_dma;
@@ -541,6 +598,43 @@ struct fxgmac_rx_desc_data {
 	struct fxgmac_buffer_data buf;	/* Payload locations */
 	unsigned short hdr_len;		/* Length of received header */
 	unsigned short len;		/* Length of received packet */
+};
+
+struct fxgmac_pkt_info {
+	struct sk_buff *skb;
+#define ATTR_TX_CSUM_ENABLE		BIT(0)
+#define ATTR_TX_TSO_ENABLE		BIT(1)
+#define ATTR_TX_VLAN_CTAG		BIT(2)
+#define ATTR_TX_PTP			BIT(3)
+
+#define ATTR_RX_CSUM_DONE		BIT(0)
+#define ATTR_RX_VLAN_CTAG		BIT(1)
+#define ATTR_RX_INCOMPLETE		BIT(2)
+#define ATTR_RX_CONTEXT_NEXT		BIT(3)
+#define ATTR_RX_CONTEXT			BIT(4)
+#define ATTR_RX_RX_TSTAMP		BIT(5)
+#define ATTR_RX_RSS_HASH		BIT(6)
+	unsigned int attr;
+
+#define ERRORS_RX_LENGTH		BIT(0)
+#define ERRORS_RX_OVERRUN		BIT(1)
+#define ERRORS_RX_CRC			BIT(2)
+#define ERRORS_RX_FRAME			BIT(3)
+	unsigned int errors;
+	unsigned int desc_count; /* descriptors needed for this packet */
+	unsigned int length;
+	unsigned int tx_packets;
+	unsigned int tx_bytes;
+
+	unsigned int header_len;
+	unsigned int tcp_header_len;
+	unsigned int tcp_payload_len;
+	unsigned short mss;
+	unsigned short vlan_ctag;
+
+	u64 rx_tstamp;
+	u32 rss_hash;
+	enum pkt_hash_types rss_hash_type;
 };
 
 struct fxgmac_desc_data {
