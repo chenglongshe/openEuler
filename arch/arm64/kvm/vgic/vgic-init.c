@@ -3,6 +3,7 @@
  * Copyright (C) 2015, 2016 ARM Ltd.
  */
 
+#include <linux/acpi.h>
 #include <linux/uaccess.h>
 #include <linux/interrupt.h>
 #include <linux/cpu.h>
@@ -531,17 +532,30 @@ out_slots:
 	return ret;
 }
 
+extern struct static_key_false ipiv_enable;
+static int ipiv_irq;
+
 /* GENERIC PROBE */
 
 void kvm_vgic_cpu_up(void)
 {
 	enable_percpu_irq(kvm_vgic_global_state.maint_irq, 0);
+	if (static_branch_unlikely(&ipiv_enable))
+		enable_percpu_irq(ipiv_irq, 0);
 }
 
 
 void kvm_vgic_cpu_down(void)
 {
 	disable_percpu_irq(kvm_vgic_global_state.maint_irq);
+	if (static_branch_unlikely(&ipiv_enable))
+		disable_percpu_irq(ipiv_irq);
+}
+
+static irqreturn_t vgic_ipiv_irq_handler(int irq, void *data)
+{
+	kvm_info("IPIV irq handler!\n");
+	return IRQ_HANDLED;
 }
 
 static irqreturn_t vgic_maintenance_handler(int irq, void *data)
@@ -615,6 +629,15 @@ int kvm_vgic_hyp_init(void)
 		kvm_vgic_global_state.no_hw_deactivation = true;
 	}
 
+	if (static_branch_unlikely(&ipiv_enable)) {
+		ipiv_irq = acpi_register_gsi(NULL, 18, ACPI_EDGE_SENSITIVE,
+			ACPI_ACTIVE_HIGH);
+		if (ipiv_irq < 0) {
+			kvm_err("No ipiv exception irq\n");
+			return -ENXIO;
+		}
+	}
+
 	kvm_vgic_global_state.flags = gic_kvm_info->flags;
 	switch (gic_kvm_info->type) {
 	case GIC_V2:
@@ -637,7 +660,7 @@ int kvm_vgic_hyp_init(void)
 	gic_kvm_info = NULL;
 
 	if (ret)
-		return ret;
+		goto out_unregister_gsi;
 
 	if (!has_mask && !kvm_vgic_global_state.maint_irq)
 		return 0;
@@ -648,9 +671,26 @@ int kvm_vgic_hyp_init(void)
 	if (ret) {
 		kvm_err("Cannot register interrupt %d\n",
 			kvm_vgic_global_state.maint_irq);
-		return ret;
+		goto out_unregister_gsi;
 	}
 
 	kvm_info("vgic interrupt IRQ%d\n", kvm_vgic_global_state.maint_irq);
+
+	if (static_branch_unlikely(&ipiv_enable)) {
+		ret = request_percpu_irq(ipiv_irq, vgic_ipiv_irq_handler,
+				 "ipiv exception", kvm_get_running_vcpus());
+		if (ret) {
+			kvm_err("Cannot register interrupt %d\n", ipiv_irq);
+			goto out_free_irq;
+		}
+	}
+
 	return 0;
+out_free_irq:
+	free_percpu_irq(kvm_vgic_global_state.maint_irq,
+			kvm_get_running_vcpus());
+out_unregister_gsi:
+	if (static_branch_unlikely(&ipiv_enable))
+		acpi_unregister_gsi(18);
+	return ret;
 }
