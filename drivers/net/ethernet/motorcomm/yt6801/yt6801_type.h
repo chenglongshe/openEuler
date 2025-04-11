@@ -29,6 +29,9 @@
 #define FXGMAC_MAX_DMA_CHANNELS                                           \
 	(FXGMAC_MAX_DMA_RX_CHANNELS + FXGMAC_MAX_DMA_TX_CHANNELS)
 
+/****************  Other configuration register. *********************/
+#define GLOBAL_CTRL0				0x1000
+
 #define EPHY_CTRL				0x1004
 #define EPHY_CTRL_RESET				BIT(0)
 #define EPHY_CTRL_STA_LINKUP			BIT(1)
@@ -53,6 +56,25 @@
 #define  MGMT_INT_CTRL0_INT_MASK_DISABLE	0xf000
 #define  MGMT_INT_CTRL0_INT_MASK_MASK		0xffff
 
+/* LTR_CTRL3, LTR latency message, only for System IDLE Start. */
+#define LTR_IDLE_ENTER				0x113c
+#define LTR_IDLE_ENTER_ENTER			GENMASK(9, 0)
+#define  LTR_IDLE_ENTER_900_US			900
+#define LTR_IDLE_ENTER_SCALE			GENMASK(14, 10)
+#define  LTR_IDLE_ENTER_SCALE_1_NS		0
+#define  LTR_IDLE_ENTER_SCALE_32_NS		1
+#define  LTR_IDLE_ENTER_SCALE_1024_NS		2
+#define  LTR_IDLE_ENTER_SCALE_32768_NS		3
+#define  LTR_IDLE_ENTER_SCALE_1048576_NS	4
+#define  LTR_IDLE_ENTER_SCALE_33554432_NS	5
+#define LTR_IDLE_ENTER_REQUIRE			BIT(15)
+
+/* LTR_CTRL4, LTR latency message, only for System IDLE End. */
+#define LTR_IDLE_EXIT				0x1140
+#define LTR_IDLE_EXIT_EXIT			GENMASK(9, 0)
+#define  LTR_IDLE_EXIT_171_US			171
+#define LTR_IDLE_EXIT_SCALE			GENMASK(14, 10)
+#define LTR_IDLE_EXIT_REQUIRE			BIT(15)
 /* msi table */
 #define MSI_ID_RXQ0				0
 #define MSI_ID_RXQ1				1
@@ -60,6 +82,35 @@
 #define MSI_ID_RXQ3				3
 #define MSI_ID_TXQ0				4
 #define MSIX_TBL_MAX_NUM			5
+
+#define MSI_PBA					0x1300
+
+#define EFUSE_OP_CTRL_0				0x1500
+#define EFUSE_OP_MODE				GENMASK(1, 0)
+#define  EFUSE_OP_MODE_ROW_WRITE		0x0
+#define  EFUSE_OP_MODE_ROW_READ			0x1
+#define  EFUSE_OP_MODE_AUTO_LOAD		0x2
+#define  EFUSE_OP_MODE_READ_BLANK		0x3
+#define EFUSE_OP_START				BIT(2)
+#define EFUSE_OP_ADDR				GENMASK(15, 8)
+#define EFUSE_OP_WR_DATA			GENMASK(23, 16)
+
+#define EFUSE_OP_CTRL_1				0x1504
+#define EFUSE_OP_DONE				BIT(1)
+#define EFUSE_OP_PGM_PASS			BIT(2)
+#define EFUSE_OP_BIST_ERR_CNT			GENMASK(15, 8)
+#define EFUSE_OP_BIST_ERR_ADDR			GENMASK(23, 16)
+#define EFUSE_OP_RD_DATA			GENMASK(31, 24)
+
+/* MAC addr can be configured through effuse */
+#define MACA0LR_FROM_EFUSE			0x1520
+#define MACA0HR_FROM_EFUSE			0x1524
+
+#define SYS_RESET				0x152c
+#define SYS_RESET_RESET				BIT(31)
+
+#define PCIE_SERDES_PLL				0x199c
+#define PCIE_SERDES_PLL_AUTOOFF			BIT(0)
 
 /****************  GMAC register. *********************/
 #define MAC_CR				0x2000
@@ -91,6 +142,46 @@
 #define MAC_PMT_STA_RWKPTR		GENMASK(27, 24)
 #define MAC_PMT_STA_RWKFILTERST		BIT(31)
 
+#define MAC_HWF0R			0x211c
+#define MAC_HWF0R_VLHASH		BIT(4)
+#define MAC_HWF0R_SMASEL		BIT(5)
+#define MAC_HWF0R_RWKSEL		BIT(6)
+#define MAC_HWF0R_MGKSEL		BIT(7)
+#define MAC_HWF0R_MMCSEL		BIT(8)
+#define MAC_HWF0R_ARPOFFSEL		BIT(9)
+#define MAC_HWF0R_TSSEL			BIT(12)
+#define MAC_HWF0R_EEESEL		BIT(13)
+#define MAC_HWF0R_TXCOESEL		BIT(14)
+#define MAC_HWF0R_RXCOESEL		BIT(16)
+#define MAC_HWF0R_ADDMACADRSEL		GENMASK(22, 18)
+#define MAC_HWF0R_TSSTSSEL		GENMASK(26, 25)
+#define MAC_HWF0R_SAVLANINS		BIT(27)
+#define MAC_HWF0R_ACTPHYIFSEL		GENMASK(30, 28)
+
+#define MAC_HWF1R			0x2120
+#define MAC_HWF1R_RXFIFOSIZE		GENMASK(4, 0)
+#define MAC_HWF1R_TXFIFOSIZE		GENMASK(10, 6)
+#define MAC_HWF1R_ADVTHWORD		BIT(13)
+#define MAC_HWF1R_ADDR64		GENMASK(15, 14)
+#define MAC_HWF1R_DCBEN			BIT(16)
+#define MAC_HWF1R_SPHEN			BIT(17)
+#define MAC_HWF1R_TSOEN			BIT(18)
+#define MAC_HWF1R_DBGMEMA		BIT(19)
+#define MAC_HWF1R_AVSEL			BIT(20)
+#define MAC_HWF1R_RAVSEL		BIT(21)
+#define MAC_HWF1R_HASHTBLSZ		GENMASK(25, 24)
+#define MAC_HWF1R_L3L4FNUM		GENMASK(30, 27)
+
+#define MAC_HWF2R			0x2124
+#define MAC_HWF2R_RXQCNT		GENMASK(3, 0)
+#define MAC_HWF2R_TXQCNT		GENMASK(9, 6)
+#define MAC_HWF2R_RXCHCNT		GENMASK(15, 12)
+#define MAC_HWF2R_TXCHCNT		GENMASK(21, 18)
+#define MAC_HWF2R_PPSOUTNUM		GENMASK(26, 24)
+#define MAC_HWF2R_AUXSNAPNUM		GENMASK(30, 28)
+
+#define MAC_HWF3R			0x2128
+
 #define MAC_MDIO_ADDR			0x2200
 #define MAC_MDIO_ADDR_BUSY		BIT(0)
 #define MAC_MDIO_ADDR_GOC		GENMASK(3, 2)
@@ -114,6 +205,7 @@
 #define MTL_Q_RQDR			0x38
 #define MTL_Q_RQDR_RXQSTS		GENMASK(5, 4)
 #define MTL_Q_RQDR_PRXQ			GENMASK(29, 16)
+
 #define DMA_DSRX_INC				4
 #define DMA_DSR0				0x300c
 #define DMA_DSR0_TPS				GENMASK(15, 12)
@@ -246,6 +338,55 @@ struct fxgmac_channel {
 	struct fxgmac_ring *rx_ring;
 } ____cacheline_aligned;
 
+/* This structure contains flags that indicate what hardware features
+ * or configurations are present in the device.
+ */
+struct fxgmac_hw_features {
+	unsigned int version;		/* HW Version */
+
+	/* HW Feature Register0 */
+	unsigned int phyifsel;		/* PHY interface support */
+	unsigned int vlhash;		/* VLAN Hash Filter */
+	unsigned int sma;		/* SMA(MDIO) Interface */
+	unsigned int rwk;		/* PMT remote wake-up packet */
+	unsigned int mgk;		/* PMT magic packet */
+	unsigned int mmc;		/* RMON module */
+	unsigned int aoe;		/* ARP Offload */
+	unsigned int ts;		/* IEEE 1588-2008 Advanced Timestamp */
+	unsigned int eee;		/* Energy Efficient Ethernet */
+	unsigned int tx_coe;		/* Tx Checksum Offload */
+	unsigned int rx_coe;		/* Rx Checksum Offload */
+	unsigned int addn_mac;		/* Additional MAC Addresses */
+	unsigned int ts_src;		/* Timestamp Source */
+	unsigned int sa_vlan_ins;	/* Source Address or VLAN Insertion */
+
+	/* HW Feature Register1 */
+	unsigned int rx_fifo_size;	/* MTL Receive FIFO Size */
+	unsigned int tx_fifo_size;	/* MTL Transmit FIFO Size */
+	unsigned int adv_ts_hi;		/* Advance Timestamping High Word */
+	unsigned int dma_width;		/* DMA width */
+	unsigned int dcb;		/* DCB Feature */
+	unsigned int sph;		/* Split Header Feature */
+	unsigned int tso;		/* TCP Segmentation Offload */
+	unsigned int dma_debug;		/* DMA Debug Registers */
+	unsigned int rss;		/* Receive Side Scaling */
+	unsigned int tc_cnt;		/* Number of Traffic Classes */
+	unsigned int avsel;		/* AV Feature Enable */
+	unsigned int ravsel;		/* Rx Side Only AV Feature Enable */
+	unsigned int hash_table_size;	/* Hash Table Size */
+	unsigned int l3l4_filter_num;	/* Number of L3-L4 Filters */
+
+	/* HW Feature Register2 */
+	unsigned int rx_q_cnt;		/* Number of MTL Receive Queues */
+	unsigned int tx_q_cnt;		/* Number of MTL Transmit Queues */
+	unsigned int rx_ch_cnt;		/* Number of DMA Receive Channels */
+	unsigned int tx_ch_cnt;		/* Number of DMA Transmit Channels */
+	unsigned int pps_out_num;	/* Number of PPS outputs */
+	unsigned int aux_snap_num;	/* Number of Aux snapshot inputs */
+
+	u32 hwfr3;			/* HW Feature Register3 */
+};
+
 struct fxgmac_resources {
 	void __iomem *addr;
 	int irq;
@@ -266,6 +407,7 @@ struct fxgmac_pdata {
 	struct device *dev;
 	struct phy_device *phydev;
 
+	struct fxgmac_hw_features hw_feat;	/* Hardware features */
 	void __iomem *hw_addr;			/* Registers base */
 
 	/* Rings for Tx/Rx on a DMA channel */
@@ -277,6 +419,33 @@ struct fxgmac_pdata {
 #define FXGMAC_TX_1_RING	1
 #define FXGMAC_TX_1_Q		1
 	unsigned int tx_desc_count;
+
+	unsigned long sysclk_rate;		/* Device clocks */
+	unsigned int pblx8;			/* Tx/Rx common settings */
+
+	/* Tx settings */
+	unsigned int tx_sf_mode;
+	unsigned int tx_threshold;
+	unsigned int tx_pbl;
+	unsigned int tx_osp_mode;
+
+	/* Rx settings */
+	unsigned int rx_sf_mode;
+	unsigned int rx_threshold;
+	unsigned int rx_pbl;
+
+	/* Tx coalescing settings */
+	unsigned int tx_usecs;
+	unsigned int tx_frames;
+
+	/* Rx coalescing settings */
+	unsigned int rx_riwt;
+	unsigned int rx_usecs;
+	unsigned int rx_frames;
+
+	/* Flow control settings */
+	unsigned int tx_pause;
+	unsigned int rx_pause;
 
 	/* Device interrupt */
 	int dev_irq;
@@ -301,7 +470,14 @@ struct fxgmac_pdata {
 #define INT_FLAG_LEGACY_IRQ		BIT(31)
 	u32 int_flag;		/* interrupt flag */
 
+	/* ndev related settings */
+	unsigned char mac_addr[ETH_ALEN];
+
+	int mac_speed;
+	int mac_duplex;
+
 	u32 msg_enable;
+	u32 reg_nonstick[(MSI_PBA - GLOBAL_CTRL0) >> 2];
 	enum fxgmac_dev_state dev_state;
 #define FXGMAC_POWER_STATE_DOWN			0
 #define FXGMAC_POWER_STATE_UP			1
