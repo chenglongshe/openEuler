@@ -171,6 +171,52 @@ out:
 	return 0;
 }
 
+struct aer_device_list {
+	struct device *dev;
+	struct hlist_node node;
+};
+
+static int aer_get_pci_dev(struct pci_dev *pdev, void *data)
+{
+	struct hlist_head *hhead = (struct hlist_head *)data;
+	struct device *dev = &pdev->dev;
+	struct aer_device_list *entry;
+
+	entry = kmalloc(sizeof(*entry), GFP_KERNEL);
+	if (!entry)
+		/* continue with other devices, lets not return error */
+		return 0;
+
+	entry->dev = get_device(dev);
+	hlist_add_head(&entry->node, hhead);
+
+	return 0;
+}
+
+static void aer_pci_walk_bus(struct pci_bus *top,
+			     int (*cb)(struct pci_dev *, void *),
+			     void *result)
+{
+	HLIST_HEAD(dev_hlist);
+	struct hlist_node *tmp;
+	struct aer_device_list *entry;
+
+	pci_walk_bus(top, aer_get_pci_dev, &dev_hlist);
+	hlist_for_each_entry_safe(entry, tmp, &dev_hlist, node) {
+		struct pci_dev *pdev = container_of(entry->dev, struct pci_dev,
+						    dev);
+		int err;
+
+		err = cb(pdev, result);
+		if (err)
+			dev_err(entry->dev, "AER: recovery handler failed: %d",
+				err);
+		put_device(entry->dev);
+		hlist_del(&entry->node);
+		kfree(entry);
+	}
+}
+
 /**
  * pci_walk_bridge - walk bridges potentially AER affected
  * @bridge:	bridge which may be a Port, an RCEC, or an RCiEP
@@ -189,7 +235,7 @@ static void pci_walk_bridge(struct pci_dev *bridge,
 			    void *userdata)
 {
 	if (bridge->subordinate)
-		pci_walk_bus(bridge->subordinate, cb, userdata);
+		aer_pci_walk_bus(bridge->subordinate, cb, userdata);
 	else
 		cb(bridge, userdata);
 }
