@@ -585,6 +585,9 @@
 #define SYS_CNTHV_CTL_EL2		sys_reg(3, 4, 14, 3, 1)
 #define SYS_CNTHV_CVAL_EL2		sys_reg(3, 4, 14, 3, 2)
 
+/* IPIV private register */
+#define CPU_SYS_TRAP_EL2		sys_reg(3, 4, 15, 7, 2)
+
 /* VHE encodings for architectural EL0/1 system registers */
 #define SYS_SCTLR_EL12			sys_reg(3, 5, 1, 0, 0)
 #define SYS_CPACR_EL12			sys_reg(3, 5, 1, 0, 2)
