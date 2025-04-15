@@ -365,7 +365,7 @@ static int __arm_lpae_map(struct arm_lpae_io_pgtable *data, unsigned long iova,
 		if (pte)
 			__arm_lpae_free_pages(cptep, tblsz, cfg);
 #ifdef CONFIG_HISILICON_ERRATUM_162100602
-		if (lvl <= 2)
+		if (lvl <= 2 && (cfg->quirks & IO_PGTABLE_QUIRK_HISI_ERRATA))
 			io_pgtable_tlb_flush_walk(&data->iop, iova, 0, ARM_LPAE_GRANULE(data));
 #endif
 	} else if (!cfg->coherent_walk && !(pte & ARM_LPAE_PTE_SW_SYNC)) {
