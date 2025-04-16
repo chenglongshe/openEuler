@@ -130,6 +130,7 @@
 #define ESR_ELx_FSC_SECC_TTW1	(0x1d)
 #define ESR_ELx_FSC_SECC_TTW2	(0x1e)
 #define ESR_ELx_FSC_SECC_TTW3	(0x1f)
+#define ESR_ELx_FSC_EXCL_ATOMIC	(0x35)
 
 /* ISS field definitions for Data Aborts */
 #define ESR_ELx_ISV_SHIFT	(24)
@@ -396,6 +397,13 @@ static inline bool esr_is_data_abort(unsigned long esr)
 	const unsigned long ec = ESR_ELx_EC(esr);
 
 	return ec == ESR_ELx_EC_DABT_LOW || ec == ESR_ELx_EC_DABT_CUR;
+}
+
+static inline bool esr_fsc_is_excl_atomic_fault(unsigned long esr)
+{
+	esr = esr & ESR_ELx_FSC;
+
+	return esr == ESR_ELx_FSC_EXCL_ATOMIC;
 }
 
 const char *esr_get_class_string(unsigned long esr);
