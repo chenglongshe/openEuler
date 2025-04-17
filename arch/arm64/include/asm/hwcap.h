@@ -140,6 +140,10 @@
 #define KERNEL_HWCAP_MOPS		__khwcap2_feature(MOPS)
 #define KERNEL_HWCAP_HBC		__khwcap2_feature(HBC)
 
+#define __khwcap3_feature(x)           (const_ilog2(HWCAP3_ ## x) + 128)
+#define KERNEL_HWCAP_LS64              __khwcap3_feature(LS64)
+#define KERNEL_HWCAP_LS64_V            __khwcap3_feature(LS64_V)
+
 /*
  * This yields a mask that user programs can use to figure out what
  * instruction set this cpu supports.
