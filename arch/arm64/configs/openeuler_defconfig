@@ -6104,6 +6104,8 @@ CONFIG_SMMU_BYPASS_DEV=y
 # end of NXP/Freescale QorIQ SoC drivers
 
 #
+CONFIG_HISI_SOC_CACHE=m
+CONFIG_HISI_SOC_HHA=m
 # i.MX SoC drivers
 #
 # end of i.MX SoC drivers
