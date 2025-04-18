@@ -546,9 +546,11 @@ struct page *read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 				   unsigned long addr, struct swap_iocb **plug)
 {
 	bool page_was_allocated;
+	struct folio *folio;
 	struct page *retpage = __read_swap_cache_async(entry, gfp_mask,
 			vma, addr, &page_was_allocated);
 
+	folio = page_folio(retpage);
 	if (page_was_allocated)
 		swap_read_folio(folio, plug);
 
@@ -648,6 +650,7 @@ struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,
 	bool page_allocated;
 	struct vm_area_struct *vma = vmf->vma;
 	unsigned long addr = vmf->address;
+	struct folio *folio;
 
 	mask = swapin_nr_pages(offset) - 1;
 	if (!mask)
@@ -667,6 +670,7 @@ struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,
 		page = __read_swap_cache_async(
 			swp_entry(swp_type(entry), offset),
 			gfp_mask, vma, addr, &page_allocated);
+		folio = page_folio(page);
 		if (!page)
 			continue;
 		if (page_allocated) {
@@ -809,6 +813,7 @@ static struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,
 	struct vma_swap_readahead ra_info = {
 		.win = 1,
 	};
+	struct folio *folio;
 
 	swap_ra_info(vmf, &ra_info);
 	if (ra_info.win == 1)
@@ -833,6 +838,7 @@ static struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,
 		pte = NULL;
 		page = __read_swap_cache_async(entry, gfp_mask, vma,
 					       addr, &page_allocated);
+		folio = page_folio(page);
 		if (!page)
 			continue;
 		if (page_allocated) {
