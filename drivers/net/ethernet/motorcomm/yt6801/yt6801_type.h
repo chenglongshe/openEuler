@@ -56,6 +56,12 @@
 #define  MGMT_INT_CTRL0_INT_MASK_DISABLE	0xf000
 #define  MGMT_INT_CTRL0_INT_MASK_MASK		0xffff
 
+/* Interrupt Moderation */
+#define INT_MOD					0x1108
+#define INT_MOD_RX				GENMASK(11, 0)
+#define  INT_MOD_200_US				200
+#define INT_MOD_TX				GENMASK(27, 16)
+
 /* LTR_CTRL3, LTR latency message, only for System IDLE Start. */
 #define LTR_IDLE_ENTER				0x113c
 #define LTR_IDLE_ENTER_ENTER			GENMASK(9, 0)
@@ -75,6 +81,9 @@
 #define  LTR_IDLE_EXIT_171_US			171
 #define LTR_IDLE_EXIT_SCALE			GENMASK(14, 10)
 #define LTR_IDLE_EXIT_REQUIRE			BIT(15)
+
+#define MSIX_TBL_MASK				0x120c
+
 /* msi table */
 #define MSI_ID_RXQ0				0
 #define MSI_ID_RXQ1				1
@@ -132,6 +141,24 @@
 #define MAC_RQC2_INC			4
 #define MAC_RQC2_Q_PER_REG		4
 
+#define MAC_ISR				0x20b0
+#define MAC_ISR_PHYIF_STA		BIT(0)
+#define MAC_ISR_AN_SR			GENMASK(3, 1)
+#define MAC_ISR_PMT_STA			BIT(4)
+#define MAC_ISR_LPI_STA			BIT(5)
+#define MAC_ISR_MMC_STA			BIT(8)
+#define MAC_ISR_RX_MMC_STA		BIT(9)
+#define MAC_ISR_TX_MMC_STA		BIT(10)
+#define MAC_ISR_IPC_RXINT		BIT(11)
+#define MAC_ISR_TSIS			BIT(12)
+#define MAC_ISR_TX_RX_STA		GENMASK(14, 13)
+#define MAC_ISR_GPIO_SR			GENMASK(25, 15)
+
+#define MAC_IER				0x20b4
+#define MAC_IER_TSIE			BIT(12)
+
+#define MAC_TX_RX_STA			0x20b8
+
 #define MAC_PMT_STA			0x20c0
 #define MAC_PMT_STA_PWRDWN		BIT(0)
 #define MAC_PMT_STA_MGKPKTEN		BIT(1)
@@ -141,6 +168,20 @@
 #define MAC_PMT_STA_GLBLUCAST		BIT(9)
 #define MAC_PMT_STA_RWKPTR		GENMASK(27, 24)
 #define MAC_PMT_STA_RWKFILTERST		BIT(31)
+
+#define MAC_RWK_PAC			0x20c4
+#define MAC_LPI_STA			0x20d0
+#define MAC_LPI_CONTROL			0x20d4
+#define MAC_LPI_TIMER			0x20d8
+#define MAC_MS_TIC_COUNTER		0x20dc
+#define MAC_AN_CR			0x20e0
+#define MAC_AN_SR			0x20e4
+#define MAC_AN_ADV			0x20e8
+#define MAC_AN_LPA			0x20ec
+#define MAC_AN_EXP			0x20f0
+#define MAC_PHYIF_STA			0x20f8
+#define MAC_VR				0x2110
+#define MAC_DBG_STA			0x2114
 
 #define MAC_HWF0R			0x211c
 #define MAC_HWF0R_VLHASH		BIT(4)
@@ -181,6 +222,7 @@
 #define MAC_HWF2R_AUXSNAPNUM		GENMASK(30, 28)
 
 #define MAC_HWF3R			0x2128
+
 #define MAC_MDIO_ADDR			0x2200
 #define MAC_MDIO_ADDR_BUSY		BIT(0)
 #define MAC_MDIO_ADDR_GOC		GENMASK(3, 2)
@@ -201,9 +243,19 @@
 #define MTL_Q_EN_IF_AV			0x01
 #define MTL_Q_ENABLED			0x02
 
+#define MTL_Q_IR			0x2c /* Interrupt control status */
 #define MTL_Q_RQDR			0x38
 #define MTL_Q_RQDR_RXQSTS		GENMASK(5, 4)
 #define MTL_Q_RQDR_PRXQ			GENMASK(29, 16)
+
+/* DMA registers */
+#define DMA_MR					0x3000
+#define DMA_MR_SWR				BIT(0)
+#define DMA_MR_TXPR				BIT(11)
+#define DMA_MR_INTM				GENMASK(17, 16)
+#define DMA_MR_QUREAD				BIT(19)
+#define DMA_MR_TNDF				GENMASK(21, 20)
+#define DMA_MR_RNDF				GENMASK(23, 22)
 
 #define DMA_DSRX_INC				4
 #define DMA_DSR0				0x300c
@@ -234,6 +286,26 @@
 #define DMA_CH_RCR_SR			BIT(0)
 #define DMA_CH_RCR_RBSZ			GENMASK(14, 1)
 #define DMA_CH_RCR_PBL			GENMASK(21, 16)
+
+#define DMA_CH_IER			0x34
+#define DMA_CH_IER_TIE			BIT(0)
+#define DMA_CH_IER_TXSE			BIT(1)
+#define DMA_CH_IER_TBUE			BIT(2)
+#define DMA_CH_IER_RIE			BIT(6)
+#define DMA_CH_IER_RBUE			BIT(7)
+#define DMA_CH_IER_RSE			BIT(8)
+#define DMA_CH_IER_FBEE			BIT(12)
+#define DMA_CH_IER_AIE			BIT(14)
+#define DMA_CH_IER_NIE			BIT(15)
+
+#define DMA_CH_SR			0x60
+#define DMA_CH_SR_TI			BIT(0)
+#define DMA_CH_SR_TPS			BIT(1)
+#define DMA_CH_SR_TBU			BIT(2)
+#define DMA_CH_SR_RI			BIT(6)
+#define DMA_CH_SR_RBU			BIT(7)
+#define DMA_CH_SR_RPS			BIT(8)
+#define DMA_CH_SR_FBE			BIT(12)
 
 struct fxgmac_ring_buf {
 	struct sk_buff *skb;
