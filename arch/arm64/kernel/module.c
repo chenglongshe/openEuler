@@ -20,7 +20,7 @@
 #include <asm/insn.h>
 #include <asm/sections.h>
 
-void *module_alloc(unsigned long size)
+static void *__module_alloc(unsigned long size, unsigned long vm_flags, int nid)
 {
 	u64 module_alloc_end = module_alloc_base + MODULES_VSIZE;
 	gfp_t gfp_mask = GFP_KERNEL;
@@ -35,8 +35,8 @@ void *module_alloc(unsigned long size)
 		module_alloc_end = MODULES_END;
 
 	p = __vmalloc_node_range(size, MODULE_ALIGN, module_alloc_base,
-				module_alloc_end, gfp_mask, PAGE_KERNEL, VM_NO_HUGE_VMAP,
-				NUMA_NO_NODE, __builtin_return_address(0));
+				module_alloc_end, gfp_mask, PAGE_KERNEL,
+				vm_flags | VM_NO_HUGE_VMAP, nid, __builtin_return_address(0));
 
 	if (!p && IS_ENABLED(CONFIG_ARM64_MODULE_PLTS) &&
 	    (IS_ENABLED(CONFIG_KASAN_VMALLOC) || !IS_ENABLED(CONFIG_KASAN)))
@@ -52,7 +52,7 @@ void *module_alloc(unsigned long size)
 		 */
 		p = __vmalloc_node_range(size, MODULE_ALIGN, module_alloc_base,
 				module_alloc_base + SZ_2G, GFP_KERNEL,
-				PAGE_KERNEL, VM_NO_HUGE_VMAP, NUMA_NO_NODE,
+				PAGE_KERNEL, vm_flags |  VM_NO_HUGE_VMAP, nid,
 				__builtin_return_address(0));
 
 	if (p && (kasan_module_alloc(p, size) < 0)) {
@@ -62,6 +62,36 @@ void *module_alloc(unsigned long size)
 
 	return p;
 }
+
+#ifdef CONFIG_KERNEL_REPLICATION
+void *module_alloc(unsigned long size)
+{
+	return __module_alloc(size, VM_NUMA_SHARED, NUMA_NO_NODE);
+}
+
+void *module_alloc_replica(unsigned long size)
+{
+	return __module_alloc(size, VM_NUMA_SHARED, first_memory_node);
+}
+
+void module_replicate_numa(void *ptr)
+{
+	gfp_t gfp_mask = GFP_KERNEL;
+
+	__vmalloc_node_replicate_range(ptr, gfp_mask,
+			PAGE_KERNEL, 0);
+}
+#else
+void *module_alloc(unsigned long size)
+{
+	return __module_alloc(size, 0, NUMA_NO_NODE);
+}
+
+void *module_alloc_replica(unsigned long size)
+{
+	return module_alloc(size);
+}
+#endif /*CONFIG_KERNEL_REPLICATION*/
 
 enum aarch64_reloc_op {
 	RELOC_OP_NONE,

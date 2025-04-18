@@ -1048,6 +1048,16 @@ config THP_NUMA_CONTROL
 	  This featrue add a switch to control the behavior of THP migration
 	  when do numa balancing.
 
+config KERNEL_REPLICATION
+	bool "Enable kernel text and ro-data replication between NUMA nodes"
+	default n
+	depends on ARM64 && MMU && NUMA && !MAXSMP
+
+	help
+	  Creates per NUMA node pagetable which allows to replicate text and ro-data.
+
+	  If unsure, say "n".
+
 source "mm/damon/Kconfig"
 
 endmenu

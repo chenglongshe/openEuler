@@ -10,6 +10,7 @@
 
 #include <linux/init.h>
 #include <linux/cpu.h>
+#include <linux/numa_replication.h>
 #include <asm/cacheflush.h>
 #include <asm/alternative.h>
 #include <asm/cpufeature.h>
@@ -132,18 +133,42 @@ static void clean_dcache_range_nopatch(u64 start, u64 end)
 	} while (cur += d_size, cur < end);
 }
 
-static void __apply_alternatives(void *alt_region,  bool is_module,
-				 unsigned long *feature_mask)
+static void __write_alternatives(struct alt_instr *alt,
+					 alternative_cb_t alt_cb,
+					 __le32 *origptr, __le32 *updptr,
+					 int nr_inst)
+{
+#ifdef CONFIG_KERNEL_REPLICATION
+	if (is_text_replicated() && is_kernel_text((unsigned long)origptr)) {
+		int nid;
+
+		for_each_memory_node(nid) {
+			__le32 *ptr = numa_get_replica(origptr, nid);
+
+			alt_cb(alt, origptr, ptr, nr_inst);
+			clean_dcache_range_nopatch((u64)ptr,
+						   (u64)(ptr + nr_inst));
+		}
+
+		return;
+	}
+#endif /* CONFIG_KERNEL_REPLICATION */
+	alt_cb(alt, origptr, updptr, nr_inst);
+}
+
+
+static void __apply_alternatives(const struct alt_region *region,
+				 bool is_module,
+				 unsigned long *cpucap_mask)
 {
 	struct alt_instr *alt;
-	struct alt_region *region = alt_region;
 	__le32 *origptr, *updptr;
 	alternative_cb_t alt_cb;
 
 	for (alt = region->begin; alt < region->end; alt++) {
 		int nr_inst;
 
-		if (!test_bit(alt->cpufeature, feature_mask))
+		if (!test_bit(alt->cpufeature, cpucap_mask))
 			continue;
 
 		/* Use ARM64_CB_PATCH as an unconditional patch */
@@ -158,16 +183,17 @@ static void __apply_alternatives(void *alt_region,  bool is_module,
 
 		pr_info_once("patching kernel code\n");
 
-		origptr = ALT_ORIG_PTR(alt);
-		updptr = is_module ? origptr : lm_alias(origptr);
-		nr_inst = alt->orig_len / AARCH64_INSN_SIZE;
-
 		if (alt->cpufeature < ARM64_CB_PATCH)
 			alt_cb = patch_alternative;
 		else
 			alt_cb  = ALT_REPL_PTR(alt);
 
-		alt_cb(alt, origptr, updptr, nr_inst);
+
+		origptr = ALT_ORIG_PTR(alt);
+		updptr = is_module ? origptr : lm_alias(origptr);
+		nr_inst = alt->orig_len / AARCH64_INSN_SIZE;
+
+		__write_alternatives(alt, alt_cb, origptr, updptr, nr_inst);
 
 		if (!is_module) {
 			clean_dcache_range_nopatch((u64)origptr,
@@ -186,7 +212,7 @@ static void __apply_alternatives(void *alt_region,  bool is_module,
 
 		/* Ignore ARM64_CB bit from feature mask */
 		bitmap_or(applied_alternatives, applied_alternatives,
-			  feature_mask, ARM64_NCAPS);
+			  cpucap_mask, ARM64_NCAPS);
 		bitmap_and(applied_alternatives, applied_alternatives,
 			   cpu_hwcaps, ARM64_NCAPS);
 	}

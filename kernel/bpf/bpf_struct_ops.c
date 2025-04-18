@@ -450,8 +450,8 @@ static int bpf_struct_ops_map_update_elem(struct bpf_map *map, void *key,
 	refcount_set(&kvalue->refcnt, 1);
 	bpf_map_inc(map);
 
-	set_memory_ro((long)st_map->image, 1);
-	set_memory_x((long)st_map->image, 1);
+	numa_set_memory_ro((long)st_map->image, 1);
+	numa_set_memory_x((long)st_map->image, 1);
 	err = st_ops->reg(kdata);
 	if (likely(!err)) {
 		/* Pair with smp_load_acquire() during lookup_elem().
@@ -468,8 +468,9 @@ static int bpf_struct_ops_map_update_elem(struct bpf_map *map, void *key,
 	 * in registering the struct_ops (under the same name) to
 	 * a sub-system through different struct_ops's maps.
 	 */
-	set_memory_nx((long)st_map->image, 1);
-	set_memory_rw((long)st_map->image, 1);
+
+	numa_set_memory_nx((long)st_map->image, 1);
+	numa_set_memory_rw((long)st_map->image, 1);
 	bpf_map_put(map);
 
 reset_unlock:
