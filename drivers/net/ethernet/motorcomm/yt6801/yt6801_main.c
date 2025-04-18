@@ -17,7 +17,11 @@
  *  ********************||******************* **
  */
 
+#include <linux/if_vlan.h>
 #include <linux/module.h>
+#include <linux/phy.h>
+#include <linux/tcp.h>
+
 #include "yt6801_type.h"
 #include "yt6801_desc.h"
 
@@ -1380,6 +1384,21 @@ static void fxgmac_restart_work(struct work_struct *work)
 	fxgmac_restart(container_of(work, struct fxgmac_pdata, restart_work));
 	rtnl_unlock();
 }
+
+static int fxgmac_net_powerup(struct fxgmac_pdata *priv)
+{
+	int ret;
+
+	priv->power_state = 0;/* clear all bits as normal now */
+	ret = fxgmac_start(priv);
+	if (ret < 0) {
+		dev_err(priv->dev, "fxgmac start failed:%d.\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static void fxgmac_config_powerdown(struct fxgmac_pdata *priv)
 {
 	fxgmac_io_wr_bits(priv, MAC_CR, MAC_CR_RE, 1); /* Enable MAC Rx */
@@ -2922,6 +2941,55 @@ static void fxgmac_shutdown(struct pci_dev *pcidev)
 	}
 	rtnl_unlock();
 }
+
+static int fxgmac_suspend(struct device *device)
+{
+	struct fxgmac_pdata *priv = dev_get_drvdata(device);
+	struct net_device *ndev = priv->ndev;
+
+	rtnl_lock();
+	if (priv->dev_state != FXGMAC_DEV_START)
+		goto unlock;
+
+	if (netif_running(ndev))
+		__fxgmac_shutdown(to_pci_dev(device));
+
+	priv->dev_state = FXGMAC_DEV_SUSPEND;
+unlock:
+	rtnl_unlock();
+
+	return 0;
+}
+
+static int fxgmac_resume(struct device *device)
+{
+	struct fxgmac_pdata *priv = dev_get_drvdata(device);
+	struct net_device *ndev = priv->ndev;
+	int ret = 0;
+
+	rtnl_lock();
+	if (priv->dev_state != FXGMAC_DEV_SUSPEND)
+		goto unlock;
+
+	priv->dev_state = FXGMAC_DEV_RESUME;
+	__clear_bit(FXGMAC_POWER_STATE_DOWN, &priv->power_state);
+	rtnl_lock();
+	if (netif_running(ndev)) {
+		ret = fxgmac_net_powerup(priv);
+		if (ret < 0) {
+			netdev_err(priv->ndev, "%s, fxgmac net powerup failed:%d\n",
+				   __func__, ret);
+			goto unlock;
+		}
+	}
+
+	netif_device_attach(ndev);
+unlock:
+	rtnl_unlock();
+
+	return ret;
+}
+
 #define MOTORCOMM_PCI_ID			0x1f0a
 #define YT6801_PCI_DEVICE_ID			0x6801
 
@@ -2932,11 +3000,16 @@ static const struct pci_device_id fxgmac_pci_tbl[] = {
 
 MODULE_DEVICE_TABLE(pci, fxgmac_pci_tbl);
 
+static const struct dev_pm_ops fxgmac_pm_ops = {
+	SYSTEM_SLEEP_PM_OPS(fxgmac_suspend, fxgmac_resume)
+};
+
 static struct pci_driver fxgmac_pci_driver = {
 	.name		= FXGMAC_DRV_NAME,
 	.id_table	= fxgmac_pci_tbl,
 	.probe		= fxgmac_probe,
 	.remove		= fxgmac_remove,
+	.driver.pm	= pm_ptr(&fxgmac_pm_ops),
 	.shutdown	= fxgmac_shutdown,
 };
 
