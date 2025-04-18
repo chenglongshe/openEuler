@@ -71,6 +71,22 @@ static inline pgtable_t __pte_alloc_one(struct mm_struct *mm, gfp_t gfp)
 	return pte;
 }
 
+static inline pgtable_t __pte_alloc_one_node(unsigned int nid,
+			struct mm_struct *mm, gfp_t gfp)
+{
+	struct page *pte;
+
+	pte = alloc_pages_node(nid, gfp, 0);
+	if (!pte)
+		return NULL;
+	if (!pgtable_pte_page_ctor(pte)) {
+		__free_page(pte);
+		return NULL;
+	}
+
+	return pte;
+}
+
 #ifndef __HAVE_ARCH_PTE_ALLOC_ONE
 /**
  * pte_alloc_one - allocate a page for PTE-level user page table
@@ -84,6 +100,12 @@ static inline pgtable_t pte_alloc_one(struct mm_struct *mm)
 {
 	return __pte_alloc_one(mm, GFP_PGTABLE_USER);
 }
+
+static inline pgtable_t pte_alloc_one_node(unsigned int nid, struct mm_struct *mm)
+{
+	return __pte_alloc_one_node(nid, mm, GFP_PGTABLE_USER | __GFP_THISNODE);
+}
+
 #endif
 
 /*
@@ -98,6 +120,7 @@ static inline pgtable_t pte_alloc_one(struct mm_struct *mm)
  */
 static inline void pte_free(struct mm_struct *mm, struct page *pte_page)
 {
+	ClearPageReplicated(pte_page);
 	pgtable_pte_page_dtor(pte_page);
 	__free_page(pte_page);
 }

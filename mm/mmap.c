@@ -50,7 +50,7 @@
 #include <linux/swapops.h>
 #include <linux/share_pool.h>
 #include <linux/ksm.h>
-
+#include <linux/numa_user_replication.h>
 #include <linux/uaccess.h>
 #include <asm/cacheflush.h>
 #include <asm/tlb.h>
@@ -1173,6 +1173,7 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 	pgoff_t pglen = (end - addr) >> PAGE_SHIFT;
 	struct vm_area_struct *area, *next;
 	int err;
+	int adjust_replicas_prev = 0, adjust_replicas_next = 0;
 
 	/*
 	 * We later require that vma->vm_flags == vm_flags,
@@ -1218,11 +1219,16 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			err = __vma_adjust(prev, prev->vm_start,
 					 next->vm_end, prev->vm_pgoff, NULL,
 					 prev);
-		} else					/* cases 2, 5, 7 */
+			adjust_replicas_prev = numa_is_vma_replicant(prev);
+		} else {					/* cases 2, 5, 7 */
 			err = __vma_adjust(prev, prev->vm_start,
 					 end, prev->vm_pgoff, NULL, prev);
+			adjust_replicas_prev = adjust_replicas_next =
+				numa_is_vma_replicant(prev);
+		}
 		if (err)
 			return NULL;
+
 		khugepaged_enter_vma_merge(prev, vm_flags);
 		return prev;
 	}
@@ -1235,12 +1241,15 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			can_vma_merge_before(next, vm_flags,
 					     anon_vma, file, pgoff+pglen,
 					     vm_userfaultfd_ctx)) {
-		if (prev && addr < prev->vm_end)	/* case 4 */
+		if (prev && addr < prev->vm_end) {	/* case 4 */
 			err = __vma_adjust(prev, prev->vm_start,
 					 addr, prev->vm_pgoff, NULL, next);
-		else {					/* cases 3, 8 */
+			adjust_replicas_prev = adjust_replicas_next =
+			       numa_is_vma_replicant(prev);
+		} else {					/* cases 3, 8 */
 			err = __vma_adjust(area, addr, next->vm_end,
 					 next->vm_pgoff - pglen, NULL, next);
+			adjust_replicas_next = numa_is_vma_replicant(next);
 			/*
 			 * In case 3 area is already equal to next and
 			 * this is a noop, but in case 8 "area" has
@@ -1250,6 +1259,7 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 		}
 		if (err)
 			return NULL;
+
 		khugepaged_enter_vma_merge(area, vm_flags);
 		return area;
 	}
@@ -1606,6 +1616,22 @@ unsigned long __do_mmap_mm(struct mm_struct *mm, struct file *file,
 	if (flags & MAP_CHECKNODE)
 		set_vm_checknode(&vm_flags, flags);
 
+#ifdef CONFIG_USER_REPLICATION
+	if (flags & MAP_REPLICA) {
+		vm_flags |= VM_REPLICA_INIT;
+	}
+
+	if (get_table_replication_policy(mm) == TABLE_REPLICATION_ALL) {
+		vm_flags |= VM_REPLICA_INIT;
+	}
+
+	if ((get_table_replication_policy(mm) == TABLE_REPLICATION_MINIMAL) && !(vm_flags & VM_WRITE)) {
+		vm_flags |= VM_REPLICA_INIT;
+	}
+
+
+#endif /* CONFIG_USER_REPLICATION */
+
 	addr = __mmap_region_ext(mm, file, addr, len, vm_flags, pgoff, uf);
 	if (!IS_ERR_VALUE(addr) &&
 	    ((vm_flags & VM_LOCKED) ||
@@ -1823,6 +1849,8 @@ static unsigned long __mmap_region(struct mm_struct *mm, struct file *file,
 
 	/*
 	 * Can we just expand an old mapping?
+	 *
+	 * Note: If replicant vmas are merged, interval in mm::replica_ranges will be extended
 	 */
 	vma = vma_merge(mm, prev, addr, addr + len, vm_flags,
 			NULL, file, pgoff, NULL, NULL_VM_UFFD_CTX);
@@ -1925,6 +1953,18 @@ unmap_writable:
 	file = vma->vm_file;
 	ksm_add_vma(vma);
 out:
+
+#ifdef CONFIG_USER_REPLICATION
+	if (numa_is_vma_replicant(vma)) {
+		anon_vma_prepare(vma);
+
+		if ((get_data_replication_policy(mm) != DATA_REPLICATION_NONE) && vma_might_be_replicated(vma)) {
+			vma->vm_flags |= VM_REPLICA_COMMIT;
+		}
+
+	}
+#endif /* CONFIG_USER_REPLICATION */
+
 	perf_event_mmap(vma);
 
 	vm_stat_account(mm, vm_flags, len >> PAGE_SHIFT);
@@ -2291,7 +2331,11 @@ arch_get_unmapped_area_topdown(struct file *filp, unsigned long addr,
 			return addr;
 	}
 
-	info.flags = VM_UNMAPPED_AREA_TOPDOWN;
+	if (flags & MAP_REPLICA)
+		info.flags = 0;
+	else
+		info.flags = VM_UNMAPPED_AREA_TOPDOWN;
+
 	info.length = len;
 	info.low_limit = max(PAGE_SIZE, mmap_min_addr);
 	info.high_limit = arch_get_mmap_base(addr, mm->mmap_base);
@@ -3257,6 +3301,12 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 	if (vma)
 		goto out;
 
+#ifdef CONFIG_USER_REPLICATION
+	if (get_table_replication_policy(mm) == TABLE_REPLICATION_ALL) {
+		flags |= VM_REPLICA_INIT;
+	}
+#endif /* CONFIG_USER_REPLICATION */
+
 	/*
 	 * create a vma struct for an anonymous mapping
 	 */
@@ -3276,6 +3326,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 	ksm_add_vma(vma);
 out:
 	perf_event_mmap(vma);
+
 	mm->total_vm += len >> PAGE_SHIFT;
 	mm->data_vm += len >> PAGE_SHIFT;
 	if (flags & VM_LOCKED)
@@ -3643,6 +3694,17 @@ static struct vm_area_struct *__install_special_mapping(
 		goto out;
 
 	vm_stat_account(mm, vma->vm_flags, len >> PAGE_SHIFT);
+
+#ifdef CONFIG_USER_REPLICATION
+	if (vma_want_table_replica(vma)) {
+		vma->vm_flags |= VM_REPLICA_INIT;
+	}
+	if (numa_is_vma_replicant(vma)) {
+		if ((get_data_replication_policy(mm) != DATA_REPLICATION_NONE) && vma_might_be_replicated(vma)) {
+			vma->vm_flags |= VM_REPLICA_COMMIT;
+		}
+	}
+#endif /* CONFIG_USER_REPLICATION */
 
 	perf_event_mmap(vma);
 

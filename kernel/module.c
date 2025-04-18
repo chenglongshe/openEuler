@@ -2238,7 +2238,9 @@ void __weak module_arch_freeing_init(struct module *mod)
 /* Free a module, remove from lists, etc. */
 static void free_module(struct module *mod)
 {
-	struct module_layout *mut_layout = mod->mutable_data_layout;
+	/* This memory must be freed after module structure is freed */
+	struct module_layout *mut_data = mod->mutable_data_layout;
+
 	trace_module_free(mod);
 
 	mod_sysfs_teardown(mod);
@@ -2287,7 +2289,7 @@ static void free_module(struct module *mod)
 	/* Finally, free the core (containing the module structure) */
 	module_memfree(mod->core_layout.base);
 	module_memfree(mod->mutable_data_layout->base);
-	kfree(mut_layout);
+	kfree(mut_data);
 }
 
 void *__symbol_get(const char *symbol)

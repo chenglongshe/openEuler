@@ -103,6 +103,7 @@
 #include <linux/share_pool.h>
 #include <linux/ksm.h>
 #include <linux/pbha.h>
+#include <linux/numa_user_replication.h>
 #include <trace/events/oom.h>
 #include "internal.h"
 #include "fd.h"
@@ -3595,6 +3596,189 @@ static const struct file_operations proc_pid_sg_level_operations = {
 static const struct file_operations proc_task_operations;
 static const struct inode_operations proc_task_inode_operations;
 
+#ifdef CONFIG_USER_REPLICATION
+
+static ssize_t numa_data_replication_read(struct file *file, char __user *buf, size_t count,
+			    loff_t *ppos)
+{
+	struct task_struct *task = get_proc_task(file_inode(file));
+	struct mm_struct *mm;
+	table_replication_policy_t result;
+	char buffer[PROC_NUMBUF];
+	int len;
+
+	if (!task)
+		return -ESRCH;
+
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm)
+		return -ESRCH;
+
+	result = get_data_replication_policy(mm);
+
+	mmput(mm);
+
+	len = snprintf(buffer, sizeof(buffer), "%d\n", result);
+
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+
+static ssize_t numa_data_replication_write(struct file *file, const char __user *buf,
+			     size_t count, loff_t *ppos)
+{
+	struct task_struct *task = get_proc_task(file_inode(file));
+	struct mm_struct *mm;
+	int val = 0;
+	char buffer[PROC_NUMBUF];
+	int err = 0;
+
+	if (!task)
+		return -ESRCH;
+
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm)
+		return -ESRCH;
+
+	memset(buffer, 0, sizeof(buffer));
+
+	if (copy_from_user(buffer, buf, count)) {
+		err = -EFAULT;
+		goto out;
+	}
+
+	err = kstrtoint(strstrip(buffer), 0, &val);
+	if (err)
+		goto out;
+
+	err = numa_dispatch_data_replication_request(mm, val);
+
+out:
+	mmput(mm);
+
+	return err < 0 ? err : count;
+}
+
+
+static ssize_t numa_table_replication_read(struct file *file, char __user *buf, size_t count,
+			    loff_t *ppos)
+{
+	struct task_struct *task = get_proc_task(file_inode(file));
+	struct mm_struct *mm;
+	table_replication_policy_t result;
+	char buffer[PROC_NUMBUF];
+	int len;
+
+	if (!task)
+		return -ESRCH;
+
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm)
+		return -ESRCH;
+
+	result = get_table_replication_policy(mm);
+
+	mmput(mm);
+
+	len = snprintf(buffer, sizeof(buffer), "%d\n", result);
+
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+
+static ssize_t numa_table_replication_write(struct file *file, const char __user *buf,
+			     size_t count, loff_t *ppos)
+{
+	struct task_struct *task = get_proc_task(file_inode(file));
+	struct mm_struct *mm;
+	int val = 0;
+	char buffer[PROC_NUMBUF];
+	int err = 0;
+
+	if (!task)
+		return -ESRCH;
+
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm)
+		return -ESRCH;
+
+	memset(buffer, 0, sizeof(buffer));
+
+	if (copy_from_user(buffer, buf, count)) {
+		err = -EFAULT;
+		goto out;
+	}
+
+	err = kstrtoint(strstrip(buffer), 0, &val);
+	if (err)
+		goto out;
+
+	err = numa_dispatch_table_replication_request(mm, val);
+
+out:
+	mmput(mm);
+
+	return err < 0 ? err : count;
+}
+
+
+#define REPLICATION_STATS_BUFFER_SIZE 1024
+static ssize_t numa_replication_stats_read(struct file *file, char __user *buf, size_t count,
+			    loff_t *ppos)
+{
+	struct task_struct *task = get_proc_task(file_inode(file));
+	struct mm_struct *mm;
+	unsigned long replicated_data_bytes = 0;
+	unsigned long replicated_table_bytes = 0;
+	struct timespec64 uptime;
+	char buffer[REPLICATION_STATS_BUFFER_SIZE];
+	int len;
+
+	if (!task)
+		return -ESRCH;
+
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm)
+		return -ESRCH;
+
+	ktime_get_boottime_ts64(&uptime);
+	timens_add_boottime(&uptime);
+
+	replicated_data_bytes = total_replicated_data_bytes_mm(mm);
+	replicated_table_bytes = total_replicated_table_bytes_mm(mm);
+
+	mmput(mm);
+
+	len = snprintf(buffer, sizeof(buffer), "{\n"
+						"    \"timestamp\": \"%lu.%02lu\",\n"
+						"    \"replicated_data_bytes\": \"%lu\",\n"
+						"    \"replicated_table_bytes\": \"%lu\"\n"
+						"}\n",
+			(unsigned long) uptime.tv_sec,
+			(uptime.tv_nsec / (NSEC_PER_SEC / 100)), replicated_data_bytes, replicated_table_bytes);
+
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+
+const struct file_operations numa_table_replication_operations = {
+	.read		= numa_table_replication_read,
+	.write		= numa_table_replication_write,
+};
+
+const struct file_operations numa_data_replication_operations = {
+	.read		= numa_data_replication_read,
+	.write		= numa_data_replication_write,
+};
+
+const struct file_operations numa_replication_stats_operations = {
+	.read		= numa_replication_stats_read,
+};
+
+#endif
+
 static const struct pid_entry tgid_base_stuff[] = {
 	DIR("task",       S_IRUGO|S_IXUGO, proc_task_inode_operations, proc_task_operations),
 	DIR("fd",         S_IRUSR|S_IXUSR, proc_fd_inode_operations, proc_fd_operations),
@@ -3724,6 +3908,11 @@ static const struct pid_entry tgid_base_stuff[] = {
 #ifdef CONFIG_KSM
 	ONE("ksm_merging_pages",  S_IRUSR, proc_pid_ksm_merging_pages),
 	ONE("ksm_stat",  S_IRUSR, proc_pid_ksm_stat),
+#endif
+#ifdef CONFIG_USER_REPLICATION
+	REG("numa_table_replication", 0600, numa_table_replication_operations),
+	REG("numa_data_replication", 0600, numa_data_replication_operations),
+	REG("numa_replication_stats", 0400, numa_replication_stats_operations),
 #endif
 };
 

@@ -15,7 +15,7 @@
 #include <linux/stop_machine.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/cacheflush.h>
 #include <asm/debug-monitors.h>
@@ -188,6 +188,7 @@ void __kprobes aarch64_literal64_write(void *addr, u64 data)
 	}
 	raw_spin_unlock_irqrestore(&patch_lock, flags);
 }
+EXPORT_SYMBOL(aarch64_literal64_write);
 #else
 static int __kprobes __aarch64_insn_write(void *addr, __le32 insn)
 {
@@ -218,6 +219,7 @@ void __kprobes aarch64_literal64_write(void *addr, u64 data)
 	patch_unmap(FIX_TEXT_POKE0);
 	raw_spin_unlock_irqrestore(&patch_lock, flags);
 }
+EXPORT_SYMBOL(aarch64_literal64_write);
 #endif /* CONFIG_KERNEL_REPLICATION */
 
 int __kprobes aarch64_insn_write(void *addr, u32 insn)

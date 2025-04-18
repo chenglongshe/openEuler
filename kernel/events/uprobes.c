@@ -27,6 +27,7 @@
 #include <linux/task_work.h>
 #include <linux/shmem_fs.h>
 #include <linux/khugepaged.h>
+#include <linux/numa_user_replication.h>
 
 #include <linux/uprobes.h>
 
@@ -197,10 +198,10 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 
 	reliable_page_counter(old_page, mm, -1);
 	flush_cache_page(vma, addr, pte_pfn(*pvmw.pte));
-	ptep_clear_flush_notify(vma, addr, pvmw.pte);
+	ptep_clear_flush_notify_replicated(vma, addr, pvmw.pte);
 	if (new_page)
-		set_pte_at_notify(mm, addr, pvmw.pte,
-				  mk_pte(new_page, vma->vm_page_prot));
+		set_pte_at_notify_replicated(mm, addr, pvmw.pte,
+					     mk_pte(new_page, vma->vm_page_prot));
 
 	page_remove_rmap(old_page, false);
 	if (!page_mapped(old_page))

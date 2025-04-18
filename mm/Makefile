@@ -134,5 +134,5 @@ obj-$(CONFIG_MEMCG_MEMFS_INFO) += memcg_memfs_info.o
 obj-$(CONFIG_PAGE_CACHE_LIMIT) += page_cache_limit.o
 obj-$(CONFIG_CLEAR_FREELIST_PAGE) += clear_freelist_page.o
 obj-$(CONFIG_MEM_SAMPLING) += mem_sampling.o
-obj-$(CONFIG_KERNEL_REPLICATION) += numa_replication.o
-
+obj-$(CONFIG_KERNEL_REPLICATION) += numa_kernel_replication.o
+obj-$(CONFIG_USER_REPLICATION) += numa_user_replication.o

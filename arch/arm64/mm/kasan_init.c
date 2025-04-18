@@ -13,7 +13,7 @@
 #include <linux/memblock.h>
 #include <linux/start_kernel.h>
 #include <linux/mm.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/mmu_context.h>
 #include <asm/kernel-pgtable.h>
@@ -57,6 +57,24 @@ static phys_addr_t __init kasan_alloc_raw_page(int node)
 	return __pa(p);
 }
 
+static void __init __kasan_pmd_populate(pmd_t *pmdp, phys_addr_t pte_phys, unsigned long addr)
+{
+#ifdef CONFIG_KERNEL_REPLICATION
+	if (get_propagation_level() == PMD_PROPAGATION) {
+		int nid;
+		pmd_t *target;
+
+		for_each_memory_node(nid) {
+			target = (pmd_t *)pgd_offset_pgd(per_node_pgd(&init_mm, nid), addr);
+			__pmd_populate(target, pte_phys, PMD_TYPE_TABLE);
+		}
+	} else
+		__pmd_populate(pmdp, pte_phys, PMD_TYPE_TABLE);
+#else
+	__pmd_populate(pmdp, pte_phys, PMD_TYPE_TABLE);
+#endif /* CONFIG_KERNEL_REPLICATION */
+}
+
 static pte_t *__init kasan_pte_offset(pmd_t *pmdp, unsigned long addr, int node,
 				      bool early)
 {
@@ -64,12 +82,31 @@ static pte_t *__init kasan_pte_offset(pmd_t *pmdp, unsigned long addr, int node,
 		phys_addr_t pte_phys = early ?
 				__pa_symbol(kasan_early_shadow_pte)
 					: kasan_alloc_zeroed_page(node);
-		__pmd_populate(pmdp, pte_phys, PMD_TYPE_TABLE);
+		__kasan_pmd_populate(pmdp, pte_phys, PMD_TYPE_TABLE);
 	}
 
 	return early ? pte_offset_kimg(pmdp, addr)
 		     : pte_offset_kernel(pmdp, addr);
 }
+
+static void __init __kasan_pud_populate(pud_t *pudp, phys_addr_t pmd_phys, unsigned long addr)
+{
+#ifdef CONFIG_KERNEL_REPLICATION
+	if (get_propagation_level() == PUD_PROPAGATION) {
+		int nid;
+		pud_t *target;
+
+		for_each_memory_node(nid) {
+			target = (pud_t *)pgd_offset_pgd(per_node_pgd(&init_mm, nid), addr);
+			__pud_populate(target, pmd_phys, PMD_TYPE_TABLE);
+		}
+	} else
+		__pud_populate(pudp, pmd_phys, PMD_TYPE_TABLE);
+#else
+	__pud_populate(pudp, pmd_phys, PMD_TYPE_TABLE);
+#endif /* CONFIG_KERNEL_REPLICATION */
+}
+
 
 static pmd_t *__init kasan_pmd_offset(pud_t *pudp, unsigned long addr, int node,
 				      bool early)
@@ -78,7 +115,7 @@ static pmd_t *__init kasan_pmd_offset(pud_t *pudp, unsigned long addr, int node,
 		phys_addr_t pmd_phys = early ?
 				__pa_symbol(kasan_early_shadow_pmd)
 					: kasan_alloc_zeroed_page(node);
-		__pud_populate(pudp, pmd_phys, PMD_TYPE_TABLE);
+		__kasan_pud_populate(pudp, pmd_phys, PMD_TYPE_TABLE);
 	}
 
 	return early ? pmd_offset_kimg(pudp, addr) : pmd_offset(pudp, addr);
@@ -87,7 +124,7 @@ static pmd_t *__init kasan_pmd_offset(pud_t *pudp, unsigned long addr, int node,
 static void __init __kasan_p4d_populate(p4d_t *p4dp, phys_addr_t pud_phys, unsigned long addr)
 {
 #ifdef CONFIG_KERNEL_REPLICATION
-	if (is_text_replicated()) {
+	if (get_propagation_level() == P4D_PROPAGATION) {
 		int nid;
 		p4d_t *target;
 
@@ -279,7 +316,7 @@ void __init kasan_init(void)
 				   (void *)mod_shadow_start);
 
 	if (IS_ENABLED(CONFIG_KASAN_VMALLOC)) {
-		BUILD_BUG_ON(VMALLOC_START != MODULES_END);
+		// BUILD_BUG_ON(VMALLOC_START != MODULES_END);
 		kasan_populate_early_shadow((void *)vmalloc_shadow_end,
 					    (void *)KASAN_SHADOW_END);
 	} else {

@@ -1058,6 +1058,29 @@ config KERNEL_REPLICATION
 
 	  If unsure, say "n".
 
+config USER_REPLICATION
+	bool "infrastructure for userspace replication between NUMA nodes"
+	default n
+	depends on KERNEL_REPLICATION
+	select ARCH_USES_HIGH_VMA_FLAGS
+
+	help
+	  Provide interfaces for per NUMA node replication of some userspace mappings.
+	  First of all it made for text, ro-data and ro after init data. This feature
+	  doesn't support THP now, so even with madvise(2) replicated pages should not be
+	  the target for THP.
+
+	  If unsure, say "n".
+
+config USER_REPLICATION_DEBUG
+	bool "Add tracepoints to measure replication costs"
+	default n
+	depends on USER_REPLICATION
+
+	help
+	  Add tracepoints to measure replication costs
+
+
 source "mm/damon/Kconfig"
 
 endmenu

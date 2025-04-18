@@ -12,6 +12,7 @@
 #include <linux/mmu_notifier.h>
 #include <linux/page_ext.h>
 #include <linux/page_idle.h>
+#include <linux/numa_user_replication.h>
 
 #define BITMAP_CHUNK_SIZE	sizeof(u64)
 #define BITMAP_CHUNK_BITS	(BITMAP_CHUNK_SIZE * BITS_PER_BYTE)
@@ -62,7 +63,7 @@ static bool page_idle_clear_pte_refs_one(struct page *page,
 			 * For PTE-mapped THP, one sub page is referenced,
 			 * the whole THP is referenced.
 			 */
-			if (ptep_clear_young_notify(vma, addr, pvmw.pte))
+			if (ptep_clear_young_notify_replicated(vma, addr, pvmw.pte))
 				referenced = true;
 		} else if (IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE)) {
 			if (pmdp_clear_young_notify(vma, addr, pvmw.pmd))

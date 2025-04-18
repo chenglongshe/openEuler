@@ -75,7 +75,7 @@
 #include <linux/init.h>
 #include <linux/libfdt.h>
 #include <linux/pbha.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/cpu.h>
 #include <asm/cpufeature.h>

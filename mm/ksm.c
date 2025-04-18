@@ -38,6 +38,7 @@
 #include <linux/freezer.h>
 #include <linux/oom.h>
 #include <linux/numa.h>
+#include <linux/numa_user_replication.h>
 #include <linux/mempolicy.h>
 
 #include <asm/tlbflush.h>
@@ -1115,13 +1116,13 @@ static int write_protect_page(struct vm_area_struct *vma, struct page *page,
 		 *
 		 * See Documentation/vm/mmu_notifier.rst
 		 */
-		entry = ptep_clear_flush(vma, pvmw.address, pvmw.pte);
+		entry = ptep_clear_flush_replicated(vma, pvmw.address, pvmw.pte);
 		/*
 		 * Check that no O_DIRECT or similar I/O is in progress on the
 		 * page
 		 */
 		if (page_mapcount(page) + 1 + swapped != page_count(page)) {
-			set_pte_at(mm, pvmw.address, pvmw.pte, entry);
+			set_pte_at_replicated(mm, pvmw.address, pvmw.pte, entry);
 			goto out_unlock;
 		}
 		if (pte_dirty(entry))
@@ -1131,7 +1132,7 @@ static int write_protect_page(struct vm_area_struct *vma, struct page *page,
 			entry = pte_mkclean(pte_clear_savedwrite(entry));
 		else
 			entry = pte_mkclean(pte_wrprotect(entry));
-		set_pte_at_notify(mm, pvmw.address, pvmw.pte, entry);
+		set_pte_at_notify_replicated(mm, pvmw.address, pvmw.pte, entry);
 	}
 	*orig_pte = *pvmw.pte;
 	err = 0;
@@ -1211,8 +1212,8 @@ static int replace_page(struct vm_area_struct *vma, struct page *page,
 	 *
 	 * See Documentation/vm/mmu_notifier.rst
 	 */
-	ptep_clear_flush(vma, addr, ptep);
-	set_pte_at_notify(mm, addr, ptep, newpte);
+	ptep_clear_flush_replicated(vma, addr, ptep);
+	set_pte_at_notify_replicated(mm, addr, ptep, newpte);
 
 	reliable_page_counter(page, mm, -1);
 	page_remove_rmap(page, false);
@@ -2339,7 +2340,7 @@ next_mm:
 			continue;
 		if (ksm_scan.address < vma->vm_start)
 			ksm_scan.address = vma->vm_start;
-		if (!vma->anon_vma)
+		if (!vma->anon_vma || vma_has_replicas(vma))
 			ksm_scan.address = vma->vm_end;
 
 		while (ksm_scan.address < vma->vm_end) {
@@ -2796,7 +2797,26 @@ again:
 			 */
 			if ((rmap_item->mm == vma->vm_mm) == search_new_forks)
 				continue;
+#ifdef CONFIG_USER_REPLICATION
+			down_read(&vma->vm_mm->replication_ctl->rmap_lock);
 
+			if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg)) {
+				up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+				continue;
+			}
+
+			if (!rwc->rmap_one(page, vma, addr, rwc->arg)) {
+				up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+				anon_vma_unlock_read(anon_vma);
+				return;
+			}
+			if (rwc->done && rwc->done(page)) {
+				up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+				anon_vma_unlock_read(anon_vma);
+				return;
+			}
+			up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+#else
 			if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 				continue;
 
@@ -2808,6 +2828,7 @@ again:
 				anon_vma_unlock_read(anon_vma);
 				return;
 			}
+#endif
 		}
 		anon_vma_unlock_read(anon_vma);
 	}

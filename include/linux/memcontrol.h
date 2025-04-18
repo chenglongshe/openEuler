@@ -250,6 +250,16 @@ struct swap_device {
 	int type;
 };
 
+struct memcg_replication_ctl {
+	fork_policy_t fork_policy;
+	table_replication_policy_t table_policy;
+	data_replication_policy_t data_policy;
+	unsigned long __percpu *pcp_replicated_pages;
+	unsigned long __percpu *pcp_dereplicated_pages;
+	unsigned long __percpu *pcp_replicated_tables;
+	unsigned long __percpu *pcp_dereplicated_tables;
+};
+
 /*
  * The memory controller data structure. The memory controller controls both
  * page cache and RSS per cgroup. We would eventually like to provide
@@ -406,7 +416,12 @@ struct mem_cgroup {
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
 #endif
+
+#ifdef CONFIG_USER_REPLICATION
+	KABI_USE(5, struct memcg_replication_ctl *replication_ctl)
+#else
 	KABI_RESERVE(5)
+#endif
 #if defined(CONFIG_DYNAMIC_HUGETLB) && defined(CONFIG_ARM64)
 	KABI_USE(6, struct dhugetlb_pool *hpool)
 #else

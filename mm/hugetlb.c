@@ -32,6 +32,7 @@
 #include <linux/cma.h>
 #include <linux/mman.h>
 #include <linux/share_pool.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/page.h>
 #include <asm/pgalloc.h>
@@ -4249,7 +4250,7 @@ static void set_huge_ptep_writable(struct vm_area_struct *vma,
 	pte_t entry;
 
 	entry = huge_pte_mkwrite(huge_pte_mkdirty(huge_ptep_get(ptep)));
-	if (huge_ptep_set_access_flags(vma, address, ptep, entry, 1))
+	if (huge_ptep_set_access_flags_replicated(vma, address, ptep, entry, 1))
 		update_mmu_cache(vma, address, ptep);
 }
 
@@ -4314,7 +4315,7 @@ int copy_hugetlb_page_range(struct mm_struct *dst, struct mm_struct *src,
 		src_pte = huge_pte_offset(src, addr, sz);
 		if (!src_pte)
 			continue;
-		dst_pte = huge_pte_alloc(dst, addr, sz);
+		dst_pte = huge_pte_alloc_copy_tables(dst, src, addr, sz);
 		if (!dst_pte) {
 			ret = -ENOMEM;
 			break;
@@ -4356,10 +4357,10 @@ int copy_hugetlb_page_range(struct mm_struct *dst, struct mm_struct *src,
 				 */
 				make_migration_entry_read(&swp_entry);
 				entry = swp_entry_to_pte(swp_entry);
-				set_huge_swap_pte_at(src, addr, src_pte,
+				set_huge_swap_pte_at_replicated(src, addr, src_pte,
 						     entry, sz);
 			}
-			set_huge_swap_pte_at(dst, addr, dst_pte, entry, sz);
+			set_huge_swap_pte_at_replicated(dst, addr, dst_pte, entry, sz);
 		} else {
 			if (cow) {
 				/*
@@ -4369,13 +4370,13 @@ int copy_hugetlb_page_range(struct mm_struct *dst, struct mm_struct *src,
 				 *
 				 * See Documentation/vm/mmu_notifier.rst
 				 */
-				huge_ptep_set_wrprotect(src, addr, src_pte);
+				huge_ptep_set_wrprotect_replicated(src, addr, src_pte);
 			}
 			entry = huge_ptep_get(src_pte);
 			ptepage = pte_page(entry);
 			get_page(ptepage);
 			page_dup_rmap(ptepage, true);
-			set_huge_pte_at(dst, addr, dst_pte, entry);
+			set_huge_pte_at_replicated(dst, addr, dst_pte, entry);
 			hugetlb_count_add(pages_per_huge_page(h), dst);
 		}
 		spin_unlock(src_ptl);
@@ -4448,7 +4449,7 @@ void __unmap_hugepage_range(struct mmu_gather *tlb, struct vm_area_struct *vma,
 		 * unmapped and its refcount is dropped, so just clear pte here.
 		 */
 		if (unlikely(!pte_present(pte))) {
-			huge_pte_clear(mm, address, ptep, sz);
+			huge_pte_clear_replicated(mm, address, ptep, sz);
 			spin_unlock(ptl);
 			continue;
 		}
@@ -4472,7 +4473,7 @@ void __unmap_hugepage_range(struct mmu_gather *tlb, struct vm_area_struct *vma,
 			set_vma_resv_flags(vma, HPAGE_RESV_UNMAPPED);
 		}
 
-		pte = huge_ptep_get_and_clear(mm, address, ptep);
+		pte = huge_ptep_get_and_clear_replicated(mm, address, ptep);
 		tlb_remove_huge_tlb_entry(h, tlb, ptep, address);
 
 		/* sharepool k2u mapped pages are marked special */
@@ -4749,9 +4750,9 @@ retry_avoidcopy:
 		ClearHPageRestoreReserve(new_page);
 
 		/* Break COW */
-		huge_ptep_clear_flush(vma, haddr, ptep);
+		huge_ptep_clear_flush_replicated(vma, haddr, ptep);
 		mmu_notifier_invalidate_range(mm, range.start, range.end);
-		set_huge_pte_at(mm, haddr, ptep,
+		set_huge_pte_at_replicated(mm, haddr, ptep,
 				make_huge_pte(vma, new_page, 1));
 		page_remove_rmap(old_page, true);
 		hugepage_add_new_anon_rmap(new_page, vma, haddr);
@@ -4978,7 +4979,7 @@ retry:
 		page_dup_rmap(page, true);
 	new_pte = make_huge_pte(vma, page, ((vma->vm_flags & VM_WRITE)
 				&& (vma->vm_flags & VM_SHARED)));
-	set_huge_pte_at(mm, haddr, ptep, new_pte);
+	set_huge_pte_at_replicated(mm, haddr, ptep, new_pte);
 
 	hugetlb_count_add(pages_per_huge_page(h), mm);
 	if ((flags & FAULT_FLAG_WRITE) && !(vma->vm_flags & VM_SHARED)) {
@@ -5079,7 +5080,7 @@ vm_fault_t hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	 */
 	mapping = vma->vm_file->f_mapping;
 	i_mmap_lock_read(mapping);
-	ptep = huge_pte_alloc(mm, haddr, huge_page_size(h));
+	ptep = huge_pte_alloc_replica(mm, vma, haddr, huge_page_size(h));
 	if (!ptep) {
 		i_mmap_unlock_read(mapping);
 		return VM_FAULT_OOM;
@@ -5169,7 +5170,7 @@ vm_fault_t hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		entry = huge_pte_mkdirty(entry);
 	}
 	entry = pte_mkyoung(entry);
-	if (huge_ptep_set_access_flags(vma, haddr, ptep, entry,
+	if (huge_ptep_set_access_flags_replicated(vma, haddr, ptep, entry,
 						flags & FAULT_FLAG_WRITE))
 		update_mmu_cache(vma, haddr, ptep);
 out_put_page:
@@ -5314,10 +5315,10 @@ int hugetlb_mcopy_atomic_pte(struct mm_struct *dst_mm,
 		_dst_pte = huge_pte_mkdirty(_dst_pte);
 	_dst_pte = pte_mkyoung(_dst_pte);
 
-	set_huge_pte_at(dst_mm, dst_addr, dst_pte, _dst_pte);
+	set_huge_pte_at_replicated(dst_mm, dst_addr, dst_pte, _dst_pte);
 
-	(void)huge_ptep_set_access_flags(dst_vma, dst_addr, dst_pte, _dst_pte,
-					dst_vma->vm_flags & VM_WRITE);
+	(void)huge_ptep_set_access_flags_replicated(dst_vma, dst_addr, dst_pte, _dst_pte,
+						    dst_vma->vm_flags & VM_WRITE);
 	hugetlb_count_add(pages_per_huge_page(h), dst_mm);
 
 	/* No need to invalidate - it was non-present before */
@@ -5576,8 +5577,8 @@ unsigned long hugetlb_change_protection(struct vm_area_struct *vma,
 
 				make_migration_entry_read(&entry);
 				newpte = swp_entry_to_pte(entry);
-				set_huge_swap_pte_at(mm, address, ptep,
-						     newpte, huge_page_size(h));
+				set_huge_swap_pte_at_replicated(mm, address, ptep,
+								newpte, huge_page_size(h));
 				pages++;
 			}
 			spin_unlock(ptl);
@@ -5586,10 +5587,10 @@ unsigned long hugetlb_change_protection(struct vm_area_struct *vma,
 		if (!huge_pte_none(pte)) {
 			pte_t old_pte;
 
-			old_pte = huge_ptep_modify_prot_start(vma, address, ptep);
+			old_pte = huge_ptep_modify_prot_start_replicated(vma, address, ptep);
 			pte = pte_mkhuge(huge_pte_modify(old_pte, newprot));
 			pte = arch_make_huge_pte(pte, vma, NULL, 0);
-			huge_ptep_modify_prot_commit(vma, address, ptep, old_pte, pte);
+			huge_ptep_modify_prot_commit_replicated(vma, address, ptep, old_pte, pte);
 			pages++;
 		}
 		spin_unlock(ptl);
@@ -5926,6 +5927,10 @@ pte_t *huge_pmd_share(struct mm_struct *mm, unsigned long addr, pud_t *pud)
 			spte = huge_pte_offset(svma->vm_mm, saddr,
 					       vma_mmu_pagesize(svma));
 			if (spte) {
+				if (PageReplicated(virt_to_page(spte))) {
+					spte = NULL;
+					continue;
+				}
 				get_page(virt_to_page(spte));
 				break;
 			}
@@ -5937,8 +5942,8 @@ pte_t *huge_pmd_share(struct mm_struct *mm, unsigned long addr, pud_t *pud)
 
 	spin_lock(&mm->page_table_lock);
 	if (pud_none(*pud)) {
-		pud_populate(mm, pud,
-				(pmd_t *)((unsigned long)spte & PAGE_MASK));
+		pud_populate_replicated(mm, pud,
+			(pmd_t *)((unsigned long)spte & PAGE_MASK));
 		mm_inc_nr_pmds(mm);
 	} else {
 		put_page(virt_to_page(spte));
@@ -5973,7 +5978,7 @@ int huge_pmd_unshare(struct mm_struct *mm, struct vm_area_struct *vma,
 	if (page_count(virt_to_page(ptep)) == 1)
 		return 0;
 
-	pud_clear(pud);
+	pud_clear_replicated(pud);
 	put_page(virt_to_page(ptep));
 	mm_dec_nr_pmds(mm);
 	/*
@@ -6426,7 +6431,7 @@ static int __hugetlb_insert_hugepage(struct mm_struct *mm, unsigned long addr,
 
 	ptl = huge_pte_lockptr(h, mm, ptep);
 	spin_lock(ptl);
-	set_huge_pte_at(mm, addr, ptep, entry);
+	set_huge_pte_at_replicated(mm, addr, ptep, entry);
 	spin_unlock(ptl);
 
 	return ret;

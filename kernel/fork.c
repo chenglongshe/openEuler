@@ -101,6 +101,8 @@
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 #include <linux/sched/grid_qos.h>
 #endif
+#include <linux/numa_user_replication.h>
+
 #include <linux/share_pool.h>
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -607,6 +609,7 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 		rb_parent = &tmp->vm_rb;
 
 		mm->map_count++;
+
 		if (!(tmp->vm_flags & VM_WIPEONFORK))
 			retval = copy_page_range(tmp, mpnt);
 
@@ -697,6 +700,10 @@ void __mmdrop(struct mm_struct *mm)
 	BUG_ON(mm == &init_mm);
 	WARN_ON_ONCE(mm == current->mm);
 	WARN_ON_ONCE(mm == current->active_mm);
+#ifdef CONFIG_USER_REPLICATION
+	free_numa_replication_ctl(mm);
+#endif
+	mm_free_numa_stats(mm);
 	mm_free_pgd(mm);
 	destroy_context(mm);
 	mmu_notifier_subscriptions_destroy(mm);
@@ -1096,6 +1103,21 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 #endif
 	mm_init_uprobes_state(mm);
 	hugetlb_count_init(mm);
+
+#ifdef CONFIG_USER_REPLICATION
+	/*
+	 * Hack, to prevent use after free in case of ENOMEM
+	 */
+	mm->replication_ctl = NULL;
+	mm->context_switch_stats = NULL;
+	mm->pgd = NULL;
+	mm->pgd_numa = NULL;
+#endif
+
+	if (mm_init_numa_stats(mm))
+		goto fail_nopgd;
+	if (alloc_numa_replication_ctl(mm))
+		goto fail_nopgd;
 
 	if (current->mm) {
 		mm->flags = current->mm->flags & MMF_INIT_MASK;

@@ -38,6 +38,7 @@
 #include <linux/hugetlb.h>
 #include <linux/frontswap.h>
 #include <linux/fs_parser.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/tlbflush.h> /* for arch/microblaze update_mmu_cache() */
 
@@ -2481,7 +2482,7 @@ static int shmem_mfill_atomic_pte(struct mm_struct *dst_mm,
 	inc_mm_counter(dst_mm, mm_counter_file(page));
 	reliable_page_counter(page, dst_mm, 1);
 	page_add_file_rmap(page, false);
-	set_pte_at(dst_mm, dst_addr, dst_pte, _dst_pte);
+	set_pte_at_replicated(dst_mm, dst_addr, dst_pte, _dst_pte);
 
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(dst_vma, dst_addr, dst_pte);

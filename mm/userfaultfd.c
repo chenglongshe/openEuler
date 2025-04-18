@@ -16,6 +16,8 @@
 #include <linux/hugetlb.h>
 #include <linux/shmem_fs.h>
 #include <linux/userswap.h>
+#include <linux/numa_user_replication.h>
+
 #include <asm/tlbflush.h>
 #include "internal.h"
 
@@ -130,7 +132,7 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 	page_add_new_anon_rmap(page, dst_vma, dst_addr, false);
 	lru_cache_add_inactive_or_unevictable(page, dst_vma);
 
-	set_pte_at(dst_mm, dst_addr, dst_pte, _dst_pte);
+	set_pte_at_replicated(dst_mm, dst_addr, dst_pte, _dst_pte);
 
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(dst_vma, dst_addr, dst_pte);
@@ -172,7 +174,7 @@ static int mfill_zeropage_pte(struct mm_struct *dst_mm,
 	ret = -EEXIST;
 	if (!pte_none(*dst_pte))
 		goto out_unlock;
-	set_pte_at(dst_mm, dst_addr, dst_pte, _dst_pte);
+	set_pte_at_replicated(dst_mm, dst_addr, dst_pte, _dst_pte);
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(dst_vma, dst_addr, dst_pte);
 	ret = 0;

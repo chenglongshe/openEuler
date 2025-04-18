@@ -7,7 +7,6 @@
 #include <asm/tlbflush.h>
 #include <asm/pgalloc.h>
 #include <asm/memory.h>
-#include <asm/mmu_context.h>
 #include <linux/mm.h>
 #include <linux/seq_file.h>
 
@@ -22,14 +21,16 @@ static inline pgd_t *numa_replicate_pgt_pgd(int nid)
 	pgd_page = alloc_pages_node(nid, GFP_PGTABLE_KERNEL, 2);
 	BUG_ON(pgd_page == NULL);
 
+	SetPageReplicated(pgd_page);
+	SetPageReplicated(pgd_page + 2);
+
 	new_pgd = (pgd_t *)page_address(pgd_page);
-	new_pgd += (PTRS_PER_PGD * 2); //Extra pages for KPTI
+	new_pgd += (PAGE_SIZE * 2 / sizeof(pgd_t)); //Extra pages for KPTI
 
 	copy_page((void *)new_pgd, (void *)swapper_pg_dir);
 
 	return new_pgd;
 }
-
 
 void cpu_replace_ttbr1(pgd_t *pgdp);
 static inline void numa_load_replicated_pgd(pgd_t *pgd)
@@ -50,7 +51,8 @@ static inline ssize_t numa_cpu_dump(struct seq_file *m)
 
 static inline void numa_sync_text_replicas(unsigned long start, unsigned long end)
 {
-	__flush_icache_range(start, end);
+	__flush_dcache_area((void *)start, end - start);
+	__flush_icache_all();
 }
 #endif /* CONFIG_KERNEL_REPLICATION */
 #endif /* __ASM_NUMA_REPLICATION_H */

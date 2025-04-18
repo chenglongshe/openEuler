@@ -50,6 +50,7 @@
 #include <linux/timekeeping.h>
 #include <linux/time64.h>
 #include <linux/pagewalk.h>
+#include <linux/numa_user_replication.h>
 
 #define spg_valid(spg)		((spg)->is_alive == true)
 
@@ -4104,7 +4105,7 @@ retry:
 	page_dup_rmap(page, true);
 	new_pte = make_huge_pte(vma, page, ((vma->vm_flags & VM_WRITE)
 				&& (vma->vm_flags & VM_SHARED)));
-	set_huge_pte_at(mm, haddr, ptep, new_pte);
+	set_huge_pte_at_replicated(mm, haddr, ptep, new_pte);
 
 	hugetlb_count_add(pages_per_huge_page(h), mm);
 
