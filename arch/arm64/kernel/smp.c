@@ -37,7 +37,7 @@
 #include <linux/kvm_host.h>
 #include <linux/perf/arm_pmu.h>
 #include <linux/crash_dump.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/alternative.h>
 #include <asm/atomic.h>

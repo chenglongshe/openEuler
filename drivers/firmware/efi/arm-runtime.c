@@ -19,7 +19,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/pgtable.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/cacheflush.h>
 #include <asm/efi.h>

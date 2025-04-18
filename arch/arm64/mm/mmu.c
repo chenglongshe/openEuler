@@ -24,7 +24,7 @@
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
 #include <linux/pbha.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/barrier.h>
 #include <asm/cputype.h>
@@ -697,7 +697,7 @@ static void __init populate_trampoline_mappings(void)
 
 	/* Copy trampoline mappings in replicated tables */
 	for_each_memory_node(nid) {
-		memcpy(per_node_pgd(&init_mm, nid) - (PTRS_PER_PGD * 2),
+		memcpy(per_node_pgd(&init_mm, nid) - (PAGE_SIZE * 2 / sizeof(pgd_t)),
 				tramp_pg_dir, PGD_SIZE);
 	}
 	/* Be sure that replicated page table can be observed properly */

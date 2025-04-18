@@ -683,7 +683,7 @@ static void __init free_unused_memmap(void)
  * It is necessary to preallocate vmalloc pages in advance,
  * otherwise the replicated page-tables can be incomplete.
  */
-static void __init preallocate_vmalloc_pages(void)
+void __init preallocate_vmalloc_pages(void)
 {
 	unsigned long addr;
 
@@ -692,6 +692,8 @@ static void __init preallocate_vmalloc_pages(void)
 		pgd_t *pgd = pgd_offset_k(addr);
 		p4d_t *p4d;
 		pud_t *pud;
+		pmd_t *pmd;
+		int pte;
 
 		p4d = p4d_alloc(&init_mm, pgd, addr);
 		/*
@@ -701,6 +703,18 @@ static void __init preallocate_vmalloc_pages(void)
 		pud = pud_alloc(&init_mm, p4d, addr);
 		if (!pud)
 			panic("Failed to pre-allocate pud pages for vmalloc area\n");
+		if (!mm_pud_folded(&init_mm))
+			continue;
+
+		pmd = pmd_alloc(&init_mm, pud, addr);
+		if (!pmd)
+			panic("Failed to pre-allocate pmd pages for vmalloc area\n");
+		if (!mm_pmd_folded(&init_mm))
+			continue;
+
+		pte = pte_alloc(&init_mm, pmd);
+		if (pte)
+			panic("Failed to pre-allocate pte pages for vmalloc area\n");
 	}
 }
 #endif /* CONFIG_KERNEL_REPLICATION */
@@ -749,9 +763,6 @@ void __init mem_init(void)
 		 */
 		sysctl_overcommit_memory = OVERCOMMIT_ALWAYS;
 	}
-#ifdef CONFIG_KERNEL_REPLICATION
-	preallocate_vmalloc_pages();
-#endif /* CONFIG_KERNEL_REPLICATION */
 }
 
 void free_initmem(void)

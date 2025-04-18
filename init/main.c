@@ -99,7 +99,7 @@
 #include <linux/kcsan.h>
 #include <linux/init_syscalls.h>
 #include <linux/randomize_kstack.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/io.h>
 #include <asm/setup.h>
@@ -819,6 +819,7 @@ static void __init report_meminit(void)
 		pr_info("mem auto-init: clearing system memory may take some time...\n");
 }
 
+void __weak preallocate_vmalloc_pages(void) { }
 /*
  * Set up kernel memory allocators
  */
@@ -839,6 +840,7 @@ static void __init mm_init(void)
 	kmemleak_init();
 	pgtable_init();
 	debug_objects_mem_init();
+	preallocate_vmalloc_pages();
 	vmalloc_init();
 	/* Should be run before the first non-init thread is created */
 	init_espfix_bsp();
@@ -1461,6 +1463,7 @@ static int __ref kernel_init(void *unused)
 	 */
 	numa_replicate_kernel_rodata();
 	numa_replication_fini();
+	numa_replication_init_sysfs();
 	/*
 	 * Kernel mappings are now finalized - update the userspace page-table
 	 * to finalize PTI.

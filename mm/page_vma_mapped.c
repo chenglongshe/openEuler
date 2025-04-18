@@ -4,6 +4,7 @@
 #include <linux/hugetlb.h>
 #include <linux/swap.h>
 #include <linux/swapops.h>
+#include <linux/numa_user_replication.h>
 
 #include "internal.h"
 
@@ -190,7 +191,7 @@ bool page_vma_mapped_walk(struct page_vma_mapped_walk *pvmw)
 		goto next_pte;
 restart:
 	do {
-		pgd = pgd_offset(mm, pvmw->address);
+		pgd = pgd_offset_pgd(this_node_pgd(mm), pvmw->address);
 		if (!pgd_present(*pgd)) {
 			step_forward(pvmw, PGDIR_SIZE);
 			continue;

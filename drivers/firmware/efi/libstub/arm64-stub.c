@@ -312,7 +312,12 @@ efi_status_t handle_kernel_image(unsigned long *image_addr,
 	 * TLB usage. Due to this fact for now we map kernel by huge pages even
 	 * in case of KASLR enabled. Ugly but works.
 	 */
+#ifdef CONFIG_ARM64_4K_PAGES
 	u64 min_kimg_align = HPAGE_SIZE;
+#else
+	u64 min_kimg_align = CONT_PTE_SIZE;
+#endif
+
 #else
 	u64 min_kimg_align = efi_nokaslr ? MIN_KIMG_ALIGN : EFI_KIMG_ALIGN;
 #endif

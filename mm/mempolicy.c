@@ -103,6 +103,7 @@
 #include <linux/mmu_notifier.h>
 #include <linux/printk.h>
 #include <linux/swapops.h>
+#include <linux/numa_user_replication.h>
 
 #include <linux/share_pool_interface.h>
 
@@ -622,6 +623,12 @@ static int queue_pages_pte_range(pmd_t *pmd, unsigned long addr,
 			continue;
 		if (!queue_pages_required(page, qp))
 			continue;
+		/*
+		 * If vma contains replicated memory, we are not going to move these pages.
+		 */
+		if (PageReplicated(compound_head(page)))
+			continue;
+
 		if (flags & (MPOL_MF_MOVE | MPOL_MF_MOVE_ALL)) {
 			/* MPOL_MF_STRICT must be specified if we get here */
 			if (!vma_migratable(vma)) {

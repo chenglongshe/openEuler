@@ -21,6 +21,7 @@
 #include <linux/pkeys.h>
 #include <linux/module.h>
 #include <linux/pbha.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/elf.h>
 #include <asm/tlb.h>
@@ -401,6 +402,20 @@ struct mem_size_stats {
 	u64 pss_locked;
 	u64 swap_pss;
 	bool check_shmem_swap;
+#ifdef CONFIG_USER_REPLICATION
+	KABI_EXTEND(unsigned long repl_page)
+	KABI_EXTEND(unsigned long repl_thp)
+	KABI_EXTEND(unsigned long repl_tables)
+#endif
+};
+
+struct smaps_private {
+	struct mem_size_stats *mss;
+	struct vm_area_struct *vma;
+#ifdef CONFIG_USER_REPLICATION
+	int _nid;			/* Node ID of the page of upper level */
+	struct mm_struct *mm;
+#endif
 };
 
 static void smaps_page_accumulate(struct mem_size_stats *mss,
@@ -488,7 +503,8 @@ static void smaps_account(struct mem_size_stats *mss, struct page *page,
 static int smaps_pte_hole(unsigned long addr, unsigned long end,
 			  __always_unused int depth, struct mm_walk *walk)
 {
-	struct mem_size_stats *mss = walk->private;
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
 
 	mss->swap += shmem_partial_swap_usage(
 			walk->vma->vm_file->f_mapping, addr, end);
@@ -502,8 +518,9 @@ static int smaps_pte_hole(unsigned long addr, unsigned long end,
 static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 		struct mm_walk *walk)
 {
-	struct mem_size_stats *mss = walk->private;
-	struct vm_area_struct *vma = walk->vma;
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
+	struct vm_area_struct *vma = priv->vma;
 	bool locked = !!(vma->vm_flags & VM_LOCKED);
 	struct page *page = NULL;
 	bool migration = false, young = false, dirty = false;
@@ -545,6 +562,11 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 	if (!page)
 		return;
 
+#ifdef CONFIG_USER_REPLICATION
+	if (PageReplicated(page) && priv->_nid == page_to_nid(page))
+		mss->repl_page += PAGE_SIZE;
+#endif
+
 	smaps_account(mss, page, false, young, dirty, locked, migration);
 }
 
@@ -552,8 +574,9 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 static void smaps_pmd_entry(pmd_t *pmd, unsigned long addr,
 		struct mm_walk *walk)
 {
-	struct mem_size_stats *mss = walk->private;
-	struct vm_area_struct *vma = walk->vma;
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
+	struct vm_area_struct *vma = priv->vma;
 	bool locked = !!(vma->vm_flags & VM_LOCKED);
 	struct page *page = NULL;
 	bool migration = false;
@@ -571,6 +594,10 @@ static void smaps_pmd_entry(pmd_t *pmd, unsigned long addr,
 	}
 	if (IS_ERR_OR_NULL(page))
 		return;
+#ifdef CONFIG_USER_REPLICATION
+	if (PageReplicated(page) && priv->_nid == page_to_nid(page))
+		mss->repl_thp += HPAGE_SIZE;
+#endif
 	if (PageAnon(page))
 		mss->anonymous_thp += HPAGE_PMD_SIZE;
 	else if (PageSwapBacked(page))
@@ -711,8 +738,9 @@ static int smaps_hugetlb_range(pte_t *pte, unsigned long hmask,
 				 unsigned long addr, unsigned long end,
 				 struct mm_walk *walk)
 {
-	struct mem_size_stats *mss = walk->private;
-	struct vm_area_struct *vma = walk->vma;
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
+	struct vm_area_struct *vma = priv->vma;
 	struct page *page = NULL;
 
 	if (pte_present(*pte)) {
@@ -737,6 +765,10 @@ static int smaps_hugetlb_range(pte_t *pte, unsigned long hmask,
 #define smaps_hugetlb_range	NULL
 #endif /* HUGETLB_PAGE */
 
+/*
+ * In case if CONFIG_USER_REPLICATION=y PGD is always replicated, so
+ * must be accounted on all available nodes.
+ */
 static const struct mm_walk_ops smaps_walk_ops = {
 	.pmd_entry		= smaps_pte_range,
 	.hugetlb_entry		= smaps_hugetlb_range,
@@ -748,6 +780,35 @@ static const struct mm_walk_ops smaps_shmem_walk_ops = {
 	.pte_hole		= smaps_pte_hole,
 };
 
+static void smaps_walk_vma(struct vm_area_struct *vma,
+			   unsigned long start,
+			   const struct mm_walk_ops *ops,
+			   struct smaps_private *priv)
+{
+#ifdef CONFIG_USER_REPLICATION
+	if (numa_is_vma_replicant(vma)) {
+		int nid;
+
+		BUG_ON(is_vm_hugetlb_page(vma));
+
+		for_each_node_state(nid, N_MEMORY) {
+			priv->_nid = nid;
+			walk_page_range_novma(vma->vm_mm,
+					      start ? start : vma->vm_start,
+					      vma->vm_end, ops,
+					      vma->vm_mm->pgd_numa[nid],
+					      priv);
+		}
+		return;
+	}
+#endif
+
+	if (!start)
+		walk_page_vma(vma, ops, priv);
+	else
+		walk_page_range(vma->vm_mm, start, vma->vm_end, ops, priv);
+}
+
 /*
  * Gather mem stats from @vma with the indicated beginning
  * address @start, and keep them in @mss.
@@ -758,6 +819,10 @@ static void smap_gather_stats(struct vm_area_struct *vma,
 		struct mem_size_stats *mss, unsigned long start)
 {
 	const struct mm_walk_ops *ops = &smaps_walk_ops;
+	struct smaps_private priv = {
+		.mss = mss,
+		.vma = vma,
+	};
 
 	/* Invalid start */
 	if (start >= vma->vm_end)
@@ -788,11 +853,9 @@ static void smap_gather_stats(struct vm_area_struct *vma,
 		}
 	}
 #endif
+
 	/* mmap_lock is held in m_start */
-	if (!start)
-		walk_page_vma(vma, ops, mss);
-	else
-		walk_page_range(vma->vm_mm, start, vma->vm_end, ops, mss);
+	smaps_walk_vma(vma, start, ops, &priv);
 }
 
 #define SEQ_PUT_DEC(str, val) \
@@ -834,6 +897,11 @@ static void __show_smap(struct seq_file *m, const struct mem_size_stats *mss,
 					mss->swap_pss >> PSS_SHIFT);
 	SEQ_PUT_DEC(" kB\nLocked:         ",
 					mss->pss_locked >> PSS_SHIFT);
+#ifdef CONFIG_USER_REPLICATION
+	SEQ_PUT_DEC(" kB\nReplPages:      ", mss->repl_page);
+	SEQ_PUT_DEC(" kB\nReplThpPages:   ", mss->repl_thp);
+	SEQ_PUT_DEC(" kB\nReplTablePages: ", mss->repl_tables);
+#endif
 	seq_puts(m, " kB\n");
 }
 
@@ -864,6 +932,121 @@ static int show_smap(struct seq_file *m, void *v)
 
 	return 0;
 }
+
+#ifdef CONFIG_USER_REPLICATION
+static int smaps_tables_pgd_callback(pgd_t *pgd,
+			unsigned long addr, unsigned long next,
+			struct mm_walk *walk)
+{
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
+	p4d_t *p4d;
+
+	if (mm_p4d_folded(priv->mm))
+		return 0;
+
+	if (pgd_none_or_clear_bad(pgd))
+		return 0;
+
+	p4d = (p4d_t *)pgd_page_vaddr(*pgd);
+
+	if (numa_pgtable_replicated(p4d))
+		mss->repl_tables += (replica_count * PAGE_SIZE);
+
+	return 0;
+}
+
+static int smaps_tables_p4d_callback(p4d_t *p4d,
+			unsigned long addr, unsigned long next,
+			struct mm_walk *walk)
+{
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
+	pud_t *pud;
+
+	if (mm_pud_folded(priv->mm))
+		return 0;
+
+	if (p4d_none_or_clear_bad(p4d))
+		return 0;
+
+	pud = p4d_pgtable(*p4d);
+
+	if (numa_pgtable_replicated(pud))
+		mss->repl_tables += (replica_count * PAGE_SIZE);
+	return 0;
+}
+
+static int smaps_tables_pud_callback(pud_t *pud,
+			unsigned long addr, unsigned long next,
+			struct mm_walk *walk)
+{
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
+	pmd_t *pmd;
+
+	if (mm_pmd_folded(priv->mm))
+		return 0;
+	if (pud_none_or_clear_bad(pud))
+		return 0;
+
+	pmd = pud_pgtable(*pud);
+
+	if (numa_pgtable_replicated(pmd))
+		mss->repl_tables += (replica_count * PAGE_SIZE);
+
+	return 0;
+}
+
+static int smaps_tables_pmd_callback(pmd_t *pmd,
+			unsigned long addr, unsigned long next,
+			struct mm_walk *walk)
+{
+	struct smaps_private *priv = walk->private;
+	struct mem_size_stats *mss = priv->mss;
+
+	struct page *pte;
+
+	if (pmd_none(*pmd) || is_swap_pmd(*pmd) || pmd_devmap(*pmd) || pmd_trans_huge(*pmd))
+		return 0;
+
+	pte = pmd_pgtable(*pmd);
+
+	if (numa_pgtable_replicated(page_to_virt(pte)))
+		mss->repl_tables += (replica_count * PAGE_SIZE);
+
+	return 0;
+}
+
+const struct mm_walk_ops smaps_tables_ops = {
+	.pgd_entry = smaps_tables_pgd_callback,
+	.p4d_entry = smaps_tables_p4d_callback,
+	.pud_entry = smaps_tables_pud_callback,
+	.pmd_entry = smaps_tables_pmd_callback,
+};
+
+static struct vm_area_struct *find_last_vma(struct mm_struct *mm)
+{
+	struct vm_area_struct *vma = mm->mmap;
+
+	while (vma->vm_next) {
+		vma = vma->vm_next;
+	}
+	return vma;
+}
+
+static void smaps_gather_tables(struct mm_struct *mm, struct mem_size_stats *mss)
+{
+	const struct mm_walk_ops *ops = &smaps_tables_ops;
+	struct smaps_private priv = {
+		.mss = mss,
+		.mm = mm
+	};
+
+	walk_page_range_novma(mm, mm->mmap->vm_start, find_last_vma(mm)->vm_end, ops, NULL, &priv);
+	mss->repl_tables += (PAGE_SIZE * replica_count);
+}
+#endif
 
 static int show_smaps_rollup(struct seq_file *m, void *v)
 {
@@ -960,6 +1143,10 @@ static int show_smaps_rollup(struct seq_file *m, void *v)
 		/* Case 2 above */
 		vma = vma->vm_next;
 	}
+
+#ifdef CONFIG_USER_REPLICATION
+	smaps_gather_tables(priv->mm, &mss);
+#endif
 
 	show_vma_header_prefix(m, priv->mm->mmap ? priv->mm->mmap->vm_start : 0,
 			       last_vma_end, 0, 0, 0, 0);

@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <linux/kernel.h>
 #include <linux/pagewalk.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 #include <linux/memblock.h>
 #include <linux/pgtable.h>
 #include <linux/hugetlb.h>
 #include <linux/kobject.h>
 #include <linux/debugfs.h>
 
+
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
+#include <asm/tlb.h>
+#include <asm/mmu_context.h>
 
 #define KERNEL_TEXT_START	((unsigned long)&_stext)
 #define KERNEL_TEXT_END		((unsigned long)&_etext)
@@ -21,7 +24,7 @@
 #define PAGES_PER_PMD		(1 << PMD_ALLOC_ORDER)
 
 #define replication_log(data, fmt, args...)		\
-({							\
+({						\
 	if (data && data->m)				\
 		seq_printf(data->m, fmt, ##args);	\
 	else						\
@@ -50,6 +53,7 @@ struct dump_config {
 };
 
 static bool text_replicated;
+static propagation_level_t prop_level = NONE;
 /*
  * The first ready NUMA node, used as a source node
  * for kernel text and rodata replication
@@ -65,6 +69,11 @@ static int node_to_memory_node[MAX_NUMNODES];
 
 static bool pgtables_extra;
 static DEFINE_SPINLOCK(debugfs_lock);
+
+propagation_level_t get_propagation_level(void)
+{
+	return prop_level;
+}
 
 bool is_text_replicated(void)
 {
@@ -127,8 +136,8 @@ static int p4d_callback(p4d_t *p4d,
 	next = (addr & P4D_MASK) - 1 + P4D_SIZE;
 
 	replication_log(c->data,
-			"P4D ADDR: 0x%p P4D VAL: 0x%016lx [%p --- %p]\n",
-			p4d, val, (void *)addr, (void *)next);
+			"P4D ADDR: 0x%p (REPL=%d) P4D VAL: 0x%016lx [%p --- %p]\n",
+			p4d, numa_pgtable_replicated(p4d), val, (void *)addr, (void *)next);
 
 	if (c->p4d_extra_info)
 		binary_dump(c->data, val);
@@ -150,8 +159,8 @@ static int pud_callback(pud_t *pud,
 	next = (addr & PUD_MASK) - 1 + PUD_SIZE;
 
 	replication_log(c->data,
-		"PUD ADDR: 0x%p PUD VAL: 0x%016lx huge(%d) [%p --- %p]\n",
-		pud, val, pud_huge(*pud), (void *)addr, (void *)next);
+		"PUD ADDR: 0x%p (REPL=%d) PUD VAL: 0x%016lx huge(%d) [%p --- %p]\n",
+		pud, numa_pgtable_replicated(pud), val, pud_huge(*pud), (void *)addr, (void *)next);
 
 	if (c->pud_extra_info)
 		binary_dump(c->data, val);
@@ -174,8 +183,8 @@ static int pmd_callback(pmd_t *pmd,
 	next = (addr & PMD_MASK) - 1 + PMD_SIZE;
 
 	replication_log(c->data,
-		"PMD ADDR: 0x%p PMD VAL: 0x%016lx huge(%d) [%p --- %p] to %p\n",
-		pmd, val, pmd_huge(*pmd), (void *)addr, (void *)next, (void *)paddr);
+		"PMD ADDR: 0x%p (REPL=%d) PMD VAL: 0x%016lx huge(%d) [%p --- %p] to %p\n",
+		pmd, numa_pgtable_replicated(pmd), val, pmd_huge(*pmd), (void *)addr, (void *)next, (void *)paddr);
 
 	if (c->pmd_extra_info)
 		binary_dump(c->data, val);
@@ -198,14 +207,16 @@ static int pte_callback(pte_t *pte,
 	next = (addr & PAGE_MASK) - 1 + PAGE_SIZE;
 
 	replication_log(c->data,
-		"PTE ADDR: 0x%p PTE VAL: 0x%016lx [%p --- %p] to %p\n",
-		pte, val, (void *)addr, (void *)next, (void *)paddr);
+		"PTE ADDR: 0x%p (REPL=%d) PTE VAL: 0x%016lx [%p --- %p] to %p (REPL=%d)\n",
+		pte, numa_pgtable_replicated(pte), val, (void *)addr, (void *)next, (void *)paddr, PageReplicated(virt_to_page(phys_to_virt(paddr))));
 
 	if (c->pte_extra_info)
 		binary_dump(c->data, val);
 
 	return 0;
 }
+
+
 
 static int pte_hole_callback(unsigned long addr, unsigned long next,
 			     int depth, struct mm_walk *walk)
@@ -223,6 +234,7 @@ static void dump_pgtables(struct mm_struct *mm,
 {
 	int nid = 0;
 	int extra = pgtables_extra ? 1 : 0;
+	bool locked = false;
 	struct dump_config conf = {
 		.pgd_extra_info = extra,
 		.p4d_extra_info = extra,
@@ -248,14 +260,22 @@ static void dump_pgtables(struct mm_struct *mm,
 
 	replication_log(data,
 			"----PER-NUMA NODE KERNEL REPLICATION ENABLED----\n");
-	mmap_read_lock(mm);
+
+	if (rwsem_is_locked(&mm->mmap_lock))
+		locked = true;
+	else
+		mmap_read_lock(mm);
+
 	for_each_memory_node(nid) {
 		replication_log(data, "NUMA node id #%d\n", nid);
 		replication_log(data, "PGD: %p  PGD phys: %p\n",
 			mm->pgd_numa[nid], (void *)virt_to_phys(mm->pgd_numa[nid]));
 		walk_page_range_novma(mm, start, end, &ops, mm->pgd_numa[nid], &conf);
 	}
-	mmap_read_unlock(mm);
+
+	if (!locked)
+		mmap_read_unlock(mm);
+
 	replication_log(data,
 			"----PER-NUMA NODE KERNEL REPLICATION ENABLED----\n");
 }
@@ -388,21 +408,32 @@ static void replicate_memory(void *dst, unsigned long start, unsigned long end, 
 	p4d_t *p4d;
 	pud_t *pud;
 	pmd_t *pmd;
+	pte_t *pte;
 	pgprot_t prot;
-	unsigned int nr_pmd = 0;
+	unsigned int offset_in_pages = 0;
 	unsigned long vaddr = start;
 	struct page *pages = virt_to_page(dst);
 
 	memcpy(dst, lm_alias(start), end - start);
-	for (; vaddr < end; vaddr += PMD_SIZE, nr_pmd++) {
+	while (vaddr < end) {
 		pgd = pgd_offset_pgd(node_desc[nid].pgd, vaddr);
 		p4d = p4d_offset(pgd, vaddr);
 		pud = pud_offset(p4d, vaddr);
 		pmd = pmd_offset(pud, vaddr);
 
-		prot = pmd_pgprot(*pmd);
+		if (pmd_leaf(*pmd)) {
+			prot = pmd_pgprot(*pmd);
+			set_pmd(pmd, pfn_pmd(page_to_pfn(pages) + offset_in_pages, prot));
+			offset_in_pages += PAGES_PER_PMD;
+			vaddr += PMD_SIZE;
+			continue;
+		}
+		pte = pte_offset_kernel(pmd, vaddr);
+		prot = pte_pgprot(*pte);
+		set_pte(pte, pfn_pte(page_to_pfn(pages) + offset_in_pages, prot));
+		offset_in_pages++;
+		vaddr += PAGE_SIZE;
 
-		set_pmd(pmd, pfn_pmd(page_to_pfn(pages) + nr_pmd * PAGES_PER_PMD, prot));
 	}
 }
 
@@ -421,6 +452,38 @@ static void replicate_kernel_rodata(int nid)
 }
 
 //'-1' in next functions have only one purpose - prevent unsgined long overflow
+static void replicate_pgt_pte(pud_t *dst, pud_t *src,
+			      unsigned long start, unsigned long end,
+			      unsigned int nid)
+{
+	unsigned long left = start & PMD_MASK;
+	unsigned long right = (end & PMD_MASK) - 1 + PMD_SIZE;
+	unsigned long addr;
+
+	pmd_t *clone_pmd = pmd_offset(dst, left);
+	pmd_t *orig_pmd = pmd_offset(src, left);
+
+	for (addr = left;
+			(addr >= left && addr < right); addr += PMD_SIZE) {
+		pgtable_t new_pte;
+
+		if (pmd_none(*orig_pmd) || pmd_huge(*orig_pmd)  ||
+				pmd_val(*orig_pmd) == 0)
+			goto skip;
+
+		pmd_clear(clone_pmd);
+		new_pte = pte_alloc_one_node(nid, &init_mm);
+		pmd_populate(&init_mm, clone_pmd, new_pte);
+		BUG_ON(new_pte == NULL);
+
+		copy_page(page_to_virt(pmd_pgtable(*clone_pmd)), page_to_virt(pmd_pgtable(*orig_pmd)));
+skip:
+		clone_pmd++;
+		orig_pmd++;
+	}
+}
+
+//'-1' in next functions have only one purpose - prevent unsgined long overflow
 static void replicate_pgt_pmd(p4d_t *dst, p4d_t *src,
 			      unsigned long start, unsigned long end,
 			      unsigned int nid)
@@ -436,7 +499,8 @@ static void replicate_pgt_pmd(p4d_t *dst, p4d_t *src,
 			(addr >= left && addr < right); addr += PUD_SIZE) {
 		pmd_t *new_pmd;
 
-		if (pud_none(*orig_pud) || pud_huge(*orig_pud))
+		if (pud_none(*orig_pud) || pud_huge(*orig_pud)  ||
+				pud_val(*orig_pud) == 0)
 			goto skip;
 
 		pud_clear(clone_pud);
@@ -444,6 +508,9 @@ static void replicate_pgt_pmd(p4d_t *dst, p4d_t *src,
 		BUG_ON(new_pmd == NULL);
 
 		copy_page(pud_pgtable(*clone_pud), pud_pgtable(*orig_pud));
+
+		replicate_pgt_pte(clone_pud, orig_pud, max(addr, start),
+				  min(addr - 1 + PUD_SIZE, end), nid);
 skip:
 		clone_pud++;
 		orig_pud++;
@@ -465,7 +532,8 @@ static void replicate_pgt_pud(pgd_t *dst, pgd_t *src,
 			(addr >= left && addr < right); addr += P4D_SIZE) {
 		pud_t *new_pud;
 
-		if (p4d_none(*orig_p4d) || p4d_huge(*orig_p4d))
+		if (p4d_none(*orig_p4d) || p4d_huge(*orig_p4d)  ||
+				p4d_val(*orig_p4d) == 0)
 			goto skip;
 
 		p4d_clear(clone_p4d);
@@ -555,7 +623,6 @@ static void replicate_pgtables(void)
 
 	for_each_online_node(nid) {
 		int memory_nid = numa_get_memory_node(nid);
-
 		init_mm.pgd_numa[nid] = node_desc[memory_nid].pgd;
 	}
 
@@ -588,6 +655,18 @@ void __init numa_replicate_kernel_text(void)
 	}
 
 	text_replicated = true;
+
+	if (!mm_p4d_folded(&init_mm))
+		prop_level = PGD_PROPAGATION;
+	if (mm_p4d_folded(&init_mm) && !mm_pud_folded(&init_mm))
+		prop_level = P4D_PROPAGATION;
+	if (mm_p4d_folded(&init_mm) && mm_pud_folded(&init_mm) && !mm_pmd_folded(&init_mm))
+		prop_level = PUD_PROPAGATION;
+	if (mm_p4d_folded(&init_mm) && mm_pud_folded(&init_mm) && mm_pmd_folded(&init_mm))
+		prop_level = PMD_PROPAGATION;
+
+	BUG_ON(prop_level == NONE);
+
 	numa_setup_pgd();
 }
 
@@ -621,16 +700,23 @@ void __init_or_module *numa_get_replica(void *vaddr, int nid)
 	return node_desc[nid].text_vaddr + offset;
 }
 
-nodemask_t __read_mostly replica_nodes = { { [0] = 1UL } };
-
+extern nodemask_t replica_nodes;
+unsigned long __read_mostly replica_count;
 void __init numa_replication_init(void)
 {
 	int nid;
 
+	unsigned long align = PAGE_SIZE;
+#ifdef CONFIG_ARM64_4K_PAGES
+	align = HPAGE_SIZE;
+#else
+	align = CONT_PTE_SIZE;
+#endif
 	nodes_clear(replica_nodes);
-
+	replica_count = 0;
 	for_each_node_state(nid, N_MEMORY) {
 		__node_set(nid, &replica_nodes);
+		replica_count++;
 	}
 
 	for_each_memory_node(nid)
@@ -647,11 +733,11 @@ void __init numa_replication_init(void)
 		} else {
 			node_desc[nid].text_vaddr = memblock_alloc_try_nid(
 					(KERNEL_TEXT_END - KERNEL_TEXT_START),
-					HPAGE_SIZE, 0, MEMBLOCK_ALLOC_ANYWHERE, nid);
+					align, 0, MEMBLOCK_ALLOC_ANYWHERE, nid);
 
 			node_desc[nid].rodata_vaddr = memblock_alloc_try_nid(
 					(KERNEL_RODATA_END - KERNEL_RODATA_START),
-					HPAGE_SIZE, 0, MEMBLOCK_ALLOC_ANYWHERE, nid);
+					align, 0, MEMBLOCK_ALLOC_ANYWHERE, nid);
 		}
 
 		BUG_ON(node_desc[nid].text_vaddr == NULL);

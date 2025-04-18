@@ -18,7 +18,7 @@
 #include <linux/ptdump.h>
 #include <linux/sched.h>
 #include <linux/seq_file.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/fixmap.h>
 #include <asm/kasan.h>

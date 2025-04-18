@@ -10,7 +10,6 @@
 
 #include <linux/vmalloc.h>
 #include <linux/mm.h>
-#include <linux/numa_replication.h>
 #include <linux/module.h>
 #include <linux/highmem.h>
 #include <linux/sched/signal.h>
@@ -40,6 +39,8 @@
 #include <linux/hugetlb.h>
 #include <linux/share_pool.h>
 #include <linux/pbha.h>
+#include <linux/numa_kernel_replication.h>
+
 #include <asm/io.h>
 #include <asm/tlbflush.h>
 #include <asm/shmparam.h>
@@ -2655,7 +2656,6 @@ static void vm_account_replicated_range(struct vm_struct *area,
 
 		list_for_each_entry(cursor, &page->lru, lru) {
 			unsigned long addr = (unsigned long)page_address(cursor);
-
 			if (addr) {
 				unsigned long page_size;
 
@@ -3106,7 +3106,6 @@ static int vmalloc_map_area_pages(unsigned long addr, unsigned long size,
 	if (area->flags & VM_NUMA_SHARED) {
 		for_each_memory_node(nid) {
 			pgd_t *pgd = per_node_pgd(&init_mm, nid);
-
 			ret = vmalloc_map_area_pages_pgd(addr, area->pages, size,
 					gfp_mask, prot, page_shift, pgd);
 			if (ret)

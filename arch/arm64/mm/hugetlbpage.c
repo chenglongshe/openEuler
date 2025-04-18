@@ -14,9 +14,11 @@
 #include <linux/pagemap.h>
 #include <linux/err.h>
 #include <linux/sysctl.h>
+#include <linux/numa_user_replication.h>
 #include <asm/mman.h>
 #include <asm/tlb.h>
 #include <asm/tlbflush.h>
+#include <asm/pgtable.h>
 
 /*
  * HugeTLB Support Matrix
@@ -88,16 +90,6 @@ int pud_huge(pud_t pud)
 #else
 	return 0;
 #endif
-}
-
-/*
- * Select all bits except the pfn
- */
-static inline pgprot_t pte_pgprot(pte_t pte)
-{
-	unsigned long pfn = pte_pfn(pte);
-
-	return __pgprot(pte_val(pfn_pte(pfn, __pgprot(0))) ^ pte_val(pte));
 }
 
 static int find_num_contig(struct mm_struct *mm, unsigned long addr,
@@ -341,6 +333,59 @@ pte_t *huge_pte_offset(struct mm_struct *mm,
 
 	return NULL;
 }
+
+#ifdef CONFIG_USER_REPLICATION
+pte_t *huge_pte_alloc_copy_tables(struct mm_struct *dst, struct mm_struct *src,
+				  unsigned long addr, unsigned long sz)
+{
+	pgd_t *pgdp_dst, *pgdp_src;
+	p4d_t *p4dp_dst, *p4dp_src;
+	pud_t *pudp_dst, *pudp_src;
+	pmd_t *pmdp_dst, *pmdp_src;
+	pte_t *ptep_dst = NULL;
+
+	pgdp_dst = pgd_offset(dst, addr);
+	pgdp_src = pgd_offset(src, addr);
+	p4dp_dst = p4d_offset(pgdp_dst, addr);
+	p4dp_src = p4d_offset(pgdp_src, addr);
+
+	pudp_dst = cpr_alloc_pud(dst, addr, p4dp_src, p4dp_dst);
+	pudp_src = pud_offset(p4dp_src, addr);
+	if (!pudp_dst)
+		return NULL;
+
+	if (sz == PUD_SIZE) {
+		ptep_dst = (pte_t *)pudp_dst;
+	} else if (sz == (CONT_PTE_SIZE)) {
+		pmdp_dst = cpr_alloc_pmd(dst, addr, pudp_src, pudp_dst);
+		pmdp_src = pmd_offset(pudp_src, addr);
+		if (!pmdp_dst)
+			return NULL;
+
+		WARN_ON(addr & (sz - 1));
+		/*
+		 * Note that if this code were ever ported to the
+		 * 32-bit arm platform then it will cause trouble in
+		 * the case where CONFIG_HIGHPTE is set, since there
+		 * will be no pte_unmap() to correspond with this
+		 * pte_alloc_map().
+		 */
+		ptep_dst = cpr_alloc_pte_map(dst, addr, pmdp_src, pmdp_dst);
+	} else if (sz == PMD_SIZE) {
+		if (IS_ENABLED(CONFIG_ARCH_WANT_HUGE_PMD_SHARE) &&
+		    pud_none(READ_ONCE(*pudp_dst)))
+			ptep_dst = huge_pmd_share(dst, addr, pudp_dst);
+		else
+			ptep_dst = (pte_t *)cpr_alloc_pmd(dst, addr, pudp_src, pudp_dst);
+	} else if (sz == (CONT_PMD_SIZE)) {
+		pmdp_dst = cpr_alloc_pmd(dst, addr, pudp_src, pudp_dst);
+		WARN_ON(addr & (sz - 1));
+		return (pte_t *)pmdp_dst;
+	}
+
+	return ptep_dst;
+}
+#endif
 
 pte_t arch_make_huge_pte(pte_t entry, struct vm_area_struct *vma,
 			 struct page *page, int writable)

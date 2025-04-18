@@ -10,7 +10,7 @@
 
 #include <linux/init.h>
 #include <linux/cpu.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_kernel_replication.h>
 #include <asm/cacheflush.h>
 #include <asm/alternative.h>
 #include <asm/cpufeature.h>
@@ -144,7 +144,6 @@ static void __write_alternatives(struct alt_instr *alt,
 
 		for_each_memory_node(nid) {
 			__le32 *ptr = numa_get_replica(origptr, nid);
-
 			alt_cb(alt, origptr, ptr, nr_inst);
 			clean_dcache_range_nopatch((u64)ptr,
 						   (u64)(ptr + nr_inst));

@@ -72,6 +72,7 @@
 #include <linux/page_idle.h>
 #include <linux/memremap.h>
 #include <linux/userfaultfd_k.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/tlbflush.h>
 
@@ -795,7 +796,7 @@ static bool page_referenced_one(struct page *page, struct vm_area_struct *vma,
 		}
 
 		if (pvmw.pte) {
-			if (ptep_clear_flush_young_notify(vma, address,
+			if (ptep_clear_flush_young_notify_replicated(vma, address,
 						pvmw.pte)) {
 				/*
 				 * Don't treat a reference through
@@ -937,10 +938,10 @@ static bool page_mkclean_one(struct page *page, struct vm_area_struct *vma,
 				continue;
 
 			flush_cache_page(vma, address, pte_pfn(*pte));
-			entry = ptep_clear_flush(vma, address, pte);
+			entry = ptep_clear_flush_replicated(vma, address, pte);
 			entry = pte_wrprotect(entry);
 			entry = pte_mkclean(entry);
-			set_pte_at(vma->vm_mm, address, pte, entry);
+			set_pte_at_replicated(vma->vm_mm, address, pte, entry);
 			ret = 1;
 		} else {
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
@@ -951,10 +952,10 @@ static bool page_mkclean_one(struct page *page, struct vm_area_struct *vma,
 				continue;
 
 			flush_cache_page(vma, address, page_to_pfn(page));
-			entry = pmdp_invalidate(vma, address, pmd);
+			entry = pmdp_invalidate_replicated(vma, address, pmd);
 			entry = pmd_wrprotect(entry);
 			entry = pmd_mkclean(entry);
-			set_pmd_at(vma->vm_mm, address, pmd, entry);
+			set_pmd_at_replicated(vma->vm_mm, address, pmd, entry);
 			ret = 1;
 #else
 			/* unexpected pmd-mapped page? */
@@ -1345,6 +1346,8 @@ void page_remove_rmap(struct page *page, bool compound)
 {
 	lock_page_memcg(page);
 
+	BUG_ON(PageReplicated(compound_head(page)));
+
 	if (!PageAnon(page)) {
 		page_remove_file_rmap(page, compound);
 		goto out;
@@ -1529,7 +1532,7 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			swp_entry_t entry;
 			pte_t swp_pte;
 
-			pteval = ptep_get_and_clear(mm, pvmw.address, pvmw.pte);
+			pteval = ptep_get_and_clear_replicated(mm, pvmw.address, pvmw.pte);
 
 			/*
 			 * Store the pfn of the page in a special migration
@@ -1547,7 +1550,7 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 				swp_pte = pte_swp_mksoft_dirty(swp_pte);
 			if (pte_swp_uffd_wp(pteval))
 				swp_pte = pte_swp_mkuffd_wp(swp_pte);
-			set_pte_at(mm, pvmw.address, pvmw.pte, swp_pte);
+			set_pte_at_replicated(mm, pvmw.address, pvmw.pte, swp_pte);
 			/*
 			 * No need to invalidate here it will synchronize on
 			 * against the special swap migration pte.
@@ -1574,11 +1577,11 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			 * transition on a cached TLB entry is written through
 			 * and traps if the PTE is unmapped.
 			 */
-			pteval = ptep_get_and_clear(mm, address, pvmw.pte);
+			pteval = ptep_get_and_clear_replicated(mm, address, pvmw.pte);
 
 			set_tlb_ubc_flush_pending(mm, pte_dirty(pteval), address);
 		} else {
-			pteval = ptep_clear_flush(vma, address, pvmw.pte);
+			pteval = ptep_clear_flush_replicated(vma, address, pvmw.pte);
 		}
 
 		/* Move the dirty bit to the page. Now the pte is gone. */
@@ -1597,8 +1600,9 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 						     vma_mmu_pagesize(vma));
 			} else {
 				dec_mm_counter(mm, mm_counter(page));
+
 				reliable_page_counter(page, mm, -1);
-				set_pte_at(mm, address, pvmw.pte, pteval);
+				set_pte_at_replicated(mm, address, pvmw.pte, pteval);
 			}
 
 		} else if (pte_unused(pteval) && !userfaultfd_armed(vma)) {
@@ -1623,7 +1627,7 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			pte_t swp_pte;
 
 			if (arch_unmap_one(mm, vma, address, pteval) < 0) {
-				set_pte_at(mm, address, pvmw.pte, pteval);
+				set_pte_at_replicated(mm, address, pvmw.pte, pteval);
 				ret = false;
 				page_vma_mapped_walk_done(&pvmw);
 				break;
@@ -1641,7 +1645,7 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 				swp_pte = pte_swp_mksoft_dirty(swp_pte);
 			if (pte_uffd_wp(pteval))
 				swp_pte = pte_swp_mkuffd_wp(swp_pte);
-			set_pte_at(mm, address, pvmw.pte, swp_pte);
+			set_pte_at_replicated(mm, address, pvmw.pte, swp_pte);
 			/*
 			 * No need to invalidate here it will synchronize on
 			 * against the special swap migration pte.
@@ -1701,7 +1705,7 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 				 * If the page was redirtied, it cannot be
 				 * discarded. Remap the page to page table.
 				 */
-				set_pte_at(mm, address, pvmw.pte, pteval);
+				set_pte_at_replicated(mm, address, pvmw.pte, pteval);
 				SetPageSwapBacked(page);
 				ret = false;
 				page_vma_mapped_walk_done(&pvmw);
@@ -1709,13 +1713,13 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			}
 
 			if (swap_duplicate(entry) < 0) {
-				set_pte_at(mm, address, pvmw.pte, pteval);
+				set_pte_at_replicated(mm, address, pvmw.pte, pteval);
 				ret = false;
 				page_vma_mapped_walk_done(&pvmw);
 				break;
 			}
 			if (arch_unmap_one(mm, vma, address, pteval) < 0) {
-				set_pte_at(mm, address, pvmw.pte, pteval);
+				set_pte_at_replicated(mm, address, pvmw.pte, pteval);
 				ret = false;
 				page_vma_mapped_walk_done(&pvmw);
 				break;
@@ -1734,7 +1738,7 @@ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 				swp_pte = pte_swp_mksoft_dirty(swp_pte);
 			if (pte_uffd_wp(pteval))
 				swp_pte = pte_swp_mkuffd_wp(swp_pte);
-			set_pte_at(mm, address, pvmw.pte, swp_pte);
+			set_pte_at_replicated(mm, address, pvmw.pte, swp_pte);
 			/* Invalidate as we cleared the pte */
 			mmu_notifier_invalidate_range(mm, address,
 						      address + PAGE_SIZE);
@@ -1921,13 +1925,33 @@ static void rmap_walk_anon(struct page *page, struct rmap_walk_control *rwc,
 		VM_BUG_ON_VMA(address == -EFAULT, vma);
 		cond_resched();
 
+#ifdef CONFIG_USER_REPLICATION
+		down_read(&vma->vm_mm->replication_ctl->rmap_lock);
+
+		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg)) {
+			up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+			continue;
+		}
+
+		if (!rwc->rmap_one(page, vma, address, rwc->arg)) {
+			up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+			break;
+		}
+		if (rwc->done && rwc->done(page)) {
+			up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+			break;
+		}
+		up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+#else
 		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 			continue;
 
 		if (!rwc->rmap_one(page, vma, address, rwc->arg))
 			break;
+
 		if (rwc->done && rwc->done(page))
 			break;
+#endif
 	}
 
 	if (!locked)
@@ -1975,14 +1999,34 @@ static void rmap_walk_file(struct page *page, struct rmap_walk_control *rwc,
 
 		VM_BUG_ON_VMA(address == -EFAULT, vma);
 		cond_resched();
+#ifdef CONFIG_USER_REPLICATION
+		down_read(&vma->vm_mm->replication_ctl->rmap_lock);
 
+		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg)) {
+			up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+			continue;
+		}
+
+		if (!rwc->rmap_one(page, vma, address, rwc->arg)) {
+			up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+			goto done;
+		}
+		if (rwc->done && rwc->done(page)) {
+			up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+			goto done;
+		}
+		up_read(&vma->vm_mm->replication_ctl->rmap_lock);
+#else
 		if (rwc->invalid_vma && rwc->invalid_vma(vma, rwc->arg))
 			continue;
 
 		if (!rwc->rmap_one(page, vma, address, rwc->arg))
 			goto done;
+
 		if (rwc->done && rwc->done(page))
 			goto done;
+#endif
+
 	}
 
 done:

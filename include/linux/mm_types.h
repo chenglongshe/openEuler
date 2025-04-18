@@ -19,8 +19,6 @@
 
 #include <asm/mmu.h>
 
-#include <linux/numa.h>
-
 #ifndef AT_VECTOR_SIZE_ARCH
 #define AT_VECTOR_SIZE_ARCH 0
 #endif
@@ -169,11 +167,46 @@ struct page {
 		struct {	/* Page table pages */
 			unsigned long _pt_pad_1;	/* compound_head */
 			pgtable_t pmd_huge_pte; /* protected by page->ptl */
+#ifdef CONFIG_KERNEL_REPLICATION
+			KABI_REPLACE(
+				unsigned long _pt_pad_2,
+				union {
+					unsigned long _pt_pad_2;	/* mapping */
+					struct llist_head replica_list_head; /* required for connecting */
+					struct llist_node replica_list_node; /* replicated tables into lists */
+				}
+			)
+			/*
+			 * master_page is used only for pte and pmd levels,
+			 * If we have, for example, 4 replicated pmd tables,
+			 * we need to use single lock to correctly serialize modifications of this level.
+			 * Previously, lock from first_memory_node was used.
+			 * However, this design does not handle correctly
+			 * replication of existing table.
+			 * So, now this field points to lock from original table.
+			 * If tables are not replicated, or table is master, master_lock
+			 * equals to ptl (or &ptl)
+			 * Another usage here - list of deposited ptes for thp
+			 */
+			KABI_REPLACE(
+				union {
+					struct mm_struct *pt_mm; /* x86 pgds only */
+					atomic_t pt_frag_refcount; /* powerpc */
+				},
+				union {
+					struct mm_struct *pt_mm; /* x86 pgds only */
+					atomic_t pt_frag_refcount; /* powerpc */
+					struct page *master_table;
+				}
+			)
+#else
 			unsigned long _pt_pad_2;	/* mapping */
 			union {
 				struct mm_struct *pt_mm; /* x86 pgds only */
 				atomic_t pt_frag_refcount; /* powerpc */
 			};
+#endif
+
 #if ALLOC_SPLIT_PTLOCKS
 			spinlock_t *ptl;
 #else
@@ -409,6 +442,24 @@ struct core_state {
 	struct core_thread dumper;
 	struct completion startup;
 };
+
+typedef enum {
+	FORK_DISCARD_REPLICA,
+	FORK_KEEP_REPLICA
+} fork_policy_t;
+
+typedef enum {
+	TABLE_REPLICATION_NONE = 0,
+	TABLE_REPLICATION_MINIMAL = 1,
+	TABLE_REPLICATION_ALL = 2
+} table_replication_policy_t;
+
+typedef enum {
+	DATA_REPLICATION_NONE = 0,
+	DATA_REPLICATION_ON_DEMAND = 1,
+	DATA_REPLICATION_ALL_MAPPED_ON_DEMAND = 2,
+	DATA_REPLICATION_ALL = 3
+} data_replication_policy_t;
 
 struct kioctx_table;
 
@@ -646,14 +697,21 @@ struct mm_struct {
 #else
 	KABI_RESERVE(4)
 #endif
+
 #ifdef CONFIG_KERNEL_REPLICATION
 	KABI_USE(5, pgd_t **pgd_numa)
 #else
 	KABI_RESERVE(5)
 #endif
 	KABI_RESERVE(6)
+#ifdef CONFIG_USER_REPLICATION
+	KABI_USE(7, struct numa_replication_control *replication_ctl)
+	KABI_USE(8, struct numa_context_switch_stat *context_switch_stats)
+#else
 	KABI_RESERVE(7)
 	KABI_RESERVE(8)
+#endif
+
 
 #if IS_ENABLED(CONFIG_KVM) && !defined(__GENKSYMS__)
 	struct kvm *kvm;

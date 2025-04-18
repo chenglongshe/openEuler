@@ -50,6 +50,7 @@
 #include <linux/ptrace.h>
 #include <linux/oom.h>
 #include <linux/dynamic_hugetlb.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/tlbflush.h>
 
@@ -260,7 +261,7 @@ static bool remove_migration_pte(struct page *page, struct vm_area_struct *vma,
 		if (PageHuge(new)) {
 			pte = pte_mkhuge(pte);
 			pte = arch_make_huge_pte(pte, vma, new, 0);
-			set_huge_pte_at(vma->vm_mm, pvmw.address, pvmw.pte, pte);
+			set_huge_pte_at_replicated(vma->vm_mm, pvmw.address, pvmw.pte, pte);
 			if (PageAnon(new))
 				hugepage_add_anon_rmap(new, vma, pvmw.address);
 			else
@@ -268,7 +269,7 @@ static bool remove_migration_pte(struct page *page, struct vm_area_struct *vma,
 		} else
 #endif
 		{
-			set_pte_at(vma->vm_mm, pvmw.address, pvmw.pte, pte);
+			set_pte_at_replicated(vma->vm_mm, pvmw.address, pvmw.pte, pte);
 
 			reliable_page_counter(new, vma->vm_mm, 1);
 			if (PageAnon(new))
@@ -285,7 +286,6 @@ static bool remove_migration_pte(struct page *page, struct vm_area_struct *vma,
 		/* No need to invalidate - it was non-present before */
 		update_mmu_cache(vma, pvmw.address, pvmw.pte);
 	}
-
 	return true;
 }
 
@@ -1694,7 +1694,8 @@ static int add_page_for_migration(struct mm_struct *mm, unsigned long addr,
 	mmap_read_lock(mm);
 	err = -EFAULT;
 	vma = find_vma(mm, addr);
-	if (!vma || addr < vma->vm_start || !vma_migratable(vma))
+	// if page belongs to fully replicated vma, we don't want to move it here.
+	if (!vma || addr < vma->vm_start || !vma_migratable(vma) || vma_has_replicas(vma))
 		goto out;
 
 	/* FOLL_DUMP to ignore special (like zero) pages */
@@ -1879,7 +1880,10 @@ static void do_pages_stat_array(struct mm_struct *mm, unsigned long nr_pages,
 		int err = -EFAULT;
 
 		vma = find_vma(mm, addr);
-		if (!vma || addr < vma->vm_start)
+		/*
+		 * Skip fully replicated vmas (done)
+		 */
+		if (!vma || addr < vma->vm_start || vma_has_replicas(vma))
 			goto set_status;
 
 		/* FOLL_DUMP to ignore special (like zero) pages */
@@ -2168,6 +2172,8 @@ int migrate_misplaced_page(struct page *page, struct vm_area_struct *vma,
 	else
 		new = alloc_misplaced_dst_page;
 
+	BUG_ON(PageReplicated(page));
+
 	/*
 	 * Don't migrate file pages that are mapped in multiple processes
 	 * with execute permissions as they are probably shared libraries.
@@ -2208,7 +2214,6 @@ out:
 	return 0;
 }
 #endif /* CONFIG_NUMA_BALANCING */
-
 #endif /* CONFIG_NUMA */
 
 #ifdef CONFIG_DEVICE_PRIVATE
@@ -2386,6 +2391,11 @@ again:
 		 * in one process. If we can lock the page, then we can safely
 		 * set up a special migration page table entry now.
 		 */
+
+		/*
+		 * If last level of the page table is replicated,
+		 * handle this migration later
+		 */
 		if (trylock_page(page)) {
 			pte_t swp_pte;
 
@@ -2407,7 +2417,7 @@ again:
 				if (pte_swp_uffd_wp(pte))
 					swp_pte = pte_swp_mkuffd_wp(swp_pte);
 			}
-			set_pte_at(mm, addr, ptep, swp_pte);
+			set_pte_at_replicated(mm, addr, ptep, swp_pte);
 
 			/*
 			 * This is like regular unmap: we remove the rmap and
@@ -2759,6 +2769,8 @@ int migrate_vma_setup(struct migrate_vma *args)
 	if (!args->src || !args->dst)
 		return -EINVAL;
 	if (args->fault_page && !is_device_private_page(args->fault_page))
+		return -EINVAL;
+	if (numa_is_vma_replicant(args->vma))
 		return -EINVAL;
 
 	memset(args->src, 0, sizeof(*args->src) * nr_pages);

@@ -26,6 +26,7 @@
 #include <linux/userfaultfd_k.h>
 #include <linux/share_pool.h>
 #include <linux/userswap.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/cacheflush.h>
 #include <asm/tlb.h>
@@ -183,7 +184,7 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 		if (pte_none(*old_pte))
 			continue;
 
-		pte = ptep_get_and_clear(mm, old_addr, old_pte);
+		pte = ptep_get_and_clear_replicated(mm, old_addr, old_pte);
 		/*
 		 * If we are remapping a valid PTE, make sure
 		 * to flush TLB before we drop the PTL for the
@@ -199,7 +200,7 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 			force_flush = true;
 		pte = move_pte(pte, new_vma->vm_page_prot, old_addr, new_addr);
 		pte = move_soft_dirty_pte(pte);
-		set_pte_at(mm, new_addr, new_pte, pte);
+		set_pte_at_replicated(mm, new_addr, new_pte, pte);
 	}
 
 	arch_leave_lazy_mmu_mode();
@@ -229,6 +230,11 @@ static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 	spinlock_t *old_ptl, *new_ptl;
 	struct mm_struct *mm = vma->vm_mm;
 	pmd_t pmd;
+#ifdef CONFIG_USER_REPLICATION
+	pmd_t pmd_numa[MAX_NUMNODES];
+	bool old_pte_replicated = numa_pgtable_replicated(page_to_virt(pmd_pgtable(*old_pmd)));
+	bool new_pmd_replicated = numa_pgtable_replicated(new_pmd);
+#endif
 
 	if (!arch_supports_page_table_move())
 		return false;
@@ -258,6 +264,16 @@ static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 	if (WARN_ON_ONCE(!pmd_none(*new_pmd)))
 		return false;
 
+#ifdef CONFIG_USER_REPLICATION
+	/*
+	 * In that case, we need to somehow get rid of page tables replicas of pte level
+	 * I am not sure how to do it properly right now, so fallback to
+	 * slowpath
+	 */
+	if (old_pte_replicated && !new_pmd_replicated)
+		return false;
+#endif
+
 	/*
 	 * We don't have to worry about the ordering of src and dst
 	 * ptlocks because exclusive mmap_lock prevents deadlock.
@@ -268,12 +284,37 @@ static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
 
 	/* Clear the pmd */
+#ifdef CONFIG_USER_REPLICATION
+	if (old_pte_replicated) {
+		int nid;
+		unsigned long offset;
+		struct page *curr;
+		pmd_t *curr_pmd;
+		bool start;
+
+		for_each_pgtable(curr, curr_pmd, old_pmd, nid, offset, start)
+			pmd_numa[nid] = *(curr_pmd);
+	}
+#endif
 	pmd = *old_pmd;
-	pmd_clear(old_pmd);
+	pmd_clear_replicated(old_pmd);
 
 	VM_BUG_ON(!pmd_none(*new_pmd));
 
-	pmd_populate(mm, new_pmd, pmd_pgtable(pmd));
+#ifdef CONFIG_USER_REPLICATION
+	if (new_pmd_replicated && old_pte_replicated) {
+		int nid;
+		unsigned long offset;
+		struct page *curr;
+		pmd_t *curr_pmd;
+		bool start;
+
+		for_each_pgtable(curr, curr_pmd, new_pmd, nid, offset, start)
+			pmd_populate(mm, curr_pmd, pmd_pgtable(pmd_numa[nid]));
+	} else
+#endif
+		pmd_populate_replicated(mm, new_pmd, pmd_pgtable(pmd));
+
 	flush_tlb_range(vma, old_addr, old_addr + PMD_SIZE);
 	if (new_ptl != old_ptl)
 		spin_unlock(new_ptl);
@@ -297,6 +338,11 @@ static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
 	spinlock_t *old_ptl, *new_ptl;
 	struct mm_struct *mm = vma->vm_mm;
 	pud_t pud;
+#ifdef CONFIG_USER_REPLICATION
+	pud_t pud_numa[MAX_NUMNODES];
+	bool old_pmd_replicated = numa_pgtable_replicated(pud_pgtable(*old_pud));
+	bool new_pud_replicated = numa_pgtable_replicated(new_pud);
+#endif
 
 	if (!arch_supports_page_table_move())
 		return false;
@@ -306,6 +352,17 @@ static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
 	 */
 	if (WARN_ON_ONCE(!pud_none(*new_pud)))
 		return false;
+
+#ifdef CONFIG_USER_REPLICATION
+	/*
+	 * In that case, we need to somehow get rid of page tables replicas
+	 * of pte pmd and levels
+	 * I am not sure how to do it properly right now, so fallback to
+	 * slowpath
+	 */
+	if (old_pmd_replicated && !new_pud_replicated)
+		return false;
+#endif
 
 	/*
 	 * We don't have to worry about the ordering of src and dst
@@ -317,12 +374,39 @@ static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
 		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
 
 	/* Clear the pud */
+#ifdef CONFIG_USER_REPLICATION
+	if (old_pmd_replicated) {
+		int nid;
+		unsigned long offset;
+		struct page *curr;
+		pud_t *curr_pud;
+		bool start;
+
+		for_each_pgtable(curr, curr_pud, old_pud, nid, offset, start)
+			pud_numa[nid] = *(curr_pud);
+	}
+#endif
+
 	pud = *old_pud;
-	pud_clear(old_pud);
+
+	pud_clear_replicated(old_pud);
 
 	VM_BUG_ON(!pud_none(*new_pud));
 
-	pud_populate(mm, new_pud, pud_pgtable(pud));
+#ifdef CONFIG_USER_REPLICATION
+	if (new_pud_replicated && old_pmd_replicated) {
+		int nid;
+		unsigned long offset;
+		struct page *curr;
+		pud_t *curr_pud;
+		bool start;
+
+		for_each_pgtable(curr, curr_pud, new_pud, nid, offset, start)
+			pud_populate(mm, curr_pud, pud_pgtable(pud_numa[nid]));
+	} else
+#endif
+	pud_populate_replicated(mm, new_pud, pud_pgtable(pud));
+
 	flush_tlb_range(vma, old_addr, old_addr + PUD_SIZE);
 	if (new_ptl != old_ptl)
 		spin_unlock(new_ptl);
@@ -340,6 +424,9 @@ static inline bool move_normal_pud(struct vm_area_struct *vma,
 #endif
 
 #ifdef CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD
+/*
+ * Not supported on arm64, do not implement right now
+ */
 static bool move_huge_pud(struct vm_area_struct *vma, unsigned long old_addr,
 			  unsigned long new_addr, pud_t *old_pud, pud_t *new_pud)
 {
@@ -505,7 +592,6 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 		 * PUD level if possible.
 		 */
 		extent = get_extent(NORMAL_PUD, old_addr, old_end, new_addr);
-
 		old_pud = get_old_pud(vma->vm_mm, old_addr);
 		if (!old_pud)
 			continue;
@@ -729,6 +815,12 @@ static struct vm_area_struct *vma_to_resize(unsigned long addr,
 		pr_warn_once("%s (%d): attempted to duplicate a private mapping with mremap.  This is not supported.\n", current->comm, current->pid);
 		return ERR_PTR(-EINVAL);
 	}
+
+	/*
+	 * For simplicity, remap is not supported for replicant vmas right now
+	 */
+	if (numa_is_vma_replicant(vma))
+		return ERR_PTR(-EINVAL);
 
 	if (flags & MREMAP_DONTUNMAP && (!vma_is_anonymous(vma) ||
 			vma->vm_flags & VM_SHARED))

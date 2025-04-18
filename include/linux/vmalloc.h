@@ -77,7 +77,6 @@ struct vm_struct {
 	KABI_EXTEND(int	node)
 	KABI_EXTEND(bool replicated)
 #endif
-
 };
 
 struct vmap_area {
@@ -152,8 +151,8 @@ extern void *__vmalloc_node_range(unsigned long size, unsigned long align,
 			const void *caller);
 #ifdef CONFIG_KERNEL_REPLICATION
  /*
-  * DO NOT USE this function if you don't understand what it is doing
-  */
+ * DO NOT USE this function if you don't understand what it is doing
+ */
 int __vmalloc_node_replicate_range(const void *addr, gfp_t gfp_mask,
 		pgprot_t prot, unsigned long vm_flags);
 #ifdef CONFIG_ARM64

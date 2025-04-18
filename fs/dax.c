@@ -25,6 +25,7 @@
 #include <linux/sizes.h>
 #include <linux/mmu_notifier.h>
 #include <linux/iomap.h>
+#include <linux/numa_user_replication.h>
 #include <asm/pgalloc.h>
 
 #define CREATE_TRACE_POINTS
@@ -862,10 +863,10 @@ unlock_pmd:
 				goto unlock_pte;
 
 			flush_cache_page(vma, address, pfn);
-			pte = ptep_clear_flush(vma, address, ptep);
+			pte = ptep_clear_flush_replicated(vma, address, ptep);
 			pte = pte_wrprotect(pte);
 			pte = pte_mkclean(pte);
-			set_pte_at(vma->vm_mm, address, ptep, pte);
+			set_pte_at_replicated(vma->vm_mm, address, ptep, pte);
 unlock_pte:
 			pte_unmap_unlock(ptep, ptl);
 		}

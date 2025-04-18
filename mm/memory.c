@@ -75,7 +75,8 @@
 #include <linux/vmalloc.h>
 #include <linux/userswap.h>
 #include <linux/pbha.h>
-#include <linux/numa_replication.h>
+#include <linux/numa_user_replication.h>
+
 
 #include <trace/events/kmem.h>
 
@@ -211,6 +212,223 @@ static void check_sync_rss_stat(struct task_struct *task)
 
 #endif /* SPLIT_RSS_COUNTING */
 
+#ifdef CONFIG_KERNEL_REPLICATION
+#ifdef CONFIG_USER_REPLICATION
+
+static void free_pte_range(struct mmu_gather *tlb, pmd_t *pmd,
+			   unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr, *tmp;
+	pmd_t *curr_pmd;
+	pte_t *curr_pte;
+	pgtable_t token = pmd_pgtable(*pmd);
+	bool pmd_replicated = numa_pgtable_replicated(pmd);
+	bool pte_replicated = numa_pgtable_replicated(page_to_virt(token));
+
+	pmd_clear(pmd);
+
+	if (pmd_replicated)
+		for_each_pgtable_replica(curr, curr_pmd, pmd, offset) {
+			pmd_clear(curr_pmd);
+		}
+
+	if (pte_replicated) {
+		memcg_account_dereplicated_pte_page(page_to_virt(token));
+		for_each_pgtable_replica_safe(curr, tmp, curr_pte, page_to_virt(token), offset) {
+			memcg_account_dereplicated_pte_page(curr_pte);
+			cleanup_pte_list(curr);
+			pte_free_tlb(tlb, curr, addr);
+			mm_dec_nr_ptes(tlb->mm);
+		}
+		account_dereplicated_table(tlb->mm);
+	}
+	cleanup_pte_list(token);
+	pte_free_tlb(tlb, token, addr);
+	mm_dec_nr_ptes(tlb->mm);
+}
+
+static void __free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
+				    unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr, *tmp;
+	pud_t *curr_pud;
+	pmd_t *curr_pmd;
+	pmd_t *pmd = pmd_offset(pud, addr);
+	bool pud_replicated = numa_pgtable_replicated(pud);
+	bool pmd_replicated = numa_pgtable_replicated(pmd);
+
+	pud_clear(pud);
+
+	if (pud_replicated)
+		for_each_pgtable_replica(curr, curr_pud, pud, offset) {
+			pud_clear(curr_pud);
+		}
+
+	if (pmd_replicated) {
+		memcg_account_dereplicated_pmd_page(pmd);
+		for_each_pgtable_replica_safe(curr, tmp, curr_pmd, pmd, offset) {
+			memcg_account_dereplicated_pmd_page(curr_pmd);
+			cleanup_pmd_list(curr);
+			pmd_free_tlb(tlb, curr_pmd, addr);
+			mm_dec_nr_pmds(tlb->mm);
+		}
+		account_dereplicated_table(tlb->mm);
+	}
+	cleanup_pmd_list(virt_to_page(pmd));
+	pmd_free_tlb(tlb, pmd, addr);
+	mm_dec_nr_pmds(tlb->mm);
+}
+
+static inline void __free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
+				    unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr, *tmp;
+	p4d_t *curr_p4d;
+	pud_t *curr_pud;
+	pud_t *pud = pud_offset(p4d, addr);
+	bool p4d_replicated = numa_pgtable_replicated(p4d);
+	bool pud_replicated = numa_pgtable_replicated(pud);
+
+	p4d_clear(p4d);
+
+	if (p4d_replicated)
+		for_each_pgtable_replica(curr, curr_p4d, p4d, offset) {
+			p4d_clear(curr_p4d);
+		}
+
+	if (pud_replicated) {
+		memcg_account_dereplicated_pud_page(pud);
+		for_each_pgtable_replica_safe(curr, tmp, curr_pud, pud, offset) {
+			memcg_account_dereplicated_pud_page(curr_pud);
+			cleanup_pud_list(curr);
+			pud_free_tlb(tlb, curr_pud, addr);
+			mm_dec_nr_puds(tlb->mm);
+		}
+		account_dereplicated_table(tlb->mm);
+	}
+	cleanup_pud_list(virt_to_page(pud));
+	pud_free_tlb(tlb, pud, addr);
+	mm_dec_nr_puds(tlb->mm);
+}
+
+static inline void __free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd,
+				    unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr, *tmp;
+	pgd_t *curr_pgd;
+	p4d_t *curr_p4d;
+	p4d_t *p4d = p4d_offset(pgd, addr);
+	bool pgd_replicated = numa_pgtable_replicated(pgd);
+	bool p4d_replicated = numa_pgtable_replicated(p4d);
+
+	pgd_clear(pgd);
+
+	if (pgd_replicated)
+		for_each_pgtable_replica(curr, curr_pgd, pgd, offset)
+			pgd_clear(curr_pgd);
+
+	if (p4d_replicated) {
+		for_each_pgtable_replica_safe(curr, tmp, curr_p4d, p4d, offset) {
+			cleanup_p4d_list(curr);
+			p4d_free_tlb(tlb, curr_p4d, addr);
+		}
+#ifndef __PAGETABLE_P4D_FOLDED
+		account_dereplicated_table(tlb->mm);
+#endif
+	}
+	cleanup_p4d_list(virt_to_page(p4d));
+	p4d_free_tlb(tlb, p4d, addr);
+}
+
+#else
+
+static void free_pte_range(struct mmu_gather *tlb, pmd_t *pmd,
+			   unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr;
+	pmd_t *curr_pmd;
+	pgtable_t token = pmd_pgtable(*pmd);
+
+	pmd_clear(pmd);
+
+	if (get_propagation_level() == PMD_PROPAGATION) {
+		for_each_pgtable_replica(curr, curr_pmd, pmd, offset) {
+			pmd_clear(curr_pmd);
+		}
+	}
+
+	pte_free_tlb(tlb, token, addr);
+	mm_dec_nr_ptes(tlb->mm);
+}
+
+static inline void __free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
+				    unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr;
+	pud_t *curr_pud;
+	pmd_t *pmd = pmd_offset(pud, addr);
+
+	pud_clear(pud);
+
+	if (get_propagation_level() == PUD_PROPAGATION) {
+		for_each_pgtable_replica(curr, curr_pud, pud, offset) {
+			pud_clear(curr_pud);
+		}
+	}
+
+	pmd_free_tlb(tlb, pmd, addr);
+	mm_dec_nr_pmds(tlb->mm);
+}
+
+static inline void __free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
+				    unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr;
+	p4d_t *curr_p4d;
+	pud_t *pud = pud_offset(p4d, addr);
+
+	p4d_clear(p4d);
+
+	if (get_propagation_level() == P4D_PROPAGATION) {
+		for_each_pgtable_replica(curr, curr_p4d, p4d, offset) {
+			p4d_clear(curr_p4d);
+		}
+	}
+
+	pud_free_tlb(tlb, pud, addr);
+	mm_dec_nr_puds(tlb->mm);
+}
+
+static inline void __free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd,
+				    unsigned long addr)
+{
+	unsigned long offset;
+	struct page *curr;
+	pgd_t *curr_pgd;
+	p4d_t *p4d = p4d_offset(pgd, addr);
+
+	pgd_clear(pgd);
+
+	if (get_propagation_level() == PGD_PROPAGATION) {
+		for_each_pgtable_replica(curr, curr_pgd, pgd, offset) {
+			pgd_clear(curr_pgd);
+		}
+	}
+	p4d_free_tlb(tlb, p4d, addr);
+}
+
+
+#endif /*CONFIG_USER_REPLICATION*/
+
+#else /*!CONFIG_KERNEL_REPLICATION*/
+
 /*
  * Note: this doesn't free the actual pages themselves. That
  * has been handled earlier when unmapping all the memory regions.
@@ -223,6 +441,40 @@ static void free_pte_range(struct mmu_gather *tlb, pmd_t *pmd,
 	pte_free_tlb(tlb, token, addr);
 	mm_dec_nr_ptes(tlb->mm);
 }
+
+static void __free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
+				    unsigned long addr)
+{
+	pmd_t *pmd = pmd_offset(pud, addr);
+
+	pud_clear(pud);
+	pmd_free_tlb(tlb, pmd, addr);
+	mm_dec_nr_pmds(tlb->mm);
+	(void)pmd;
+}
+
+static inline void __free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
+				    unsigned long addr)
+{
+	pud_t *pud = pud_offset(p4d, addr);
+
+	p4d_clear(p4d);
+	pud_free_tlb(tlb, pud, addr);
+	mm_dec_nr_puds(tlb->mm);
+	(void)pud;
+}
+
+static inline void __free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd,
+				    unsigned long addr)
+{
+	p4d_t *p4d = p4d_offset(pgd, addr);
+
+	pgd_clear(pgd);
+	p4d_free_tlb(tlb, p4d, addr);
+	(void)p4d;
+}
+
+#endif /*CONFIG_KERNEL_REPLICATION*/
 
 static inline void free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
 				unsigned long addr, unsigned long end,
@@ -252,28 +504,7 @@ static inline void free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
 	if (end - 1 > ceiling - 1)
 		return;
 
-	pmd = pmd_offset(pud, start);
-	pud_clear(pud);
-	pmd_free_tlb(tlb, pmd, start);
-	mm_dec_nr_pmds(tlb->mm);
-}
-
-static inline void __free_pud_range(struct mmu_gather *tlb, p4d_t *p4d)
-{
-#ifdef CONFIG_KERNEL_REPLICATION
-	int nid;
-	int offset;
-
-	if (mm_p4d_folded(tlb->mm)) {
-		offset = p4d - (p4d_t *)tlb->mm->pgd;
-		for_each_memory_node(nid)
-			p4d_clear((p4d_t *)tlb->mm->pgd_numa[nid] + offset);
-	} else {
-		p4d_clear(p4d);
-	}
-#else
-	p4d_clear(p4d);
-#endif /* CONFIG_KERNEL_REPLICATION */
+	__free_pmd_range(tlb, pud, start);
 }
 
 static inline void free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
@@ -304,28 +535,7 @@ static inline void free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
 	if (end - 1 > ceiling - 1)
 		return;
 
-	pud = pud_offset(p4d, start);
-
-	__free_pud_range(tlb, p4d);
-
-	pud_free_tlb(tlb, pud, start);
-	mm_dec_nr_puds(tlb->mm);
-}
-
-static inline void __free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd)
-{
-#ifdef CONFIG_KERNEL_REPLICATION
-	int nid;
-	int offset;
-
-	if (!mm_p4d_folded(tlb->mm)) {
-		offset = pgd - (pgd_t *)tlb->mm->pgd;
-		for_each_memory_node(nid)
-			pgd_clear(tlb->mm->pgd_numa[nid] + offset);
-	}
-#else
-	pgd_clear(pgd);
-#endif /* CONFIG_KERNEL_REPLICATION */
+	__free_pud_range(tlb, p4d, start);
 }
 
 static inline void free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd,
@@ -356,11 +566,7 @@ static inline void free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd,
 	if (end - 1 > ceiling - 1)
 		return;
 
-	p4d = p4d_offset(pgd, start);
-
-	__free_p4d_range(tlb, pgd);
-
-	p4d_free_tlb(tlb, p4d, start);
+	__free_p4d_range(tlb, pgd, start);
 }
 
 /*
@@ -448,9 +654,15 @@ void free_pgtables(struct mmu_gather *tlb, struct vm_area_struct *vma,
 		} else {
 			/*
 			 * Optimization: gather nearby vmas into one call down
+			 * We are able to optimize into one call only if all of them are replicated,
+			 * or all of them are not
+			 *
+			 * Disable this optimization for replicated vmas for now,
+			 * because maple tree (i think) can't erase multiple regions in single call
 			 */
 			while (next && next->vm_start <= vma->vm_end + PMD_SIZE
-			       && !is_vm_hugetlb_page(next)) {
+			       && !is_vm_hugetlb_page(next)
+			       && !numa_is_vma_replicant(vma) && !numa_is_vma_replicant(next)) {
 				vma = next;
 				next = vma->vm_next;
 				unlink_anon_vmas(vma);
@@ -488,7 +700,7 @@ int __pte_alloc(struct mm_struct *mm, pmd_t *pmd)
 	ptl = pmd_lock(mm, pmd);
 	if (likely(pmd_none(*pmd))) {	/* Has another populated it ? */
 		mm_inc_nr_ptes(mm);
-		pmd_populate(mm, pmd, new);
+		pmd_populate_replicated(mm, pmd, new);
 		new = NULL;
 	}
 	spin_unlock(ptl);
@@ -775,7 +987,7 @@ copy_nonpresent_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 				pte = pte_swp_mksoft_dirty(pte);
 			if (pte_swp_uffd_wp(*src_pte))
 				pte = pte_swp_mkuffd_wp(pte);
-			set_pte_at(src_mm, addr, src_pte, pte);
+			set_pte_at_replicated(src_mm, addr, src_pte, pte);
 		}
 	} else if (is_device_private_entry(entry)) {
 		page = device_private_entry_to_page(entry);
@@ -806,12 +1018,12 @@ copy_nonpresent_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 			pte = swp_entry_to_pte(entry);
 			if (pte_swp_uffd_wp(*src_pte))
 				pte = pte_swp_mkuffd_wp(pte);
-			set_pte_at(src_mm, addr, src_pte, pte);
+			set_pte_at_replicated(src_mm, addr, src_pte, pte);
 		}
 	}
 	if (!userfaultfd_wp(dst_vma))
 		pte = pte_swp_clear_uffd_wp(pte);
-	set_pte_at(dst_mm, addr, dst_pte, pte);
+	set_pte_at_replicated(dst_mm, addr, dst_pte, pte);
 	return 0;
 }
 
@@ -841,9 +1053,15 @@ copy_present_page(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma
 		  struct page **prealloc, pte_t pte, struct page *page)
 {
 	struct mm_struct *src_mm = src_vma->vm_mm;
+#ifdef CONFIG_USER_REPLICATION
+	bool discard_replica = PageReplicated(compound_head(page)) &&
+				(get_fork_policy(dst_vma->vm_mm) == FORK_DISCARD_REPLICA);
+#else
+	bool discard_replica = false;
+#endif
 	struct page *new_page;
 
-	if (!is_cow_mapping(src_vma->vm_flags))
+	if (!is_cow_mapping(src_vma->vm_flags) && !discard_replica)
 		return 1;
 
 	/*
@@ -859,9 +1077,9 @@ copy_present_page(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma
 	 * the page count. That might give false positives for
 	 * for pinning, but it will work correctly.
 	 */
-	if (likely(!atomic_read(&src_mm->has_pinned)))
+	if (likely(!atomic_read(&src_mm->has_pinned) && !discard_replica))
 		return 1;
-	if (likely(!page_maybe_dma_pinned(page)))
+	if (likely(!page_maybe_dma_pinned(page) && !discard_replica))
 		return 1;
 
 	/*
@@ -900,7 +1118,7 @@ copy_present_page(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma
 	if (userfaultfd_pte_wp(dst_vma, *src_pte))
 		/* Uffd-wp needs to be delivered to dest pte as well */
 		pte = pte_wrprotect(pte_mkuffd_wp(pte));
-	set_pte_at(dst_vma->vm_mm, addr, dst_pte, pte);
+	set_pte_at_replicated(dst_vma->vm_mm, addr, dst_pte, pte);
 	return 0;
 }
 
@@ -917,20 +1135,45 @@ copy_present_pte(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	unsigned long vm_flags = src_vma->vm_flags;
 	pte_t pte = *src_pte;
 	struct page *page;
-
+#ifdef CONFIG_USER_REPLICATION
+	pte_t pte_numa[MAX_NUMNODES];
+	unsigned long offset;
+	bool start;
+	struct page *curr;
+	pte_t *curr_pte;
+	int nid;
+	bool page_replicated = false;
+#endif
 	page = vm_normal_page(src_vma, addr, pte);
+
 	if (page) {
 		int retval;
-
 		retval = copy_present_page(dst_vma, src_vma, dst_pte, src_pte,
 					   addr, rss, prealloc, pte, page);
 		if (retval <= 0)
 			return retval;
+#ifdef CONFIG_USER_REPLICATION
+		page_replicated = PageReplicated(compound_head(page));
+		if (page_replicated) {
+			BUG_ON(get_fork_policy(dst_vma->vm_mm) != FORK_KEEP_REPLICA);
 
-		get_page(page);
-		page_dup_rmap(page, false);
-		rss[mm_counter(page)]++;
-		reliable_page_counter(page, dst_vma->vm_mm, 1);
+			for_each_pgtable(curr, curr_pte, src_pte, nid, offset, start) {
+				struct page *curr_page = vm_normal_page(src_vma, addr, *curr_pte);
+
+				pte_numa[nid] = *curr_pte;
+				get_page(curr_page);
+				rss[MM_ANONPAGES]++;
+				reliable_page_counter(curr_page, dst_vma->vm_mm, 1);
+			}
+			account_replicated_page(dst_vma->vm_mm);
+		} else
+#endif
+		{
+			get_page(page);
+			page_dup_rmap(page, false);
+			rss[mm_counter(page)]++;
+			reliable_page_counter(page, dst_vma->vm_mm, 1);
+		}
 	}
 
 	/*
@@ -938,8 +1181,15 @@ copy_present_pte(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	 * in the parent and the child
 	 */
 	if (is_cow_mapping(vm_flags) && pte_write(pte)) {
-		ptep_set_wrprotect(src_mm, addr, src_pte);
-		pte = pte_wrprotect(pte);
+		ptep_set_wrprotect_replicated(src_mm, addr, src_pte);
+#ifdef CONFIG_USER_REPLICATION
+		if (page_replicated) {
+			for_each_memory_node(nid)
+				pte_numa[nid] = pte_wrprotect(pte_numa[nid]);
+		} else
+#endif
+			pte = pte_wrprotect(pte);
+
 	}
 
 	/*
@@ -948,12 +1198,26 @@ copy_present_pte(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	 */
 	if (vm_flags & VM_SHARED)
 		pte = pte_mkclean(pte);
-	pte = pte_mkold(pte);
+
+#ifdef CONFIG_USER_REPLICATION
+	if (page_replicated) {
+		for_each_memory_node(nid)
+			pte_numa[nid] = pte_mkold(pte_numa[nid]);
+	} else
+#endif
+		pte = pte_mkold(pte);
 
 	if (!userfaultfd_wp(dst_vma))
 		pte = pte_clear_uffd_wp(pte);
 
-	set_pte_at(dst_vma->vm_mm, addr, dst_pte, pte);
+#ifdef CONFIG_USER_REPLICATION
+	if (page_replicated) {
+		for_each_pgtable(curr, curr_pte, dst_pte, nid, offset, start)
+			set_pte_at(dst_vma->vm_mm, addr, curr_pte, pte_numa[nid]);
+	} else
+#endif
+		set_pte_at_replicated(dst_vma->vm_mm, addr, dst_pte, pte);
+
 	return 0;
 }
 
@@ -976,6 +1240,34 @@ page_copy_prealloc(struct mm_struct *src_mm, struct vm_area_struct *vma,
 	return new_page;
 }
 
+#ifndef CONFIG_USER_REPLICATION
+
+static pte_t *cpr_alloc_pte_map_lock(struct mm_struct *mm, unsigned long addr,
+				     pmd_t *src_pmd, pmd_t *dst_pmd, spinlock_t **ptl)
+{
+	return pte_alloc_map_lock(mm, dst_pmd, addr, ptl);
+}
+
+static pmd_t *cpr_alloc_pmd(struct mm_struct *mm, unsigned long addr,
+			    pud_t *src_pud, pud_t *dst_pud)
+{
+	return pmd_alloc(mm, dst_pud, addr);
+}
+
+static pud_t *cpr_alloc_pud(struct mm_struct *mm, unsigned long addr,
+			    p4d_t *src_p4d, p4d_t *dst_p4d)
+{
+	return pud_alloc(mm, dst_p4d, addr);
+}
+
+static p4d_t *cpr_alloc_p4d(struct mm_struct *mm, unsigned long addr,
+			    pgd_t *src_pgd, pgd_t *dst_pgd)
+{
+	return p4d_alloc(mm, dst_pgd, addr);
+}
+
+#endif
+
 static int
 copy_pte_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	       pmd_t *dst_pmd, pmd_t *src_pmd, unsigned long addr,
@@ -995,7 +1287,7 @@ again:
 	progress = 0;
 	init_rss_vec(rss);
 
-	dst_pte = pte_alloc_map_lock(dst_mm, dst_pmd, addr, &dst_ptl);
+	dst_pte = cpr_alloc_pte_map_lock(dst_mm, addr, src_pmd, dst_pmd, &dst_ptl);
 	if (!dst_pte) {
 		ret = -ENOMEM;
 		goto out;
@@ -1096,7 +1388,7 @@ copy_pmd_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	pmd_t *src_pmd, *dst_pmd;
 	unsigned long next;
 
-	dst_pmd = pmd_alloc(dst_mm, dst_pud, addr);
+	dst_pmd = cpr_alloc_pmd(dst_mm, addr, src_pud, dst_pud);
 	if (!dst_pmd)
 		return -ENOMEM;
 	src_pmd = pmd_offset(src_pud, addr);
@@ -1133,7 +1425,7 @@ copy_pud_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	pud_t *src_pud, *dst_pud;
 	unsigned long next;
 
-	dst_pud = pud_alloc(dst_mm, dst_p4d, addr);
+	dst_pud = cpr_alloc_pud(dst_mm, addr, src_p4d, dst_p4d);
 	if (!dst_pud)
 		return -ENOMEM;
 	src_pud = pud_offset(src_p4d, addr);
@@ -1169,7 +1461,7 @@ copy_p4d_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	p4d_t *src_p4d, *dst_p4d;
 	unsigned long next;
 
-	dst_p4d = p4d_alloc(dst_mm, dst_pgd, addr);
+	dst_p4d = cpr_alloc_p4d(dst_mm, addr, src_pgd, dst_pgd);
 	if (!dst_p4d)
 		return -ENOMEM;
 	src_p4d = p4d_offset(src_pgd, addr);
@@ -1281,24 +1573,34 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 				struct zap_details *details)
 {
 	struct mm_struct *mm = tlb->mm;
+	struct pgtable_private zp;
 	int force_flush = 0;
 	int rss[NR_MM_COUNTERS];
 	spinlock_t *ptl;
 	pte_t *start_pte;
 	pte_t *pte;
 	swp_entry_t entry;
-
+	int nid = 0;
+	int res = 0;
+	bool pte_replicated = false;
+	bool has_replicas = false;
 	tlb_change_page_size(tlb, PAGE_SIZE);
 again:
 	init_rss_vec(rss);
 	start_pte = pte_offset_map_lock(mm, pmd, addr, &ptl);
 	pte = start_pte;
+	pgtable_update_pte(&zp, pte);
+	pte_replicated = numa_pgtable_replicated(pte);
+
 	flush_tlb_batched_pending(mm);
 	arch_enter_lazy_mmu_mode();
 	do {
 		pte_t ptent = *pte;
+		pte_t numa_ptent[MAX_NUMNODES];
+
+		has_replicas = false;
 		if (pte_none(ptent))
-			continue;
+			goto next;
 
 		if (need_resched())
 			break;
@@ -1306,7 +1608,18 @@ again:
 		if (pte_present(ptent)) {
 			struct page *page;
 
+			if (pte_replicated) {
+				for_each_memory_node(nid)
+					numa_ptent[nid] = *zp.pte_numa[nid];
+			}
+
 			page = vm_normal_page(vma, addr, ptent);
+			if (likely(page))
+				has_replicas = PageReplicated(compound_head(page));
+			if (pte_replicated && has_replicas) {
+				for_each_memory_node(nid)
+					zp.replica_pages[nid] = vm_normal_page(vma, addr, numa_ptent[nid]);
+			}
 			if (unlikely(details) && page) {
 				/*
 				 * unmap_shared_mapping_pages() wants to
@@ -1317,35 +1630,74 @@ again:
 				    details->check_mapping != page_rmapping(page))
 					continue;
 			}
-			ptent = ptep_get_and_clear_full(mm, addr, pte,
-							tlb->fullmm);
+
+			if (pte_replicated)
+				for_each_memory_node(nid)
+					numa_ptent[nid] = ptep_get_and_clear_full(mm, addr, zp.pte_numa[nid],
+										  tlb->fullmm);
+			else
+				ptent = ptep_get_and_clear_full(mm, addr, pte,
+								tlb->fullmm);
 			tlb_remove_tlb_entry(tlb, pte, addr);
 			if (unlikely(!page))
-				continue;
+				goto next;
 
 			if (!PageAnon(page)) {
-				if (pte_dirty(ptent)) {
-					force_flush = 1;
-					set_page_dirty(page);
+				if (pte_replicated) {
+					int nid;
+
+					for_each_memory_node(nid) {
+						if (pte_dirty(numa_ptent[nid])) {
+							force_flush = 1;
+							set_page_dirty(page);
+						}
+						if (pte_young(numa_ptent[nid]) &&
+						    likely(!(vma->vm_flags & VM_SEQ_READ)))
+							mark_page_accessed(page);
+					}
+				} else {
+					if (pte_dirty(ptent)) {
+						force_flush = 1;
+						set_page_dirty(page);
+					}
+					if (pte_young(ptent) &&
+					    likely(!(vma->vm_flags & VM_SEQ_READ)))
+						mark_page_accessed(page);
 				}
-				if (pte_young(ptent) &&
-				    likely(!(vma->vm_flags & VM_SEQ_READ)))
-					mark_page_accessed(page);
 			}
-			rss[mm_counter(page)]--;
-			reliable_page_counter(page, mm, -1);
-			page_remove_rmap(page, false);
+
+			if (pte_replicated && has_replicas) {
+				for_each_memory_node(nid) {
+					rss[MM_ANONPAGES]--;
+					reliable_page_counter(zp.replica_pages[nid], mm, -1);
+				}
+			} else {
+				reliable_page_counter(page, mm, -1);
+				rss[mm_counter(page)]--;
+				page_remove_rmap(page, false);
+			}
+
 			if (unlikely(page_mapcount(page) < 0))
 				print_bad_pte(vma, addr, ptent, page);
-			if (unlikely(__tlb_remove_page(tlb, page))) {
+
+			if (pte_replicated && has_replicas)
+				res = __tlb_remove_replica_pages(tlb, zp.replica_pages);
+			else
+				res = __tlb_remove_page(tlb, page);
+
+			if (unlikely(res)) {
 				force_flush = 1;
 				addr += PAGE_SIZE;
 				break;
 			}
-			continue;
+			goto next;
 		}
 
 		entry = pte_to_swp_entry(ptent);
+
+		// We can't end up here with replicated memory
+		BUG_ON(has_replicas);
+
 		if (is_device_private_entry(entry)) {
 			struct page *page = device_private_entry_to_page(entry);
 
@@ -1357,7 +1709,7 @@ again:
 				 */
 				if (details->check_mapping !=
 				    page_rmapping(page))
-					continue;
+					goto next;
 			}
 
 			pte_clear_not_present_full(mm, addr, pte, tlb->fullmm);
@@ -1365,13 +1717,13 @@ again:
 			rss[mm_counter(page)]--;
 			page_remove_rmap(page, false);
 			put_page(page);
-			continue;
+			goto next;
 		}
 
 		if (!non_swap_entry(entry)) {
 			/* Genuine swap entry, hence a private anon page */
 			if (!should_zap_cows(details))
-				continue;
+				goto next;
 			rss[MM_SWAPENTS]--;
 		} else if (is_migration_entry(entry)) {
 			struct page *page;
@@ -1379,12 +1731,18 @@ again:
 			page = migration_entry_to_page(entry);
 			if (details && details->check_mapping &&
 			    details->check_mapping != page_rmapping(page))
-				continue;
+				goto next;
 			rss[mm_counter(page)]--;
 		}
+
 		if (unlikely(!free_swap_and_cache(entry)))
 			print_bad_pte(vma, addr, ptent, NULL);
-		pte_clear_not_present_full(mm, addr, pte, tlb->fullmm);
+
+		if (pte_replicated)
+			for_each_memory_node(nid)
+				pte_clear_not_present_full(mm, addr, zp.pte_numa[nid], tlb->fullmm);
+next:
+		pgtable_pte_step(&zp, 1);
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 
 	add_mm_rss_vec(mm, rss);
@@ -1684,7 +2042,7 @@ void zap_vma_ptes(struct vm_area_struct *vma, unsigned long address,
 		unsigned long size)
 {
 	if (address < vma->vm_start || address + size > vma->vm_end ||
-	    		!(vma->vm_flags & VM_PFNMAP))
+			!(vma->vm_flags & VM_PFNMAP))
 		return;
 
 	zap_page_range_single(vma, address, size, NULL);
@@ -1741,7 +2099,7 @@ static int insert_page_into_pte_locked(struct mm_struct *mm, pte_t *pte,
 	inc_mm_counter_fast(mm, mm_counter_file(page));
 	reliable_page_counter(page, mm, 1);
 	page_add_file_rmap(page, false);
-	set_pte_at(mm, addr, pte, mk_pte(page, prot));
+	set_pte_at_replicated(mm, addr, pte, mk_pte(page, prot));
 	return 0;
 }
 
@@ -2044,7 +2402,7 @@ static vm_fault_t insert_pfn(struct vm_area_struct *vma, unsigned long addr,
 			}
 			entry = pte_mkyoung(*pte);
 			entry = maybe_mkwrite(pte_mkdirty(entry), vma);
-			if (ptep_set_access_flags(vma, addr, pte, entry, 1))
+			if (ptep_set_access_flags_replicated(vma, addr, pte, entry, 1))
 				update_mmu_cache(vma, addr, pte);
 		}
 		goto out_unlock;
@@ -2061,7 +2419,7 @@ static vm_fault_t insert_pfn(struct vm_area_struct *vma, unsigned long addr,
 		entry = maybe_mkwrite(pte_mkdirty(entry), vma);
 	}
 
-	set_pte_at(mm, addr, pte, entry);
+	set_pte_at_replicated(mm, addr, pte, entry);
 	update_mmu_cache(vma, addr, pte); /* XXX: why not for insert_page? */
 
 out_unlock:
@@ -2280,7 +2638,7 @@ static int remap_pte_range(struct mm_struct *mm, pmd_t *pmd,
 			err = -EACCES;
 			break;
 		}
-		set_pte_at(mm, addr, pte, pte_mkspecial(pfn_pte(pfn, prot)));
+		set_pte_at_replicated(mm, addr, pte, pte_mkspecial(pfn_pte(pfn, prot)));
 		pfn++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 	arch_leave_lazy_mmu_mode();
@@ -2787,7 +3145,7 @@ static inline int cow_user_page(struct page *dst, struct page *src,
 		}
 
 		entry = pte_mkyoung(vmf->orig_pte);
-		if (ptep_set_access_flags(vma, addr, vmf->pte, entry, 0))
+		if (ptep_set_access_flags_replicated(vma, addr, vmf->pte, entry, 0))
 			update_mmu_cache(vma, addr, vmf->pte);
 	}
 
@@ -2961,7 +3319,7 @@ static inline void wp_page_reuse(struct vm_fault *vmf)
 	flush_cache_page(vma, vmf->address, pte_pfn(vmf->orig_pte));
 	entry = pte_mkyoung(vmf->orig_pte);
 	entry = maybe_mkwrite(pte_mkdirty(entry), vma);
-	if (ptep_set_access_flags(vma, vmf->address, vmf->pte, entry, 1))
+	if (ptep_set_access_flags_replicated(vma, vmf->address, vmf->pte, entry, 1))
 		update_mmu_cache(vma, vmf->address, vmf->pte);
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
 	count_vm_event(PGREUSE);
@@ -3063,7 +3421,7 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 		 * seen in the presence of one thread doing SMC and another
 		 * thread doing COW.
 		 */
-		ptep_clear_flush_notify(vma, vmf->address, vmf->pte);
+		ptep_clear_flush_notify_replicated(vma, vmf->address, vmf->pte);
 		page_add_new_anon_rmap(new_page, vma, vmf->address, false);
 		lru_cache_add_inactive_or_unevictable(new_page, vma);
 		/*
@@ -3071,7 +3429,7 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 		 * mmu page tables (such as kvm shadow page tables), we want the
 		 * new page to be mapped directly into the secondary page table.
 		 */
-		set_pte_at_notify(mm, vmf->address, vmf->pte, entry);
+		set_pte_at_notify_replicated(mm, vmf->address, vmf->pte, entry);
 		update_mmu_cache(vma, vmf->address, vmf->pte);
 		if (old_page) {
 			/*
@@ -3675,7 +4033,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 		pte = pte_mkuffd_wp(pte);
 		pte = pte_wrprotect(pte);
 	}
-	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, pte);
+	set_pte_at_replicated(vma->vm_mm, vmf->address, vmf->pte, pte);
 	arch_do_swap_page(vma->vm_mm, vma, vmf->address, pte, vmf->orig_pte);
 	vmf->orig_pte = pte;
 
@@ -3781,7 +4139,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 
 	/* Use the zero-page for reads */
 	if (!(vmf->flags & FAULT_FLAG_WRITE) &&
-			!mm_forbids_zeropage(vma->vm_mm)) {
+			!mm_forbids_zeropage(vma->vm_mm) && !numa_is_vma_replicant(vma)) {
 		entry = pte_mkspecial(pfn_pte(my_zero_pfn(vmf->address),
 						vma->vm_page_prot));
 		vmf->pte = pte_offset_map_lock(vma->vm_mm, vmf->pmd,
@@ -3861,7 +4219,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	page_add_new_anon_rmap(page, vma, vmf->address, false);
 	lru_cache_add_inactive_or_unevictable(page, vma);
 setpte:
-	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, entry);
+	set_pte_at_replicated(vma->vm_mm, vmf->address, vmf->pte, entry);
 
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(vma, vmf->address, vmf->pte);
@@ -3939,17 +4297,6 @@ static vm_fault_t __do_fault(struct vm_fault *vmf)
 	return ret;
 }
 
-/*
- * The ordering of these checks is important for pmds with _PAGE_DEVMAP set.
- * If we check pmd_trans_unstable() first we will trip the bad_pmd() check
- * inside of pmd_none_or_trans_huge_or_clear_bad(). This will end up correctly
- * returning 1 but not before it spams dmesg with the pmd_clear_bad() output.
- */
-static int pmd_devmap_trans_unstable(pmd_t *pmd)
-{
-	return pmd_devmap(*pmd) || pmd_trans_unstable(pmd);
-}
-
 static vm_fault_t pte_alloc_one_map(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
@@ -3964,7 +4311,7 @@ static vm_fault_t pte_alloc_one_map(struct vm_fault *vmf)
 		}
 
 		mm_inc_nr_ptes(vma->vm_mm);
-		pmd_populate(vma->vm_mm, vmf->pmd, vmf->prealloc_pte);
+		pmd_populate_replicated(vma->vm_mm, vmf->pmd, vmf->prealloc_pte);
 		spin_unlock(vmf->ptl);
 		vmf->prealloc_pte = NULL;
 	} else if (unlikely(pte_alloc(vma->vm_mm, vmf->pmd))) {
@@ -4004,7 +4351,7 @@ static void deposit_prealloc_pte(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
 
-	pgtable_trans_huge_deposit(vma->vm_mm, vmf->pmd, vmf->prealloc_pte);
+	pgtable_trans_huge_deposit(vma->vm_mm, get_master_pmd(vmf->pmd), vmf->prealloc_pte);
 	/*
 	 * We are going to consume the prealloc table,
 	 * count that as nr_ptes.
@@ -4060,7 +4407,7 @@ static vm_fault_t do_set_pmd(struct vm_fault *vmf, struct page *page)
 	if (arch_needs_pgtable_deposit())
 		deposit_prealloc_pte(vmf);
 
-	set_pmd_at(vma->vm_mm, haddr, vmf->pmd, entry);
+	set_pmd_at_replicated(vma->vm_mm, haddr, vmf->pmd, entry);
 
 	update_mmu_cache_pmd(vma, haddr, vmf->pmd);
 
@@ -4101,6 +4448,8 @@ vm_fault_t alloc_set_pte(struct vm_fault *vmf, struct page *page)
 	pte_t entry;
 	vm_fault_t ret;
 
+	BUG_ON(PageReplicated(compound_head(page)));
+
 	if (pmd_none(*vmf->pmd) && PageTransCompound(page)) {
 		ret = do_set_pmd(vmf, page);
 		if (ret != VM_FAULT_FALLBACK)
@@ -4134,8 +4483,10 @@ vm_fault_t alloc_set_pte(struct vm_fault *vmf, struct page *page)
 		inc_mm_counter_fast(vma->vm_mm, mm_counter_file(page));
 		page_add_file_rmap(page, false);
 	}
+
 	entry = maybe_mk_pbha_bit0(entry, vma);
-	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, entry);
+
+	set_pte_at_replicated(vma->vm_mm, vmf->address, vmf->pte, entry);
 
 	/* no need to invalidate: a not-present page won't be cached */
 	update_mmu_cache(vma, vmf->address, vmf->pte);
@@ -4476,6 +4827,41 @@ int numa_migrate_prep(struct page *page, struct vm_area_struct *vma,
 	return mpol_misplaced(page, vma, addr);
 }
 
+#ifdef CONFIG_USER_REPLICATION
+
+static int numa_replicate_page(struct vm_fault *vmf)
+{
+	struct vm_area_struct *vma = vmf->vma;
+	struct mm_struct *mm = vmf->vma->vm_mm;
+	unsigned long start = vmf->address & PAGE_MASK;
+	int error = 0;
+
+	mmap_assert_locked(mm);
+
+	if (WARN_ON_ONCE(!(vma->vm_flags & VM_REPLICA_COMMIT)))
+		goto out;
+
+	/*
+	 * This should not be possible,
+	 * because we have just handled page fault up to pmd level,
+	 * so pmd tables must exist and be replicated.
+	 * In fact, event pte level tables must be replicated at this point.
+	 */
+	BUG_ON(pmd_none(*vmf->pmd) || !numa_pgtable_replicated(vmf->pmd));
+
+	if (phys_duplicate_pte_range(vma, vmf->pmd, start, start + PAGE_SIZE) != start + PAGE_SIZE) {
+		error = -ENOMEM;
+		goto out;
+	}
+
+	flush_tlb_page(vma, start);
+
+out:
+	return error;
+}
+
+#endif
+
 static vm_fault_t do_numa_page(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
@@ -4487,6 +4873,7 @@ static vm_fault_t do_numa_page(struct vm_fault *vmf)
 	pte_t pte, old_pte;
 	bool was_writable = pte_savedwrite(vmf->orig_pte);
 	int flags = 0;
+
 
 	/*
 	 * The "pte" at this point cannot be used safely without
@@ -4504,12 +4891,12 @@ static vm_fault_t do_numa_page(struct vm_fault *vmf)
 	 * Make it present again, Depending on how arch implementes non
 	 * accessible ptes, some can allow access by kernel mode.
 	 */
-	old_pte = ptep_modify_prot_start(vma, vmf->address, vmf->pte);
+	old_pte = ptep_modify_prot_start_replicated(vma, vmf->address, vmf->pte);
 	pte = pte_modify(old_pte, vma->vm_page_prot);
 	pte = pte_mkyoung(pte);
 	if (was_writable)
 		pte = pte_mkwrite(pte);
-	ptep_modify_prot_commit(vma, vmf->address, vmf->pte, old_pte, pte);
+	ptep_modify_prot_commit_replicated(vma, vmf->address, vmf->pte, old_pte, pte);
 	update_mmu_cache(vma, vmf->address, vmf->pte);
 
 	page = vm_normal_page(vma, vmf->address, pte);
@@ -4517,6 +4904,8 @@ static vm_fault_t do_numa_page(struct vm_fault *vmf)
 		pte_unmap_unlock(vmf->pte, vmf->ptl);
 		return 0;
 	}
+
+	BUG_ON(page && PageReplicated(compound_head(page)));
 
 	/* TODO: handle PTE-mapped THP */
 	if (PageCompound(page)) {
@@ -4547,6 +4936,27 @@ static vm_fault_t do_numa_page(struct vm_fault *vmf)
 	target_nid = numa_migrate_prep(page, vma, vmf->address, page_nid,
 			&flags);
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
+
+#ifdef CONFIG_USER_REPLICATION
+	if (get_data_replication_policy(vma->vm_mm) != DATA_REPLICATION_NONE) {
+		if (vma_might_be_replicated(vma)) {
+			if (!numa_replicate_page(vmf)) {
+				vmf->replica_action = REPLICA_NONE;
+				put_page(page);
+				flags |= TNF_FAULT_LOCAL;
+				if (target_nid != NUMA_NO_NODE)
+					page_nid = target_nid;
+				goto out;
+			}
+		}
+
+		if (vma->vm_file && ((vma->vm_flags & (VM_READ|VM_WRITE)) == VM_READ)) {
+			put_page(page);
+			return 0;
+		}
+	}
+#endif
+
 	if (target_nid == NUMA_NO_NODE) {
 		put_page(page);
 		goto out;
@@ -4647,7 +5057,10 @@ split:
 static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 {
 	pte_t entry;
+	vm_fault_t ret;
 	bool is_write = vmf->flags & FAULT_FLAG_WRITE;
+	UREPLICA_DEBUG(ktime_t start;
+		ktime_t end;)
 
 	if (unlikely(pmd_none(*vmf->pmd))) {
 		/*
@@ -4686,17 +5099,35 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 	}
 
 	if (!vmf->pte) {
-		if (vma_is_anonymous(vmf->vma))
-			return do_anonymous_page(vmf);
-		else
-			return do_fault(vmf);
+		if (vma_is_anonymous(vmf->vma)) {
+			UREPLICA_DEBUG(start = ktime_get());
+			ret = do_anonymous_page(vmf);
+			UREPLICA_DEBUG(end = ktime_get();
+				       trace_mm_ureplica_cost_do_anonymous_page(end - start);)
+		} else {
+			UREPLICA_DEBUG(start = ktime_get());
+			ret = do_fault(vmf);
+			UREPLICA_DEBUG(end = ktime_get();
+				       trace_mm_ureplica_cost_do_fault(end - start);)
+		}
+		goto replication;
 	}
 
-	if (!pte_present(vmf->orig_pte))
-		return do_swap_page(vmf);
+	if (!pte_present(vmf->orig_pte)) {
+		UREPLICA_DEBUG(start = ktime_get());
+		ret = do_swap_page(vmf);
+		UREPLICA_DEBUG(end = ktime_get();
+			       trace_mm_ureplica_cost_do_swap_page(end - start);)
+		return ret;
+	}
 
-	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma))
-		return do_numa_page(vmf);
+	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma)) {
+		UREPLICA_DEBUG(start = ktime_get());
+		ret = do_numa_page(vmf);
+		UREPLICA_DEBUG(end = ktime_get();
+			       trace_mm_ureplica_cost_do_numa_page(end - start);)
+		return ret;
+	}
 
 	vmf->ptl = pte_lockptr(vmf->vma->vm_mm, vmf->pmd);
 	spin_lock(vmf->ptl);
@@ -4706,12 +5137,17 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 		goto unlock;
 	}
 	if (is_write) {
-		if (!pte_write(entry))
-			return do_wp_page(vmf);
+		if (!pte_write(entry)) {
+			UREPLICA_DEBUG(start = ktime_get());
+			ret = do_wp_page(vmf);
+			UREPLICA_DEBUG(end = ktime_get();
+				       trace_mm_ureplica_cost_do_wp_page(end - start);)
+			return ret;
+		}
 		entry = pte_mkdirty(entry);
 	}
 	entry = pte_mkyoung(entry);
-	if (ptep_set_access_flags(vmf->vma, vmf->address, vmf->pte, entry,
+	if (ptep_set_access_flags_replicated(vmf->vma, vmf->address, vmf->pte, entry,
 				  is_write)) {
 		update_mmu_cache(vmf->vma, vmf->address, vmf->pte);
 		if (is_write)
@@ -4733,7 +5169,53 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 unlock:
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
 	return 0;
+
+replication:
+
+#ifdef CONFIG_USER_REPLICATION
+/*
+ * How about a little bit of replication ??
+ */
+	if (get_data_replication_policy(vmf->vma->vm_mm) == DATA_REPLICATION_ALL && vma_might_be_replicated(vmf->vma)) {
+		unsigned long start = vmf->address & PAGE_MASK;
+
+		if (WARN_ON_ONCE(pmd_none(*vmf->pmd) || !numa_pgtable_replicated(vmf->pmd)))
+			return ret;
+		if (phys_duplicate_pte_range(vmf->vma, vmf->pmd, start, start + PAGE_SIZE) == start + PAGE_SIZE)
+			flush_tlb_page(vmf->vma, start);
+	}
+#endif
+
+	return ret;
 }
+#ifndef CONFIG_USER_REPLICATION
+
+static pgd_t *fault_pgd_offset(struct vm_fault *vmf, unsigned long address)
+{
+	return pgd_offset(vmf->vma->vm_mm, address);
+}
+
+static p4d_t *fault_p4d_alloc(struct vm_fault *vmf, struct mm_struct *mm, pgd_t *pgd, unsigned long address)
+{
+	return p4d_alloc(mm, pgd, address);
+}
+
+static pud_t *fault_pud_alloc(struct vm_fault *vmf, struct mm_struct *mm, p4d_t *p4d, unsigned long address)
+{
+	return pud_alloc(mm, p4d, address);
+}
+
+static pmd_t *fault_pmd_alloc(struct vm_fault *vmf, struct mm_struct *mm, pud_t *pud, unsigned long address)
+{
+	return pmd_alloc(mm, pud, address);
+}
+
+static int fault_pte_alloc(struct vm_fault *vmf)
+{
+	return 0;
+}
+
+#endif /* CONFIG_USER_REPLICATION */
 
 /*
  * By the time we get here, we already hold the mm semaphore
@@ -4747,6 +5229,7 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 	struct vm_fault vmf = {
 		.vma = vma,
 		.address = address & PAGE_MASK,
+		.real_address = address,
 		.flags = flags,
 		.pgoff = linear_page_index(vma, address),
 		.gfp_mask = __get_fault_gfp_mask(vma),
@@ -4756,13 +5239,20 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 	pgd_t *pgd;
 	p4d_t *p4d;
 	vm_fault_t ret;
+	UREPLICA_DEBUG(ktime_t start;
+		ktime_t end;)
 
-	pgd = pgd_offset(mm, address);
-	p4d = p4d_alloc(mm, pgd, address);
+	pgd = fault_pgd_offset(&vmf, address);
+	UREPLICA_DEBUG(start = ktime_get());
+	p4d = fault_p4d_alloc(&vmf, mm, pgd, address);
+	UREPLICA_DEBUG(end = ktime_get();
+		       trace_mm_ureplica_cost_fault_p4d_alloc(end - start);)
 	if (!p4d)
 		return VM_FAULT_OOM;
-
-	vmf.pud = pud_alloc(mm, p4d, address);
+	UREPLICA_DEBUG(start = ktime_get());
+	vmf.pud = fault_pud_alloc(&vmf, mm, p4d, address);
+	UREPLICA_DEBUG(end = ktime_get();
+		       trace_mm_ureplica_cost_fault_pud_alloc(end - start);)
 	if (!vmf.pud)
 		return VM_FAULT_OOM;
 retry_pud:
@@ -4775,7 +5265,6 @@ retry_pud:
 
 		barrier();
 		if (pud_trans_huge(orig_pud) || pud_devmap(orig_pud)) {
-
 			/* NUMA case for anonymous PUDs would go here */
 
 			if (dirty && !pud_write(orig_pud)) {
@@ -4788,8 +5277,10 @@ retry_pud:
 			}
 		}
 	}
-
-	vmf.pmd = pmd_alloc(mm, vmf.pud, address);
+	UREPLICA_DEBUG(start = ktime_get());
+	vmf.pmd = fault_pmd_alloc(&vmf, mm, vmf.pud, address);
+	UREPLICA_DEBUG(end = ktime_get();
+		       trace_mm_ureplica_cost_fault_pmd_alloc(end - start);)
 	if (!vmf.pmd)
 		return VM_FAULT_OOM;
 
@@ -4821,13 +5312,20 @@ retry_pud:
 				if (!(ret & VM_FAULT_FALLBACK))
 					return ret;
 			} else {
-				huge_pmd_set_accessed(&vmf);
+				huge_pmd_set_accessed_replicated(&vmf);
 				return 0;
 			}
 		}
 	}
 
-	return handle_pte_fault(&vmf);
+	if (fault_pte_alloc(&vmf))
+		return VM_FAULT_OOM;
+
+	UREPLICA_DEBUG(start = ktime_get());
+	ret = handle_pte_fault(&vmf);
+	UREPLICA_DEBUG(end = ktime_get();
+		       trace_mm_ureplica_cost_handle_pte_fault(end - start);)
+	return ret;
 }
 
 /**
@@ -4901,6 +5399,8 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 			   unsigned int flags, struct pt_regs *regs)
 {
 	vm_fault_t ret;
+	UREPLICA_DEBUG(ktime_t start;
+		ktime_t end;)
 
 	__set_current_state(TASK_RUNNING);
 
@@ -4924,9 +5424,12 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		ret = hugetlb_fault(vma->vm_mm, vma, address, flags);
-	else
+	else {
+		UREPLICA_DEBUG(start = ktime_get());
 		ret = __handle_mm_fault(vma, address, flags);
-
+		UREPLICA_DEBUG(end = ktime_get();
+			       trace_mm_ureplica_cost_handle_mm_fault(end - start);)
+	}
 	if (flags & FAULT_FLAG_USER) {
 		mem_cgroup_exit_user_fault();
 		/*
@@ -4948,24 +5451,6 @@ EXPORT_SYMBOL_GPL(handle_mm_fault);
 #ifndef __PAGETABLE_P4D_FOLDED
 
 #ifdef CONFIG_KERNEL_REPLICATION
-static void __p4d_populate_to_replicas(struct mm_struct *mm,
-				       p4d_t *p4d,
-				       unsigned long address)
-{
-	int nid;
-	pgd_t *pgd;
-
-	if (mm_p4d_folded(mm) || !is_text_replicated())
-		return;
-
-	for_each_memory_node(nid) {
-		pgd = pgd_offset_pgd(mm->pgd_numa[nid], address);
-		if (pgd_present(*pgd))
-			continue;
-		pgd_populate(mm, pgd, p4d);
-	}
-}
-
 int __p4d_alloc_node(unsigned int nid,
 		struct mm_struct *mm,
 		pgd_t *pgd, unsigned long address)
@@ -4984,11 +5469,6 @@ int __p4d_alloc_node(unsigned int nid,
 	spin_unlock(&mm->page_table_lock);
 	return 0;
 }
-#else
-static void __p4d_populate_to_replicas(struct mm_struct *mm,
-				       p4d_t *p4d,
-				       unsigned long address)
-{ }
 #endif /* CONFIG_KERNEL_REPLICATION */
 
 /*
@@ -5006,10 +5486,8 @@ int __p4d_alloc(struct mm_struct *mm, pgd_t *pgd, unsigned long address)
 	spin_lock(&mm->page_table_lock);
 	if (pgd_present(*pgd))		/* Another has populated it */
 		p4d_free(mm, new);
-	else {
-		pgd_populate(mm, pgd, new);
-		__p4d_populate_to_replicas(mm, new, address);
-	}
+	else
+		pgd_populate_replicated(mm, pgd, new);
 	spin_unlock(&mm->page_table_lock);
 	return 0;
 }
@@ -5018,24 +5496,6 @@ int __p4d_alloc(struct mm_struct *mm, pgd_t *pgd, unsigned long address)
 #ifndef __PAGETABLE_PUD_FOLDED
 
 #ifdef CONFIG_KERNEL_REPLICATION
-static void __pud_populate_to_replicas(struct mm_struct *mm,
-				       pud_t *pud,
-				       unsigned long address)
-{
-	int nid;
-	p4d_t *p4d;
-
-	if (!mm_p4d_folded(mm) || !is_text_replicated())
-		return;
-
-	for_each_online_node(nid) {
-		p4d = (p4d_t *)pgd_offset_pgd(mm->pgd_numa[nid], address);
-		if (p4d_present(*p4d))
-			continue;
-		p4d_populate(mm, p4d, pud);
-	}
-}
-
 int __pud_alloc_node(unsigned int nid,
 		struct mm_struct *mm,
 		p4d_t *p4d, unsigned long address)
@@ -5044,22 +5504,16 @@ int __pud_alloc_node(unsigned int nid,
 	if (!new)
 		return -ENOMEM;
 
+	smp_wmb(); /* See comment in __pte_alloc */
+
 	spin_lock(&mm->page_table_lock);
 	if (!p4d_present(*p4d)) {
 		mm_inc_nr_puds(mm);
-		smp_wmb(); /* See comment in pmd_install() */
 		p4d_populate(mm, p4d, new);
-	} else  /* Another has populated it */
+	} else	/* Another has populated it */
 		pud_free(mm, new);
 	spin_unlock(&mm->page_table_lock);
 	return 0;
-}
-#else
-static void __pud_populate_to_replicas(struct mm_struct *mm,
-				       pud_t *pud,
-				       unsigned long address)
-{
-	return;
 }
 #endif /* CONFIG_KERNEL_REPLICATION */
 
@@ -5078,8 +5532,7 @@ int __pud_alloc(struct mm_struct *mm, p4d_t *p4d, unsigned long address)
 	spin_lock(&mm->page_table_lock);
 	if (!p4d_present(*p4d)) {
 		mm_inc_nr_puds(mm);
-		p4d_populate(mm, p4d, new);
-		__pud_populate_to_replicas(mm, new, address);
+		p4d_populate_replicated(mm, p4d, new);
 	} else	/* Another has populated it */
 		pud_free(mm, new);
 	spin_unlock(&mm->page_table_lock);
@@ -5104,7 +5557,7 @@ int __pmd_alloc(struct mm_struct *mm, pud_t *pud, unsigned long address)
 	ptl = pud_lock(mm, pud);
 	if (!pud_present(*pud)) {
 		mm_inc_nr_pmds(mm);
-		pud_populate(mm, pud, new);
+		pud_populate_replicated(mm, pud, new);
 	} else	/* Another has populated it */
 		pmd_free(mm, new);
 	spin_unlock(ptl);
@@ -5121,14 +5574,14 @@ int __pmd_alloc_node(unsigned int nid,
 	if (!new)
 		return -ENOMEM;
 
+	smp_wmb(); /* See comment in __pte_alloc */
+
 	ptl = pud_lock(mm, pud);
 	if (!pud_present(*pud)) {
 		mm_inc_nr_pmds(mm);
-		smp_wmb(); /* See comment in pmd_install() */
 		pud_populate(mm, pud, new);
-	} else { /* Another has populated it */
+	} else	/* Another has populated it */
 		pmd_free(mm, new);
-	}
 	spin_unlock(ptl);
 	return 0;
 }
@@ -5686,6 +6139,25 @@ void __init ptlock_cache_init(void)
 			SLAB_PANIC, NULL);
 }
 
+#ifdef CONFIG_KERNEL_REPLICATION
+bool ptlock_alloc(struct page *page)
+{
+	spinlock_t *ptl;
+
+	ptl = kmem_cache_alloc(page_ptl_cachep, GFP_KERNEL);
+	if (!ptl)
+		return false;
+	page->ptl = ptl;
+	page->master_table = page;
+	return true;
+}
+
+void ptlock_free(struct page *page)
+{
+	kmem_cache_free(page_ptl_cachep, page->ptl);
+	page->master_table = NULL;
+}
+#else
 bool ptlock_alloc(struct page *page)
 {
 	spinlock_t *ptl;
@@ -5701,6 +6173,8 @@ void ptlock_free(struct page *page)
 {
 	kmem_cache_free(page_ptl_cachep, page->ptl);
 }
+#endif
+
 #endif
 
 #ifdef CONFIG_PIN_MEMORY
@@ -5751,7 +6225,7 @@ vm_fault_t do_anon_page_remap(struct vm_area_struct *vma, unsigned long address,
 	page_add_new_anon_rmap(page, vma, address, false);
 	lru_cache_add_inactive_or_unevictable(page, vma);
 
-	set_pte_at(vma->vm_mm, address, pte, entry);
+	set_pte_at_replicated(vma->vm_mm, address, pte, entry);
 	/* No need to invalidate - it was non-present before */
 	update_mmu_cache(vma, address, pte);
 
@@ -5785,9 +6259,10 @@ struct page *walk_to_page_node(int nid, const void *vmalloc_addr)
 	pte_t *ptep, pte;
 
 	if (!is_text_replicated())
-		nid = 0;
+		pgd = pgd_offset_pgd(init_mm.pgd, addr);
+	else
+		pgd = pgd_offset_pgd(per_node_pgd(&init_mm, nid), addr);
 
-	pgd = pgd_offset_pgd(per_node_pgd(&init_mm, nid), addr);
 	if (pgd_none(*pgd))
 		return NULL;
 	if (WARN_ON_ONCE(pgd_leaf(*pgd)))
