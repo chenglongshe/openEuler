@@ -496,10 +496,10 @@ static void swap_readpage_bdev_async(struct page *page,
 	submit_bio(bio);
 }
 
-void swap_readpage(struct page *page, bool synchronous, struct swap_iocb **plug)
+void swap_read_folio(struct folio *folio, bool synchronous,
+		struct swap_iocb **plug)
 {
-	struct folio *folio = page_folio(page);
-	struct swap_info_struct *sis = page_swap_info(page);
+	struct swap_info_struct *sis = swp_swap_info(folio->swap);
 	bool workingset = folio_test_workingset(folio);
 	unsigned long pflags;
 	bool in_thrashing;
