@@ -41,6 +41,7 @@
 #include <linux/swapfile.h>
 #include <linux/iversion.h>
 #include "swap.h"
+#include <linux/zswap.h>
 
 static struct vfsmount *shm_mnt;
 

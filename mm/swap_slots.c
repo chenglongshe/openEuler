@@ -34,6 +34,7 @@
 #include <linux/vmalloc.h>
 #include <linux/mutex.h>
 #include <linux/mm.h>
+#include <linux/zswap.h>
 
 static DEFINE_PER_CPU(struct swap_slots_cache, swp_slots);
 #ifdef CONFIG_MEMCG_SWAP_QOS
