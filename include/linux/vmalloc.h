@@ -36,6 +36,10 @@ struct notifier_block;		/* in notifier.h */
 #define VM_SHAREPOOL		0
 #endif
 
+#ifdef CONFIG_KERNEL_REPLICATION
+#define VM_NUMA_SHARED		0x00000800	/* Pages shared between per-NUMA node TT*/
+#endif
+
 /*
  * VM_KASAN is used slighly differently depending on CONFIG_KASAN_VMALLOC.
  *
@@ -69,6 +73,11 @@ struct vm_struct {
 	unsigned int		nr_pages;
 	phys_addr_t		phys_addr;
 	const void		*caller;
+#ifdef CONFIG_KERNEL_REPLICATION
+	KABI_EXTEND(int	node)
+	KABI_EXTEND(bool replicated)
+#endif
+
 };
 
 struct vmap_area {
@@ -141,6 +150,18 @@ extern void *__vmalloc_node_range(unsigned long size, unsigned long align,
 			unsigned long start, unsigned long end, gfp_t gfp_mask,
 			pgprot_t prot, unsigned long vm_flags, int node,
 			const void *caller);
+#ifdef CONFIG_KERNEL_REPLICATION
+ /*
+  * DO NOT USE this function if you don't understand what it is doing
+  */
+int __vmalloc_node_replicate_range(const void *addr, gfp_t gfp_mask,
+		pgprot_t prot, unsigned long vm_flags);
+#ifdef CONFIG_ARM64
+void vunmap_range_replicas(unsigned long addr, unsigned long end);
+#endif
+
+#endif
+
 void *__vmalloc_node(unsigned long size, unsigned long align, gfp_t gfp_mask,
 		int node, const void *caller);
 void *vmalloc_no_huge(unsigned long size);

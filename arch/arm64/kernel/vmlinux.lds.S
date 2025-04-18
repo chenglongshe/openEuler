@@ -121,6 +121,9 @@ SECTIONS
 		_text = .;
 		HEAD_TEXT
 	}
+#ifdef CONFIG_KERNEL_REPLICATION
+	. = ALIGN(PMD_SIZE);
+#endif
 	.text : {			/* Real text segment		*/
 		_stext = .;		/* Text and read-only data	*/
 			IRQENTRY_TEXT
@@ -150,10 +153,17 @@ SECTIONS
 	       "Unexpected GOT/PLT entries detected!")
 
 	. = ALIGN(SEGMENT_ALIGN);
+#ifdef CONFIG_KERNEL_REPLICATION
+	. = ALIGN(PMD_SIZE);
+#endif
 	_etext = .;			/* End of text section */
 
 	/* everything from this point to __init_begin will be marked RO NX */
+#ifdef CONFIG_KERNEL_REPLICATION
+	RO_DATA(PMD_SIZE)
+#else
 	RO_DATA(PAGE_SIZE)
+#endif
 
 	idmap_pg_dir = .;
 	. += IDMAP_DIR_SIZE;

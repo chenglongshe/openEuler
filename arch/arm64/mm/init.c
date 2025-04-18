@@ -678,6 +678,33 @@ static void __init free_unused_memmap(void)
 }
 #endif	/* !CONFIG_SPARSEMEM_VMEMMAP */
 
+#ifdef CONFIG_KERNEL_REPLICATION
+/*
+ * It is necessary to preallocate vmalloc pages in advance,
+ * otherwise the replicated page-tables can be incomplete.
+ */
+static void __init preallocate_vmalloc_pages(void)
+{
+	unsigned long addr;
+
+	for (addr = MODULES_VADDR; addr <= VMALLOC_END;
+			addr = ALIGN(addr + 1, PGDIR_SIZE)) {
+		pgd_t *pgd = pgd_offset_k(addr);
+		p4d_t *p4d;
+		pud_t *pud;
+
+		p4d = p4d_alloc(&init_mm, pgd, addr);
+		/*
+		 * No need to check p4d here due to
+		 * only 4-stage page table is possible
+		 */
+		pud = pud_alloc(&init_mm, p4d, addr);
+		if (!pud)
+			panic("Failed to pre-allocate pud pages for vmalloc area\n");
+	}
+}
+#endif /* CONFIG_KERNEL_REPLICATION */
+
 /*
  * mem_init() marks the free areas in the mem_map and tells us how much memory
  * is free.  This is done after various parts of the system have claimed their
@@ -722,6 +749,9 @@ void __init mem_init(void)
 		 */
 		sysctl_overcommit_memory = OVERCOMMIT_ALWAYS;
 	}
+#ifdef CONFIG_KERNEL_REPLICATION
+	preallocate_vmalloc_pages();
+#endif /* CONFIG_KERNEL_REPLICATION */
 }
 
 void free_initmem(void)
@@ -734,7 +764,15 @@ void free_initmem(void)
 	 * prevents the region from being reused for kernel modules, which
 	 * is not supported by kallsyms.
 	 */
-	unmap_kernel_range((u64)__init_begin, (u64)(__init_end - __init_begin));
+#ifdef CONFIG_KERNEL_REPLICATION
+	/*
+	 * In case of replicated kernel the per-NUMA node vmalloc
+	 * memory should be released.
+	 */
+	vunmap_range_replicas((u64)__init_begin, (u64)__init_end);
+#else
+	unmap_kernel_range((u64)__init_begin, (u64)__init_end - (u64)__init_begin);
+#endif /* CONFIG_KERNEL_REPLICATION */
 }
 
 void dump_mem_limit(void)

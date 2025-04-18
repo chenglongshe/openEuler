@@ -19,6 +19,8 @@
 
 #include <asm/mmu.h>
 
+#include <linux/numa.h>
+
 #ifndef AT_VECTOR_SIZE_ARCH
 #define AT_VECTOR_SIZE_ARCH 0
 #endif
@@ -435,8 +437,7 @@ struct mm_struct {
 #endif
 		unsigned long task_size;	/* size of task vm space */
 		unsigned long highest_vm_end;	/* highest vma end address */
-		pgd_t * pgd;
-
+		pgd_t *pgd;
 #ifdef CONFIG_MEMBARRIER
 		/**
 		 * @membarrier_state: Flags controlling membarrier behavior.
@@ -645,7 +646,11 @@ struct mm_struct {
 #else
 	KABI_RESERVE(4)
 #endif
+#ifdef CONFIG_KERNEL_REPLICATION
+	KABI_USE(5, pgd_t **pgd_numa)
+#else
 	KABI_RESERVE(5)
+#endif
 	KABI_RESERVE(6)
 	KABI_RESERVE(7)
 	KABI_RESERVE(8)

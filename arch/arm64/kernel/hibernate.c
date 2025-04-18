@@ -21,6 +21,7 @@
 #include <linux/sched.h>
 #include <linux/suspend.h>
 #include <linux/utsname.h>
+#include <linux/numa_replication.h>
 
 #include <asm/barrier.h>
 #include <asm/cacheflush.h>
@@ -123,7 +124,11 @@ int arch_hibernation_header_save(void *addr, unsigned int max_size)
 		return -EOVERFLOW;
 
 	arch_hdr_invariants(&hdr->invariants);
+#ifdef CONFIG_KERNEL_REPLICATION
+	hdr->ttbr1_el1		= virt_to_phys(this_node_pgd(&init_mm));
+#else
 	hdr->ttbr1_el1		= __pa_symbol(swapper_pg_dir);
+#endif /* CONFIG_KERNEL_REPLICATION */
 	hdr->reenter_kernel	= _cpu_resume;
 
 	/* We can't use __hyp_get_vectors() because kvm may still be loaded */

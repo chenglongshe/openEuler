@@ -75,6 +75,7 @@
 #include <linux/init.h>
 #include <linux/libfdt.h>
 #include <linux/pbha.h>
+#include <linux/numa_replication.h>
 
 #include <asm/cpu.h>
 #include <asm/cpufeature.h>
@@ -3347,7 +3348,11 @@ void __init setup_cpu_features(void)
 
 static void __maybe_unused cpu_enable_cnp(struct arm64_cpu_capabilities const *cap)
 {
+#ifdef CONFIG_KERNEL_REPLICATION
+	cpu_replace_ttbr1(this_node_pgd(&init_mm));
+#else
 	cpu_replace_ttbr1(lm_alias(swapper_pg_dir));
+#endif /* CONFIG_KERNEL_REPLICATION */
 }
 
 /*

@@ -24,6 +24,7 @@
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
 #include <linux/pbha.h>
+#include <linux/numa_replication.h>
 
 #include <asm/barrier.h>
 #include <asm/cputype.h>
@@ -65,6 +66,38 @@ static pud_t bm_pud[PTRS_PER_PUD] __page_aligned_bss __maybe_unused;
 
 static DEFINE_SPINLOCK(swapper_pgdir_lock);
 static DEFINE_MUTEX(fixmap_lock);
+
+void cpu_replace_ttbr1(pgd_t *pgdp)
+{
+	typedef void (ttbr_replace_func)(phys_addr_t);
+	extern ttbr_replace_func idmap_cpu_replace_ttbr1;
+	ttbr_replace_func *replace_phys;
+
+	/* phys_to_ttbr() zeros lower 2 bits of ttbr with 52-bit PA */
+	phys_addr_t ttbr1 = phys_to_ttbr(virt_to_phys(pgdp));
+
+#ifdef CONFIG_KERNEL_REPLICATION
+	if (system_supports_cnp() && !WARN_ON(pgdp != this_node_pgd(&init_mm))) {
+#else
+	if (system_supports_cnp() && !WARN_ON(pgdp != lm_alias(swapper_pg_dir))) {
+#endif /* CONFIG_KERNEL_REPLICATION */
+		/*
+		 * cpu_replace_ttbr1() is used when there's a boot CPU
+		 * up (i.e. cpufeature framework is not up yet) and
+		 * latter only when we enable CNP via cpufeature's
+		 * enable() callback.
+		 * Also we rely on the cpu_hwcap bit being set before
+		 * calling the enable() function.
+		 */
+		ttbr1 |= TTBR_CNP_BIT;
+	}
+
+	replace_phys = (void *)__pa_symbol(idmap_cpu_replace_ttbr1);
+
+	cpu_install_idmap();
+	replace_phys(ttbr1);
+	cpu_uninstall_idmap();
+}
 
 void set_swapper_pgd(pgd_t *pgdp, pgd_t pgd)
 {
@@ -454,6 +487,23 @@ void __init create_pgd_mapping(struct mm_struct *mm, phys_addr_t phys,
 			     pgd_pgtable_alloc, flags);
 }
 
+static void populate_mappings_prot(phys_addr_t phys, unsigned long virt,
+				   phys_addr_t size, pgprot_t prot)
+{
+#ifdef CONFIG_KERNEL_REPLICATION
+	int nid;
+
+	for_each_memory_node(nid) {
+		__create_pgd_mapping(per_node_pgd(&init_mm, nid),
+			page_to_phys(walk_to_page_node(nid, (void *)virt)),
+			virt, size, prot, NULL, NO_CONT_MAPPINGS);
+	}
+#else
+	__create_pgd_mapping(init_mm.pgd, phys, virt, size, prot, NULL,
+			     NO_CONT_MAPPINGS);
+#endif /* CONFIG_KERNEL_REPLICATION */
+}
+
 static void update_mapping_prot(phys_addr_t phys, unsigned long virt,
 				phys_addr_t size, pgprot_t prot)
 {
@@ -462,9 +512,7 @@ static void update_mapping_prot(phys_addr_t phys, unsigned long virt,
 			&phys, virt);
 		return;
 	}
-
-	__create_pgd_mapping(init_mm.pgd, phys, virt, size, prot, NULL,
-			     NO_CONT_MAPPINGS);
+	populate_mappings_prot(phys, virt, size, prot);
 
 	/* flush the TLBs after updating live kernel mappings */
 	flush_tlb_kernel_range(virt, virt + size);
@@ -641,6 +689,22 @@ static void __init map_kernel_segment(pgd_t *pgdp, void *va_start, void *va_end,
 }
 
 #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
+
+#ifdef CONFIG_KERNEL_REPLICATION
+static void __init populate_trampoline_mappings(void)
+{
+	int nid;
+
+	/* Copy trampoline mappings in replicated tables */
+	for_each_memory_node(nid) {
+		memcpy(per_node_pgd(&init_mm, nid) - (PTRS_PER_PGD * 2),
+				tramp_pg_dir, PGD_SIZE);
+	}
+	/* Be sure that replicated page table can be observed properly */
+	dsb(ishst);
+}
+#endif /* CONFIG_KERNEL_REPLICATION */
+
 static int __init map_entry_trampoline(void)
 {
 	int i;
@@ -669,6 +733,10 @@ static int __init map_entry_trampoline(void)
 			     __pa_symbol(__entry_tramp_data_start),
 			     PAGE_KERNEL_RO);
 	}
+
+#ifdef CONFIG_KERNEL_REPLICATION
+	populate_trampoline_mappings();
+#endif /* CONFIG_KERNEL_REPLICATION */
 
 	return 0;
 }
