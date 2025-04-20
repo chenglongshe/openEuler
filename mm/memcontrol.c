@@ -63,6 +63,7 @@
 #include <linux/psi.h>
 #include <linux/seq_buf.h>
 #include <linux/memcg_memfs_info.h>
+#include <linux/numa_user_replication.h>
 #include "internal.h"
 #include <net/sock.h>
 #include <net/ip.h>
@@ -73,6 +74,7 @@
 #include <trace/events/vmscan.h>
 #ifndef __GENKSYMS__
 #include <linux/ksm.h>
+#include <linux/time_namespace.h>
 #endif
 
 struct cgroup_subsys memory_cgrp_subsys __read_mostly;
@@ -3904,6 +3906,10 @@ static int mem_cgroup_move_charge_write(struct cgroup_subsys_state *css,
 	if (val & ~MOVE_MASK)
 		return -EINVAL;
 
+#ifdef CONFIG_USER_REPLICATION
+	if (memcg->replication_ctl->table_policy != TABLE_REPLICATION_NONE)
+		return -EINVAL;
+#endif
 	/*
 	 * No kind of locking is needed in here, because ->can_attach() will
 	 * check this value once in the beginning of the process, and then carry
@@ -6036,6 +6042,135 @@ out_unlock:
 
 static int memory_stat_show(struct seq_file *m, void *v);
 
+#ifdef CONFIG_USER_REPLICATION
+static int memory_numa_table_replication_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+
+	seq_printf(m, "%d\n", memcg->replication_ctl->table_policy);
+
+	return 0;
+}
+
+static ssize_t memory_numa_table_replication_write(struct kernfs_open_file *of, char *buf,
+			      size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	struct cgroup *cgrp = of_css(of)->cgroup;
+	unsigned long long result;
+
+	buf = strstrip(buf);
+
+	if (cgroup_has_tasks(cgrp))
+		return -EINVAL;
+
+	if (kstrtoull(buf, 0, &result))
+		return -EINVAL;
+
+	if (result == TABLE_REPLICATION_NONE && memcg->replication_ctl->data_policy != DATA_REPLICATION_NONE)
+		return -EINVAL;
+
+	if (result != TABLE_REPLICATION_NONE)
+		WRITE_ONCE(memcg->move_charge_at_immigrate, MOVE_MASK);
+
+	switch (result) {
+		case TABLE_REPLICATION_NONE: {
+			memcg->replication_ctl->table_policy = TABLE_REPLICATION_NONE;
+			break;
+		}
+		case TABLE_REPLICATION_MINIMAL: {
+			memcg->replication_ctl->table_policy = TABLE_REPLICATION_MINIMAL;
+			break;
+		}
+		case TABLE_REPLICATION_ALL: {
+			memcg->replication_ctl->table_policy = TABLE_REPLICATION_ALL;
+			break;
+		}
+		default: {
+			return -EINVAL;
+		}
+	}
+
+	return nbytes;
+}
+
+static int memory_numa_data_replication_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+
+	seq_printf(m, "%d\n", memcg->replication_ctl->data_policy);
+
+	return 0;
+}
+
+static ssize_t memory_numa_data_replication_write(struct kernfs_open_file *of, char *buf,
+			      size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	struct cgroup *cgrp = of_css(of)->cgroup;
+	unsigned long long result;
+
+	buf = strstrip(buf);
+
+	if (cgroup_has_tasks(cgrp))
+		return -EINVAL;
+
+	if (kstrtoull(buf, 0, &result))
+		return -EINVAL;
+
+	if (result != DATA_REPLICATION_NONE && memcg->replication_ctl->table_policy == TABLE_REPLICATION_NONE)
+		return -EINVAL;
+
+	switch (result) {
+		case DATA_REPLICATION_NONE: {
+			memcg->replication_ctl->data_policy = DATA_REPLICATION_NONE;
+			break;
+		}
+		case DATA_REPLICATION_ON_DEMAND: {
+			memcg->replication_ctl->data_policy = DATA_REPLICATION_ON_DEMAND;
+			break;
+		}
+		case DATA_REPLICATION_ALL_MAPPED_ON_DEMAND: {
+			memcg->replication_ctl->data_policy = DATA_REPLICATION_ALL_MAPPED_ON_DEMAND;
+			break;
+		}
+		case DATA_REPLICATION_ALL: {
+			memcg->replication_ctl->data_policy = DATA_REPLICATION_ALL;
+			break;
+		}
+		default: {
+			return -EINVAL;
+		}
+	}
+
+	return nbytes;
+}
+
+static int memory_numa_replication_stats_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+	long long replicated_data_bytes = 0;
+	long long replicated_table_bytes = 0;
+	struct timespec64 uptime;
+
+	ktime_get_boottime_ts64(&uptime);
+	timens_add_boottime(&uptime);
+
+	replicated_data_bytes = total_replicated_data_bytes_memecg(memcg);
+	replicated_table_bytes = total_replicated_table_bytes_memecg(memcg);
+
+	seq_printf(m,  "{\n"
+			"    \"timestamp\": \"%lu.%02lu\",\n"
+			"    \"replicated_data_bytes\": \"%lld\",\n"
+			"    \"replicated_table_bytes\": \"%lld\"\n"
+			"}\n", (unsigned long) uptime.tv_sec,
+			(uptime.tv_nsec / (NSEC_PER_SEC / 100)), replicated_data_bytes, replicated_table_bytes);
+
+	return 0;
+}
+
+#endif
+
 static struct cftype mem_cgroup_legacy_files[] = {
 	{
 		.name = "usage_in_bytes",
@@ -6282,6 +6417,24 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.seq_show = memory_ksm_show,
 	},
 #endif
+#ifdef CONFIG_USER_REPLICATION
+	{
+		.name = "numa_table_replication",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_numa_table_replication_show,
+		.write = memory_numa_table_replication_write,
+	},
+	{
+		.name = "numa_data_replication",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_numa_data_replication_show,
+		.write = memory_numa_data_replication_write,
+	},
+	{
+		.name = "numa_replication_stats",
+		.seq_show = memory_numa_replication_stats_show
+	},
+#endif
 	{ },	/* terminate */
 };
 
@@ -6404,6 +6557,20 @@ static void free_mem_cgroup_per_node_info(struct mem_cgroup *memcg, int node)
 	kfree(pn);
 }
 
+#ifdef CONFIG_USER_REPLICATION
+static void memcg_free_replication_ctl(struct mem_cgroup *memcg)
+{
+	free_percpu(memcg->replication_ctl->pcp_dereplicated_tables);
+	free_percpu(memcg->replication_ctl->pcp_replicated_tables);
+	free_percpu(memcg->replication_ctl->pcp_dereplicated_pages);
+	free_percpu(memcg->replication_ctl->pcp_replicated_pages);
+
+	kfree(memcg->replication_ctl);
+}
+#else
+static void memcg_free_replication_ctl(struct mem_cgroup *memcg) { }
+#endif
+
 static void __mem_cgroup_free(struct mem_cgroup *memcg)
 {
 	int node;
@@ -6412,6 +6579,7 @@ static void __mem_cgroup_free(struct mem_cgroup *memcg)
 		free_mem_cgroup_per_node_info(memcg, node);
 	free_percpu(memcg->vmstats_percpu);
 	memcg_free_swap_device(memcg);
+	memcg_free_replication_ctl(memcg);
 	kfree(memcg);
 }
 
@@ -6491,6 +6659,53 @@ fail:
 	return ERR_PTR(error);
 }
 
+#ifdef CONFIG_USER_REPLICATION
+static int memcg_init_replication_ctl(struct mem_cgroup *memcg)
+{
+	memcg->replication_ctl = kmalloc(sizeof(struct memcg_replication_ctl), GFP_KERNEL);
+	if (!memcg->replication_ctl)
+		return -ENOMEM;
+	memcg->replication_ctl->fork_policy = FORK_KEEP_REPLICA;
+	memcg->replication_ctl->table_policy = TABLE_REPLICATION_NONE;
+	memcg->replication_ctl->data_policy = DATA_REPLICATION_NONE;
+
+	memcg->replication_ctl->pcp_replicated_pages = alloc_percpu_gfp(unsigned long, GFP_KERNEL | __GFP_ZERO);
+	if (!memcg->replication_ctl->pcp_replicated_pages)
+		goto fail1;
+
+	memcg->replication_ctl->pcp_dereplicated_pages = alloc_percpu_gfp(unsigned long, GFP_KERNEL | __GFP_ZERO);
+	if (!memcg->replication_ctl->pcp_dereplicated_pages)
+		goto fail2;
+
+	memcg->replication_ctl->pcp_replicated_tables = alloc_percpu_gfp(unsigned long, GFP_KERNEL | __GFP_ZERO);
+	if (!memcg->replication_ctl->pcp_replicated_tables)
+		goto fail3;
+
+	memcg->replication_ctl->pcp_dereplicated_tables = alloc_percpu_gfp(unsigned long, GFP_KERNEL | __GFP_ZERO);
+	if (!memcg->replication_ctl->pcp_dereplicated_tables)
+		goto fail4;
+
+	return 0;
+
+fail4:
+	free_percpu(memcg->replication_ctl->pcp_replicated_tables);
+fail3:
+	free_percpu(memcg->replication_ctl->pcp_dereplicated_pages);
+fail2:
+	free_percpu(memcg->replication_ctl->pcp_replicated_pages);
+fail1:
+	kfree(memcg->replication_ctl);
+	memcg->replication_ctl = NULL;
+
+	return -ENOMEM;
+}
+#else
+static int memcg_init_replication_ctl(struct mem_cgroup *memcg)
+{
+	return 0;
+}
+#endif
+
 static struct cgroup_subsys_state * __ref
 mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 {
@@ -6541,6 +6756,10 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		if (parent != root_mem_cgroup)
 			memory_cgrp_subsys.broken_hierarchy = true;
 	}
+
+	if (memcg_init_replication_ctl(memcg))
+		goto fail;
+
 	/* The following stuff does not apply to the root */
 	if (!parent) {
 		root_mem_cgroup = memcg;
@@ -7281,6 +7500,14 @@ static int mem_cgroup_can_attach(struct cgroup_taskset *tset)
 
 	VM_BUG_ON(from == memcg);
 
+#ifdef CONFIG_USER_REPLICATION
+	/*
+	 * We can not remove process from cgroup if replication is enabled
+	 */
+	if (from->replication_ctl->table_policy != TABLE_REPLICATION_NONE)
+		return 1;
+#endif
+
 	mm = get_task_mm(p);
 	if (!mm)
 		return 0;
@@ -7472,9 +7699,24 @@ static void mem_cgroup_attach(struct cgroup_taskset *tset)
 		memcg_attach_ksm(tset);
 }
 
+
+#ifdef CONFIG_USER_REPLICATION
+
+static void mem_cgroup_handle_replication(void)
+{
+	set_fork_policy(mc.mm, mc.to->replication_ctl->fork_policy);
+	numa_dispatch_table_replication_request(mc.mm, mc.to->replication_ctl->table_policy);
+	numa_dispatch_data_replication_request(mc.mm, mc.to->replication_ctl->data_policy);
+}
+
+#else
+static void mem_cgroup_handle_replication(void) { }
+#endif
+
 static void mem_cgroup_move_task(void)
 {
 	if (mc.to) {
+		mem_cgroup_handle_replication();
 		mem_cgroup_move_charge();
 		mem_cgroup_clear_mc();
 	}
@@ -7988,6 +8230,11 @@ int mem_cgroup_charge(struct page *page, struct mm_struct *mm, gfp_t gfp_mask)
 	css_get(&memcg->css);
 	commit_charge(page, memcg);
 
+#ifdef CONFIG_USER_REPLICATION
+	if (PageReplicated(page))
+		memcg_account_replicated_pages(memcg, nr_pages);
+#endif
+
 	local_irq_disable();
 	mem_cgroup_charge_statistics(memcg, page, nr_pages);
 	memcg_check_events(memcg, page);
@@ -8062,7 +8309,9 @@ static void uncharge_page(struct page *page, struct uncharge_gather *ug)
 	unsigned long nr_pages;
 	struct mem_cgroup *memcg;
 	struct obj_cgroup *objcg;
-
+#ifdef CONFIG_USER_REPLICATION
+	bool replicated = false;
+#endif
 	VM_BUG_ON_PAGE(PageLRU(page), page);
 
 	/*
@@ -8080,7 +8329,11 @@ static void uncharge_page(struct page *page, struct uncharge_gather *ug)
 	} else {
 		memcg = __page_memcg(page);
 	}
-
+#ifdef CONFIG_USER_REPLICATION
+	replicated = PageReplicated(page);
+	if (replicated)
+		ClearPageReplicated(page);
+#endif
 	if (!memcg)
 		return;
 
@@ -8097,7 +8350,10 @@ static void uncharge_page(struct page *page, struct uncharge_gather *ug)
 	}
 
 	nr_pages = compound_nr(page);
-
+#ifdef CONFIG_USER_REPLICATION
+	if (replicated)
+		memcg_account_dereplicated_pages(memcg, nr_pages);
+#endif
 	if (PageMemcgKmem(page)) {
 		ug->nr_memory += nr_pages;
 		ug->nr_kmem += nr_pages;

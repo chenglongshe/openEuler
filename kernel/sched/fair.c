@@ -32,6 +32,8 @@
 #include <linux/bpf_sched.h>
 #include <linux/mem_sampling.h>
 
+#include <linux/numa_user_replication.h>
+
 /*
  * Targeted preemption latency for CPU-bound tasks:
  *
@@ -2849,7 +2851,9 @@ static void task_numa_work(struct callback_head *work)
 	if (!pages)
 		return;
 
-
+#ifdef CONFIG_USER_REPLICATION
+	numa_accumulate_switches(mm);
+#endif
 	if (!mmap_read_trylock(mm))
 		return;
 	vma = find_vma(mm, start);
@@ -2859,9 +2863,8 @@ static void task_numa_work(struct callback_head *work)
 		vma = mm->mmap;
 	}
 	for (; vma; vma = vma->vm_next) {
-		if (!vma_migratable(vma) || !vma_policy_mof(vma) ||
-			is_vm_hugetlb_page(vma) || is_cdm_vma(vma) ||
-					(vma->vm_flags & VM_MIXEDMAP)) {
+		if (!vma_migratable(vma) || (!vma_policy_mof(vma) && !(vma_has_replicas(vma) && (get_data_replication_policy(vma->vm_mm) != DATA_REPLICATION_NONE))) ||
+			is_vm_hugetlb_page(vma) || is_cdm_vma(vma) || (vma->vm_flags & VM_MIXEDMAP)) {
 			continue;
 		}
 
@@ -2871,8 +2874,9 @@ static void task_numa_work(struct callback_head *work)
 		 * hinting faults in read-only file-backed mappings or the vdso
 		 * as migrating the pages will be of marginal benefit.
 		 */
-		if (!vma->vm_mm ||
-		    (vma->vm_file && (vma->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ)))
+		if ((!vma->vm_mm ||
+		    (vma->vm_file && (vma->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ))) &&
+		    !(vma->vm_mm && (get_data_replication_policy(vma->vm_mm) != DATA_REPLICATION_NONE)))
 			continue;
 
 		/*

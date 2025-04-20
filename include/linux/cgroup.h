@@ -138,6 +138,7 @@ int cgroup_init_early(void);
 int cgroup_init(void);
 
 int cgroup_parse_float(const char *input, unsigned dec_shift, s64 *v);
+bool cgroup_has_tasks(struct cgroup *cgrp);
 
 /*
  * Iteration helpers and macros.

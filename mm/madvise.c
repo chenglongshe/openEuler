@@ -29,6 +29,7 @@
 #include <linux/swapops.h>
 #include <linux/shmem_fs.h>
 #include <linux/mmu_notifier.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/tlb.h>
 
@@ -370,6 +371,10 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 
 		page = pmd_page(orig_pmd);
 
+		/* Do not interfere with replicated pages */
+		if (PageReplicated(page))
+			goto huge_unlock;
+
 		/* Do not interfere with other mappings of this page */
 		if (page_mapcount(page) != 1)
 			goto huge_unlock;
@@ -389,10 +394,10 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 		}
 
 		if (pmd_young(orig_pmd)) {
-			pmdp_invalidate(vma, addr, pmd);
+			pmdp_invalidate_replicated(vma, addr, pmd);
 			orig_pmd = pmd_mkold(orig_pmd);
 
-			set_pmd_at(mm, addr, pmd, orig_pmd);
+			set_pmd_at_replicated(mm, addr, pmd, orig_pmd);
 			tlb_remove_pmd_tlb_entry(tlb, pmd, addr);
 		}
 
@@ -434,7 +439,12 @@ regular_page:
 		page = vm_normal_page(vma, addr, ptent);
 		if (!page)
 			continue;
-
+		/*
+		 * Again, we do not care about replicated pages here,
+		 * they are unevictable and invisible for reclaim anyway
+		 */
+		if (PageReplicated(compound_head(page)))
+			continue;
 		/*
 		 * Creating a THP page is expensive so split it only if we
 		 * are sure it's worth. Split it if we are only owner.
@@ -472,10 +482,10 @@ regular_page:
 		VM_BUG_ON_PAGE(PageTransCompound(page), page);
 
 		if (pte_young(ptent)) {
-			ptent = ptep_get_and_clear_full(mm, addr, pte,
+			ptent = ptep_get_and_clear_full_replicated(mm, addr, pte,
 							tlb->fullmm);
 			ptent = pte_mkold(ptent);
-			set_pte_at(mm, addr, pte, ptent);
+			set_pte_at_replicated(mm, addr, pte, ptent);
 			tlb_remove_tlb_entry(tlb, pte, addr);
 		}
 
@@ -644,12 +654,15 @@ static int madvise_free_pte_range(pmd_t *pmd, unsigned long addr,
 				continue;
 			nr_swap--;
 			free_swap_and_cache(entry);
-			pte_clear_not_present_full(mm, addr, pte, tlb->fullmm);
+			pte_clear_not_present_full_replicated(mm, addr, pte, tlb->fullmm);
 			continue;
 		}
 
 		page = vm_normal_page(vma, addr, ptent);
 		if (!page)
+			continue;
+
+		if (PageReplicated(compound_head(page)))
 			continue;
 
 		/*
@@ -710,12 +723,12 @@ static int madvise_free_pte_range(pmd_t *pmd, unsigned long addr,
 			 * the portability, remap the pte with old|clean
 			 * after pte clearing.
 			 */
-			ptent = ptep_get_and_clear_full(mm, addr, pte,
-							tlb->fullmm);
+			ptent = ptep_get_and_clear_full_replicated(mm, addr, pte,
+								   tlb->fullmm);
 
 			ptent = pte_mkold(ptent);
 			ptent = pte_mkclean(ptent);
-			set_pte_at(mm, addr, pte, ptent);
+			set_pte_at_replicated(mm, addr, pte, ptent);
 			tlb_remove_tlb_entry(tlb, pte, addr);
 		}
 		mark_page_lazyfree(page);

@@ -25,7 +25,9 @@
 #include <asm/tlbflush.h>
 
 extern bool rodata_full;
-
+#ifdef CONFIG_USER_REPLICATION
+extern void numa_account_switch(struct mm_struct *mm);
+#endif
 static inline void contextidr_thread_switch(struct task_struct *next)
 {
 	if (!IS_ENABLED(CONFIG_PID_IN_CONTEXTIDR))
@@ -207,6 +209,9 @@ static inline void
 switch_mm(struct mm_struct *prev, struct mm_struct *next,
 	  struct task_struct *tsk)
 {
+#ifdef CONFIG_USER_REPLICATION
+	numa_account_switch(next);
+#endif
 	if (prev != next)
 		__switch_mm(next);
 

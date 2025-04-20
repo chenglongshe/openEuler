@@ -472,13 +472,24 @@ static inline pmd_t pmd_mkdevmap(pmd_t pmd)
 #define mk_pmd(page,prot)	pfn_pmd(page_to_pfn(page),prot)
 
 #ifdef CONFIG_KERNEL_REPLICATION
+/*
+ * Select all bits except the pfn
+ */
 static inline pgprot_t pmd_pgprot(pmd_t pmd)
 {
 	unsigned long pfn = pmd_pfn(pmd);
 
 	return __pgprot(pmd_val(pfn_pmd(pfn, __pgprot(0))) ^ pmd_val(pmd));
 }
+
 #endif /* CONFIG_KERNEL_REPLICATION */
+
+static inline pgprot_t pte_pgprot(pte_t pte)
+{
+	unsigned long pfn = pte_pfn(pte);
+
+	return __pgprot(pte_val(pfn_pte(pfn, __pgprot(0))) ^ pte_val(pte));
+}
 
 #define pud_young(pud)		pte_young(pud_pte(pud))
 #define pud_mkyoung(pud)	pte_pud(pte_mkyoung(pud_pte(pud)))

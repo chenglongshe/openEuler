@@ -23,6 +23,7 @@
 #include <linux/hugetlb.h>
 #include <linux/memcontrol.h>
 #include <linux/mm_inline.h>
+#include <linux/numa_user_replication.h>
 
 #include "internal.h"
 
@@ -441,7 +442,7 @@ void munlock_vma_pages_range(struct vm_area_struct *vma,
 		page = follow_page(vma, start, FOLL_GET | FOLL_DUMP);
 
 		if (page && !IS_ERR(page)) {
-			if (PageTransTail(page)) {
+			if (PageTransTail(page) || PageReplicated(compound_head(page))) {
 				VM_BUG_ON_PAGE(PageMlocked(page), page);
 				put_page(page); /* follow_page_mask() */
 			} else if (PageTransHuge(page)) {

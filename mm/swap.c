@@ -921,7 +921,6 @@ void release_pages(struct page **pages, int nr)
 		}
 
 		__ClearPageWaiters(page);
-
 		list_add(&page->lru, &pages_to_free);
 	}
 	if (lruvec)

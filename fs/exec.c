@@ -65,6 +65,7 @@
 #include <linux/compat.h>
 #include <linux/vmalloc.h>
 #include <linux/io_uring.h>
+#include <linux/numa_user_replication.h>
 #ifndef __GENKSYMS__
 #include <linux/ksm.h>
 #endif
@@ -275,11 +276,19 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	vma->vm_flags = VM_SOFTDIRTY | VM_STACK_FLAGS | VM_STACK_INCOMPLETE_SETUP;
 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
 
+#ifdef CONFIG_USER_REPLICATION
+	if (get_table_replication_policy(vma->vm_mm) == TABLE_REPLICATION_ALL) {
+		vma->vm_flags |= VM_REPLICA_INIT;
+	}
+#endif /* CONFIG_USER_REPLICATION */
+
+
 	err = insert_vm_struct(mm, vma);
 	if (err)
 		goto err;
 
 	mm->stack_vm = mm->total_vm = 1;
+
 	mmap_write_unlock(mm);
 	bprm->p = vma->vm_end - sizeof(void *);
 	return 0;

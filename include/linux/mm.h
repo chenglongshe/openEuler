@@ -340,12 +340,16 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_HIGH_ARCH_BIT_2	34	/* bit only usable on 64-bit architectures */
 #define VM_HIGH_ARCH_BIT_3	35	/* bit only usable on 64-bit architectures */
 #define VM_HIGH_ARCH_BIT_4	36	/* bit only usable on 64-bit architectures */
+#define VM_HIGH_ARCH_BIT_5	37	/* bit only usable on 64-bit architectures */
+#define VM_HIGH_ARCH_BIT_6	38	/* bit only usable on 64-bit architectures */
 #define VM_HIGH_ARCH_BIT_7	39	/* bit only usable on 64-bit architectures */
 #define VM_HIGH_ARCH_0	BIT(VM_HIGH_ARCH_BIT_0)
 #define VM_HIGH_ARCH_1	BIT(VM_HIGH_ARCH_BIT_1)
 #define VM_HIGH_ARCH_2	BIT(VM_HIGH_ARCH_BIT_2)
 #define VM_HIGH_ARCH_3	BIT(VM_HIGH_ARCH_BIT_3)
 #define VM_HIGH_ARCH_4	BIT(VM_HIGH_ARCH_BIT_4)
+#define VM_HIGH_ARCH_5	BIT(VM_HIGH_ARCH_BIT_5)
+#define VM_HIGH_ARCH_6	BIT(VM_HIGH_ARCH_BIT_6)
 #define VM_HIGH_ARCH_7	BIT(VM_HIGH_ARCH_BIT_7)
 #endif /* CONFIG_ARCH_USES_HIGH_VMA_FLAGS */
 
@@ -361,6 +365,20 @@ extern unsigned int kobjsize(const void *objp);
 # define VM_PKEY_BIT4  0
 #endif
 #endif /* CONFIG_ARCH_HAS_PKEYS */
+
+#ifdef CONFIG_USER_REPLICATION
+# define VM_REPLICA_INIT	VM_HIGH_ARCH_6	/*
+						 * Page tables for this vma will be replicated during page faults
+						 * Set and clear this flag in pair with calling numa_mm_store_range
+						 */
+# define VM_REPLICA_COMMIT	VM_HIGH_ARCH_7	/*
+						 * Phys memory of this vma migth has replicas
+						 * due to mprotect call or numa_balancer replication.
+						 * Also, this flag is used by numa balancer as a hint, that this memory should
+						 * be replicated. Obviously, that if this flag is set,
+						 * VM_REPLICA_INIT also must be set.
+						 */
+#endif /* CONFIG_USER_REPLICATION */
 
 #if defined(CONFIG_X86)
 # define VM_PAT		VM_ARCH_1	/* PAT reserves whole VMA at once (x86) */
@@ -558,6 +576,20 @@ static inline bool fault_flag_allow_retry_first(unsigned int flags)
 	{ FAULT_FLAG_INSTRUCTION,	"INSTRUCTION" }, \
 	{ FAULT_FLAG_INTERRUPTIBLE,	"INTERRUPTIBLE" }
 
+typedef enum {
+	/* Switch to default handling */
+	REPLICA_NONE,
+	/*
+	 * User replication stops here,
+	 * already replicated levels need propagation
+	 */
+	REPLICA_PROPAGATE,
+	/* Keep replicating page tables */
+	REPLICA_KEEP,
+	/* Failed to replicate page table level */
+	REPLICA_FAIL,
+} replica_action_t;
+
 /*
  * vm_fault is filled by the pagefault handler and passed to the vma's
  * ->fault function. The vma's ->fault is responsible for returning a bitmask
@@ -609,6 +641,17 @@ struct vm_fault {
 					 * page table to avoid allocation from
 					 * atomic context.
 					 */
+
+	KABI_EXTEND(unsigned long real_address)	/* Faulting virtual address - unmasked */
+	KABI_EXTEND(unsigned long left_replicant)	/* Closest vmas that require replicated tables */
+	KABI_EXTEND(unsigned long right_replicant)
+	KABI_EXTEND(p4d_t *p4d)
+	KABI_EXTEND(pgd_t *pgd)
+	KABI_EXTEND(bool pte_replicated :1)
+	KABI_EXTEND(bool pmd_replicated :1)
+	KABI_EXTEND(bool pud_replicated :1)
+	KABI_EXTEND(bool p4d_replicated :1)
+	KABI_EXTEND(replica_action_t replica_action) /* last action performed with page table */
 };
 
 /* page entry size for vm->huge_fault() */
@@ -2296,28 +2339,54 @@ void __init ptlock_cache_init(void);
 extern bool ptlock_alloc(struct page *page);
 extern void ptlock_free(struct page *page);
 
+#ifdef CONFIG_KERNEL_REPLICATION
+static inline spinlock_t *ptlock_ptr(struct page *page)
+{
+	return page->master_table->ptl;
+}
+#else
 static inline spinlock_t *ptlock_ptr(struct page *page)
 {
 	return page->ptl;
 }
+#endif
+
 #else /* ALLOC_SPLIT_PTLOCKS */
 static inline void ptlock_cache_init(void)
 {
 }
 
+#ifdef CONFIG_KERNEL_REPLICATION
+static inline bool ptlock_alloc(struct page *page)
+{
+	page->master_table = page;
+	return true;
+}
+
+static inline void ptlock_free(struct page *page)
+{
+	page->master_table = NULL;
+}
+
+static inline spinlock_t *ptlock_ptr(struct page *page)
+{
+	return &page->master_table->ptl;
+}
+#else
 static inline bool ptlock_alloc(struct page *page)
 {
 	return true;
 }
 
 static inline void ptlock_free(struct page *page)
-{
-}
+{ }
 
 static inline spinlock_t *ptlock_ptr(struct page *page)
 {
 	return &page->ptl;
 }
+#endif
+
 #endif /* ALLOC_SPLIT_PTLOCKS */
 
 static inline spinlock_t *pte_lockptr(struct mm_struct *mm, pmd_t *pmd)
@@ -2609,6 +2678,7 @@ extern void memmap_init_zone(unsigned long, int, unsigned long,
 extern void setup_per_zone_wmarks(void);
 extern int __meminit init_per_zone_wmark_min(void);
 extern void mem_init(void);
+extern void preallocate_vmalloc_pages(void);
 extern void __init mmap_init(void);
 extern void show_mem(unsigned int flags, nodemask_t *nodemask);
 extern long si_mem_available(void);

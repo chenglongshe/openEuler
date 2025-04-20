@@ -161,6 +161,9 @@ nodemask_t node_states[NR_NODE_STATES] __read_mostly = {
 	[N_CPU] = { { [0] = 1UL } },
 #endif	/* NUMA */
 };
+
+nodemask_t __read_mostly replica_nodes = { { [0] = 1UL } };
+
 EXPORT_SYMBOL(node_states);
 
 atomic_long_t _totalram_pages __read_mostly;
@@ -5482,13 +5485,11 @@ unsigned long __get_free_pages_node(unsigned int nid, gfp_t gfp_mask,
 		return 0;
 	return (unsigned long) page_address(page);
 }
-EXPORT_SYMBOL(__get_free_pages_node);
 
 unsigned long get_zeroed_page_node(unsigned int nid, gfp_t gfp_mask)
 {
 	return __get_free_pages_node(nid, gfp_mask | __GFP_ZERO, 0);
 }
-EXPORT_SYMBOL(get_zeroed_page_node);
 #endif /* CONFIG_KERNEL_REPLICATION */
 
 void __free_pages(struct page *page, unsigned int order)
