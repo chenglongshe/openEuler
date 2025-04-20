@@ -2038,8 +2038,8 @@ static void frob_text(const struct module_layout *layout,
 
 static void module_enable_x(const struct module *mod)
 {
-	frob_text(&mod->core_layout, set_memory_x);
-	frob_text(&mod->init_layout, set_memory_x);
+	frob_text(&mod->core_layout, numa_set_memory_x);
+	frob_text(&mod->init_layout, numa_set_memory_x);
 }
 #else /* !CONFIG_ARCH_HAS_STRICT_MODULE_RWX */
 static void module_enable_x(const struct module *mod) { }
@@ -2082,11 +2082,11 @@ void module_disable_ro(const struct module *mod)
 	if (!rodata_enabled)
 		return;
 
-	frob_text(&mod->core_layout, set_memory_rw);
-	frob_rodata(&mod->core_layout, set_memory_rw);
-	frob_ro_after_init(&mod->core_layout, set_memory_rw);
-	frob_text(&mod->init_layout, set_memory_rw);
-	frob_rodata(&mod->init_layout, set_memory_rw);
+	frob_text(&mod->core_layout, numa_set_memory_rw);
+	frob_rodata(&mod->core_layout, numa_set_memory_rw);
+	frob_ro_after_init(mod->mutable_data_layout, numa_set_memory_rw);
+	frob_text(&mod->init_layout, numa_set_memory_rw);
+	frob_rodata(&mod->init_layout, numa_set_memory_rw);
 }
 
 void module_enable_ro(const struct module *mod, bool after_init)
@@ -2096,23 +2096,24 @@ void module_enable_ro(const struct module *mod, bool after_init)
 
 	set_vm_flush_reset_perms(mod->core_layout.base);
 	set_vm_flush_reset_perms(mod->init_layout.base);
-	frob_text(&mod->core_layout, set_memory_ro);
+	set_vm_flush_reset_perms(mod->mutable_data_layout->base);
+	frob_text(&mod->core_layout, numa_set_memory_ro);
 
-	frob_rodata(&mod->core_layout, set_memory_ro);
-	frob_text(&mod->init_layout, set_memory_ro);
-	frob_rodata(&mod->init_layout, set_memory_ro);
+	frob_rodata(&mod->core_layout, numa_set_memory_ro);
+	frob_text(&mod->init_layout, numa_set_memory_ro);
+	frob_rodata(&mod->init_layout, numa_set_memory_ro);
 
 	if (after_init)
-		frob_ro_after_init(&mod->core_layout, set_memory_ro);
+		frob_ro_after_init(mod->mutable_data_layout, numa_set_memory_ro);
 }
 
 static void module_enable_nx(const struct module *mod)
 {
-	frob_rodata(&mod->core_layout, set_memory_nx);
-	frob_ro_after_init(&mod->core_layout, set_memory_nx);
-	frob_writable_data(&mod->core_layout, set_memory_nx);
-	frob_rodata(&mod->init_layout, set_memory_nx);
-	frob_writable_data(&mod->init_layout, set_memory_nx);
+	frob_rodata(&mod->core_layout, numa_set_memory_nx);
+	frob_ro_after_init(mod->mutable_data_layout, numa_set_memory_nx);
+	frob_writable_data(mod->mutable_data_layout, numa_set_memory_nx);
+	frob_rodata(&mod->init_layout, numa_set_memory_nx);
+	frob_writable_data(mod->mutable_data_layout, numa_set_memory_nx);
 }
 
 static int module_enforce_rwx_sections(Elf_Ehdr *hdr, Elf_Shdr *sechdrs,
@@ -2237,6 +2238,7 @@ void __weak module_arch_freeing_init(struct module *mod)
 /* Free a module, remove from lists, etc. */
 static void free_module(struct module *mod)
 {
+	struct module_layout *mut_layout = mod->mutable_data_layout;
 	trace_module_free(mod);
 
 	mod_sysfs_teardown(mod);
@@ -2284,6 +2286,8 @@ static void free_module(struct module *mod)
 
 	/* Finally, free the core (containing the module structure) */
 	module_memfree(mod->core_layout.base);
+	module_memfree(mod->mutable_data_layout->base);
+	kfree(mut_layout);
 }
 
 void *__symbol_get(const char *symbol)
@@ -2512,6 +2516,21 @@ static void layout_sections(struct module *mod, struct load_info *info)
 
 	pr_debug("Core section allocation order:\n");
 	for (m = 0; m < ARRAY_SIZE(masks); ++m) {
+		unsigned int *sizep;
+
+		switch (m) {
+		case 0:
+			sizep = &mod->core_layout.size;
+			break;
+		case 1:
+			sizep = &mod->core_layout.size;
+			break;
+		case 2:
+		case 3:
+		case 4:
+			sizep = &mod->mutable_data_layout->size;
+		}
+
 		for (i = 0; i < info->hdr->e_shnum; ++i) {
 			Elf_Shdr *s = &info->sechdrs[i];
 			const char *sname = info->secstrings + s->sh_name;
@@ -2521,7 +2540,7 @@ static void layout_sections(struct module *mod, struct load_info *info)
 			    || s->sh_entsize != ~0UL
 			    || module_init_layout_section(sname))
 				continue;
-			s->sh_entsize = get_offset(mod, &mod->core_layout.size, s, i);
+			s->sh_entsize = get_offset(mod, sizep, s, i);
 			pr_debug("\t%s\n", sname);
 		}
 		switch (m) {
@@ -2534,11 +2553,11 @@ static void layout_sections(struct module *mod, struct load_info *info)
 			mod->core_layout.ro_size = mod->core_layout.size;
 			break;
 		case 2: /* RO after init */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
-			mod->core_layout.ro_after_init_size = mod->core_layout.size;
+			mod->mutable_data_layout->size = debug_align(mod->mutable_data_layout->size);
+			mod->mutable_data_layout->ro_after_init_size = mod->mutable_data_layout->size;
 			break;
 		case 4: /* whole core */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
+			mod->mutable_data_layout->size = debug_align(mod->mutable_data_layout->size);
 			break;
 		}
 	}
@@ -2791,12 +2810,12 @@ static void layout_symtab(struct module *mod, struct load_info *info)
 	}
 
 	/* Append room for core symbols at end of core part. */
-	info->symoffs = ALIGN(mod->core_layout.size, symsect->sh_addralign ?: 1);
-	info->stroffs = mod->core_layout.size = info->symoffs + ndst * sizeof(Elf_Sym);
-	mod->core_layout.size += strtab_size;
-	info->core_typeoffs = mod->core_layout.size;
-	mod->core_layout.size += ndst * sizeof(char);
-	mod->core_layout.size = debug_align(mod->core_layout.size);
+	info->symoffs = ALIGN(mod->mutable_data_layout->size, symsect->sh_addralign ?: 1);
+	info->stroffs = mod->mutable_data_layout->size = info->symoffs + ndst * sizeof(Elf_Sym);
+	mod->mutable_data_layout->size += strtab_size;
+	info->core_typeoffs = mod->mutable_data_layout->size;
+	mod->mutable_data_layout->size += ndst * sizeof(char);
+	mod->mutable_data_layout->size = debug_align(mod->mutable_data_layout->size);
 
 	/* Put string table section at end of init part of module. */
 	strsect->sh_flags |= SHF_ALLOC;
@@ -2840,9 +2859,9 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 	 * Now populate the cut down core kallsyms for after init
 	 * and set types up while we still have access to sections.
 	 */
-	mod->core_kallsyms.symtab = dst = mod->core_layout.base + info->symoffs;
-	mod->core_kallsyms.strtab = s = mod->core_layout.base + info->stroffs;
-	mod->core_kallsyms.typetab = mod->core_layout.base + info->core_typeoffs;
+	mod->core_kallsyms.symtab = dst = mod->mutable_data_layout->base + info->symoffs;
+	mod->core_kallsyms.strtab = s = mod->mutable_data_layout->base + info->stroffs;
+	mod->core_kallsyms.typetab = mod->mutable_data_layout->base + info->core_typeoffs;
 	src = mod->kallsyms->symtab;
 	for (ndst = i = 0; i < mod->kallsyms->num_symtab; i++) {
 		mod->kallsyms->typetab[i] = elf_type(src + i, info);
@@ -2887,6 +2906,11 @@ void * __weak module_alloc(unsigned long size)
 	return __vmalloc_node_range(size, 1, VMALLOC_START, VMALLOC_END,
 			GFP_KERNEL, PAGE_KERNEL_EXEC, VM_FLUSH_RESET_PERMS,
 			NUMA_NO_NODE, __builtin_return_address(0));
+}
+
+void * __weak module_alloc_replica(unsigned long size)
+{
+	return module_alloc(size);
 }
 
 bool __weak module_init_section(const char *name)
@@ -3444,37 +3468,48 @@ static int find_module_sections(struct module *mod, struct load_info *info)
 static int move_module(struct module *mod, struct load_info *info)
 {
 	int i;
-	void *ptr;
+	void *core_mem;
+	void *init_mem;
+	void *mutable_data_mem;
 
 	/* Do the allocs. */
-	ptr = module_alloc(mod->core_layout.size);
+	core_mem = module_alloc_replica(mod->core_layout.size);
+	mutable_data_mem = module_alloc(mod->mutable_data_layout->size);
 	/*
 	 * The pointer to this block is stored in the module structure
 	 * which is inside the block. Just mark it as not being a
 	 * leak.
 	 */
-	kmemleak_not_leak(ptr);
-	if (!ptr)
+	kmemleak_not_leak(core_mem);
+	kmemleak_not_leak(mutable_data_mem);
+	if (!core_mem)
 		return -ENOMEM;
+	if (!mutable_data_mem) {
+		module_memfree(core_mem);
+		return -ENOMEM;
+	}
+	memset(core_mem, 0, mod->core_layout.size);
+	memset(mutable_data_mem, 0, mod->mutable_data_layout->size);
 
-	memset(ptr, 0, mod->core_layout.size);
-	mod->core_layout.base = ptr;
+	mod->core_layout.base = core_mem;
+	mod->mutable_data_layout->base = mutable_data_mem;
 
 	if (mod->init_layout.size) {
-		ptr = module_alloc(mod->init_layout.size);
+		init_mem = module_alloc(mod->init_layout.size);
 		/*
 		 * The pointer to this block is stored in the module structure
 		 * which is inside the block. This block doesn't need to be
 		 * scanned as it contains data and code that will be freed
 		 * after the module is initialized.
 		 */
-		kmemleak_ignore(ptr);
-		if (!ptr) {
+		kmemleak_ignore(init_mem);
+		if (!init_mem) {
 			module_memfree(mod->core_layout.base);
+			module_memfree(mod->mutable_data_layout->base);
 			return -ENOMEM;
 		}
-		memset(ptr, 0, mod->init_layout.size);
-		mod->init_layout.base = ptr;
+		memset(init_mem, 0, mod->init_layout.size);
+		mod->init_layout.base = init_mem;
 	} else
 		mod->init_layout.base = NULL;
 
@@ -3490,6 +3525,8 @@ static int move_module(struct module *mod, struct load_info *info)
 		if (shdr->sh_entsize & INIT_OFFSET_MASK)
 			dest = mod->init_layout.base
 				+ (shdr->sh_entsize & ~INIT_OFFSET_MASK);
+		else if (shdr->sh_flags & SHF_WRITE || shdr->sh_flags & SHF_RO_AFTER_INIT)
+			dest = mod->mutable_data_layout->base + shdr->sh_entsize;
 		else
 			dest = mod->core_layout.base + shdr->sh_entsize;
 
@@ -3634,6 +3671,7 @@ static struct module *layout_and_allocate(struct load_info *info, int flags)
 	/* Determine total sizes, and put offsets in sh_entsize.  For now
 	   this is done generically; there doesn't appear to be any
 	   special cases for the architectures. */
+	info->mod->mutable_data_layout = (struct module_layout *)kmalloc(sizeof(struct module_layout), GFP_KERNEL | __GFP_ZERO);
 	layout_sections(info->mod, info);
 	layout_symtab(info->mod, info);
 
@@ -3920,6 +3958,9 @@ static int complete_formation(struct module *mod, struct load_info *info)
 
 	/* This relies on module_mutex for list integrity. */
 	module_bug_finalize(info->hdr, info->sechdrs, mod);
+
+	/* Replicate read-only memory between numa nodes*/
+	module_replicate_numa(mod->core_layout.base);
 
 	module_enable_ro(mod, false);
 	module_enable_nx(mod);

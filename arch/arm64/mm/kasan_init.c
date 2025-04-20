@@ -13,6 +13,7 @@
 #include <linux/memblock.h>
 #include <linux/start_kernel.h>
 #include <linux/mm.h>
+#include <linux/numa_replication.h>
 
 #include <asm/mmu_context.h>
 #include <asm/kernel-pgtable.h>
@@ -83,6 +84,24 @@ static pmd_t *__init kasan_pmd_offset(pud_t *pudp, unsigned long addr, int node,
 	return early ? pmd_offset_kimg(pudp, addr) : pmd_offset(pudp, addr);
 }
 
+static void __init __kasan_p4d_populate(p4d_t *p4dp, phys_addr_t pud_phys, unsigned long addr)
+{
+#ifdef CONFIG_KERNEL_REPLICATION
+	if (is_text_replicated()) {
+		int nid;
+		p4d_t *target;
+
+		for_each_memory_node(nid) {
+			target = (p4d_t *)pgd_offset_pgd(per_node_pgd(&init_mm, nid), addr);
+			__p4d_populate(target, pud_phys, PMD_TYPE_TABLE);
+		}
+	} else
+		__p4d_populate(p4dp, pud_phys, PMD_TYPE_TABLE);
+#else
+	__p4d_populate(p4dp, pud_phys, PMD_TYPE_TABLE);
+#endif /* CONFIG_KERNEL_REPLICATION */
+}
+
 static pud_t *__init kasan_pud_offset(p4d_t *p4dp, unsigned long addr, int node,
 				      bool early)
 {
@@ -90,7 +109,7 @@ static pud_t *__init kasan_pud_offset(p4d_t *p4dp, unsigned long addr, int node,
 		phys_addr_t pud_phys = early ?
 				__pa_symbol(kasan_early_shadow_pud)
 					: kasan_alloc_zeroed_page(node);
-		__p4d_populate(p4dp, pud_phys, PMD_TYPE_TABLE);
+		__kasan_p4d_populate(p4dp, pud_phys, addr);
 	}
 
 	return early ? pud_offset_kimg(p4dp, addr) : pud_offset(p4dp, addr);

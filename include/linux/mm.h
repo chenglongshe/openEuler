@@ -814,6 +814,8 @@ int region_intersects(resource_size_t offset, size_t size, unsigned long flags,
 struct page *vmalloc_to_page(const void *addr);
 unsigned long vmalloc_to_pfn(const void *addr);
 
+struct page *walk_to_page_node(int nid, const void *addr);
+
 /*
  * Determine if an address is within the vmalloc range
  *
@@ -2098,9 +2100,25 @@ static inline int __p4d_alloc(struct mm_struct *mm, pgd_t *pgd,
 {
 	return 0;
 }
+
+#ifdef CONFIG_KERNEL_REPLICATION
+static inline int __p4d_alloc_node(unsigned int nid,
+				   struct mm_struct *mm,
+				   pgd_t *pgd, unsigned long address)
+{
+	return 0;
+}
+#endif /* CONFIG_KERNEL_REPLICATION */
+
 #else
 int __p4d_alloc(struct mm_struct *mm, pgd_t *pgd, unsigned long address);
-#endif
+
+#ifdef CONFIG_KERNEL_REPLICATION
+int __p4d_alloc_node(unsigned int nid, struct mm_struct *mm,
+		     pgd_t *pgd, unsigned long address);
+#endif /* CONFIG_KERNEL_REPLICATION */
+
+#endif /* __PAGETABLE_P4D_FOLDED */
 
 #if defined(__PAGETABLE_PUD_FOLDED) || !defined(CONFIG_MMU)
 static inline int __pud_alloc(struct mm_struct *mm, p4d_t *p4d,
@@ -2108,11 +2126,27 @@ static inline int __pud_alloc(struct mm_struct *mm, p4d_t *p4d,
 {
 	return 0;
 }
+
+#ifdef CONFIG_KERNEL_REPLICATION
+static inline int __pud_alloc_node(unsigned int nid,
+				   struct mm_struct *mm,
+				   p4d_t *p4d, unsigned long address)
+{
+	return 0;
+}
+#endif /* CONFIG_KERNEL_REPLICATION */
+
 static inline void mm_inc_nr_puds(struct mm_struct *mm) {}
 static inline void mm_dec_nr_puds(struct mm_struct *mm) {}
 
 #else
 int __pud_alloc(struct mm_struct *mm, p4d_t *p4d, unsigned long address);
+
+#ifdef CONFIG_KERNEL_REPLICATION
+int __pud_alloc_node(unsigned int nid,
+		     struct mm_struct *mm,
+		     p4d_t *p4d, unsigned long address);
+#endif /* CONFIG_KERNEL_REPLICATION */
 
 static inline void mm_inc_nr_puds(struct mm_struct *mm)
 {
@@ -2136,11 +2170,25 @@ static inline int __pmd_alloc(struct mm_struct *mm, pud_t *pud,
 	return 0;
 }
 
+#ifdef CONFIG_KERNEL_REPLICATION
+static inline int __pmd_alloc_node(unsigned int nid,
+				   struct mm_struct *mm,
+				   pud_t *pud, unsigned long address)
+{
+	return 0;
+}
+#endif /* CONFIG_KERNEL_REPLICATION */
+
 static inline void mm_inc_nr_pmds(struct mm_struct *mm) {}
 static inline void mm_dec_nr_pmds(struct mm_struct *mm) {}
 
 #else
 int __pmd_alloc(struct mm_struct *mm, pud_t *pud, unsigned long address);
+#ifdef CONFIG_KERNEL_REPLICATION
+int __pmd_alloc_node(unsigned int nid,
+		     struct mm_struct *mm,
+		     pud_t *pud, unsigned long address);
+#endif /* CONFIG_KERNEL_REPLICATION */
 
 static inline void mm_inc_nr_pmds(struct mm_struct *mm)
 {
@@ -2213,6 +2261,33 @@ static inline pmd_t *pmd_alloc(struct mm_struct *mm, pud_t *pud, unsigned long a
 	return (unlikely(pud_none(*pud)) && __pmd_alloc(mm, pud, address))?
 		NULL: pmd_offset(pud, address);
 }
+
+#ifdef CONFIG_KERNEL_REPLICATION
+static inline p4d_t *p4d_alloc_node(unsigned int nid,
+		struct mm_struct *mm,
+		pgd_t *pgd, unsigned long address)
+{
+	return (unlikely(pgd_none(*pgd)) && __p4d_alloc_node(nid, mm, pgd, address)) ?
+		NULL : p4d_offset(pgd, address);
+}
+
+static inline pud_t *pud_alloc_node(unsigned int nid,
+		struct mm_struct *mm,
+		p4d_t *p4d, unsigned long address)
+{
+	return (unlikely(p4d_none(*p4d)) && __pud_alloc_node(nid, mm, p4d, address)) ?
+		NULL : pud_offset(p4d, address);
+}
+
+static inline pmd_t *pmd_alloc_node(unsigned int nid,
+		struct mm_struct *mm,
+		pud_t *pud, unsigned long address)
+{
+	return (unlikely(pud_none(*pud)) && __pmd_alloc_node(nid, mm, pud, address)) ?
+		NULL : pmd_offset(pud, address);
+}
+#endif /* CONFIG_KERNEL_REPLICATION */
+
 #endif /* CONFIG_MMU */
 
 #if USE_SPLIT_PTE_PTLOCKS
@@ -3004,6 +3079,10 @@ extern int apply_to_page_range(struct mm_struct *mm, unsigned long address,
 extern int apply_to_existing_page_range(struct mm_struct *mm,
 				   unsigned long address, unsigned long size,
 				   pte_fn_t fn, void *data);
+#if defined(CONFIG_KERNEL_REPLICATION) && defined(CONFIG_ARM64)
+int apply_to_page_range_replicas(struct mm_struct *mm, unsigned long addr,
+				 unsigned long size, pte_fn_t fn, void *data);
+#endif /* CONFIG_KERNEL_REPLICATION && CONFIG_ARM64 */
 
 #ifdef CONFIG_PAGE_POISONING
 extern bool page_poisoning_enabled(void);
