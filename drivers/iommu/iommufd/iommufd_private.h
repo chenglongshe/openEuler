@@ -31,7 +31,7 @@ struct iommufd_ctx {
 	u8 no_iommu_mode;
 	struct iommufd_ioas *vfio_ioas;
 	/* Associated KVM pointer */
-	struct kvm *kvm;
+	KABI_EXTEND(struct kvm *kvm)
 };
 
 /*

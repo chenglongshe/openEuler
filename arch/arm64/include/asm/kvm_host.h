@@ -143,7 +143,7 @@ int topup_hyp_memcache(struct kvm_hyp_memcache *mc, unsigned long min_pages);
 
 struct kvm_vmid {
 	atomic64_t id;
-	refcount_t pinned;
+	KABI_EXTEND(refcount_t pinned)
 };
 
 struct kvm_s2_mmu {

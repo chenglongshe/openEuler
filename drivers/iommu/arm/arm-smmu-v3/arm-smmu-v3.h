@@ -883,7 +883,7 @@ struct arm_smmu_domain {
 	struct list_head		node;
 	struct kvm			*kvm;
 #endif
-	struct kvm			*iommufd_kvm;
+	KABI_EXTEND(struct kvm *iommufd_kvm)
 };
 
 struct arm_smmu_nested_domain {
