@@ -18,6 +18,7 @@
 #include <linux/interrupt.h>
 #include <linux/io-pgtable.h>
 #include <linux/iopoll.h>
+#include <linux/kvm_host.h>
 #include <linux/module.h>
 #include <linux/msi.h>
 #include <linux/of.h>
@@ -2612,9 +2613,13 @@ static void arm_smmu_domain_free_paging(struct iommu_domain *domain)
 		xa_erase(&arm_smmu_asid_xa, smmu_domain->cd.asid);
 		mutex_unlock(&arm_smmu_asid_lock);
 	} else {
-		struct arm_smmu_s2_cfg *cfg = &smmu_domain->s2_cfg;
-		if (cfg->vmid)
-			ida_free(&smmu->vmid_map, cfg->vmid);
+		if (smmu_domain->iommufd_kvm) {
+			kvm_pinned_vmid_put(smmu_domain->iommufd_kvm);
+		} else {
+			struct arm_smmu_s2_cfg *cfg = &smmu_domain->s2_cfg;
+			if (cfg->vmid)
+				ida_free(&smmu->vmid_map, cfg->vmid);
+		}
 	}
 
 	kfree(smmu_domain);
@@ -2642,9 +2647,13 @@ static int arm_smmu_domain_finalise_s2(struct arm_smmu_device *smmu,
 	int vmid;
 	struct arm_smmu_s2_cfg *cfg = &smmu_domain->s2_cfg;
 
-	/* Reserve VMID 0 for stage-2 bypass STEs */
-	vmid = ida_alloc_range(&smmu->vmid_map, 1, (1 << smmu->vmid_bits) - 1,
-			       GFP_KERNEL);
+	if (smmu_domain->iommufd_kvm) {
+		vmid = kvm_pinned_vmid_get(smmu_domain->iommufd_kvm);
+	} else {
+		/* Reserve VMID 0 for stage-2 bypass STEs */
+		vmid = ida_alloc_range(&smmu->vmid_map, 1,
+				       (1 << smmu->vmid_bits) - 1, GFP_KERNEL);
+	}
 	if (vmid < 0)
 		return vmid;
 
@@ -3386,6 +3395,7 @@ arm_smmu_domain_alloc_user(struct device *dev, u32 flags,
 		}
 		smmu_domain->stage = ARM_SMMU_DOMAIN_S2;
 		smmu_domain->nest_parent = true;
+		smmu_domain->iommufd_kvm = kvm;
 	}
 
 	smmu_domain->domain.type = IOMMU_DOMAIN_UNMANAGED;
