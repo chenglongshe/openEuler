@@ -95,6 +95,10 @@ obj-$(CONFIG_I2C_OWL)		+= i2c-owl.o
 obj-$(CONFIG_I2C_PASEMI)	+= i2c-pasemi-core.o i2c-pasemi-pci.o
 obj-$(CONFIG_I2C_APPLE)		+= i2c-pasemi-core.o i2c-pasemi-platform.o
 obj-$(CONFIG_I2C_PCA_PLATFORM)	+= i2c-pca-platform.o
+obj-$(CONFIG_I2C_PHYTIUM_CORE)	+= i2c-phytium-core.o
+i2c-phytium-core-objs := i2c-phytium-common.o i2c-phytium-mix.o
+obj-$(CONFIG_I2C_PHYTIUM_PCI)	+= i2c-phytium-pci.o
+obj-$(CONFIG_I2C_PHYTIUM_PLATFORM)	+= i2c-phytium-platform.o
 obj-$(CONFIG_I2C_PNX)		+= i2c-pnx.o
 obj-$(CONFIG_I2C_PXA)		+= i2c-pxa.o
 obj-$(CONFIG_I2C_PXA_PCI)	+= i2c-pxa-pci.o
@@ -158,5 +162,6 @@ obj-$(CONFIG_I2C_XGENE_SLIMPRO) += i2c-xgene-slimpro.o
 obj-$(CONFIG_SCx200_ACB)	+= scx200_acb.o
 obj-$(CONFIG_I2C_FSI)		+= i2c-fsi.o
 obj-$(CONFIG_I2C_VIRTIO)	+= i2c-virtio.o
+obj-$(CONFIG_I2C_V2_PLATFORM) += phytium_i2c_v2/
 
 ccflags-$(CONFIG_I2C_DEBUG_BUS) := -DDEBUG
