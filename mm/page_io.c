@@ -496,13 +496,14 @@ static void swap_readpage_bdev_async(struct page *page,
 	submit_bio(bio);
 }
 
-void swap_readpage(struct page *page, bool synchronous, struct swap_iocb **plug)
+void swap_read_folio(struct folio *folio, struct swap_iocb **plug)
 {
-	struct folio *folio = page_folio(page);
-	struct swap_info_struct *sis = page_swap_info(page);
+	struct swap_info_struct *sis = swp_swap_info(folio->swap);
+	bool synchronous = sis->flags & SWP_SYNCHRONOUS_IO;
 	bool workingset = folio_test_workingset(folio);
 	unsigned long pflags;
 	bool in_thrashing;
+	struct page  *page = &folio->page;
 
 	VM_BUG_ON_FOLIO(!folio_test_swapcache(folio) && !synchronous, folio);
 	VM_BUG_ON_FOLIO(!folio_test_locked(folio), folio);
@@ -525,7 +526,7 @@ void swap_readpage(struct page *page, bool synchronous, struct swap_iocb **plug)
 		folio_unlock(folio);
 	} else if (data_race(sis->flags & SWP_FS_OPS)) {
 		swap_readpage_fs(page, plug);
-	} else if (synchronous || (sis->flags & SWP_SYNCHRONOUS_IO)) {
+	} else if (synchronous) {
 		swap_readpage_bdev_sync(page, sis);
 	} else {
 		swap_readpage_bdev_async(page, sis);

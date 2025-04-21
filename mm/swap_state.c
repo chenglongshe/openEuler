@@ -509,7 +509,7 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 	if (add_to_swap_cache(folio, entry, gfp_mask & GFP_RECLAIM_MASK, &shadow))
 		goto fail_unlock;
 
-	mem_cgroup_swapin_uncharge_swap(entry);
+	mem_cgroup_swapin_uncharge_swap(entry, 1);
 
 	if (shadow)
 		workingset_refault(folio, shadow);
@@ -538,7 +538,7 @@ fail_put_swap:
  * the swap entry is no longer in use.
  *
  * get/put_swap_device() aren't needed to call this function, because
- * __read_swap_cache_async() call them and swap_readpage() holds the
+ * __read_swap_cache_async() call them and swap_read_folio() holds the
  * swap cache folio lock.
  */
 struct page *read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
@@ -546,11 +546,13 @@ struct page *read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 				   unsigned long addr, struct swap_iocb **plug)
 {
 	bool page_was_allocated;
+	struct folio *folio;
 	struct page *retpage = __read_swap_cache_async(entry, gfp_mask,
 			vma, addr, &page_was_allocated);
 
+	folio = page_folio(retpage);
 	if (page_was_allocated)
-		swap_readpage(retpage, false, plug);
+		swap_read_folio(folio, plug);
 
 	return retpage;
 }
@@ -648,6 +650,7 @@ struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,
 	bool page_allocated;
 	struct vm_area_struct *vma = vmf->vma;
 	unsigned long addr = vmf->address;
+	struct folio *folio;
 
 	mask = swapin_nr_pages(offset) - 1;
 	if (!mask)
@@ -667,10 +670,11 @@ struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,
 		page = __read_swap_cache_async(
 			swp_entry(swp_type(entry), offset),
 			gfp_mask, vma, addr, &page_allocated);
+		folio = page_folio(page);
 		if (!page)
 			continue;
 		if (page_allocated) {
-			swap_readpage(page, false, &splug);
+			swap_read_folio(folio, &splug);
 			if (offset != entry_offset) {
 				SetPageReadahead(page);
 				count_vm_event(SWAP_RA);
@@ -809,6 +813,7 @@ static struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,
 	struct vma_swap_readahead ra_info = {
 		.win = 1,
 	};
+	struct folio *folio;
 
 	swap_ra_info(vmf, &ra_info);
 	if (ra_info.win == 1)
@@ -833,10 +838,11 @@ static struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,
 		pte = NULL;
 		page = __read_swap_cache_async(entry, gfp_mask, vma,
 					       addr, &page_allocated);
+		folio = page_folio(page);
 		if (!page)
 			continue;
 		if (page_allocated) {
-			swap_readpage(page, false, &splug);
+			swap_read_folio(folio, &splug);
 			if (i != ra_info.offset) {
 				SetPageReadahead(page);
 				count_vm_event(SWAP_RA);

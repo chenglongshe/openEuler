@@ -4088,7 +4088,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 					ret = VM_FAULT_OOM;
 					goto out_page;
 				}
-				mem_cgroup_swapin_uncharge_swap(entry);
+				mem_cgroup_swapin_uncharge_swap(entry, 1);
 
 				shadow = get_shadow_from_swap_cache(entry);
 				if (shadow)
@@ -4096,9 +4096,9 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 
 				folio_add_lru(folio);
 
-				/* To provide entry to swap_readpage() */
+				/* To provide entry to swap_read_folio() */
 				folio->swap = entry;
-				swap_readpage(page, true, NULL);
+				swap_read_folio(folio, NULL);
 				folio->private = NULL;
 			}
 		} else {
