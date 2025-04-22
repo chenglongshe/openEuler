@@ -1484,6 +1484,9 @@ struct task_struct {
 	KABI_RESERVE(15)
 	KABI_RESERVE(16)
 #endif
+
+	struct read_cache_entry* rc;
+
 	KABI_AUX_PTR(task_struct)
 
 	/* CPU-specific state of this task: */

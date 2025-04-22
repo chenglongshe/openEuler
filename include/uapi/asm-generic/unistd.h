@@ -98,6 +98,7 @@ __SYSCALL(__NR_epoll_create1, sys_epoll_create1)
 __SYSCALL(__NR_epoll_ctl, sys_epoll_ctl)
 #define __NR_epoll_pwait 22
 __SC_COMP(__NR_epoll_pwait, sys_epoll_pwait, compat_sys_epoll_pwait)
+__XCALL_SC_COMP(__NR_epoll_pwait, sys_epoll_pwait, compat_sys_epoll_pwait)
 
 /* fs/fcntl.c */
 #define __NR_dup 23

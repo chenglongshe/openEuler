@@ -947,6 +947,29 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 		index <  ra->start + ra->size);
 }
 
+#define EPOLL_FILE_CACHE_NONE 0
+#define EPOLL_FILE_CACHE_QUEUED 1
+#define EPOLL_FILE_CACHE_READY 2
+
+struct prefetch_item {
+	struct file *f;
+	int fd;
+	struct read_cache_entry *rc;
+	bool keep_running;
+	struct work_struct work;
+	int cpu;
+	cpumask_t related_cpus;
+	char *cache;
+	ssize_t len;
+	/* cache state in epoll_wait */
+	int state;
+	spinlock_t pfi_lock;
+	loff_t pos;
+};
+
+#define MAX_FD_CACHE 1024
+extern int max_fd_cache_pages;
+
 struct file {
 	union {
 		struct llist_node	fu_llist;
@@ -994,6 +1017,9 @@ struct file {
 #else
 	KABI_RESERVE(1)
 #endif
+
+	/* cache state in epoll_wait */
+	struct prefetch_item *pfi;
 } __randomize_layout
   __attribute__((aligned(4)));	/* lest something weird decides that 2 is OK */
 
@@ -3748,6 +3774,10 @@ static inline bool cachefiles_ondemand_is_enabled(void)
 {
 	return false;
 }
+#endif
+
+#ifdef CONFIG_FAST_SYSCALL
+void free_pfi(struct file *file);
 #endif
 
 #endif /* _LINUX_FS_H */

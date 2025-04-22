@@ -3630,6 +3630,15 @@ static int xcall_show(struct seq_file *m, void *v)
 		else
 			seq_printf(m, "xcall_select: NULL\n");
 	}
+
+	if (p->xcall_select && test_bit(__NR_epoll_pwait, p->xcall_select) && p->rc) {
+		seq_printf(m, "epoll read cache mode: %s\n", p->rc->sync_mode ? "SYNC" : "ASYNC");
+		seq_printf(m, "epoll cache_{hit,miss,queued,wait}: %ld,%ld,%ld,%ld\n", p->rc->cache_hit,
+										       p->rc->cache_miss,
+										       p->rc->cache_queued,
+										       p->rc->cache_wait);
+	}
+
 out:
 	put_task_struct(p);
 
@@ -3656,6 +3665,8 @@ static int xcall_enable_one(struct task_struct *p, unsigned int sc_no)
 	return 0;
 }
 
+void rc_prefetch_free(struct read_cache_entry *rc, bool force);
+
 static int xcall_disable_one(struct task_struct *p, unsigned int sc_no)
 {
 	bitmap_clear(p->xcall_enable, sc_no, 1);
@@ -3667,13 +3678,47 @@ static int xcall_disable_one(struct task_struct *p, unsigned int sc_no)
 		bitmap_free(p->xcall_select);
 		p->xcall_select = NULL;
 	}
+
+	// sc_no: 22 is sys_epoll_pwait
+	// sc_no: 63 is sys_read
+	if (sc_no == __NR_epoll_pwait)
+		rc_prefetch_free(p->rc, false);
+
 	return 0;
 }
+
+struct read_cache_entry* rc_prefetch_alloc(struct task_struct *tsk);
 
 static int xcall_select_table(struct task_struct *p, unsigned int sc_no)
 {
 	BUG_ON(!p->xcall_select);
 	test_and_change_bit(sc_no, p->xcall_select);
+
+	// sc_no: 22 is sys_epoll_pwait
+	// sc_no: 63 is sys_read
+	if (sc_no == __NR_epoll_pwait) {
+		if (test_bit(sc_no, p->xcall_select))
+			p->rc = rc_prefetch_alloc(p);
+		else
+			rc_prefetch_free(p->rc, false);
+	}
+	return 0;
+}
+
+static int xcall_config_one(struct task_struct *p, unsigned int sc_no)
+{
+	/* Only config when selected */
+	if (!p->xcall_select || !test_bit(sc_no, p->xcall_select))
+		return 0;
+
+	// sc_no: 22 is sys_epoll_pwait
+	// sc_no: 63 is sys_read
+	if (sc_no == __NR_epoll_pwait && p->rc) {
+		if (p->rc->sync_mode)
+			p->rc->sync_mode = 0;
+		else
+			p->rc->sync_mode = 1;
+	}
 	return 0;
 }
 
@@ -3686,7 +3731,7 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 	const size_t maxlen = sizeof(buffer) - 1;
 	unsigned int sc_no = __NR_syscalls;
 	int ret = 0;
-	int is_clear = 0, is_switch = 0;
+	int is_clear = 0, is_switch = 0, is_config = 0;
 
 	if (!fast_syscall_enabled())
 		return -EACCES;
@@ -3703,8 +3748,10 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 		is_clear = 1;
 	else if ((buffer[0] == '@'))
 		is_switch = 1;
+	else if ((buffer[0] == '~'))
+		is_config = 1;
 
-	if (kstrtouint(buffer + is_clear + is_switch, 10, &sc_no)) {
+	if (kstrtouint(buffer + is_clear + is_switch + is_config, 10, &sc_no)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -3720,6 +3767,8 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 		ret = xcall_enable_one(p, sc_no);
 	else if (!is_switch && is_clear && test_bit(sc_no, p->xcall_enable))
 		ret = xcall_disable_one(p, sc_no);
+	else if (is_config && test_bit(sc_no, p->xcall_enable))
+		ret = xcall_config_one(p, sc_no);
 	else
 		ret = -EINVAL;
 

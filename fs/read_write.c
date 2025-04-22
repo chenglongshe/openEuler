@@ -621,9 +621,69 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 {
 	struct fd f = fdget_pos(fd);
 	ssize_t ret = -EBADF;
+	loff_t pos, *ppos;
 
 	if (f.file) {
-		loff_t pos, *ppos = file_ppos(f.file);
+#ifdef CONFIG_FAST_SYSCALL
+		if (current->xcall_select && test_bit(__NR_epoll_pwait, current->xcall_select) &&
+		    f.file->pfi && f.file->pfi->cache) {
+			struct prefetch_item *pfi = f.file->pfi;
+			ssize_t copy_len;
+
+			if (!spin_trylock(&pfi->pfi_lock)) {
+				if (current->rc)
+					current->rc->cache_wait++;
+				spin_lock(&pfi->pfi_lock);
+			}
+
+			copy_len = pfi->len;
+			if ((pfi->state == EPOLL_FILE_CACHE_READY) &&
+			    copy_len >= 0) {
+				ssize_t copy_ret = -1;
+
+				if (copy_len == 0)
+					copy_ret = 0;
+
+				if (copy_len > 0) {
+					if (copy_len >= count)
+						copy_len = count;
+
+					copy_ret = copy_to_user(buf, (void *)(pfi->cache + pfi->pos), copy_len);
+					pfi->len -= copy_len;
+					if (pfi->len <= 0) {
+						pfi->len = 0;
+						pfi->state = EPOLL_FILE_CACHE_NONE;
+					}
+
+					pfi->pos += count;
+					if (pfi->pos >= (max_fd_cache_pages * PAGE_SIZE) || pfi->len == 0)
+						pfi->pos = 0;
+				}
+
+				if (current->rc)
+					current->rc->cache_hit++;
+				fdput_pos(f);
+				spin_unlock(&pfi->pfi_lock);
+
+				if (copy_ret == 0)
+					return copy_len;
+				else
+					return -EBADF;
+			}
+			/* Always reset cache state to none */
+			pfi->len = 0;
+			pfi->state = EPOLL_FILE_CACHE_NONE;
+			if (current->rc)
+				current->rc->cache_miss++;
+			cancel_work(&pfi->work);
+			spin_unlock(&pfi->pfi_lock);
+
+			if (copy_len < 0)
+				return copy_len;
+		}
+#endif
+
+		ppos = file_ppos(f.file);
 		if (ppos) {
 			pos = *ppos;
 			ppos = &pos;
