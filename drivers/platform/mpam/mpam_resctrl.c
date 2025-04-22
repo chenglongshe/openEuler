@@ -69,6 +69,7 @@ bool resctrl_arch_mon_capable(void)
 	return exposed_mon_capable;
 }
 
+static bool pbm_capable[RDT_NUM_RESOURCES];
 static bool max_capable[RDT_NUM_RESOURCES];
 static bool min_capable[RDT_NUM_RESOURCES];
 static bool intpri_capable[RDT_NUM_RESOURCES];
@@ -77,9 +78,7 @@ bool resctrl_arch_feat_capable(enum resctrl_res_level level,
 {
 	switch (feat) {
 	case FEAT_PBM:
-		if (level == RDT_RESOURCE_L3)
-			return true;
-		break;
+		return pbm_capable[level];
 
 	case FEAT_MAX:
 		return max_capable[level];
@@ -101,6 +100,11 @@ const char *resctrl_arch_get_feat_lab(enum resctrl_feat_type feat,
 				      unsigned long fflags)
 {
 	switch (feat) {
+	case FEAT_PBM:
+		if (fflags & RFTYPE_RES_CACHE)
+			break;
+		return "PBM";
+
 	case FEAT_MAX:
 		if (fflags & RFTYPE_RES_MB)
 			break;
@@ -857,6 +861,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		if (mpam_has_feature(mpam_feat_cpor_part, &class->props)) {
 			r->alloc_capable = true;
 			exposed_alloc_capable = true;
+			pbm_capable[r->rid] = true;
 		}
 
 		if (mpam_has_feature(mpam_feat_ccap_part, &class->props))
@@ -908,6 +913,9 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		if (class_has_usable_mba(cprops)) {
 			r->alloc_capable = true;
 			exposed_alloc_capable = true;
+
+			if (mpam_has_feature(mpam_feat_mbw_part, cprops))
+				pbm_capable[r->rid] = true;
 
 			if (mpam_has_feature(mpam_feat_mbw_max, cprops))
 				max_capable[r->rid] = true;
@@ -1075,6 +1083,11 @@ u32 resctrl_arch_get_config(struct rdt_resource *r, struct rdt_domain *d,
 
 	if (!r->alloc_capable || partid >= resctrl_arch_get_num_closid(r) ||
 	    !mpam_has_feature(configured_by, cfg)) {
+
+		if (configured_by == mpam_feat_cpor_part)
+			return BIT_MASK(cprops->cpbm_wd) - 1;
+		if (configured_by == mpam_feat_mbw_part)
+			return BIT_MASK(cprops->mbw_pbm_bits) - 1;
 
 		if ((configured_by == mpam_feat_ccap_part) ||
 		    (configured_by == mpam_feat_mbw_max))
