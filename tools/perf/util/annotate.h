@@ -269,13 +269,10 @@ struct cyc_hist {
  * returns.
  */
 struct annotated_source {
-	struct list_head	source;
-	size_t			sizeof_sym_hist;
-	struct sym_hist		*histograms;
-	int    			nr_histograms;
-	int			nr_entries;
-	int			nr_asm_entries;
-	u16			max_line_len;
+	struct list_head   source;
+	int    		   nr_histograms;
+	size_t		   sizeof_sym_hist;
+	struct sym_hist	   *histograms;
 };
 
 struct annotated_branch {
@@ -293,6 +290,9 @@ struct LOCKABLE annotation {
 	struct annotation_line	**offsets;
 	int			nr_events;
 	int			max_jump_sources;
+	int			nr_entries;
+	int			nr_asm_entries;
+	u16			max_line_len;
 	struct {
 		u8		addr;
 		u8		jumps;
