@@ -31,6 +31,10 @@ enum mpam_class_types {
 	MPAM_CLASS_UNKNOWN,     /* Everything else, e.g. SMMU */
 };
 
+struct resctrl_arch_staged_config {
+	struct resctrl_staged_config	config[FEAT_NUM_TYPES];
+};
+
 #ifdef CONFIG_ACPI_MPAM
 /* Parse the ACPI description of resources entries for this MSC. */
 int acpi_mpam_parse_resources(struct mpam_msc *msc,
