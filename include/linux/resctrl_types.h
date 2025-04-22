@@ -78,10 +78,12 @@ enum resctrl_conf_type {
  * @FEAT_PBM:	Portion Bit Map, allow the usage of bitmap method for
  * 		resource allocation.
  * @FEAT_MAX:	Controls the maximum fraction of the resource capacity.
+ * @FEAT_MIN:	Controls the minimum fraction of the resource capacity.
  */
 enum resctrl_feat_type {
 	FEAT_PBM,
 	FEAT_MAX,
+	FEAT_MIN,
 	FEAT_NUM_TYPES,
 };
 
