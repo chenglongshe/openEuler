@@ -79,11 +79,13 @@ enum resctrl_conf_type {
  * 		resource allocation.
  * @FEAT_MAX:	Controls the maximum fraction of the resource capacity.
  * @FEAT_MIN:	Controls the minimum fraction of the resource capacity.
+ * @FEAT_INTPRI:Controls the priority for the resource.
  */
 enum resctrl_feat_type {
 	FEAT_PBM,
 	FEAT_MAX,
 	FEAT_MIN,
+	FEAT_INTPRI,
 	FEAT_NUM_TYPES,
 };
 
