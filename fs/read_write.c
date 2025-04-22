@@ -633,6 +633,7 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 			if (!spin_trylock(&pfi->pfi_lock)) {
 				if (current->rc)
 					current->rc->cache_wait++;
+				trace_epoll_rc_wait(fd);
 				spin_lock(&pfi->pfi_lock);
 			}
 
@@ -662,6 +663,7 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 
 				if (current->rc)
 					current->rc->cache_hit++;
+				trace_epoll_rc_hit(fd, copy_len);
 				fdput_pos(f);
 				spin_unlock(&pfi->pfi_lock);
 
@@ -676,6 +678,7 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 			if (current->rc)
 				current->rc->cache_miss++;
 			cancel_work(&pfi->work);
+			trace_epoll_rc_miss(fd);
 			spin_unlock(&pfi->pfi_lock);
 
 			if (copy_len < 0)
