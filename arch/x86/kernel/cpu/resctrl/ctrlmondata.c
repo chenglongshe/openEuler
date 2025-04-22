@@ -61,13 +61,20 @@ int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_domain *d,
 	return 0;
 }
 
+struct resctrl_staged_config *
+resctrl_arch_get_staged_config(struct rdt_domain *domain,
+			       enum resctrl_conf_type conf_type,
+			       enum resctrl_feat_type feat_type)
+{
+	return &domain->staged_config[conf_type].config;
+}
+
 int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
 {
 	struct resctrl_staged_config *cfg;
 	struct rdt_hw_domain *hw_dom;
 	struct msr_param msr_param;
 	enum resctrl_conf_type t;
-	enum resctrl_feat_type f;
 	cpumask_var_t cpu_mask;
 	struct rdt_domain *d;
 	u32 idx;
@@ -82,23 +89,21 @@ int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
 	list_for_each_entry(d, &r->domains, list) {
 		hw_dom = resctrl_to_arch_dom(d);
 		for (t = 0; t < CDP_NUM_TYPES; t++) {
-			for (f = 0; f < FEAT_NUM_TYPES; f++) {
-				cfg = &hw_dom->d_resctrl.staged_config[t][f];
-				if (!cfg->have_new_ctrl)
-					continue;
+			cfg = resctrl_arch_get_staged_config(&hw_dom->d_resctrl, t, 0);
+			if (!cfg->have_new_ctrl)
+				continue;
 
-				idx = resctrl_get_config_index(closid, t);
-				if (!apply_config(hw_dom, cfg, idx, cpu_mask))
-					continue;
+			idx = resctrl_get_config_index(closid, t);
+			if (!apply_config(hw_dom, cfg, idx, cpu_mask))
+				continue;
 
-				if (!msr_param.res) {
-					msr_param.low = idx;
-					msr_param.high = msr_param.low + 1;
-					msr_param.res = r;
-				} else {
-					msr_param.low = min(msr_param.low, idx);
-					msr_param.high = max(msr_param.high, idx + 1);
-				}
+			if (!msr_param.res) {
+				msr_param.low = idx;
+				msr_param.high = msr_param.low + 1;
+				msr_param.res = r;
+			} else {
+				msr_param.low = min(msr_param.low, idx);
+				msr_param.high = max(msr_param.high, idx + 1);
 			}
 		}
 	}
