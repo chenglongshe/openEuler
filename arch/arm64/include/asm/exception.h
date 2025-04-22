@@ -55,4 +55,7 @@ void do_el0_svc(struct pt_regs *regs);
 void do_el0_svc_compat(struct pt_regs *regs);
 void do_el0_fpac(struct pt_regs *regs, unsigned long esr);
 void do_el1_fpac(struct pt_regs *regs, unsigned long esr);
+#ifdef CONFIG_FAST_SYSCALL
+void do_el0_xcall(struct pt_regs *regs);
+#endif
 #endif	/* __ASM_EXCEPTION_H */

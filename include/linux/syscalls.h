@@ -226,6 +226,18 @@ static inline int is_syscall_trace_event(struct trace_event_call *tp_event)
 	SYSCALL_METADATA(sname, x, __VA_ARGS__)			\
 	__SYSCALL_DEFINEx(x, sname, __VA_ARGS__)
 
+#ifdef CONFIG_FAST_SYSCALL
+#define XCALL_DEFINE1(name, ...) XCALL_DEFINEx(1, _##name, __VA_ARGS__)
+#define XCALL_DEFINE2(name, ...) XCALL_DEFINEx(2, _##name, __VA_ARGS__)
+#define XCALL_DEFINE3(name, ...) XCALL_DEFINEx(3, _##name, __VA_ARGS__)
+#define XCALL_DEFINE4(name, ...) XCALL_DEFINEx(4, _##name, __VA_ARGS__)
+#define XCALL_DEFINE5(name, ...) XCALL_DEFINEx(5, _##name, __VA_ARGS__)
+#define XCALL_DEFINE6(name, ...) XCALL_DEFINEx(6, _##name, __VA_ARGS__)
+
+#define XCALL_DEFINEx(x, sname, ...)				\
+	__XCALL_DEFINEx(x, sname, __VA_ARGS__)
+#endif
+
 #define __PROTECT(...) asmlinkage_protect(__VA_ARGS__)
 
 /*

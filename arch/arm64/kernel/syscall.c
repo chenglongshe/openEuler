@@ -280,7 +280,9 @@ static inline void delouse_pt_regs(struct pt_regs *regs)
 #ifdef CONFIG_FAST_SYSCALL
 void do_el0_xcall(struct pt_regs *regs)
 {
-	const syscall_fn_t *t = sys_call_table;
+	unsigned int scno, scno_nr;
+	const syscall_fn_t *t;
+	int xcall_nr;
 
 #ifdef CONFIG_ARM64_ILP32
 	if (is_ilp32_compat_task()) {
@@ -288,6 +290,16 @@ void do_el0_xcall(struct pt_regs *regs)
 		delouse_pt_regs(regs);
 	}
 #endif
+
+	scno = regs->regs[8];
+	scno_nr = __NR_syscalls;
+
+	xcall_nr = array_index_nospec(scno, scno_nr);
+	if (scno < scno_nr && current->xcall_select &&
+	    test_bit(xcall_nr, current->xcall_select))
+		t = x_call_table;
+	else
+		t = sys_call_table;
 
 	fp_user_discard();
 	el0_xcall_common(regs, regs->regs[8], __NR_syscalls, t);
