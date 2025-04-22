@@ -73,6 +73,18 @@ enum resctrl_conf_type {
 	CDP_DATA,
 };
 
+/**
+ * enum resctrl_feat_type - The feature of configuration.
+ * @FEAT_PBM:	Portion Bit Map, allow the usage of bitmap method for
+ *		resource allocation.
+ * @FEAT_MAX:	Controls the maximum fraction of the resource capacity.
+ */
+enum resctrl_feat_type {
+	FEAT_PBM,
+	FEAT_MAX,
+	FEAT_NUM_TYPES,
+};
+
 enum resctrl_res_level {
 	RDT_RESOURCE_L3,
 	RDT_RESOURCE_L2,

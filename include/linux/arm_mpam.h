@@ -68,6 +68,11 @@ bool resctrl_arch_is_mbm_local_enabled(void);
 bool resctrl_arch_is_mbm_total_enabled(void);
 bool resctrl_arch_would_mbm_overflow(void);
 
+bool resctrl_arch_feat_capable(enum resctrl_res_level level,
+			       enum resctrl_feat_type feat);
+const char *resctrl_arch_get_feat_lab(enum resctrl_feat_type feat,
+				      unsigned long fflags);
+
 /* reset cached configurations, then all devices */
 void resctrl_arch_reset_resources(void);
 
