@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 menuconfig PHYTIUM_PMU
 	bool "Phytium PMU support"
+	depends on ARM64
 	help
 	  Say Y here if you want to support Phytium performance monitoring
 	  unit (PMU) drivers.
@@ -8,8 +9,9 @@ menuconfig PHYTIUM_PMU
 if PHYTIUM_PMU
 
 config PHYT_DDR_PMU
-        tristate "Phytium SoC DDR PMU driver"
-        depends on (ARCH_PHYTIUM && ACPI) || COMPILE_TEST
+    tristate "Phytium SoC DDR PMU driver"
+    depends on (ARCH_PHYTIUM && ACPI) || COMPILE_TEST
+	depends on ARM64
 	default m
         help
           Provides support for Phytium SoC DDR Controller performance
@@ -18,6 +20,7 @@ config PHYT_DDR_PMU
 config PHYT_PCIE_PMU
 	tristate "Phytium SoC PCIE PMU driver"
 	depends on (ARCH_PHYTIUM && ACPI) || COMPILE_TEST
+	depends on ARM64
 	default m
 	help
 	  Provides support for Phytium SoC PCIe Controller performance
