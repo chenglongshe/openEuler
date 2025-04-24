@@ -58,7 +58,6 @@ static DECLARE_WAIT_QUEUE_HEAD(wait_cacheinfo_ready);
 
 /* A dummy mon context to use when the monitors were allocated up front */
 u32 __mon_is_rmid_idx = USE_RMID_IDX;
-void *mon_is_rmid_idx = &__mon_is_rmid_idx;
 
 bool resctrl_arch_alloc_capable(void)
 {
@@ -68,6 +67,67 @@ bool resctrl_arch_alloc_capable(void)
 bool resctrl_arch_mon_capable(void)
 {
 	return exposed_mon_capable;
+}
+
+static bool pbm_capable[RDT_NUM_RESOURCES];
+static bool max_capable[RDT_NUM_RESOURCES];
+static bool lim_capable[RDT_NUM_RESOURCES];
+static bool min_capable[RDT_NUM_RESOURCES];
+static bool intpri_capable[RDT_NUM_RESOURCES];
+bool resctrl_arch_feat_capable(enum resctrl_res_level level,
+			       enum resctrl_feat_type feat)
+{
+	switch (feat) {
+	case FEAT_PBM:
+		return pbm_capable[level];
+
+	case FEAT_MAX:
+		return max_capable[level];
+
+	case FEAT_LIMIT:
+		return lim_capable[level];
+
+	case FEAT_MIN:
+		return min_capable[level];
+
+	case FEAT_INTPRI:
+		return intpri_capable[level];
+
+	default:
+		break;
+	}
+
+	return false;
+}
+
+const char *resctrl_arch_set_feat_lab(enum resctrl_feat_type feat,
+				      unsigned long fflags)
+{
+	switch (feat) {
+	case FEAT_PBM:
+		if (fflags & RFTYPE_RES_CACHE)
+			break;
+		return "PBM";
+
+	case FEAT_MAX:
+		if (fflags & RFTYPE_RES_MB)
+			break;
+		return "MAX";
+
+	case FEAT_LIMIT:
+		return "HDL";
+
+	case FEAT_MIN:
+		return "MIN";
+
+	case FEAT_INTPRI:
+		return "PRI";
+
+	default:
+		break;
+	}
+
+	return "";
 }
 
 bool resctrl_arch_is_mbm_local_enabled(void)
@@ -121,7 +181,7 @@ int resctrl_arch_set_cdp_enabled(enum resctrl_res_level ignored, bool enable)
 	return 0;
 }
 
-static bool mpam_resctrl_hide_cdp(enum resctrl_res_level rid)
+bool resctrl_arch_hide_cdp(enum resctrl_res_level rid)
 {
 	return cdp_enabled && !resctrl_arch_get_cdp_enabled(rid);
 }
@@ -296,10 +356,17 @@ struct rdt_resource *resctrl_arch_get_resource(enum resctrl_res_level l)
 	return &mpam_resctrl_exports[l].resctrl_res;
 }
 
+struct resctrl_staged_config *
+resctrl_arch_get_staged_config(struct rdt_domain *domain,
+			       enum resctrl_conf_type conf_type,
+			       enum resctrl_feat_type feat_type)
+{
+	return &domain->staged_config[conf_type].config[feat_type];
+}
+
 static void *resctrl_arch_mon_ctx_alloc_no_wait(struct rdt_resource *r,
 						int evtid)
 {
-	struct mpam_resctrl_res *res;
 	u32 *ret = kmalloc(sizeof(*ret), GFP_KERNEL);
 
 	if (!ret)
@@ -307,16 +374,15 @@ static void *resctrl_arch_mon_ctx_alloc_no_wait(struct rdt_resource *r,
 
 	switch (evtid) {
 	case QOS_L3_OCCUP_EVENT_ID:
-		res = container_of(r, struct mpam_resctrl_res, resctrl_res);
-
-		*ret = mpam_alloc_csu_mon(res->class);
-		return ret;
 	case QOS_L3_MBM_LOCAL_EVENT_ID:
 	case QOS_L3_MBM_TOTAL_EVENT_ID:
-		return mon_is_rmid_idx;
-	}
+		*ret = __mon_is_rmid_idx;
+		return ret;
 
-	return ERR_PTR(-EOPNOTSUPP);
+	default:
+		kfree(ret);
+		return ERR_PTR(-EOPNOTSUPP);
+	}
 }
 
 void *resctrl_arch_mon_ctx_alloc(struct rdt_resource *r, int evtid)
@@ -341,25 +407,7 @@ void *resctrl_arch_mon_ctx_alloc(struct rdt_resource *r, int evtid)
 void resctrl_arch_mon_ctx_free(struct rdt_resource *r, int evtid,
 			       void *arch_mon_ctx)
 {
-	struct mpam_resctrl_res *res;
-	u32 mon = *(u32 *)arch_mon_ctx;
-
-	if (mon == USE_RMID_IDX)
-		return;
 	kfree(arch_mon_ctx);
-	arch_mon_ctx = NULL;
-
-	res = container_of(r, struct mpam_resctrl_res, resctrl_res);
-
-	switch (evtid) {
-	case QOS_L3_OCCUP_EVENT_ID:
-		mpam_free_csu_mon(res->class, mon);
-		wake_up(&resctrl_mon_ctx_waiters);
-		return;
-	case QOS_L3_MBM_TOTAL_EVENT_ID:
-	case QOS_L3_MBM_LOCAL_EVENT_ID:
-		return;
-	}
 }
 
 static enum mon_filter_options resctrl_evt_config_to_mpam(u32 local_evt_cfg)
@@ -380,7 +428,7 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 {
 	int err;
 	u64 cdp_val;
-	u16 num_mbwu_mon;
+	u16 num_mon;
 	struct mon_cfg cfg;
 	struct mpam_resctrl_dom *dom;
 	struct mpam_resctrl_res *res;
@@ -407,12 +455,15 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 	if (cfg.mon == USE_RMID_IDX) {
 		/*
 		 * The number of mbwu monitors can't support free run mode,
-		 * adapt the remainder of rmid to the num_mbwu_mon as a
-		 * compromise.
+		 * adapt the remainder of rmid to the num_mon as compromise.
 		 */
 		res = container_of(r, struct mpam_resctrl_res, resctrl_res);
-		num_mbwu_mon = res->class->props.num_mbwu_mon;
-		cfg.mon = resctrl_arch_rmid_idx_encode(closid, rmid) % num_mbwu_mon;
+		if (type == mpam_feat_msmon_mbwu)
+			num_mon = res->class->props.num_mbwu_mon;
+		else
+			num_mon = res->class->props.num_csu_mon;
+
+		cfg.mon = closid % num_mon;
 	}
 
 	cfg.match_pmg = true;
@@ -420,15 +471,19 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 	cfg.opts = resctrl_evt_config_to_mpam(dom->mbm_local_evt_cfg);
 
 	if (cdp_enabled) {
-		cfg.partid = closid << 1;
+		cfg.partid = resctrl_get_config_index(closid, CDP_DATA);
 		err = mpam_msmon_read(dom->comp, &cfg, type, val);
 		if (err)
 			return err;
 
-		cfg.partid += 1;
+		cfg.partid = resctrl_get_config_index(closid, CDP_CODE);
 		err = mpam_msmon_read(dom->comp, &cfg, type, &cdp_val);
-		if (!err)
+		if (!err) {
+			pr_debug("read monitor rmid %u %s:%u CODE/DATA: %lld/%lld\n",
+				resctrl_arch_rmid_idx_encode(closid, rmid),
+				r->name, dom->comp->comp_id, cdp_val, *val);
 			*val += cdp_val;
+		}
 	} else {
 		cfg.partid = closid;
 		err = mpam_msmon_read(dom->comp, &cfg, type, val);
@@ -803,6 +858,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		/* TODO: Scaling is not yet supported */
 		r->cache.cbm_len = class->props.cpbm_wd;
 		r->cache.arch_has_sparse_bitmasks = true;
+		r->cache.intpri_wd = class->props.intpri_wd;
 
 		/* mpam_devices will reject empty bitmaps */
 		r->cache.min_cbm_bits = 1;
@@ -812,6 +868,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->fflags = RFTYPE_RES_CACHE;
 		r->default_ctrl = BIT_MASK(class->props.cpbm_wd) - 1;
 		r->data_width = (class->props.cpbm_wd + 3) / 4;
+		r->cache_level = class->level;
 
 		/*
 		 * Which bits are shared with other ...things...
@@ -824,7 +881,20 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		if (mpam_has_feature(mpam_feat_cpor_part, &class->props)) {
 			r->alloc_capable = true;
 			exposed_alloc_capable = true;
+			pbm_capable[r->rid] = true;
 		}
+
+		if (mpam_has_feature(mpam_feat_ccap_part, &class->props))
+			max_capable[r->rid] = true;
+
+		if (mpam_has_feature(mpam_feat_cmin, &class->props))
+			min_capable[r->rid] = true;
+
+		if (mpam_has_feature(mpam_feat_intpri_part, &class->props))
+			intpri_capable[r->rid] = true;
+
+		if (mpam_has_feature(mpam_feat_max_limit, &class->props))
+			lim_capable[r->rid] = true;
 
 		/*
 		 * MBWU counters may be 'local' or 'total' depending on where
@@ -857,6 +927,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->membw.delay_linear = true;
 		r->membw.throttle_mode = THREAD_THROTTLE_UNDEFINED;
 		r->membw.bw_gran = get_mba_granularity(cprops);
+		r->membw.intpri_wd = class->props.intpri_wd;
 
 		/* Round up to at least 1% */
 		if (!r->membw.bw_gran)
@@ -865,7 +936,21 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		if (class_has_usable_mba(cprops)) {
 			r->alloc_capable = true;
 			exposed_alloc_capable = true;
+
+			if (mpam_has_feature(mpam_feat_mbw_part, cprops))
+				pbm_capable[r->rid] = true;
+
+			if (mpam_has_feature(mpam_feat_mbw_max, cprops)) {
+				max_capable[r->rid] = true;
+				lim_capable[r->rid] = true;
+			}
 		}
+
+		if (mpam_has_feature(mpam_feat_mbw_min, cprops))
+			min_capable[r->rid] = true;
+
+		if (mpam_has_feature(mpam_feat_intpri_part, cprops))
+			intpri_capable[r->rid] = true;
 
 		if (has_mbwu && class->type == MPAM_CLASS_MEMORY) {
 			mbm_total_class = class;
@@ -952,7 +1037,8 @@ void mpam_resctrl_exit(void)
 }
 
 u32 resctrl_arch_get_config(struct rdt_resource *r, struct rdt_domain *d,
-			    u32 closid, enum resctrl_conf_type type)
+			    u32 closid, enum resctrl_conf_type type,
+			    enum resctrl_feat_type feat)
 {
 	u32 partid;
 	struct mpam_config *cfg;
@@ -970,20 +1056,66 @@ u32 resctrl_arch_get_config(struct rdt_resource *r, struct rdt_domain *d,
 	dom = container_of(d, struct mpam_resctrl_dom, resctrl_dom);
 	cprops = &res->class->props;
 
-	partid = resctrl_get_config_index(closid, type);
+	/*
+	 * When CDP is enabled, but the resource doesn't support it, we
+	 * need to get the configuration from the CDP_CODE resctrl_conf_type
+	 * which is same as the CDP_DATA one.
+	 */
+	if (resctrl_arch_hide_cdp(r->rid))
+		partid = resctrl_get_config_index(closid, CDP_CODE);
+	else
+		partid = resctrl_get_config_index(closid, type);
+
 	cfg = &dom->comp->cfg[partid];
 
 	switch (r->rid) {
 	case RDT_RESOURCE_L2:
 	case RDT_RESOURCE_L3:
-		configured_by = mpam_feat_cpor_part;
-		break;
+		if (mpam_has_feature(mpam_feat_cpor_part, cprops) &&
+		   (feat == FEAT_PBM)) {
+			configured_by = mpam_feat_cpor_part;
+			break;
+
+		} else if (mpam_has_feature(mpam_feat_ccap_part, cprops) &&
+			  (feat == FEAT_MAX)) {
+			configured_by = mpam_feat_ccap_part;
+			break;
+
+		} else if (mpam_has_feature(mpam_feat_max_limit, cprops) &&
+			  (feat == FEAT_LIMIT)) {
+			configured_by = mpam_feat_max_limit;
+			break;
+		} else if (mpam_has_feature(mpam_feat_cmin, cprops) &&
+			  (feat == FEAT_MIN)) {
+			configured_by = mpam_feat_cmin;
+			break;
+		} else if (mpam_has_feature(mpam_feat_intpri_part, cprops) &&
+			  (feat == FEAT_INTPRI)) {
+			configured_by = mpam_feat_intpri_part;
+			break;
+		}
+		return -EINVAL;
+
 	case RDT_RESOURCE_MBA:
-		if (mba_class_use_mbw_part(cprops)) {
+		if (mba_class_use_mbw_part(cprops) &&
+		   (feat == FEAT_PBM)) {
 			configured_by = mpam_feat_mbw_part;
 			break;
-		} else if (mpam_has_feature(mpam_feat_mbw_max, cprops)) {
+		} else if (mpam_has_feature(mpam_feat_mbw_max, cprops) &&
+			  (feat == FEAT_MAX)) {
 			configured_by = mpam_feat_mbw_max;
+			break;
+		} else if (mpam_has_feature(mpam_feat_max_limit, cprops) &&
+			  (feat == FEAT_LIMIT)) {
+			configured_by = mpam_feat_max_limit;
+			break;
+		} else if (mpam_has_feature(mpam_feat_mbw_min, cprops) &&
+			  (feat == FEAT_MIN)) {
+			configured_by = mpam_feat_mbw_min;
+			break;
+		} else if (mpam_has_feature(mpam_feat_intpri_part, cprops) &&
+			  (feat == FEAT_INTPRI)) {
+			configured_by = mpam_feat_intpri_part;
 			break;
 		}
 		fallthrough;
@@ -992,27 +1124,66 @@ u32 resctrl_arch_get_config(struct rdt_resource *r, struct rdt_domain *d,
 	}
 
 	if (!r->alloc_capable || partid >= resctrl_arch_get_num_closid(r) ||
-	    !mpam_has_feature(configured_by, cfg))
+	    !mpam_has_feature(configured_by, cfg)) {
+
+		if (configured_by == mpam_feat_cpor_part)
+			return BIT_MASK(cprops->cpbm_wd) - 1;
+		if (configured_by == mpam_feat_mbw_part)
+			return BIT_MASK(cprops->mbw_pbm_bits) - 1;
+
+		if ((configured_by == mpam_feat_ccap_part) ||
+		    (configured_by == mpam_feat_mbw_max))
+			return MAX_MBA_BW;
+
+		if (configured_by == mpam_feat_max_limit) {
+			if (r->fflags & RFTYPE_RES_CACHE)
+				return true;
+			else
+				return false;
+		}
+
+		if ((configured_by == mpam_feat_cmin) ||
+		    (configured_by == mpam_feat_mbw_min))
+			return 0;
+
+		if (configured_by == mpam_feat_intpri_part) {
+			if (!mpam_has_feature(mpam_feat_intpri_part_0_low, cprops))
+				return 0;
+
+			return (u32)GENMASK(cprops->intpri_wd - 1, 0);
+		}
+
 		return r->default_ctrl;
+	}
 
 	switch (configured_by) {
 	case mpam_feat_cpor_part:
 		/* TODO: Scaling is not yet supported */
 		return cfg->cpbm;
+	case mpam_feat_ccap_part:
+		return mbw_max_to_percent(cfg->ca_max, cprops->cmax_wd);
+	case mpam_feat_cmin:
+		return mbw_max_to_percent(cfg->ca_min, cprops->cmax_wd);
 	case mpam_feat_mbw_part:
 		/* TODO: Scaling is not yet supported */
 		return mbw_pbm_to_percent(cfg->mbw_pbm, cprops);
 	case mpam_feat_mbw_max:
 		return mbw_max_to_percent(cfg->mbw_max, cprops->bwa_wd);
+	case mpam_feat_max_limit:
+		return cfg->max_limit;
+	case mpam_feat_mbw_min:
+		return mbw_max_to_percent(cfg->mbw_min, cprops->bwa_wd);
+	case mpam_feat_intpri_part:
+		return cfg->intpri;
 	default:
 		return -EINVAL;
 	}
 }
 
-int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_domain *d,
-			    u32 closid, enum resctrl_conf_type t, u32 cfg_val)
+int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_domain *d, u32 closid,
+			    enum resctrl_conf_type t, enum resctrl_feat_type f,
+			    u32 cfg_val)
 {
-	int err;
 	u32 partid;
 	struct mpam_config cfg;
 	struct mpam_props *cprops;
@@ -1032,44 +1203,73 @@ int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_domain *d,
 	if (!r->alloc_capable || partid >= resctrl_arch_get_num_closid(r))
 		return -EINVAL;
 
+	cfg = dom->comp->cfg[partid];
+
 	switch (r->rid) {
 	case RDT_RESOURCE_L2:
 	case RDT_RESOURCE_L3:
-		/* TODO: Scaling is not yet supported */
-		cfg.cpbm = cfg_val;
-		mpam_set_feature(mpam_feat_cpor_part, &cfg);
-		break;
+		if (mpam_has_feature(mpam_feat_cpor_part, cprops) &&
+		   (f == FEAT_PBM)) {
+			/* TODO: Scaling is not yet supported */
+			cfg.cpbm = cfg_val;
+			mpam_set_feature(mpam_feat_cpor_part, &cfg);
+			break;
+		} else if (mpam_has_feature(mpam_feat_ccap_part, cprops) &&
+			  (f == FEAT_MAX)) {
+			cfg.ca_max = percent_to_mbw_max(cfg_val, cprops->cmax_wd);
+			mpam_set_feature(mpam_feat_ccap_part, &cfg);
+			break;
+		} else if (mpam_has_feature(mpam_feat_max_limit, cprops) &&
+			  (f == FEAT_LIMIT)) {
+			cfg.max_limit = cfg_val;
+			mpam_set_feature(mpam_feat_max_limit, &cfg);
+			break;
+		} else if (mpam_has_feature(mpam_feat_cmin, cprops) &&
+			  (f == FEAT_MIN)) {
+			cfg.ca_min = percent_to_mbw_max(cfg_val, cprops->cmax_wd);
+			mpam_set_feature(mpam_feat_cmin, &cfg);
+			break;
+		} else if (mpam_has_feature(mpam_feat_intpri_part, cprops) &&
+			  (f == FEAT_INTPRI)) {
+			cfg.intpri = cfg_val;
+			mpam_set_feature(mpam_feat_intpri_part, &cfg);
+			break;
+		}
+		return -EINVAL;
+
 	case RDT_RESOURCE_MBA:
-		if (mba_class_use_mbw_part(cprops)) {
+		if (mba_class_use_mbw_part(cprops) && (f == FEAT_PBM)) {
 			cfg.mbw_pbm = percent_to_mbw_pbm(cfg_val, cprops);
 			mpam_set_feature(mpam_feat_mbw_part, &cfg);
 			break;
-		} else if (mpam_has_feature(mpam_feat_mbw_max, cprops)) {
+		} else if (mpam_has_feature(mpam_feat_mbw_max, cprops) &&
+			  (f == FEAT_MAX)) {
 			cfg.mbw_max = percent_to_mbw_max(cfg_val, cprops->bwa_wd);
 			mpam_set_feature(mpam_feat_mbw_max, &cfg);
 			break;
+		} else if (mpam_has_feature(mpam_feat_max_limit, cprops) &&
+			  (f == FEAT_LIMIT)) {
+			cfg.max_limit = cfg_val;
+			mpam_set_feature(mpam_feat_max_limit, &cfg);
+			break;
+		} else if (mpam_has_feature(mpam_feat_mbw_min, cprops) &&
+			  (f == FEAT_MIN)) {
+			cfg.mbw_min = percent_to_mbw_max(cfg_val, cprops->bwa_wd);
+			mpam_set_feature(mpam_feat_mbw_min, &cfg);
+			break;
+		} else if (mpam_has_feature(mpam_feat_intpri_part, cprops) &&
+			  (f == FEAT_INTPRI)) {
+			cfg.intpri = cfg_val;
+			mpam_set_feature(mpam_feat_intpri_part, &cfg);
+			break;
 		}
+
 		fallthrough;
 	default:
 		return -EINVAL;
 	}
 
-	/*
-	 * When CDP is enabled, but the resource doesn't support it, we need to
-	 * apply the same configuration to the other partid.
-	 */
-	if (mpam_resctrl_hide_cdp(r->rid)) {
-		partid = resctrl_get_config_index(closid, CDP_CODE);
-		err = mpam_apply_config(dom->comp, partid, &cfg);
-		if (err)
-			return err;
-
-		partid = resctrl_get_config_index(closid, CDP_DATA);
-		return mpam_apply_config(dom->comp, partid, &cfg);
-
-	} else {
-		return mpam_apply_config(dom->comp, partid, &cfg);
-	}
+	return mpam_apply_config(dom->comp, partid, &cfg);
 }
 
 /* TODO: this is IPI heavy */
@@ -1078,6 +1278,7 @@ int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
 	int err = 0;
 	struct rdt_domain *d;
 	enum resctrl_conf_type t;
+	enum resctrl_feat_type f;
 	struct resctrl_staged_config *cfg;
 
 	lockdep_assert_cpus_held();
@@ -1085,14 +1286,16 @@ int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
 
 	list_for_each_entry(d, &r->domains, list) {
 		for (t = 0; t < CDP_NUM_TYPES; t++) {
-			cfg = &d->staged_config[t];
-			if (!cfg->have_new_ctrl)
-				continue;
+			for (f = 0; f < FEAT_NUM_TYPES; f++) {
+				cfg = resctrl_arch_get_staged_config(d, t, f);
+				if (!cfg->have_new_ctrl)
+					continue;
 
-			err = resctrl_arch_update_one(r, d, closid, t,
-						      cfg->new_ctrl);
-			if (err)
-				return err;
+				err = resctrl_arch_update_one(
+					r, d, closid, t, f, cfg->new_ctrl);
+				if (err)
+					return err;
+			}
 		}
 	}
 

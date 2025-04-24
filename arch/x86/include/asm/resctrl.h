@@ -9,6 +9,10 @@
 #include <linux/sched.h>
 #include <linux/resctrl_types.h>
 
+struct resctrl_arch_staged_config {
+	struct resctrl_staged_config config;
+};
+
 /*
  * This value can never be a valid CLOSID, and is used when mapping a
  * (closid, rmid) pair to an index and back. On x86 only the RMID is
@@ -93,6 +97,8 @@ static inline bool resctrl_arch_is_mbm_total_enabled(void)
 {
 	return (rdt_mon_features & (1 << QOS_L3_MBM_TOTAL_EVENT_ID));
 }
+
+static inline bool resctrl_arch_would_mbm_overflow(void) { return true; }
 
 static inline bool resctrl_arch_is_mbm_local_enabled(void)
 {
@@ -220,6 +226,33 @@ void resctrl_cpu_detect(struct cpuinfo_x86 *c);
 
 bool resctrl_arch_get_cdp_enabled(enum resctrl_res_level l);
 int resctrl_arch_set_cdp_enabled(enum resctrl_res_level l, bool enable);
+static inline bool resctrl_arch_hide_cdp(enum resctrl_res_level rid)
+{
+	return false;
+};
+
+static inline bool resctrl_arch_feat_capable(enum resctrl_res_level level,
+					     enum resctrl_feat_type feat)
+{
+	if (feat == FEAT_PBM) {
+		if (level == RDT_RESOURCE_L3 ||
+		    level == RDT_RESOURCE_L2)
+			return true;
+
+	} else if (feat == FEAT_MAX) {
+		if (level == RDT_RESOURCE_MBA ||
+		    level == RDT_RESOURCE_SMBA)
+			return true;
+	}
+
+	return false;
+}
+
+static inline const char *resctrl_arch_set_feat_lab(enum resctrl_feat_type feat,
+						    unsigned long fflags)
+{
+	return "";
+}
 
 #else
 

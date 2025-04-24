@@ -388,7 +388,7 @@ static int get_cpumask_from_cache_id(u32 cache_id, u32 cache_level,
 			 * during device_initcall(). Use cache_of_get_id().
 			 */
 			iter_cache_id = cache_of_get_id(iter);
-			if (cache_id == ~0UL) {
+			if (cache_id == (~0)) {
 				of_node_put(iter);
 				continue;
 			}
@@ -577,8 +577,17 @@ static void mpam_ris_hw_probe(struct mpam_msc_ris *ris)
 		u32 ccap_features = mpam_read_partsel_reg(msc, CCAP_IDR);
 
 		props->cmax_wd = FIELD_GET(MPAMF_CCAP_IDR_CMAX_WD, ccap_features);
-		if (props->cmax_wd)
-			mpam_set_feature(mpam_feat_ccap_part, props);
+		if (props->cmax_wd) {
+			if (!FIELD_GET(MPAMF_CCAP_IDR_NO_CMAX, ccap_features)) {
+				mpam_set_feature(mpam_feat_ccap_part, props);
+
+				if (FIELD_GET(MPAMF_CCAP_IDR_HAS_CMAX_SOFTLIM, ccap_features))
+					mpam_set_feature(mpam_feat_max_limit, props);
+			}
+
+			if (FIELD_GET(MPAMF_CCAP_IDR_HAS_CMIN, ccap_features))
+				mpam_set_feature(mpam_feat_cmin, props);
+		}
 	}
 
 	/* Cache Portion partitioning */
@@ -601,8 +610,10 @@ static void mpam_ris_hw_probe(struct mpam_msc_ris *ris)
 			mpam_set_feature(mpam_feat_mbw_part, props);
 
 		props->bwa_wd = FIELD_GET(MPAMF_MBW_IDR_BWA_WD, mbw_features);
-		if (props->bwa_wd && FIELD_GET(MPAMF_MBW_IDR_HAS_MAX, mbw_features))
+		if (props->bwa_wd && FIELD_GET(MPAMF_MBW_IDR_HAS_MAX, mbw_features)) {
 			mpam_set_feature(mpam_feat_mbw_max, props);
+			mpam_set_feature(mpam_feat_max_limit, props);
+		}
 
 		if (props->bwa_wd && FIELD_GET(MPAMF_MBW_IDR_HAS_MIN, mbw_features))
 			mpam_set_feature(mpam_feat_mbw_min, props);
@@ -921,6 +932,14 @@ static const struct midr_range mbwu_flowrate_list[] = {
 	{ /* sentinel */ }
 };
 
+bool resctrl_arch_would_mbm_overflow(void)
+{
+	if (is_midr_in_range_list(read_cpuid_id(), mbwu_flowrate_list))
+		return false;
+
+	return true;
+}
+
 static void __ris_msmon_read(void *arg)
 {
 	bool nrdy = false;
@@ -1009,7 +1028,7 @@ static void __ris_msmon_read(void *arg)
 		 * was last reset in the latest version (DDI0598D_b).
 		 */
 		if (ris->comp->class->type == MPAM_CLASS_MEMORY) {
-			if (is_midr_in_range_list(read_cpuid_id(), mbwu_flowrate_list))
+			if (!resctrl_arch_would_mbm_overflow())
 				break;
 		}
 
@@ -1179,13 +1198,13 @@ static void mpam_reset_msc_bitmap(struct mpam_msc *msc, u16 reg, u16 wd)
 static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 				      struct mpam_config *cfg)
 {
+	bool limit;
 	u32 pri_val = 0;
+	u16 intpri, dspri;
 	u16 cmax = MPAMCFG_CMAX_CMAX;
 	struct mpam_msc *msc = ris->msc;
 	u16 bwa_fract = MPAMCFG_MBW_MAX_MAX;
 	struct mpam_props *rprops = &ris->props;
-	u16 dspri = GENMASK(rprops->dspri_wd, 0);
-	u16 intpri = GENMASK(rprops->intpri_wd, 0);
 
 	spin_lock(&msc->part_sel_lock);
 	__mpam_part_sel(ris->ris_idx, partid, msc);
@@ -1202,6 +1221,28 @@ static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 					      rprops->cpbm_wd);
 	}
 
+	if (mpam_has_feature(mpam_feat_ccap_part, rprops)) {
+		if (mpam_has_feature(mpam_feat_ccap_part, cfg))
+			cmax = cfg->ca_max;
+
+		if (mpam_has_feature(mpam_feat_max_limit, cfg))
+			limit = cfg->max_limit;
+		else
+			limit = true;
+
+		if (limit)
+			mpam_write_partsel_reg(msc, CMAX, cmax);
+		else
+			mpam_write_partsel_reg(msc, CMAX, cmax | MPAMCFG_CMAX_CMAX_SOFTLIM);
+	}
+
+	if (mpam_has_feature(mpam_feat_cmin, rprops)) {
+		if (mpam_has_feature(mpam_feat_cmin, cfg))
+			mpam_write_partsel_reg(msc, CMIN, cfg->ca_min);
+		else
+			mpam_write_partsel_reg(msc, CMIN, 0);
+	}
+
 	if (mpam_has_feature(mpam_feat_mbw_part, rprops)) {
 		if (mpam_has_feature(mpam_feat_mbw_part, cfg))
 			mpam_write_partsel_reg(msc, MBW_PBM, cfg->mbw_pbm);
@@ -1210,37 +1251,54 @@ static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 					      rprops->mbw_pbm_bits);
 	}
 
-	if (mpam_has_feature(mpam_feat_mbw_min, rprops))
-		mpam_write_partsel_reg(msc, MBW_MIN, 0);
+	if (mpam_has_feature(mpam_feat_mbw_min, rprops)) {
+		if (mpam_has_feature(mpam_feat_mbw_min, cfg))
+			mpam_write_partsel_reg(msc, MBW_MIN, cfg->mbw_min);
+		else
+			mpam_write_partsel_reg(msc, MBW_MIN, 0);
+	}
 
 	if (mpam_has_feature(mpam_feat_mbw_max, rprops)) {
 		if (mpam_has_feature(mpam_feat_mbw_max, cfg))
-			mpam_write_partsel_reg(msc, MBW_MAX, cfg->mbw_max | MPAMCFG_MBW_MAX_HARDLIM);
+			bwa_fract = cfg->mbw_max;
+
+		if (mpam_has_feature(mpam_feat_max_limit, cfg))
+			limit = cfg->max_limit;
 		else
+			limit = false;
+
+		if (!limit)
 			mpam_write_partsel_reg(msc, MBW_MAX, bwa_fract);
+		else
+			mpam_write_partsel_reg(msc, MBW_MAX, bwa_fract | MPAMCFG_MBW_MAX_HARDLIM);
 	}
 
 	if (mpam_has_feature(mpam_feat_mbw_prop, rprops))
 		mpam_write_partsel_reg(msc, MBW_PROP, bwa_fract);
 
-	if (mpam_has_feature(mpam_feat_ccap_part, rprops))
-		mpam_write_partsel_reg(msc, CMAX, cmax);
+	if (mpam_has_feature(mpam_feat_intpri_part_0_low, rprops))
+		intpri = GENMASK(rprops->intpri_wd - 1, 0);
+	else
+		intpri = 0;
+
+	if (mpam_has_feature(mpam_feat_intpri_part, rprops)) {
+		if (mpam_has_feature(mpam_feat_intpri_part, cfg))
+			pri_val |= FIELD_PREP(MPAMCFG_PRI_INTPRI, cfg->intpri);
+		else
+			pri_val |= FIELD_PREP(MPAMCFG_PRI_INTPRI, intpri);
+	}
+
+	if (mpam_has_feature(mpam_feat_dspri_part_0_low, rprops))
+		dspri = GENMASK(rprops->dspri_wd - 1, 0);
+	else
+		dspri = 0;
+
+	if (mpam_has_feature(mpam_feat_dspri_part, rprops))
+		pri_val |= FIELD_PREP(MPAMCFG_PRI_DSPRI, dspri);
 
 	if (mpam_has_feature(mpam_feat_intpri_part, rprops) ||
-	    mpam_has_feature(mpam_feat_dspri_part, rprops)) {
-		/* aces high? */
-		if (!mpam_has_feature(mpam_feat_intpri_part_0_low, rprops))
-			intpri = 0;
-		if (!mpam_has_feature(mpam_feat_dspri_part_0_low, rprops))
-			dspri = 0;
-
-		if (mpam_has_feature(mpam_feat_intpri_part, rprops))
-			pri_val |= FIELD_PREP(MPAMCFG_PRI_INTPRI, intpri);
-		if (mpam_has_feature(mpam_feat_dspri_part, rprops))
-			pri_val |= FIELD_PREP(MPAMCFG_PRI_DSPRI, dspri);
-
+	    mpam_has_feature(mpam_feat_dspri_part, rprops))
 		mpam_write_partsel_reg(msc, PRI, pri_val);
-	}
 
 	spin_unlock(&msc->part_sel_lock);
 }
@@ -1850,9 +1908,10 @@ __resource_props_mismatch(struct mpam_msc_ris *ris, struct mpam_class *class)
 	/* Clear missing features */
 	cprops->features &= rprops->features;
 
-	/* Clear incompatible features */
+	/* Set cpbm_wd with the min cpbm_wd among all cache msc */
 	if (cprops->cpbm_wd != rprops->cpbm_wd)
-		mpam_clear_feature(mpam_feat_cpor_part, &cprops->features);
+		cprops->cpbm_wd = min(cprops->cpbm_wd, rprops->cpbm_wd);
+
 	if (cprops->mbw_pbm_bits != rprops->mbw_pbm_bits)
 		mpam_clear_feature(mpam_feat_mbw_part, &cprops->features);
 
