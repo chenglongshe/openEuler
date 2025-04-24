@@ -66,32 +66,136 @@ static bool bw_validate(char *buf, unsigned long *data, struct rdt_resource *r)
 	return true;
 }
 
-static int parse_bw(struct rdt_parse_data *data, struct resctrl_schema *s,
-		    struct rdt_domain *d)
+static bool deci_validate(char *buf, unsigned long *data, struct rdt_resource *r)
+{
+	unsigned long deci;
+	int ret;
+
+	ret = kstrtoul(buf, 10, &deci);
+	if (ret) {
+		rdt_last_cmd_printf("Non-decimal digit in value %s\n", buf);
+		return false;
+	}
+
+	if (deci > 100) {
+		rdt_last_cmd_printf("Value %ld out of range [0,100]\n", deci);
+		return false;
+	}
+
+	*data = deci;
+	return true;
+}
+
+static bool prio_validate(char *buf, unsigned long *data, struct rdt_resource *r)
+{
+	unsigned long prio, prio_max;
+	int ret;
+
+	ret = kstrtoul(buf, 10, &prio);
+	if (ret) {
+		rdt_last_cmd_printf("Non-decimal digit in PRIO value %s\n", buf);
+		return false;
+	}
+
+	if (r->fflags & RFTYPE_RES_CACHE)
+		prio_max = GENMASK(r->cache.intpri_wd - 1, 0);
+	else
+		prio_max = GENMASK(r->membw.intpri_wd - 1, 0);
+
+	if (prio > prio_max) {
+		rdt_last_cmd_printf("PRIO value %ld out of range [0,%ld]\n",
+				     prio, prio_max);
+		return false;
+	}
+
+	*data = prio;
+	return true;
+}
+
+static bool lim_validate(char *buf, unsigned long *data, struct rdt_resource *r)
+{
+	unsigned long cap;
+	int ret;
+
+	ret = kstrtoul(buf, 10, &cap);
+	if (ret) {
+		rdt_last_cmd_printf("Non-decimal digit in limit value %s\n", buf);
+		return false;
+	}
+
+	if (cap > 1) {
+		rdt_last_cmd_printf("Limit value %ld out of range [0,1]\n", cap);
+		return false;
+	}
+
+	*data = !!cap;
+	return true;
+}
+
+static int parse_bw_conf_type(struct rdt_parse_data *data, struct resctrl_schema *s,
+			    struct rdt_domain *d, enum resctrl_conf_type conf_type)
 {
 	struct resctrl_staged_config *cfg;
 	u32 closid = data->rdtgrp->closid;
 	struct rdt_resource *r = s->res;
 	unsigned long bw_val;
 
-	cfg = &d->staged_config[s->conf_type];
+	cfg = resctrl_arch_get_staged_config(d, conf_type, s->feat_type);
 	if (cfg->have_new_ctrl) {
 		rdt_last_cmd_printf("Duplicate domain %d\n", d->id);
 		return -EINVAL;
 	}
 
-	if (!bw_validate(data->buf, &bw_val, r))
-		return -EINVAL;
+	if (s->feat_type == FEAT_INTPRI) {
+		if (!prio_validate(data->buf, &bw_val, r))
+			return -EINVAL;
 
-	if (is_mba_sc(r)) {
-		d->mbps_val[closid] = bw_val;
-		return 0;
+	} else if (s->feat_type == FEAT_LIMIT) {
+		if (!lim_validate(data->buf, &bw_val, r))
+			return -EINVAL;
+
+	} else if (r->rid == RDT_RESOURCE_MBA) {
+		/* For FEAT_MAX and FEAT_MIN */
+		if (!bw_validate(data->buf, &bw_val, r))
+			return -EINVAL;
+
+		if (s->feat_type == FEAT_MAX && is_mba_sc(r)) {
+			d->mbps_val[closid] = bw_val;
+			return 0;
+		}
+
+	} else {
+		/* For the RDT_RESOURCE_L3/L2 */
+		if (!deci_validate(data->buf, &bw_val, r))
+			return -EINVAL;
 	}
 
 	cfg->new_ctrl = bw_val;
 	cfg->have_new_ctrl = true;
 
 	return 0;
+}
+
+static int parse_bw(struct rdt_parse_data *data, struct resctrl_schema *s,
+		    struct rdt_domain *d)
+{
+	struct rdt_resource *r = s->res;
+	int err;
+
+	/*
+	 * When CDP is enabled, but the resource doesn't support it, we
+	 * need to apply the same configuration to both of the CDP_CODE
+	 * and CDP_DATA resctrl_conf_type.
+	 */
+	if (resctrl_arch_hide_cdp(r->rid)) {
+		err = parse_bw_conf_type(data, s, d, CDP_CODE);
+		if (err)
+			return err;
+
+		return parse_bw_conf_type(data, s, d, CDP_DATA);
+	}
+
+	return parse_bw_conf_type(data, s, d, s->conf_type);
 }
 
 /*
@@ -153,7 +257,7 @@ static int parse_cbm(struct rdt_parse_data *data, struct resctrl_schema *s,
 	struct rdt_resource *r = s->res;
 	u32 cbm_val;
 
-	cfg = &d->staged_config[s->conf_type];
+	cfg = resctrl_arch_get_staged_config(d, s->conf_type, s->feat_type);
 	if (cfg->have_new_ctrl) {
 		rdt_last_cmd_printf("Duplicate domain %d\n", d->id);
 		return -EINVAL;
@@ -203,9 +307,10 @@ static int parse_cbm(struct rdt_parse_data *data, struct resctrl_schema *s,
 	return 0;
 }
 
-static ctrlval_parser_t *get_parser(struct rdt_resource *res)
+static ctrlval_parser_t *get_parser(struct resctrl_schema *s)
 {
-	if (res->fflags & RFTYPE_RES_CACHE)
+	if ((s->res->fflags & RFTYPE_RES_CACHE) &&
+	    (s->feat_type == FEAT_PBM))
 		return &parse_cbm;
 	else
 		return &parse_bw;
@@ -220,8 +325,9 @@ static ctrlval_parser_t *get_parser(struct rdt_resource *res)
 static int parse_line(char *line, struct resctrl_schema *s,
 		      struct rdtgroup *rdtgrp)
 {
-	ctrlval_parser_t *parse_ctrlval = get_parser(s->res);
+	ctrlval_parser_t *parse_ctrlval = get_parser(s);
 	enum resctrl_conf_type t = s->conf_type;
+	enum resctrl_feat_type f = s->feat_type;
 	struct resctrl_staged_config *cfg;
 	struct rdt_resource *r = s->res;
 	struct rdt_parse_data data;
@@ -255,7 +361,7 @@ next:
 			if (parse_ctrlval(&data, s, d))
 				return -EINVAL;
 			if (rdtgrp->mode ==  RDT_MODE_PSEUDO_LOCKSETUP) {
-				cfg = &d->staged_config[t];
+				cfg = resctrl_arch_get_staged_config(d, t, f);
 				/*
 				 * In pseudo-locking setup mode and just
 				 * parsed a valid CBM that should be
@@ -373,9 +479,13 @@ out:
 static void show_doms(struct seq_file *s, struct resctrl_schema *schema, int closid)
 {
 	struct rdt_resource *r = schema->res;
+	const char *format_str;
 	struct rdt_domain *dom;
 	bool sep = false;
 	u32 ctrl_val;
+
+	format_str = (schema->feat_type == FEAT_PBM) ?
+			"%d=%0*x" : "%d=%0*u";
 
 	/* Walking r->domains, ensure it can't race with cpuhp */
 	lockdep_assert_cpus_held();
@@ -389,9 +499,10 @@ static void show_doms(struct seq_file *s, struct resctrl_schema *schema, int clo
 			ctrl_val = dom->mbps_val[closid];
 		else
 			ctrl_val = resctrl_arch_get_config(r, dom, closid,
-							   schema->conf_type);
+							   schema->conf_type,
+							   schema->feat_type);
 
-		seq_printf(s, r->format_str, dom->id, max_data_width,
+		seq_printf(s, format_str, dom->id, max_data_width,
 			   ctrl_val);
 		sep = true;
 	}
