@@ -73,6 +73,26 @@ enum resctrl_conf_type {
 	CDP_DATA,
 };
 
+/**
+ * enum resctrl_feat_type - The feature of configuration.
+ * @FEAT_PBM:	Portion Bit Map, allow the usage of bitmap method for
+ *		resource allocation.
+ * @FEAT_MAX:	Controls the maximum fraction of the resource capacity.
+ * @FEAT_MIN:	Controls the minimum fraction of the resource capacity.
+ * @FEAT_INTPRI:Controls the priority for the resource.
+ * @FEAT_LIMIT: Allows some allocations by a PARTID when its resource
+ *		use is above the maximum capacity partition.
+ */
+enum resctrl_feat_type {
+	FEAT_PBM,
+	FEAT_MAX,
+	FEAT_MIN,
+	FEAT_INTPRI,
+	FEAT_LIMIT,
+
+	FEAT_NUM_TYPES,
+};
+
 enum resctrl_res_level {
 	RDT_RESOURCE_L3,
 	RDT_RESOURCE_L2,
@@ -93,6 +113,16 @@ enum resctrl_event_id {
 	QOS_L3_OCCUP_EVENT_ID		= 0x01,
 	QOS_L3_MBM_TOTAL_EVENT_ID	= 0x02,
 	QOS_L3_MBM_LOCAL_EVENT_ID	= 0x03,
+};
+
+/**
+ * struct resctrl_staged_config - parsed configuration to be applied
+ * @new_ctrl:		new ctrl value to be loaded
+ * @have_new_ctrl:	whether the user provided new_ctrl is valid
+ */
+struct resctrl_staged_config {
+	u32			new_ctrl;
+	bool			have_new_ctrl;
 };
 
 #endif /* __LINUX_RESCTRL_TYPES_H */
