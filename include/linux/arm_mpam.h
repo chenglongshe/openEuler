@@ -31,6 +31,10 @@ enum mpam_class_types {
 	MPAM_CLASS_UNKNOWN,     /* Everything else, e.g. SMMU */
 };
 
+struct resctrl_arch_staged_config {
+	struct resctrl_staged_config	config[FEAT_NUM_TYPES];
+};
+
 #ifdef CONFIG_ACPI_MPAM
 /* Parse the ACPI description of resources entries for this MSC. */
 int acpi_mpam_parse_resources(struct mpam_msc *msc,
@@ -66,12 +70,19 @@ bool resctrl_arch_mon_capable(void);
 bool resctrl_arch_is_llc_occupancy_enabled(void);
 bool resctrl_arch_is_mbm_local_enabled(void);
 bool resctrl_arch_is_mbm_total_enabled(void);
+bool resctrl_arch_would_mbm_overflow(void);
+
+bool resctrl_arch_feat_capable(enum resctrl_res_level level,
+			       enum resctrl_feat_type feat);
+const char *resctrl_arch_set_feat_lab(enum resctrl_feat_type feat,
+				      unsigned long fflags);
 
 /* reset cached configurations, then all devices */
 void resctrl_arch_reset_resources(void);
 
 bool resctrl_arch_get_cdp_enabled(enum resctrl_res_level ignored);
 int resctrl_arch_set_cdp_enabled(enum resctrl_res_level ignored, bool enable);
+bool resctrl_arch_hide_cdp(enum resctrl_res_level rid);
 bool resctrl_arch_match_closid(struct task_struct *tsk, u32 closid);
 bool resctrl_arch_match_rmid(struct task_struct *tsk, u32 closid, u32 rmid);
 void resctrl_arch_set_cpu_default_closid(int cpu, u32 closid);

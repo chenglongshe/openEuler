@@ -40,7 +40,8 @@ static bool apply_config(struct rdt_hw_domain *hw_dom,
 }
 
 int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_domain *d,
-			    u32 closid, enum resctrl_conf_type t, u32 cfg_val)
+			    u32 closid, enum resctrl_conf_type t,
+			    enum resctrl_feat_type f, u32 cfg_val)
 {
 	struct rdt_hw_resource *hw_res = resctrl_to_arch_res(r);
 	struct rdt_hw_domain *hw_dom = resctrl_to_arch_dom(d);
@@ -58,6 +59,14 @@ int resctrl_arch_update_one(struct rdt_resource *r, struct rdt_domain *d,
 	hw_res->msr_update(d, &msr_param, r);
 
 	return 0;
+}
+
+struct resctrl_staged_config *
+resctrl_arch_get_staged_config(struct rdt_domain *domain,
+			       enum resctrl_conf_type conf_type,
+			       enum resctrl_feat_type feat_type)
+{
+	return &domain->staged_config[conf_type].config;
 }
 
 int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
@@ -80,7 +89,7 @@ int resctrl_arch_update_domains(struct rdt_resource *r, u32 closid)
 	list_for_each_entry(d, &r->domains, list) {
 		hw_dom = resctrl_to_arch_dom(d);
 		for (t = 0; t < CDP_NUM_TYPES; t++) {
-			cfg = &hw_dom->d_resctrl.staged_config[t];
+			cfg = resctrl_arch_get_staged_config(&hw_dom->d_resctrl, t, 0);
 			if (!cfg->have_new_ctrl)
 				continue;
 
@@ -112,7 +121,8 @@ done:
 }
 
 u32 resctrl_arch_get_config(struct rdt_resource *r, struct rdt_domain *d,
-			    u32 closid, enum resctrl_conf_type type)
+			    u32 closid, enum resctrl_conf_type type,
+			    enum resctrl_feat_type feat)
 {
 	struct rdt_hw_domain *hw_dom = resctrl_to_arch_dom(d);
 	u32 idx = resctrl_get_config_index(closid, type);
