@@ -73,6 +73,16 @@ enum resctrl_conf_type {
 	CDP_DATA,
 };
 
+enum resctrl_feat_type {
+	FEAT_PBM,
+	FEAT_MAX,
+	FEAT_MIN,
+	FEAT_INTPRI,
+	FEAT_LIMIT,
+
+	FEAT_NUM_TYPES,
+};
+
 enum resctrl_res_level {
 	RDT_RESOURCE_L3,
 	RDT_RESOURCE_L2,

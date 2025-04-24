@@ -52,7 +52,7 @@ struct mpam_msc
 	struct mpam_msc * __percpu	*error_dev_id;
 
 	atomic_t		online_refs;
-	
+
 	struct mutex		lock;
 	bool			probed;
 	bool			error_irq_requested;
@@ -86,6 +86,7 @@ typedef u32 mpam_features_t;
 enum mpam_device_features {
 	mpam_feat_ccap_part = 0,
 	mpam_feat_cpor_part,
+	mpam_feat_cmin,
 	mpam_feat_mbw_part,
 	mpam_feat_mbw_min,
 	mpam_feat_mbw_max,
@@ -109,6 +110,7 @@ enum mpam_device_features {
 	mpam_feat_msmon_mbwu_rwbw,
 	mpam_feat_msmon_capt,
 	mpam_feat_partid_nrw,
+	mpam_feat_max_limit,
 	MPAM_FEATURE_LAST,
 };
 #define MPAM_ALL_FEATURES      ((1<<MPAM_FEATURE_LAST) - 1)
@@ -160,8 +162,20 @@ struct mpam_config {
 	mpam_features_t		features;
 
 	u32	cpbm;
+	u16	ca_max;
+	u16	ca_min;
+
 	u32	mbw_pbm;
 	u16	mbw_max;
+	u16	mbw_min;
+
+	/*
+	 *  dspri is downstream priority, intpri is internal priority.
+	 */
+	u16	dspri;
+	u16	intpri;
+
+	bool	max_limit;
 };
 
 struct mpam_component
@@ -194,7 +208,7 @@ enum mon_filter_options {
 };
 
 struct mon_cfg {
-	u16                     mon;
+	u32                     mon;
 	u8                      pmg;
 	bool                    match_pmg;
 	u32                     partid;
@@ -340,7 +354,8 @@ void mpam_resctrl_exit(void);
 /* Configuration and Status Register offsets in the memory mapped page */
 #define MPAMCFG_PART_SEL        0x0100  /* partid to configure: */
 #define MPAMCFG_CPBM            0x1000  /* cache-portion config */
-#define MPAMCFG_CMAX            0x0108  /* cache-capacity config */
+#define MPAMCFG_CMAX            0x0108  /* cache-capacity max config */
+#define MPAMCFG_CMIN            0x0110  /* cache-capacity min config */
 #define MPAMCFG_MBW_MIN         0x0200  /* min mem-bw config */
 #define MPAMCFG_MBW_MAX         0x0208  /* max mem-bw config */
 #define MPAMCFG_MBW_WINWD       0x0220  /* mem-bw accounting window config */
@@ -391,6 +406,9 @@ void mpam_resctrl_exit(void);
 
 /* MPAMF_CCAP_IDR - MPAM features cache capacity partitioning ID register */
 #define MPAMF_CCAP_IDR_CMAX_WD                  GENMASK(5, 0)
+#define MPAMF_CCAP_IDR_HAS_CMIN                 BIT(29)
+#define MPAMF_CCAP_IDR_NO_CMAX                  BIT(30)
+#define MPAMF_CCAP_IDR_HAS_CMAX_SOFTLIM         BIT(31)
 
 /* MPAMF_MBW_IDR - MPAM features memory bandwidth partitioning ID register */
 #define MPAMF_MBW_IDR_BWA_WD            GENMASK(5, 0)
@@ -444,6 +462,7 @@ void mpam_resctrl_exit(void);
 
 /* MPAMCFG_CMAX - MPAM cache portion bitmap partition configuration register */
 #define MPAMCFG_CMAX_CMAX               GENMASK(15, 0)
+#define MPAMCFG_CMAX_CMAX_SOFTLIM       BIT(31)
 
 /*
  * MPAMCFG_MBW_MIN - MPAM memory minimum bandwidth partitioning configuration
