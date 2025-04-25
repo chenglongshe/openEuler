@@ -296,6 +296,16 @@ static struct ctl_table sched_fair_sysctls[] = {
 		.proc_handler	= proc_dointvec,
 	},
 #endif
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+	{
+		.procname       = "sched_util_ratio",
+		.data           = &sysctl_sched_util_ratio,
+		.maxlen         = sizeof(sysctl_sched_util_ratio),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_minmax,
+		.extra1         = SYSCTL_ZERO,
+	},
+#endif
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 	{
 		.procname	= "smart_grid_strategy_ctrl",
@@ -8118,6 +8128,20 @@ static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int t
 	return -1;
 }
 
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+int sysctl_sched_util_ratio = 100;
+
+static int core_has_spare(int cpu)
+{
+	int core_id = cpumask_first(cpu_smt_mask(cpu));
+	struct rq *rq = cpu_rq(core_id);
+	unsigned long util = rq->cfs.avg.util_avg;
+	unsigned long capacity = rq->cpu_capacity;
+
+	return util * 100 < capacity * sysctl_sched_util_ratio;
+}
+#endif
+
 #else /* CONFIG_SCHED_SMT */
 
 static inline void set_idle_cores(int cpu, int val)
@@ -9234,6 +9258,15 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 		/* Fast path */
 		new_cpu = select_idle_sibling(p, prev_cpu, new_cpu);
 	}
+
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+	if (sched_feat(KEEP_ON_CORE) &&
+	    static_branch_likely(&sched_smt_present)) {
+		if (core_has_spare(new_cpu))
+			new_cpu = cpumask_first(cpu_smt_mask((new_cpu)));
+	}
+#endif
+
 	rcu_read_unlock();
 	schedstat_end_time(cpu_rq(cpu), time);
 
@@ -10597,6 +10630,15 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		ret = bpf_sched_cfs_can_migrate_task(p, &migrate_node);
 		if (!ret)
 			return ret;
+	}
+#endif
+
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+	if (sched_feat(KEEP_ON_CORE) &&
+	    static_branch_likely(&sched_smt_present)) {
+		if (core_has_spare(env->dst_cpu) &&
+		    cpumask_first(cpu_smt_mask((env->dst_cpu))) != env->dst_cpu)
+			return 0;
 	}
 #endif
 
