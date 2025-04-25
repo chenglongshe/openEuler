@@ -1425,14 +1425,6 @@ static void optee_smccc_hvc(unsigned long a0, unsigned long a1,
 	arm_smccc_hvc(a0, a1, a2, a3, a4, a5, a6, a7, res);
 }
 
-#if defined(CONFIG_OPTEE_DEFAULT_METHOD_HVC)
-#define DEFAULT_CONDUIT_METHOD optee_smccc_hvc
-#elif defined(CONFIG_OPTEE_DEFAULT_METHOD_SMC)
-#define DEFAULT_CONDUIT_METHOD optee_smccc_smc
-#else
-#define DEFAULT_CONDUIT_METHOD ERR_PTR(-ENXIO)
-#endif
-
 static optee_invoke_fn *get_invoke_func(struct device *dev)
 {
 	const char *method;
@@ -1441,7 +1433,7 @@ static optee_invoke_fn *get_invoke_func(struct device *dev)
 
 	if (device_property_read_string(dev, "method", &method)) {
 		pr_warn("missing \"method\" property\n");
-		return DEFAULT_CONDUIT_METHOD;
+		return ERR_PTR(-ENXIO);
 	}
 
 	if (!strcmp("hvc", method))
