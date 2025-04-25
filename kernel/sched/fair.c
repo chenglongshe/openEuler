@@ -304,6 +304,7 @@ static struct ctl_table sched_fair_sysctls[] = {
 		.mode           = 0644,
 		.proc_handler   = proc_dointvec_minmax,
 		.extra1         = SYSCTL_ZERO,
+		.extra2		= SYSCTL_ONE_HUNDRED,
 	},
 #endif
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
@@ -8131,12 +8132,15 @@ static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int t
 #ifdef CONFIG_SCHED_KEEP_ON_CORE
 int sysctl_sched_util_ratio = 100;
 
-static int core_has_spare(int cpu)
+static bool core_has_spare(int cpu)
 {
 	int core_id = cpumask_first(cpu_smt_mask(cpu));
 	struct rq *rq = cpu_rq(core_id);
-	unsigned long util = rq->cfs.avg.util_avg;
+	unsigned long util = cpu_util_cfs(cpu);
 	unsigned long capacity = rq->cpu_capacity;
+
+	if (sysctl_sched_util_ratio == 100)
+		return true;
 
 	return util * 100 < capacity * sysctl_sched_util_ratio;
 }
