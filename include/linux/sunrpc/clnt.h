@@ -38,6 +38,31 @@ struct rpc_sysfs_client {
 	struct rpc_xprt_switch *xprt_switch;
 };
 
+struct rpc_clnt_reserve {
+    atomic_t		cl_count;	/* Number of references */
+    unsigned int		cl_clid;	/* client id */
+    struct list_head	cl_clients;	/* Global list of clients */
+    struct list_head	cl_tasks;	/* List of tasks */
+    spinlock_t		cl_lock;	/* spinlock */
+    struct rpc_xprt __rcu *	cl_xprt;	/* transport */
+    const struct rpc_procinfo *cl_procinfo;	/* procedure info */
+    u32			cl_prog,	/* RPC program number */
+                cl_vers,	/* RPC version number */
+                cl_maxproc;	/* max procedure number */
+
+    struct rpc_auth *	cl_auth;	/* authenticator */
+    struct rpc_stat *	cl_stats;	/* per-program statistics */
+    struct rpc_iostats *	cl_metrics;	/* per-client statistics */
+
+    unsigned int		cl_softrtry : 1,/* soft timeouts */
+                cl_discrtry : 1,/* disconnect before retry */
+                cl_noretranstimeo: 1,/* No retransmit timeouts */
+                cl_autobind : 1,/* use getport() */
+                cl_chatty   : 1,/* be verbose */
+                cl_reserve  : 11,/* reserve bits */
+                cl_enfs   : 1;/* be enfs */
+};
+
 
 /*
  * The high-level client handle
@@ -164,6 +189,7 @@ struct rpc_create_args {
 
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
+	void *multipath_option;
 };
 
 struct rpc_add_xprt_test {
@@ -236,6 +262,7 @@ void		rpc_force_rebind(struct rpc_clnt *);
 size_t		rpc_peeraddr(struct rpc_clnt *, struct sockaddr *, size_t);
 const char	*rpc_peeraddr2str(struct rpc_clnt *, enum rpc_display_format_t);
 int		rpc_localaddr(struct rpc_clnt *, struct sockaddr *, size_t);
+int rpc_localalladdr(struct rpc_xprt *xprt, struct sockaddr *buf, size_t buflen);
 
 int 		rpc_clnt_iterate_for_each_xprt(struct rpc_clnt *clnt,
 			int (*fn)(struct rpc_clnt *, struct rpc_xprt *, void *),
@@ -273,6 +300,9 @@ bool rpc_clnt_xprt_switch_has_addr(struct rpc_clnt *clnt,
 void rpc_clnt_xprt_set_online(struct rpc_clnt *clnt, struct rpc_xprt *xprt);
 void rpc_clnt_disconnect(struct rpc_clnt *clnt);
 void rpc_cleanup_clids(void);
+int rpc_clnt_test_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt, const struct rpc_call_ops *ops, void *data, int flags);
+
+struct rpc_xprt *rpc_task_get_next_xprt(struct rpc_clnt *clnt);
 
 static inline int rpc_reply_expected(struct rpc_task *task)
 {
@@ -285,4 +315,27 @@ static inline void rpc_task_close_connection(struct rpc_task *task)
 	if (task->tk_xprt)
 		xprt_force_disconnect(task->tk_xprt);
 }
+
+struct rpc_multipath_ops {
+    struct module *owner;
+    void (*create_clnt)(struct rpc_create_args *args, struct rpc_clnt *clnt);
+    void (*releas_clnt)(struct rpc_clnt *clnt);
+    void (*create_xprt)(struct rpc_xprt *xprt);
+    void (*destroy_xprt)(struct rpc_xprt *xprt);
+    void (*xprt_iostat)(struct rpc_task *task);
+    void (*failover_handle)(struct rpc_task *task);
+    void (*adjust_task_timeout)(struct rpc_task *task, void *condition);
+    void (*init_task_req)(struct rpc_task *task, struct rpc_rqst *req);
+    bool (*prepare_transmit)(struct rpc_task *task);
+    void (*set_transport)(struct rpc_task *task, struct rpc_clnt *clnt);
+    void (*inc_queuelen)(struct rpc_xprt *xprt);
+    void (*dec_queuelen)(struct rpc_xprt *xprt);
+    void (*get_rpc_program)(struct rpc_task *task, u32 *program, u32 *version);
+    bool (*task_need_call_start_again)(struct rpc_task *task);
+};
+extern struct rpc_multipath_ops __rcu *multipath_ops;
+int rpc_multipath_ops_register(struct rpc_multipath_ops *ops);
+int rpc_multipath_ops_unregister(struct rpc_multipath_ops *ops);
+struct rpc_multipath_ops *rpc_multipath_ops_get(void);
+void rpc_multipath_ops_put(struct rpc_multipath_ops *ops);
 #endif /* _LINUX_SUNRPC_CLNT_H */
