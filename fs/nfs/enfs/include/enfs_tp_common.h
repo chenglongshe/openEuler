@@ -35,38 +35,39 @@
 #define LVOS_TRACEP_STAT_DEACTIVE  2
 
 typedef enum tagLVOS_TP_TYPE_E {
-    LVOS_TP_TYPE_CALLBACK = 0,
-    LVOS_TP_TYPE_RESET,
-    LVOS_TP_TYPE_PAUSE,
-    LVOS_TP_TYPE_ABORT,
-    LVOS_TP_TYPE_BUTT
-}LVOS_TP_TYPE_E;
+	LVOS_TP_TYPE_CALLBACK = 0,
+	LVOS_TP_TYPE_RESET,
+	LVOS_TP_TYPE_PAUSE,
+	LVOS_TP_TYPE_ABORT,
+	LVOS_TP_TYPE_BUTT
+} LVOS_TP_TYPE_E;
 
 typedef struct {
-    char achParamData[LVOS_TRACEP_PARAM_SIZE]; /**<  自定义参数数据区。 */
+	char achParamData[LVOS_TRACEP_PARAM_SIZE];
+					       /**<  自定义参数数据区。 */
 } LVOS_TRACEP_PARAM_S;
 
 typedef void (*FN_TRACEP_COMMON_T)(LVOS_TRACEP_PARAM_S *, ...);
 
 typedef struct tagLVOS_TRACEP_NEW_S {
-    char szName[MAX_NAME_LEN];
-    char szDesc[MAX_DESC_LEN];
-    unsigned int uiPid;
-    int iActive;
-    int type;
-    unsigned int timeAlive;
-    unsigned int timeCalled;
-    FN_TRACEP_COMMON_T fnHook;
-    LVOS_TRACEP_PARAM_S stParam;
-}LVOS_TRACEP_NEW_S;
+	char szName[MAX_NAME_LEN];
+	char szDesc[MAX_DESC_LEN];
+	unsigned int uiPid;
+	int iActive;
+	int type;
+	unsigned int timeAlive;
+	unsigned int timeCalled;
+	FN_TRACEP_COMMON_T fnHook;
+	LVOS_TRACEP_PARAM_S stParam;
+} LVOS_TRACEP_NEW_S;
 
 typedef struct {
-    unsigned int cmd;
-    unsigned int pid;
-    int type;
-    unsigned int timeAlive;
-    LVOS_TRACEP_PARAM_S userParam;
-    char traceName[MAX_NAME_LEN];
+	unsigned int cmd;
+	unsigned int pid;
+	int type;
+	unsigned int timeAlive;
+	LVOS_TRACEP_PARAM_S userParam;
+	char traceName[MAX_NAME_LEN];
 } NfsTracePointCmd;
 
 #define IOCTL_MAGIC 'N'
@@ -74,13 +75,16 @@ typedef struct {
 
 int enfs_tracepoint_init(void);
 void enfs_tracepoint_exit(void);
-int RegTracePoint(unsigned int pid, const char *name, const char *desc, FN_TRACEP_COMMON_T fnHook);
+int RegTracePoint(unsigned int pid, const char *name, const char *desc,
+		  FN_TRACEP_COMMON_T fnHook);
 int UnregTracePoint(unsigned int pid, const char *name);
-int GetTracePoint(unsigned int pid, const char *name, LVOS_TRACEP_NEW_S **tracepoint);
-void DoTracePointPause(LVOS_TRACEP_NEW_S *tracepoint);
+int GetTracePoint(unsigned int pid, const char *name,
+		  LVOS_TRACEP_NEW_S ** tracepoint);
+void DoTracePointPause(LVOS_TRACEP_NEW_S * tracepoint);
 int deactive_tracepoint(unsigned int pid, const char *name);
 int deactive_tracepoint_all(void);
-int active_tracepoint(unsigned int pid, const char *name, int type, unsigned int time, LVOS_TRACEP_PARAM_S userParam);
+int active_tracepoint(unsigned int pid, const char *name, int type,
+		      unsigned int time, LVOS_TRACEP_PARAM_S userParam);
 
 #ifndef MY_PID
 #define MY_PID 1234
@@ -126,4 +130,4 @@ int active_tracepoint(unsigned int pid, const char *name, int type, unsigned int
 
 #endif // NFS_CLIENT_DEBUG
 
-#endif // ENFS_TP_COMMON_H
+#endif // ENFS_TP_COMMON_H

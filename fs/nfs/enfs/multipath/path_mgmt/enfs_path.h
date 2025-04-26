@@ -8,4 +8,4 @@
 int enfs_alloc_xprt_ctx(struct rpc_xprt *xprt);
 void enfs_free_xprt_ctx(struct rpc_xprt *xprt);
 
-#endif  // ENFS_PATH_H
+#endif // ENFS_PATH_H

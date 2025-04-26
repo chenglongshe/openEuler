@@ -8,10 +8,9 @@
 #ifndef MGMT_INIT_H
 #define MGMT_INIT_H
 
-#include 
+#include
 
 int32_t mgmt_init(void);
 void mgmt_fini(void);
-
 
 #endif // MGMT_INIT_H

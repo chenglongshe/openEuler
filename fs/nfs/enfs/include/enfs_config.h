@@ -8,37 +8,36 @@
 #ifndef ENFS_CONFIG_H
 #define ENFS_CONFIG_H
 
-#include 
+#include
 
-#define ENFS_VERSION 4   // client version is 4, server version is 10002
-#define ENFS_SERVER_VERSION_BASE 10001  // 24A server version is 10001
+#define ENFS_VERSION 4		// client version is 4, server version is 10002
+#define ENFS_SERVER_VERSION_BASE 10001	// 24A server version is 10001
 
 #define ENFS_PM_PING_TMIE_OUT 3
 
 typedef enum {
-    ENFS_MULTIPATH_ENABLE = 0,
-    ENFS_MULTIPATH_DISABLE = 1,
+	ENFS_MULTIPATH_ENABLE = 0,
+	ENFS_MULTIPATH_DISABLE = 1,
 } enfs_multipath_state;
 
 typedef enum {
-    ENFS_LOADBALANCE_RR,
-    ENFS_LOADBALANCE_SHARDVIEW,
+	ENFS_LOADBALANCE_RR,
+	ENFS_LOADBALANCE_SHARDVIEW,
 } enfs_loadbalance_mode;
 
 typedef enum {
-    ENFS_LOOKUPCACHE_DISABLE = 0,
-    ENFS_LOOKUPCACHE_ENABLE = 1,
+	ENFS_LOOKUPCACHE_DISABLE = 0,
+	ENFS_LOOKUPCACHE_ENABLE = 1,
 } enfs_lookupcache_state;
 
 typedef enum {
-    ENFS_V0 = 0,
-    ENFS_V1,
-    ENFS_V2,
-    ENFS_V3,
-    ENFS_V4,
-    ENFS_VERSION_BUTT
+	ENFS_V0 = 0,
+	ENFS_V1,
+	ENFS_V2,
+	ENFS_V3,
+	ENFS_V4,
+	ENFS_VERSION_BUTT
 } ENFS_CLIENT_VERSION;
-
 
 int32_t enfs_get_config_path_detect_interval(void);
 int32_t enfs_get_config_path_detect_timeout(void);

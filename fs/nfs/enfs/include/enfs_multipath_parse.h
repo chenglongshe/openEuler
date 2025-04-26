@@ -4,18 +4,18 @@
 #include "enfs.h"
 
 struct multipath_mount_options {
-    int version;
-    struct nfs_ip_list *remote_ip_list;
-    struct nfs_ip_list *local_ip_list;
-    NFS_ROUTE_DNS_INFO_S *pRemoteDnsInfo;
-    u32 fill_local;
-    u32 reserve[2];
+	int version;
+	struct nfs_ip_list *remote_ip_list;
+	struct nfs_ip_list *local_ip_list;
+	NFS_ROUTE_DNS_INFO_S *pRemoteDnsInfo;
+	u32 fill_local;
+	u32 reserve[2];
 };
 
 int nfs_multipath_parse_options(enum nfsmultipathoptions type, char *str,
-								void **enfs_option, struct net *net_ns);
+				void **enfs_option, struct net *net_ns);
 int nfs_multipath_alloc_options(void **enfs_option);
 void nfs_multipath_free_options(void **enfs_option);
 void enfs_set_mount_data(void **enfs_option, const char *hostname);
 
-#endif
+#endif	/*  */

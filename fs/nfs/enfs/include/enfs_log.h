@@ -8,7 +8,7 @@
 #ifndef ENFS_LOG_H
 #define ENFS_LOG_H
 
-#include 
+#include
 
 extern unsigned int enfs_debug;
 
@@ -22,4 +22,4 @@ extern unsigned int enfs_debug;
 		}                                                       \
 	} while (0)
 
-#endif  // ENFS_ERRCODE_H
+#endif // ENFS_ERRCODE_H

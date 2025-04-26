@@ -7,12 +7,12 @@
 
 #ifndef _ENFS_H_
 #define _ENFS_H_
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
+#include
+#include
+#include
+#include
+#include
+#include
 #include "enfs_adapter.h"
 
 #define IP_ADDRESS_LEN_MAX 64
@@ -33,47 +33,46 @@
 #define ENFS_MAX_MOUNT_COUNT 256
 #define EXTEND_MAX_DNS_NAME_LEN 256
 
-
 struct nfs_ip_list {
-    int count;
-    struct sockaddr_storage address[MAX_SUPPORTED_REMOTE_IP_COUNT];
-    size_t addrlen[MAX_SUPPORTED_REMOTE_IP_COUNT];
+	int count;
+	struct sockaddr_storage address[MAX_SUPPORTED_REMOTE_IP_COUNT];
+	size_t addrlen[MAX_SUPPORTED_REMOTE_IP_COUNT];
 };
 
 typedef struct NFS_ROUTE_DNS_T {
-    char dnsname[MAX_DNS_NAME_LEN];  // valid only if dnsExist is true
+	char dnsname[MAX_DNS_NAME_LEN];	// valid only if dnsExist is true
 } NFS_ROUTE_DNS_S;
 
 typedef struct NFS_ROUTE_DNS_INFO_T {
-    int dnsNameCount;                                       /* Count of DNS name in the list */
-    NFS_ROUTE_DNS_S routeRemoteDnsList[MAX_DNS_SUPPORTED];  // valid only if dnsExist is true
+	int dnsNameCount;	/* Count of DNS name in the list */
+	NFS_ROUTE_DNS_S routeRemoteDnsList[MAX_DNS_SUPPORTED];	// valid only if dnsExist is true
 } NFS_ROUTE_DNS_INFO_S;
 
 // TODO:寻找合适的头文件放
 struct rpc_iostats;
 struct enfs_xprt_context {
-    int version;
-    struct sockaddr_storage	srcaddr;
-    struct rpc_iostats *stats;
-    bool main;
-    atomic_t path_state;
-    atomic_t path_check_state;
-    atomic_long_t queuelen;
-    uint64_t lsid;
-    uint64_t wwn;
-    uint32_t cpuId;
-    u32 protocol; // TCP or UDP or RDMA
-    int64_t lastTime;
-    u32 reverse[4];
+	int version;
+	struct sockaddr_storage srcaddr;
+	struct rpc_iostats *stats;
+	bool main;
+	atomic_t path_state;
+	atomic_t path_check_state;
+	atomic_long_t queuelen;
+	uint64_t lsid;
+	uint64_t wwn;
+	uint32_t cpuId;
+	u32 protocol;		// TCP or UDP or RDMA
+	int64_t lastTime;
+	u32 reverse[4];
 };
 
 static inline bool enfs_is_main_xprt(struct rpc_xprt *xprt)
 {
-    struct enfs_xprt_context *ctx = xprt_get_reserve_context(xprt);
-    if (!ctx) {
-        return false;
-    }
-    return ctx->main;
+	struct enfs_xprt_context *ctx = xprt_get_reserve_context(xprt);
+	if (!ctx) {
+		return false;
+	}
+	return ctx->main;
 }
 
 static inline bool enfs_timeout_ms(ktime_t *start, int ms)
@@ -110,10 +109,9 @@ static inline void enfs_msleep(long ms)
 }
 
 bool enfs_insert_ip_list(struct nfs_ip_list *ip_list, int max,
-						 struct sockaddr_storage *addr);
+			 struct sockaddr_storage *addr);
 bool enfs_ip_list_contain(struct nfs_ip_list *ip_list,
-						  struct sockaddr_storage *addr);
-
+			  struct sockaddr_storage *addr);
 
 bool enfs_link_count_add(int num);
 int enfs_link_count_num(void);
@@ -128,12 +126,12 @@ struct rpcclnt_release_item {
 };
 
 struct clnt_release_item {
-    struct list_head node;
-    struct nfs_client *client;
-    struct rpc_clnt *clnt;
+	struct list_head node;
+	struct nfs_client *client;
+	struct rpc_clnt *clnt;
 };
 
 void enfs_destroy_clnt_list(struct list_head *head);
 void enfs_destroy_rpcclnt_list(struct list_head *head);
 
-#endif
+#endif	/*  */

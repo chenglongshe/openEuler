@@ -1,62 +1,61 @@
 #ifndef _ENFS_LOOKUP_CACHE_H_
 #define _ENFS_LOOKUP_CACHE_H_
- 
-#include 
-#include 
-#include 
-#include 
- 
+
+#include
+#include
+#include
+#include
+
 #define FILE_UUID_BUFF_LEN 38
 #define MAX_EXPID_LEN 32
 #define MAX_EXPSTR_LEN (MAX_EXPID_LEN * 2 + 1)
 #define ENFS_LOOKUP_CACHE_LEVEL 0
- 
+
 #define ENFS_fhandle_sz		(sizeof(struct nfs_fh))
 #define ENFS_lookupcacheargs_sz	(sizeof(EnfsGetConfigArgs))
 #define ENFS_lookupcacheres_sz	(sizeof(EnfsGetConfigRes))
- 
+
 typedef enum {
 	ENFS_LOOKUPCACHE_ALL = 0,
 	ENFS_LOOKUPCACHE_NONEG,
 	ENFS_LOOKUPCACHE_NONE
 } EnfsLookupcacheEnum;
- 
+
 struct lookupcache_work {
 	struct nfs_fh fh;
-    void *server; /* struct nfs_server pointer, don't access the mem, because maybe already freed */
-    struct rpc_clnt   *cl_rpcclient;
+	void *server;		/* struct nfs_server pointer, don't access the mem, because maybe already freed */
+	struct rpc_clnt *cl_rpcclient;
 	struct work_struct work_lookup;
 };
- 
-typedef struct {
-    unsigned int version;
-    unsigned int mask;
-    unsigned int reserve;
-	struct nfs_fh fh;
-	unsigned int vers;
-}EnfsGetConfigArgs;
- 
+
 typedef struct {
 	unsigned int version;
-    unsigned int mask;
+	unsigned int mask;
+	unsigned int reserve;
+	struct nfs_fh fh;
+	unsigned int vers;
+} EnfsGetConfigArgs;
+
+typedef struct {
+	unsigned int version;
+	unsigned int mask;
 	unsigned int lookupCache;
-    unsigned int reserve;
+	unsigned int reserve;
 	unsigned int status;
-}EnfsGetConfigRes;
- 
-struct nfs_enfs_s{
+} EnfsGetConfigRes;
+
+struct nfs_enfs_s {
 	union {
 		EnfsGetConfigArgs args;
 		EnfsGetConfigRes res;
 	} enfs_u;
 };
- 
-void enfs_xdr_enc_lookupcacheargs(struct rpc_rqst *rqstp, struct xdr_stream *xdr,
-    const void *data);
-int enfs_xdr_dec_lookupcacheres(struct rpc_rqst *req,
-				   struct xdr_stream *xdr,
-				   void *data);
- 
+
+void enfs_xdr_enc_lookupcacheargs(struct rpc_rqst *rqstp,
+				  struct xdr_stream *xdr, const void *data);
+int enfs_xdr_dec_lookupcacheres(struct rpc_rqst *req, struct xdr_stream *xdr,
+				void *data);
+
 #define PROC(proc, argtype, restype, timer)				\
 	.p_proc      = ENFSPROC_##proc,					\
 	.p_encode    = (kxdreproc_t)enfs_xdr_enc_##argtype##args,			\
@@ -66,9 +65,9 @@ int enfs_xdr_dec_lookupcacheres(struct rpc_rqst *req,
 	.p_timer     = timer,						\
 	.p_statidx   = ENFSPROC_##proc,					\
 	.p_name      = #proc,						\
- 
+
 int enfs_lookupcache_init(void);
 void enfs_lookupcache_fini(void);
 void enfs_trigger_get_capability(struct nfs_server *nfs_server);
- 
-#endif
+
+#endif	/*  */

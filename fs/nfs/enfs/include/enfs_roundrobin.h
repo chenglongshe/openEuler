@@ -11,4 +11,4 @@ const struct rpc_xprt_iter_ops *enfs_xprt_rr_ops(void);
 const struct rpc_xprt_iter_ops *enfs_xprt_singular_ops(void);
 bool enfs_is_rr_route(struct rpc_clnt *cln);
 bool enfs_is_singularr_route(struct rpc_clnt *cln);
-#endif
+#endif	/*  */

@@ -1,12 +1,12 @@
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
+#include
+#include
+#include
+#include
+#include
+#include
+#include
+#include
+#include
 
 #include "../../../net/sunrpc/netns.h"
 
@@ -36,16 +36,16 @@ static int sockaddr_ip_to_str(struct sockaddr *addr, char *buf, int len)
 		return 0;
 	}
 	switch (addr->sa_family) {
-	case AF_INET: {
-		struct sockaddr_in *sin = (struct sockaddr_in *)addr;
-		snprintf(buf, len, "%pI4", &sin->sin_addr);
-		return 0;
-	}
-	case AF_INET6: {
-		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
-		snprintf(buf, len, "%pI6", &sin6->sin6_addr);
-		return 0;
-	}
+	case AF_INET:{
+			struct sockaddr_in *sin = (struct sockaddr_in *)addr;
+			snprintf(buf, len, "%pI4", &sin->sin_addr);
+			return 0;
+		}
+	case AF_INET6:{
+			struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
+			snprintf(buf, len, "%pI6", &sin6->sin6_addr);
+			return 0;
+		}
 	default:
 		break;
 	}
@@ -56,8 +56,8 @@ static bool should_print(const char *name)
 {
 	int i;
 	static const char *proc_names[] = {
-	    "READ",
-	    "WRITE",
+		"READ",
+		"WRITE",
 	};
 
 	if (name == NULL) {
@@ -78,23 +78,26 @@ struct enfs_xprt_iter {
 	unsigned int max_addrs_length;
 };
 
-void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data), void *data);
+void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt * clnt, void *data),
+			    void *data);
 static int debug_show_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
-						   void *data)
+			   void *data)
 {
 	uint64_t lsid;
 	struct enfs_xprt_context *ctx = xprt_get_reserve_context(xprt);
 	lsid = ctx ? ctx->lsid : 0;
 
-	pr_info("       xprt:%p ctx:%p main:%d queue_len:%lu lsid:%llu.\n", xprt, ctx,
-	        ctx ? ctx->main : false, ctx ? atomic_long_read(&ctx->queuelen) : 0, lsid);
+	pr_info("       xprt:%p ctx:%p main:%d queue_len:%lu lsid:%llu.\n",
+		xprt, ctx, ctx ? ctx->main : false,
+		ctx ? atomic_long_read(&ctx->queuelen) : 0, lsid);
 	return 0;
 }
 
 static int debug_show_clnt(struct rpc_clnt *clnt, void *data)
 {
 	struct rpc_clnt_reserve *clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-	pr_info("    clnt %d addr:%p enfs:%d\n", clnt->cl_clid, clnt, clnt_reserve->cl_enfs);
+	pr_info("    clnt %d addr:%p enfs:%d\n", clnt->cl_clid, clnt,
+		clnt_reserve->cl_enfs);
 	rpc_clnt_iterate_for_each_xprt(clnt, debug_show_xprt, NULL);
 	return 0;
 }
@@ -108,63 +111,80 @@ static void debug_print_all_xprt(void)
 
 static bool is_valid_ip_address(const char *ip_str)
 {
-    struct in_addr addr4;
-    struct in6_addr addr6;
+	struct in_addr addr4;
+	struct in6_addr addr6;
 
-    if (in4_pton(ip_str, -1, (u8 *)&addr4, '\0', NULL) == 1) {
-        return true;
-    }
+	if (in4_pton(ip_str, -1, (u8 *) & addr4, '\0', NULL) == 1) {
+		return true;
+	}
 
-    if (in6_pton(ip_str, -1, (u8 *)&addr6, '\0', NULL) == 1) {
-        return true;
-    }
+	if (in6_pton(ip_str, -1, (u8 *) & addr6, '\0', NULL) == 1) {
+		return true;
+	}
 
-    return false;
+	return false;
 }
 
-static void enfs_proc_format_xprt_addr_display(struct rpc_clnt *clnt, struct rpc_xprt *xprt, 
-										char *local_name_buf, int local_name_buf_len, char *remote_name_buf, int remote_name_buf_len) 
+static void enfs_proc_format_xprt_addr_display(struct rpc_clnt *clnt,
+					       struct rpc_xprt *xprt,
+					       char *local_name_buf,
+					       int local_name_buf_len,
+					       char *remote_name_buf,
+					       int remote_name_buf_len)
 {
 	int err;
 	struct sockaddr_storage srcaddr;
 	struct enfs_xprt_context *ctx;
-    char local_name[INET6_ADDRSTRLEN];
-    const char *local = local_name;
+	char local_name[INET6_ADDRSTRLEN];
+	const char *local = local_name;
 
 	ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
 
 	sockaddr_ip_to_str((struct sockaddr *)&xprt->addr, remote_name_buf,
-					   remote_name_buf_len);
+			   remote_name_buf_len);
 
 	// get local address depend one main or not
 	if (enfs_is_main_xprt(xprt)) {
-		err = rpc_localaddr(clnt, (struct sockaddr *)&srcaddr, sizeof(srcaddr));
+		err =
+		    rpc_localaddr(clnt, (struct sockaddr *)&srcaddr,
+				  sizeof(srcaddr));
 		if (err != 0)
-			(void)snprintf(local_name_buf, local_name_buf_len, "Unknown");
+			(void)snprintf(local_name_buf, local_name_buf_len,
+				       "Unknown");
 		else {
 			if (ctx->protocol != XPRT_TRANSPORT_RDMA) {
-				sockaddr_ip_to_str((struct sockaddr *)&srcaddr, local_name_buf,
-								   local_name_buf_len);
+				sockaddr_ip_to_str((struct sockaddr *)&srcaddr,
+						   local_name_buf,
+						   local_name_buf_len);
 			} else {
-				sockaddr_ip_to_str(NULL, local_name_buf, local_name_buf_len);
+				sockaddr_ip_to_str(NULL, local_name_buf,
+						   local_name_buf_len);
 			}
 		}
 	} else {
-        if (ctx->protocol != XPRT_TRANSPORT_RDMA) {
-            sockaddr_ip_to_str((struct sockaddr *)&ctx->srcaddr, local_name, sizeof(local_name));
-            if (!is_valid_ip_address(local)) {
-                rpc_localalladdr(xprt, (struct sockaddr *)&srcaddr, sizeof(srcaddr));
-                sockaddr_ip_to_str((struct sockaddr *)&srcaddr, local_name_buf, local_name_buf_len);
-                return;
+		if (ctx->protocol != XPRT_TRANSPORT_RDMA) {
+			sockaddr_ip_to_str((struct sockaddr *)&ctx->srcaddr,
+					   local_name, sizeof(local_name));
+			if (!is_valid_ip_address(local)) {
+				rpc_localalladdr(xprt,
+						 (struct sockaddr *)&srcaddr,
+						 sizeof(srcaddr));
+				sockaddr_ip_to_str((struct sockaddr *)&srcaddr,
+						   local_name_buf,
+						   local_name_buf_len);
+				return;
 			}
-            sockaddr_ip_to_str((struct sockaddr *)&ctx->srcaddr, local_name_buf, local_name_buf_len);
+			sockaddr_ip_to_str((struct sockaddr *)&ctx->srcaddr,
+					   local_name_buf, local_name_buf_len);
 		} else {
-            sockaddr_ip_to_str(NULL, local_name_buf, local_name_buf_len);
+			sockaddr_ip_to_str(NULL, local_name_buf,
+					   local_name_buf_len);
 		}
 	}
 }
 
-static int enfs_show_xprt_stats(struct rpc_clnt *clnt, struct rpc_xprt *xprt, void *data)
+static int enfs_show_xprt_stats(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
+				void *data)
 {
 	unsigned int op;
 	unsigned int maxproc = clnt->cl_maxproc;
@@ -178,11 +198,13 @@ static int enfs_show_xprt_stats(struct rpc_clnt *clnt, struct rpc_xprt *xprt, vo
 		enfs_log_debug("multipath_context is null.\n");
 		return 0;
 	}
-	enfs_proc_format_xprt_addr_display(clnt, xprt, local_name, sizeof(local_name),
-	                                   remote_name, sizeof(remote_name));
+	enfs_proc_format_xprt_addr_display(clnt, xprt, local_name,
+					   sizeof(local_name), remote_name,
+					   sizeof(remote_name));
 
-	seq_printf(iter->seq, "%-6u%-*s%-*s", iter->id, iter->max_addrs_length + 4,
-	           local_name, iter->max_addrs_length + 4, remote_name);
+	seq_printf(iter->seq, "%-6u%-*s%-*s", iter->id,
+		   iter->max_addrs_length + 4, local_name,
+		   iter->max_addrs_length + 4, remote_name);
 
 	iter->id++;
 
@@ -190,24 +212,29 @@ static int enfs_show_xprt_stats(struct rpc_clnt *clnt, struct rpc_xprt *xprt, vo
 		if (!should_print(clnt->cl_procinfo[op].p_name)) {
 			continue;
 		}
-		seq_printf(iter->seq, "%-22lu%-22Lu%-22Lu", ctx->stats[op].om_ops,
-		           ctx->stats[op].om_ops == 0 ? 0 : ktime_to_ms(ctx->stats[op].om_rtt) / ctx->stats[op].om_ops,
-		           ctx->stats[op].om_ops == 0 ? 0 : ktime_to_ms(ctx->stats[op].om_execute) / ctx->stats[op].om_ops);
+		seq_printf(iter->seq, "%-22lu%-22Lu%-22Lu",
+			   ctx->stats[op].om_ops,
+			   ctx->stats[op].om_ops ==
+			   0 ? 0 : ktime_to_ms(ctx->stats[op].om_rtt) /
+			   ctx->stats[op].om_ops,
+			   ctx->stats[op].om_ops ==
+			   0 ? 0 : ktime_to_ms(ctx->stats[op].om_execute) /
+			   ctx->stats[op].om_ops);
 	}
 	seq_printf(iter->seq, "%-22lu", atomic_long_read(&(ctx->queuelen)));
 	seq_printf(iter->seq, "\n");
 	return 0;
 }
 
-static int rpc_proc_show_path_status(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
-                                     void *data)
+static int rpc_proc_show_path_status(struct rpc_clnt *clnt,
+				     struct rpc_xprt *xprt, void *data)
 {
 	struct enfs_xprt_iter *iter = (struct enfs_xprt_iter *)data;
 	struct enfs_xprt_context *ctx = NULL;
-    char local_name[INET6_ADDRSTRLEN] = {0};
-	char remote_name[INET6_ADDRSTRLEN] = {0};
-	char multiapth_status[ENFS_PROC_PATH_STATUS_LEN] = {0};
-	char xprt_status[ENFS_PROC_PATH_STATUS_LEN] = {0};
+	char local_name[INET6_ADDRSTRLEN] = { 0 };
+	char remote_name[INET6_ADDRSTRLEN] = { 0 };
+	char multiapth_status[ENFS_PROC_PATH_STATUS_LEN] = { 0 };
+	char xprt_status[ENFS_PROC_PATH_STATUS_LEN] = { 0 };
 
 	ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);;
 	if (ctx == NULL) {
@@ -215,35 +242,39 @@ static int rpc_proc_show_path_status(struct rpc_clnt *clnt, struct rpc_xprt *xpr
 		return 0;
 	}
 
-	enfs_proc_format_xprt_addr_display(clnt, xprt, local_name, sizeof(local_name),
-	                                   remote_name, sizeof(remote_name));
+	enfs_proc_format_xprt_addr_display(clnt, xprt, local_name,
+					   sizeof(local_name), remote_name,
+					   sizeof(remote_name));
 
-	pm_get_path_state_desc(xprt, multiapth_status, ENFS_PROC_PATH_STATUS_LEN);
+	pm_get_path_state_desc(xprt, multiapth_status,
+			       ENFS_PROC_PATH_STATUS_LEN);
 	pm_get_xprt_state_desc(xprt, xprt_status, ENFS_PROC_PATH_STATUS_LEN);
 
-	seq_printf(iter->seq, "%-6u%-*s%-*s%-12s%-12s\n", iter->id, iter->max_addrs_length + 4,
-	           local_name, iter->max_addrs_length + 4, remote_name, multiapth_status,
-	           xprt_status);
+	seq_printf(iter->seq, "%-6u%-*s%-*s%-12s%-12s\n", iter->id,
+		   iter->max_addrs_length + 4, local_name,
+		   iter->max_addrs_length + 4, remote_name, multiapth_status,
+		   xprt_status);
 	iter->id++;
 	return 0;
 }
 
-static int enfs_get_max_addrs_length(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
-                                     void *data)
+static int enfs_get_max_addrs_length(struct rpc_clnt *clnt,
+				     struct rpc_xprt *xprt, void *data)
 {
 	struct enfs_xprt_iter *iter = (struct enfs_xprt_iter *)data;
 	char local_name[INET6_ADDRSTRLEN];
 	char remote_name[INET6_ADDRSTRLEN];
-    struct enfs_xprt_context *ctx = NULL;
+	struct enfs_xprt_context *ctx = NULL;
 
-    ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
+	ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
 	if (ctx == NULL) {
 		enfs_log_debug("multipath_context is null.\n");
-        return 0;
-    }
+		return 0;
+	}
 
-	enfs_proc_format_xprt_addr_display(clnt, xprt, local_name, sizeof(local_name),
-	                                   remote_name, sizeof(remote_name));
+	enfs_proc_format_xprt_addr_display(clnt, xprt, local_name,
+					   sizeof(local_name), remote_name,
+					   sizeof(remote_name));
 
 	if (iter->max_addrs_length < strlen(local_name)) {
 		iter->max_addrs_length = strlen(local_name);
@@ -264,13 +295,16 @@ static int rpc_proc_clnt_showpath(struct seq_file *seq, void *v)
 	iter.id = 0;
 	iter.max_addrs_length = 0;
 
-	rpc_clnt_iterate_for_each_xprt(clnt, enfs_get_max_addrs_length, (void *)&iter);
+	rpc_clnt_iterate_for_each_xprt(clnt, enfs_get_max_addrs_length,
+				       (void *)&iter);
 
 	seq_printf(seq, "%-6s%-*s%-*s%-12s%-12s\n", "id",
-	           iter.max_addrs_length + 4, "local_addr", iter.max_addrs_length + 4,
-	           "remote_addr", "path_state", "xprt_state");
+		   iter.max_addrs_length + 4, "local_addr",
+		   iter.max_addrs_length + 4, "remote_addr", "path_state",
+		   "xprt_state");
 
-	rpc_clnt_iterate_for_each_xprt(clnt, rpc_proc_show_path_status, (void *)&iter);
+	rpc_clnt_iterate_for_each_xprt(clnt, rpc_proc_show_path_status,
+				       (void *)&iter);
 	return 0;
 }
 
@@ -285,13 +319,16 @@ static int enfs_rpc_proc_show(struct seq_file *seq, void *v)
 	debug_print_all_xprt();
 	enfs_log_debug("enfs proc clnt:%p\n", clnt);
 
-	rpc_clnt_iterate_for_each_xprt(clnt, enfs_get_max_addrs_length, (void *)&iter);
+	rpc_clnt_iterate_for_each_xprt(clnt, enfs_get_max_addrs_length,
+				       (void *)&iter);
 
-	seq_printf(seq, "%-6s%-*s%-*s%-22s%-22s%-22s%-22s%-22s%-22s%-22s\n", "id",
-	           iter.max_addrs_length + 4, "local_addr", iter.max_addrs_length + 4,
-	           "remote_addr", "r_count", "r_rtt", "r_exec", "w_count", "w_rtt", "w_exec", "queuelen");
+	seq_printf(seq, "%-6s%-*s%-*s%-22s%-22s%-22s%-22s%-22s%-22s%-22s\n",
+		   "id", iter.max_addrs_length + 4, "local_addr",
+		   iter.max_addrs_length + 4, "remote_addr", "r_count", "r_rtt",
+		   "r_exec", "w_count", "w_rtt", "w_exec", "queuelen");
 
-	rpc_clnt_iterate_for_each_xprt(clnt, enfs_show_xprt_stats, (void *)&iter);
+	rpc_clnt_iterate_for_each_xprt(clnt, enfs_show_xprt_stats,
+				       (void *)&iter);
 	return 0;
 }
 
@@ -306,7 +343,8 @@ static int rpc_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, enfs_rpc_proc_show, clnt);
 }
 
-static int enfs_reset_xprt_stats(struct rpc_clnt *clnt, struct rpc_xprt *xprt, void *data)
+static int enfs_reset_xprt_stats(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
+				 void *data)
 {
 	unsigned int op;
 	struct enfs_xprt_context *ctx;
@@ -336,11 +374,12 @@ static void trim_newline_ch(char *str, int len)
 	}
 }
 
-static ssize_t enfs_proc_write(struct file *file, const char __user *user_buf, size_t len,
-                               loff_t *offset)
+static ssize_t enfs_proc_write(struct file *file, const char __user *user_buf,
+			       size_t len, loff_t *offset)
 {
 	char buffer[128];
-	struct rpc_clnt *clnt = ((struct seq_file *)file->private_data)->private;
+	struct rpc_clnt *clnt =
+	    ((struct seq_file *)file->private_data)->private;
 
 	if (len >= sizeof(buffer))
 		return -E2BIG;
@@ -371,47 +410,48 @@ static int rpc_proc_show_path(struct inode *inode, struct file *file)
 
 #if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 static const struct proc_ops rpc_proc_fops = {
-    .proc_flags = PROC_ENTRY_PERMANENT,
-    .proc_open = rpc_proc_open,
-    .proc_read = seq_read,
-    .proc_lseek = seq_lseek,
-    .proc_release = single_release,
-    .proc_write = enfs_proc_write,
+	.proc_flags = PROC_ENTRY_PERMANENT,
+	.proc_open = rpc_proc_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+	.proc_write = enfs_proc_write,
 };
 #else
 static const struct file_operations rpc_proc_fops = {
-    .owner = THIS_MODULE,
-    .open = rpc_proc_open,
-    .read = seq_read,
-    .llseek = seq_lseek,
-    .release = single_release,
-    .write = enfs_proc_write,
+	.owner = THIS_MODULE,
+	.open = rpc_proc_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+	.write = enfs_proc_write,
 };
 #endif
 
 #if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 static const struct proc_ops rpc_show_path_fops = {
-    .proc_flags = PROC_ENTRY_PERMANENT,
-    .proc_open = rpc_proc_show_path,
-    .proc_read = seq_read,
-    .proc_lseek = seq_lseek,
-    .proc_release = single_release,
+	.proc_flags = PROC_ENTRY_PERMANENT,
+	.proc_open = rpc_proc_show_path,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
 };
 #else
 static const struct file_operations rpc_show_path_fops = {
-    .owner = THIS_MODULE,
-    .open = rpc_proc_show_path,
-    .read = seq_read,
-    .llseek = seq_lseek,
-    .release = single_release,
+	.owner = THIS_MODULE,
+	.open = rpc_proc_show_path,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
 };
 #endif
 
 static int clnt_proc_name(struct rpc_clnt *clnt, char *buf, int len)
 {
 	int ret;
-	ret = snprintf(buf, len, "%s_%u", rpc_peeraddr2str(clnt, RPC_DISPLAY_ADDR),
-	               clnt->cl_clid);
+	ret =
+	    snprintf(buf, len, "%s_%u",
+		     rpc_peeraddr2str(clnt, RPC_DISPLAY_ADDR), clnt->cl_clid);
 	if (ret > len) {
 		return -E2BIG;
 	}
@@ -439,14 +479,16 @@ static int enfs_proc_create_file(struct rpc_clnt *clnt)
 	}
 
 	LVOS_TP_START(PROC_CREATE_FILE_STAT_FAILED, &stat_entry);
-	stat_entry = proc_create_data("stat", 0, clnt_entry, &rpc_proc_fops, clnt);
+	stat_entry =
+	    proc_create_data("stat", 0, clnt_entry, &rpc_proc_fops, clnt);
 	LVOS_TP_END;
 	if (stat_entry == NULL) {
 		return -EINVAL;
 	}
 
 	LVOS_TP_START(PROC_CREATE_FILE_PATH_FAILED, &stat_entry);
-	stat_entry = proc_create_data("path", 0, clnt_entry, &rpc_show_path_fops, clnt);
+	stat_entry =
+	    proc_create_data("path", 0, clnt_entry, &rpc_show_path_fops, clnt);
 	LVOS_TP_END;
 	if (stat_entry == NULL) {
 		return -EINVAL;
@@ -506,11 +548,10 @@ void enfs_proc_delete_clnt(struct rpc_clnt *clnt)
 
 static int shardview_proc_help(struct seq_file *seq, void *v)
 {
-	seq_printf(
-		seq, "%s\n%s\n%s\n%s\n", "usage: uuidinfo [uuid]",
-		"usage: fsinfo [fsid]",
-		"usage: shardinfo [cluster id] [storage pool id] [start shard index]",
-		"usage: lifinfo [ipaddr]");
+	seq_printf(seq, "%s\n%s\n%s\n%s\n", "usage: uuidinfo [uuid]",
+		   "usage: fsinfo [fsid]",
+		   "usage: shardinfo [cluster id] [storage pool id] [start shard index]",
+		   "usage: lifinfo [ipaddr]");
 	return 0;
 }
 
@@ -525,8 +566,8 @@ static int shardview_proc_open(struct inode *inode, struct file *file)
 }
 
 static ssize_t shardview_proc_write(struct file *file,
-									const char __user *user_buf, size_t len,
-									loff_t *offset)
+				    const char __user *user_buf, size_t len,
+				    loff_t *offset)
 {
 	int i;
 	int ret;
@@ -554,12 +595,12 @@ static ssize_t shardview_proc_write(struct file *file,
 
 #if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 static const struct proc_ops shardview_proc_fops = {
-    .proc_flags = PROC_ENTRY_PERMANENT,
-    .proc_open = shardview_proc_open,
-    .proc_read = seq_read,
-    .proc_lseek = seq_lseek,
-    .proc_release = single_release,
-    .proc_write = shardview_proc_write,
+	.proc_flags = PROC_ENTRY_PERMANENT,
+	.proc_open = shardview_proc_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+	.proc_write = shardview_proc_write,
 };
 #else
 static const struct file_operations shardview_proc_fops = {
@@ -584,13 +625,15 @@ static int enfs_proc_create_parent(void)
 		return -ENOMEM;
 	}
 #ifdef NFS_CLIENT_DEBUG
-	stat_entry = proc_create_data("shardview", 0, enfs_proc_parent, &shardview_proc_fops, NULL);
+	stat_entry =
+	    proc_create_data("shardview", 0, enfs_proc_parent,
+			     &shardview_proc_fops, NULL);
 	if (stat_entry == NULL) {
 		proc_remove(enfs_proc_parent);
 		enfs_proc_parent = NULL;
 		return -EINVAL;
 	}
-#endif  // NFS_CLIENT_DEBUG
+#endif // NFS_CLIENT_DEBUG
 	return 0;
 }
 
@@ -598,7 +641,7 @@ static void enfs_proc_delete_parent(void)
 {
 #ifdef NFS_CLIENT_DEBUG
 	remove_proc_entry("shardview", enfs_proc_parent);
-#endif  // NFS_CLIENT_DEBUG
+#endif // NFS_CLIENT_DEBUG
 	remove_proc_entry(ENFS_PROC_DIR, NULL);
 }
 
@@ -621,21 +664,21 @@ static int enfs_proc_destroy_clnt(struct rpc_clnt *clnt, void *data)
 	return 0;
 }
 
-void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data), void *data)
+void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data),
+			    void *data)
 {
 	struct net *net;
 	struct sunrpc_net *sn;
 	struct rpc_clnt *clnt;
 
 	rcu_read_lock();
-	for_each_net_rcu(net)
-	{
+	for_each_net_rcu(net) {
 		sn = net_generic(net, sunrpc_net_id);
 		if (sn == NULL) {
 			continue;
 		}
 		spin_lock(&sn->rpc_client_lock);
-		list_for_each_entry (clnt, &sn->all_clients, cl_clients) {
+		list_for_each_entry(clnt, &sn->all_clients, cl_clients) {
 			fn(clnt, data);
 		}
 		spin_unlock(&sn->rpc_client_lock);

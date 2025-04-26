@@ -2,8 +2,8 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
  */
 
-#include 
-#include 
+#include
+#include
 
 #include "enfs.h"
 #include "enfs_log.h"
@@ -26,7 +26,7 @@ int enfs_alloc_xprt_ctx(struct rpc_xprt *xprt)
 		return -ENOMEM;
 	}
 
-    xprt_set_reserve_context(xprt, (void *)ctx);
+	xprt_set_reserve_context(xprt, (void *)ctx);
 	return 0;
 }
 
@@ -40,6 +40,8 @@ void enfs_free_xprt_ctx(struct rpc_xprt *xprt)
 			ctx->stats = NULL;
 		}
 		kfree(ctx);
-	    xprt_set_reserve_context(xprt, NULL);
+		xprt_set_reserve_context(xprt, NULL);
 	}
-}
+}
+
+

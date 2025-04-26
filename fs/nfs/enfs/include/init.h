@@ -8,9 +8,9 @@
 #ifndef ENFS_INIT_H
 #define ENFS_INIT_H
 
-#include 
+#include
 
 int32_t enfs_init(void);
 void enfs_fini(void);
 
-#endif
+#endif	/*  */

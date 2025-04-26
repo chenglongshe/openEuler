@@ -6,10 +6,10 @@
  */
 #ifndef _ENFS_REMOUNT_
 #define _ENFS_REMOUNT_
-#include 
+#include
 #include "enfs.h"
 
 int enfs_remount(struct nfs_client *nfs_client, void *enfs_option);
 int enfs_remount_iplist(struct nfs_client *nfs_client, void *enfs_option);
 
-#endif
+#endif	/*  */

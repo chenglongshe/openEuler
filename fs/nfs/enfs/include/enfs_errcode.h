@@ -9,8 +9,8 @@
 #define ENFS_ERRCODE_H
 
 enum {
-    ENFS_RET_OK = 0,
-    ENFS_RET_FAIL
+	ENFS_RET_OK = 0,
+	ENFS_RET_FAIL
 };
 
 #endif // ENFS_ERRCODE_H

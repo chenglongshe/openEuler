@@ -1,13 +1,13 @@
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
-#include 
+#include
+#include
+#include
+#include
+#include
+#include
+#include
+#include
+#include
+#include
 
 #include "enfs_multipath_client.h"
 #include "enfs_multipath_parse.h"
@@ -35,7 +35,8 @@ int enfs_alloc_nfsclient_info(struct multipath_client_info **client_info)
 		goto remote_exit;
 	}
 
-	info->pRemoteDnsInfo = kzalloc(sizeof(NFS_ROUTE_DNS_INFO_S), GFP_KERNEL);
+	info->pRemoteDnsInfo =
+	    kzalloc(sizeof(NFS_ROUTE_DNS_INFO_S), GFP_KERNEL);
 	if (!info->pRemoteDnsInfo) {
 		enfs_log_error("Memory allocation failed");
 		goto dns_exit;
@@ -70,41 +71,48 @@ void enfs_free_nfsclient_info(struct multipath_client_info *client_info)
 	kfree(client_info);
 }
 
-int nfs_multipath_client_mount_info_init(struct multipath_client_info *client_info,
-	const struct nfs_client_initdata *cl_init)
+int nfs_multipath_client_mount_info_init(struct multipath_client_info
+					 *client_info,
+					 const struct nfs_client_initdata
+					 *cl_init)
 {
-	struct multipath_mount_options *opt =  (struct multipath_mount_options *)(cl_init->enfs_option);
+	struct multipath_mount_options *opt =
+	    (struct multipath_mount_options *)(cl_init->enfs_option);
 
 	if (opt->local_ip_list) {
-		client_info->local_ip_list = kzalloc(sizeof(struct nfs_ip_list), GFP_KERNEL);
+		client_info->local_ip_list =
+		    kzalloc(sizeof(struct nfs_ip_list), GFP_KERNEL);
 		if (!client_info->local_ip_list)
 			return -ENOMEM;
 
 		memcpy(client_info->local_ip_list, opt->local_ip_list,
-			sizeof(struct nfs_ip_list));
+		       sizeof(struct nfs_ip_list));
 	}
 
 	if (opt->remote_ip_list) {
-		client_info->remote_ip_list = kzalloc(sizeof(struct nfs_ip_list), GFP_KERNEL);
+		client_info->remote_ip_list =
+		    kzalloc(sizeof(struct nfs_ip_list), GFP_KERNEL);
 		if (!client_info->remote_ip_list) {
 			kfree(client_info->local_ip_list);
 			client_info->local_ip_list = NULL;
 			return -ENOMEM;
 		}
 		memcpy(client_info->remote_ip_list, opt->remote_ip_list,
-			sizeof(struct nfs_ip_list));
+		       sizeof(struct nfs_ip_list));
 	}
 
-    if (opt->pRemoteDnsInfo) {
-		client_info->pRemoteDnsInfo = kzalloc(sizeof(NFS_ROUTE_DNS_INFO_S), GFP_KERNEL);
+	if (opt->pRemoteDnsInfo) {
+		client_info->pRemoteDnsInfo =
+		    kzalloc(sizeof(NFS_ROUTE_DNS_INFO_S), GFP_KERNEL);
 		if (!client_info->pRemoteDnsInfo) {
 			kfree(client_info->local_ip_list);
-            client_info->local_ip_list = NULL;
-            kfree(client_info->remote_ip_list);
-            client_info->remote_ip_list = NULL;
+			client_info->local_ip_list = NULL;
+			kfree(client_info->remote_ip_list);
+			client_info->remote_ip_list = NULL;
 			return -ENOMEM;
 		}
-		memcpy(client_info->pRemoteDnsInfo, opt->pRemoteDnsInfo, sizeof(NFS_ROUTE_DNS_INFO_S));
+		memcpy(client_info->pRemoteDnsInfo, opt->pRemoteDnsInfo,
+		       sizeof(NFS_ROUTE_DNS_INFO_S));
 	}
 
 	client_info->fill_local = opt->fill_local;
@@ -140,13 +148,14 @@ void nfs_multipath_client_info_free_work(struct work_struct *work)
 		return;
 
 	clp_info = container_of(work, struct multipath_client_info, work);
-	
+
 	enfs_free_client_info(clp_info);
 }
 
 void nfs_multipath_client_info_free(void *data)
 {
-	struct multipath_client_info *clp_info = (struct multipath_client_info *)data;
+	struct multipath_client_info *clp_info =
+	    (struct multipath_client_info *)data;
 
 	if (clp_info == NULL)
 		return;
@@ -155,36 +164,38 @@ void nfs_multipath_client_info_free(void *data)
 	schedule_work(&clp_info->work);
 }
 
-int nfs_multipath_client_info_init(void **data, const struct nfs_client_initdata *cl_init)
+int nfs_multipath_client_info_init(void **data,
+				   const struct nfs_client_initdata *cl_init)
 {
-    int rc;
-    struct multipath_client_info *info;
+	int rc;
+	struct multipath_client_info *info;
 	struct multipath_client_info **enfs_info;
-    /* no multi path info, no need do multipath init */
-    if (cl_init->enfs_option == NULL)
+	/* no multi path info, no need do multipath init */
+	if (cl_init->enfs_option == NULL)
 		return 0;
-    enfs_info = (struct multipath_client_info **)data;
-    if (enfs_info == NULL)
-        return -EINVAL;
+	enfs_info = (struct multipath_client_info **)data;
+	if (enfs_info == NULL)
+		return -EINVAL;
 
-    if (*enfs_info == NULL)
-		*enfs_info = kzalloc(sizeof(struct multipath_client_info), GFP_KERNEL);
+	if (*enfs_info == NULL)
+		*enfs_info =
+		    kzalloc(sizeof(struct multipath_client_info), GFP_KERNEL);
 
-    if (*enfs_info == NULL)
-        return -ENOMEM;
+	if (*enfs_info == NULL)
+		return -ENOMEM;
 
-    info = (struct multipath_client_info *)*enfs_info;
+	info = (struct multipath_client_info *)*enfs_info;
 	printk("init client info %p.\n", info);
-    rc = nfs_multipath_client_mount_info_init(info, cl_init);
+	rc = nfs_multipath_client_mount_info_init(info, cl_init);
 	if (rc) {
 		nfs_multipath_client_info_free((void *)info);
 		return rc;
 	}
-    return rc;
+	return rc;
 }
 
 bool nfs_multipath_ip_list_info_match(const struct nfs_ip_list *ip_list_src,
-	const struct nfs_ip_list *ip_list_dst)
+				      const struct nfs_ip_list *ip_list_dst)
 {
 	int i;
 	int j;
@@ -202,8 +213,10 @@ bool nfs_multipath_ip_list_info_match(const struct nfs_ip_list *ip_list_src,
 	for (i = 0; i < ip_list_src->count; i++) {
 		is_find = false;
 		for (j = 0; j < ip_list_src->count; j++) {
-			if (rpc_cmp_addr_port((const struct sockaddr *)&ip_list_src->address[i],
-				(const struct sockaddr *)&ip_list_dst->address[j])) {
+			if (rpc_cmp_addr_port
+			    ((const struct sockaddr *)&ip_list_src->address[i],
+			     (const struct sockaddr *)&ip_list_dst->
+			     address[j])) {
 				is_find = true;
 				break;
 			}
@@ -211,13 +224,13 @@ bool nfs_multipath_ip_list_info_match(const struct nfs_ip_list *ip_list_src,
 		if (is_find == false) {
 			return false;
 		}
-		
+
 	}
 	return true;
 }
 
 int nfs_multipath_dns_list_info_match(const NFS_ROUTE_DNS_INFO_S *dns_src,
-									  const NFS_ROUTE_DNS_INFO_S *dns_dst)
+				      const NFS_ROUTE_DNS_INFO_S *dns_dst)
 {
 	int i;
 	int j;
@@ -237,7 +250,8 @@ int nfs_multipath_dns_list_info_match(const NFS_ROUTE_DNS_INFO_S *dns_src,
 		find = false;
 		for (j = 0; j < dns_dst->dnsNameCount; j++) {
 			if (strcmp(dns_src->routeRemoteDnsList[i].dnsname,
-					   dns_dst->routeRemoteDnsList[j].dnsname) == 0) {
+				   dns_dst->routeRemoteDnsList[j].dnsname) ==
+			    0) {
 				find = true;
 				break;
 			}
@@ -253,29 +267,33 @@ int nfs_multipath_dns_list_info_match(const NFS_ROUTE_DNS_INFO_S *dns_src,
 int nfs_multipath_client_info_match(void *src, void *dst)
 {
 	int ret = true;
-	
+
 	struct multipath_client_info *src_info;
 	struct multipath_mount_options *dst_info;
 	src_info = (struct multipath_client_info *)src;
 	dst_info = (struct multipath_mount_options *)dst;
 
-	ret = nfs_multipath_ip_list_info_match(src_info->local_ip_list, dst_info->local_ip_list);
+	ret =
+	    nfs_multipath_ip_list_info_match(src_info->local_ip_list,
+					     dst_info->local_ip_list);
 	if (ret == false) {
 		printk("local_ip not match.\n");
-		return ret;	
+		return ret;
 	}
 
 	if (src_info->pRemoteDnsInfo->dnsNameCount == 0 &&
-		dst_info->pRemoteDnsInfo->dnsNameCount == 0) {
+	    dst_info->pRemoteDnsInfo->dnsNameCount == 0) {
 		ret = nfs_multipath_ip_list_info_match(src_info->remote_ip_list,
-											   dst_info->remote_ip_list);
+						       dst_info->
+						       remote_ip_list);
 		if (ret == false) {
 			printk("remote_ip not match.\n");
 			return ret;
 		}
 	} else {
-		ret = nfs_multipath_dns_list_info_match(src_info->pRemoteDnsInfo,
-												dst_info->pRemoteDnsInfo);
+		ret =
+		    nfs_multipath_dns_list_info_match(src_info->pRemoteDnsInfo,
+						      dst_info->pRemoteDnsInfo);
 		if (ret == false) {
 			printk("dns not match.\n");
 			return ret;
@@ -296,21 +314,22 @@ int nfs4_multipath_client_info_match(void *src, void *dst)
 		return false;
 
 	ret =
-	    nfs_multipath_ip_list_info_match(srcinfo->local_ip_list, dstinfo->local_ip_list);
+	    nfs_multipath_ip_list_info_match(srcinfo->local_ip_list,
+					     dstinfo->local_ip_list);
 	if (ret == false) {
 		enfs_log_info("nfs4 local_ip not match.\n");
 		return ret;
 	}
 
 	ret = nfs_multipath_ip_list_info_match(srcinfo->remote_ip_list,
-	                                       dstinfo->remote_ip_list);
+					       dstinfo->remote_ip_list);
 	if (ret == false) {
 		enfs_log_info("nfs4 remote_ip not match.\n");
 		return ret;
 	}
 
 	ret = nfs_multipath_dns_list_info_match(srcinfo->pRemoteDnsInfo,
-	                                        dstinfo->pRemoteDnsInfo);
+						dstinfo->pRemoteDnsInfo);
 	if (ret == false) {
 		enfs_log_info("nfs4 dns not match.\n");
 		return ret;
@@ -320,7 +339,7 @@ int nfs4_multipath_client_info_match(void *src, void *dst)
 }
 
 void print_ip_info(struct seq_file *mount_option, struct nfs_ip_list *ip_list,
-								const char *type)
+		   const char *type)
 {
 	char buf[IP_ADDRESS_LEN_MAX + 1];
 	int len = 0;
@@ -328,7 +347,9 @@ void print_ip_info(struct seq_file *mount_option, struct nfs_ip_list *ip_list,
 
 	seq_printf(mount_option, ",%s=", type);
 	for (i = 0; i < ip_list->count; i++) {
-		len = rpc_ntop((struct sockaddr *)&ip_list->address[i], buf, IP_ADDRESS_LEN_MAX);
+		len =
+		    rpc_ntop((struct sockaddr *)&ip_list->address[i], buf,
+			     IP_ADDRESS_LEN_MAX);
 		if (len > 0 && len < IP_ADDRESS_LEN_MAX)
 			buf[len] = '\0';
 
@@ -336,12 +357,14 @@ void print_ip_info(struct seq_file *mount_option, struct nfs_ip_list *ip_list,
 			seq_printf(mount_option, "%s", buf);
 		else
 			seq_printf(mount_option, "~%s", buf);
-		dfprintk(MOUNT, "NFS:   show nfs mount option type:%s %s [%s]\n", type, buf, __FUNCTION__);
+		dfprintk(MOUNT,
+			 "NFS:   show nfs mount option type:%s %s [%s]\n", type,
+			 buf, __FUNCTION__);
 	}
 }
 
 void print_dns_info(struct seq_file *seq, NFS_ROUTE_DNS_INFO_S *pRemoteDnsInfo,
-					const char *type)
+		    const char *type)
 {
 	int i = 0;
 	char *name;
@@ -357,53 +380,62 @@ void print_dns_info(struct seq_file *seq, NFS_ROUTE_DNS_INFO_S *pRemoteDnsInfo,
 	}
 }
 
-static void multipath_print_sockaddr(struct seq_file *seq, struct sockaddr *addr)
+static void multipath_print_sockaddr(struct seq_file *seq,
+				     struct sockaddr *addr)
 {
 	switch (addr->sa_family) {
-	case AF_INET: {
-		struct sockaddr_in *sin = (struct sockaddr_in *)addr;
-		seq_printf(seq, "%pI4", &sin->sin_addr);
-		return;
-	}
-	case AF_INET6: {
-		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
-		seq_printf(seq, "%pI6", &sin6->sin6_addr);
-        return;
-	}
+	case AF_INET:{
+			struct sockaddr_in *sin = (struct sockaddr_in *)addr;
+			seq_printf(seq, "%pI4", &sin->sin_addr);
+			return;
+		}
+	case AF_INET6:{
+			struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
+			seq_printf(seq, "%pI6", &sin6->sin6_addr);
+			return;
+		}
 	default:
 		break;
 	}
 	printk(KERN_ERR "unsupport family:%d\n", addr->sa_family);
 }
 
-void convert_lookup_cache_str(struct nfs_server *server,char **server_lookup, char **actual_lookup)
+void convert_lookup_cache_str(struct nfs_server *server, char **server_lookup,
+			      char **actual_lookup)
 {
-	if ((server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONEG) && (server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
+	if ((server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONEG)
+	    && (server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
 		*server_lookup = "none";
-	} else if ((server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONEG) || (server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
+	} else if ((server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONEG)
+		   || (server->enfs_flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
 		*server_lookup = "positive";
 	} else {
 		*server_lookup = "all";
 	}
- 
-	if ((server->flags & NFS_MOUNT_LOOKUP_CACHE_NONEG) && (server->flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
+
+	if ((server->flags & NFS_MOUNT_LOOKUP_CACHE_NONEG)
+	    && (server->flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
 		*actual_lookup = "none";
-	} else if ((server->flags & NFS_MOUNT_LOOKUP_CACHE_NONEG) || (server->flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
+	} else if ((server->flags & NFS_MOUNT_LOOKUP_CACHE_NONEG)
+		   || (server->flags & NFS_MOUNT_LOOKUP_CACHE_NONE)) {
 		*actual_lookup = "positive";
 	} else {
 		*actual_lookup = *server_lookup;
 	}
 }
 
-static void multipath_print_enfs_info(struct seq_file *seq, struct nfs_server *server)
+static void multipath_print_enfs_info(struct seq_file *seq,
+				      struct nfs_server *server)
 {
 	struct sockaddr_storage peeraddr;
 	struct rpc_clnt *next = server->client;
 	char *server_lookup_cache = NULL;
 	char *actual_lookup_cache = NULL;
-	convert_lookup_cache_str(server, &server_lookup_cache, &actual_lookup_cache);
+	convert_lookup_cache_str(server, &server_lookup_cache,
+				 &actual_lookup_cache);
 
-	rpc_peeraddr(server->client, (struct sockaddr *)&peeraddr, sizeof(peeraddr));
+	rpc_peeraddr(server->client, (struct sockaddr *)&peeraddr,
+		     sizeof(peeraddr));
 	seq_printf(seq, ",slookupcache=%s", server_lookup_cache);
 	seq_printf(seq, ",alookupcache=%s", actual_lookup_cache);
 	seq_printf(seq, ",enfs_info=");
@@ -413,28 +445,32 @@ static void multipath_print_enfs_info(struct seq_file *seq, struct nfs_server *s
 		if (next == next->cl_parent)
 			break;
 		next = next->cl_parent;
-    }
+	}
 	seq_printf(seq, "_%u", next->cl_clid);
 }
 
 void nfs_multipath_client_info_show(struct seq_file *seq, void *data)
 {
 	struct nfs_server *server = data;
-	struct multipath_client_info *client_info = server->nfs_client->cl_multipath_data;
+	struct multipath_client_info *client_info =
+	    server->nfs_client->cl_multipath_data;
 
 	dfprintk(MOUNT, "NFS:   show nfs mount option[%s]\n", __FUNCTION__);
-	if ((client_info->local_ip_list) && (client_info->local_ip_list->count > 0))
-		print_ip_info(seq, client_info->local_ip_list,
-			"localaddrs");
+	if ((client_info->local_ip_list)
+	    && (client_info->local_ip_list->count > 0))
+		print_ip_info(seq, client_info->local_ip_list, "localaddrs");
 
 	if ((client_info->pRemoteDnsInfo) &&
-		(client_info->pRemoteDnsInfo->dnsNameCount > 0)) {
+	    (client_info->pRemoteDnsInfo->dnsNameCount > 0)) {
 		print_dns_info(seq, client_info->pRemoteDnsInfo, "remoteaddrs");
 	} else {
 		if ((client_info->remote_ip_list) &&
-			(client_info->remote_ip_list->count > 0))
-			print_ip_info(seq, client_info->remote_ip_list, "remoteaddrs");
-    }
+		    (client_info->remote_ip_list->count > 0))
+			print_ip_info(seq, client_info->remote_ip_list,
+				      "remoteaddrs");
+	}
 
 	multipath_print_enfs_info(seq, server);
-}
+}
+
+

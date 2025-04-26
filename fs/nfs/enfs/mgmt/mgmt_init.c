@@ -6,17 +6,19 @@
  */
 
 #include "mgmt_init.h"
-#include 
+#include
 #include "enfs_errcode.h"
 #include "enfs_config.h"
 
 int32_t mgmt_init(void)
 {
-    return enfs_config_timer_init();
+	return enfs_config_timer_init();
 }
 
 void mgmt_fini(void)
 {
-    enfs_config_timer_exit();
-    return;
-}
+	enfs_config_timer_exit();
+	return;
+}
+
+

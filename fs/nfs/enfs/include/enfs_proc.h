@@ -11,6 +11,7 @@ struct proc_dir_entry *enfs_get_proc_parent(void);
 int enfs_proc_create_clnt(struct rpc_clnt *clnt);
 void enfs_proc_delete_clnt(struct rpc_clnt *clnt);
 void enfs_count_iostat(struct rpc_task *task);
-void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data), void *data);
+void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt * clnt, void *data),
+			    void *data);
 
-#endif
+#endif	/*  */

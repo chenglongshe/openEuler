@@ -8,7 +8,7 @@
 #ifndef _ENFS_SHARD_H_
 #define _ENFS_SHARD_H_
 
-#include 
+#include
 #include "exten_call.h"
 
 extern unsigned int enfs_uuid_debug;
@@ -18,8 +18,8 @@ int enfs_debug_match_cmd(char *str, size_t len);
 int enfs_shard_init(void);
 void enfs_shard_exit(void);
 
-int enfs_find_clnt_root(struct rpc_clnt *clnt, FILE_UUID *root_uuid);
-int enfs_insert_clnt_root(struct rpc_clnt *clnt, FILE_UUID *root_uuid);
+int enfs_find_clnt_root(struct rpc_clnt *clnt, FILE_UUID * root_uuid);
+int enfs_insert_clnt_root(struct rpc_clnt *clnt, FILE_UUID * root_uuid);
 int enfs_delete_clnt_shard_cache(struct rpc_clnt *clnt);
 void enfs_query_xprt_shard(struct rpc_clnt *clnt, struct rpc_xprt *xprt);
-#endif // _ENFS_SHARD_H_
+#endif // _ENFS_SHARD_H_
