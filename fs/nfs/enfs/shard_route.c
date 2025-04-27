@@ -1673,8 +1673,6 @@ static int EnfsChooseNewNlmXprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
 			   sizeof(remoteip));
 	memcpy((struct sockaddr *)&nlm_xprt->addr,
 	       (struct sockaddr *)&xprt->addr, sizeof(xprt->addr));
-	strcpy(nlm_xprt->servername, remoteip);
-	strcpy(nlm_xprt->address_strings[RPC_DISPLAY_ADDR], remoteip);
 
 	ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
 	if (ctx == NULL) {
