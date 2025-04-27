@@ -2,16 +2,13 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-
+#include <linux/types.h>
+#include <linux/nfs.h>
+#include <linux/nfs4.h>
+#include <linux/nfs_fs.h>
+#include <linux/nfs_fs_sb.h>
+#include <linux/kern_levels.h>
+#include <linux/sunrpc/addr.h>
 #include "enfs_multipath_parse.h"
 #include "enfs_log.h"
 #include "enfs_config.h"

@@ -6,8 +6,8 @@
 #ifndef PM_STATE_H
 #define PM_STATE_H
 
-#include
-#include
+#include <linux/types.h>
+#include <linux/sunrpc/xprt.h>
 
 typedef enum {
 	PM_STATE_INIT,

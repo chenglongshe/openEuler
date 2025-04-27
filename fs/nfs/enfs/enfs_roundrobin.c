@@ -2,16 +2,16 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
+#include <linux/spinlock.h>
+#include <linux/module.h>
+#include <linux/printk.h>
+#include <linux/kref.h>
+#include <linux/rculist.h>
+#include <linux/types.h>
+#include <linux/sunrpc/xprt.h>
+#include <linux/sunrpc/clnt.h>
+#include <linux/sunrpc/xprtmultipath.h>
+#include "enfs_roundrobin.h"
 
 #include "enfs.h"
 #include "enfs_config.h"

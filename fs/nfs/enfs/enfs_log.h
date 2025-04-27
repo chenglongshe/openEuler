@@ -6,7 +6,7 @@
 #ifndef ENFS_LOG_H
 #define ENFS_LOG_H
 
-#include
+#include <linux/printk.h>
 
 extern unsigned int enfs_debug;
 

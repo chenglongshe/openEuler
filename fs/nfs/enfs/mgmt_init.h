@@ -6,7 +6,7 @@
 #ifndef MGMT_INIT_H
 #define MGMT_INIT_H
 
-#include
+#include <linux/types.h>
 
 int32_t mgmt_init(void);
 void mgmt_fini(void);

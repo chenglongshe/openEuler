@@ -4,19 +4,20 @@
  */
 
 #include "pm_ping.h"
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
+#include <linux/err.h>
+#include <linux/spinlock.h>
+#include <linux/slab.h>
+#include <linux/module.h>
+#include <linux/printk.h>
+#include <linux/kthread.h>
+#include <linux/nfs.h>
+#include <linux/errno.h>
+#include <linux/rcupdate.h>
+#include <linux/workqueue.h>
+#include <net/netns/generic.h>
+#include <linux/atomic.h>
+#include <linux/sunrpc/clnt.h>
+
 #include "../../../net/sunrpc/netns.h"
 #include "pm_state.h"
 #include "enfs.h"

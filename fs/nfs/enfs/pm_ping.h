@@ -6,7 +6,7 @@
 #ifndef PM_PING_H
 #define PM_PING_H
 
-#include
+#include <linux/sunrpc/clnt.h>
 
 typedef enum {
 	PM_CHECK_INIT,		// this xprt never been queued

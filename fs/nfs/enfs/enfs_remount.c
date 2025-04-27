@@ -4,18 +4,18 @@
  */
 #include "enfs_remount.h"
 
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
+#include <linux/string.h>
+#include <linux/in.h>
+#include <linux/in6.h>
+#include <linux/sunrpc/clnt.h>
+#include <linux/spinlock.h>
+#include <linux/sunrpc/addr.h>
+#include <linux/sunrpc/metrics.h>
+#include <linux/sunrpc/xprtmultipath.h>
+#include <linux/sunrpc/xprtsock.h>
+#include <linux/sunrpc/xprt.h>
+#include <linux/smp.h>
+#include <linux/delay.h>
 
 #include "enfs.h"
 #include "enfs_log.h"

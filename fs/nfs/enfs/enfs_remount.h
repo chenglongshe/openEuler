@@ -4,7 +4,7 @@
  */
 #ifndef _ENFS_REMOUNT_
 #define _ENFS_REMOUNT_
-#include
+#include <linux/string.h>
 #include "enfs.h"
 
 int enfs_remount(struct nfs_client *nfs_client, void *enfs_option);

@@ -4,8 +4,8 @@
  */
 
 #include "failover_time.h"
-#include
-#include
+#include <linux/jiffies.h>
+#include <linux/sunrpc/clnt.h>
 #include "enfs_config.h"
 #include "enfs_log.h"
 #include "failover_com.h"

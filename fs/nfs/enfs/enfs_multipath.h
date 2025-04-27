@@ -5,7 +5,7 @@
 
 #ifndef ENFS_MULTIPATH_H
 #define ENFS_MULTIPATH_H
-#include
+#include <linux/sunrpc/clnt.h>
 #include "enfs_multipath_parse.h"
 
 #define MAX_XPRT_NUM_PER_CLIENT 31

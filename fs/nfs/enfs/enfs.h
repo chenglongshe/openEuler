@@ -5,13 +5,13 @@
 
 #ifndef _ENFS_H_
 #define _ENFS_H_
-#include
-#include
-#include
-#include
-#include
-#include
-#include "enfs_adapter.h"
+#include <linux/atomic.h>
+#include <linux/nfs.h>
+#include <linux/nfs4.h>
+#include <linux/nfs3.h>
+#include <linux/nfs_fs.h>
+#include <linux/nfs_fs_sb.h>
+#include "../enfs_adapter.h"
 
 #define IP_ADDRESS_LEN_MAX 64
 #define MAX_IP_PAIR_PER_MOUNT 8

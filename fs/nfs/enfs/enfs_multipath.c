@@ -3,33 +3,30 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
 #include "enfs_multipath.h"
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
+#include <linux/in.h>
+#include <linux/in6.h>
+#include <linux/kallsyms.h>
+#include <linux/mm.h>
+#include <linux/module.h>
+#include <linux/mount.h>
+#include <linux/namei.h>
+#include <linux/rcupdate.h>
+#include <linux/slab.h>
+#include <linux/socket.h>
+#include <linux/atomic.h>
+#include <linux/sunrpc/addr.h>
+#include <linux/sunrpc/bc_xprt.h>
+#include <linux/sunrpc/clnt.h>
+#include <linux/sunrpc/metrics.h>
+#include <linux/sunrpc/rpc_pipe_fs.h>
+#include <linux/sunrpc/xprt.h>
+#include <linux/sunrpc/xprtmultipath.h>
+#include <linux/types.h>
+#include <linux/un.h>
+#include <linux/utsname.h>
+#include <linux/workqueue.h>
+#include <trace/events/sunrpc.h>
+#include <linux/sunrpc/sunrpc_enfs_adapter.h>
 
 #include "enfs_config.h"
 #include "enfs_log.h"

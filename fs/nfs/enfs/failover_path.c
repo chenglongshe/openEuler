@@ -4,13 +4,12 @@
  */
 
 #include "failover_path.h"
-#include
-#include
-#include
-#include
-#include
-#include
-#include
+#include <linux/nfs.h>
+#include <linux/nfs3.h>
+#include <linux/nfs4.h>
+#include <linux/sunrpc/clnt.h>
+#include <linux/sunrpc/sched.h>
+#include <linux/sunrpc/xprt.h>
 #include "enfs_config.h"
 #include "enfs_log.h"
 #include "enfs.h"

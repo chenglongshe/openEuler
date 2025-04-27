@@ -4,7 +4,7 @@
  */
 
 #include "mgmt_init.h"
-#include
+#include <linux/printk.h>
 #include "enfs_errcode.h"
 #include "enfs_config.h"
 

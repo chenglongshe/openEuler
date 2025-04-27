@@ -6,7 +6,7 @@
 #ifndef FAILOVER_PATH_H
 #define FAILOVER_PATH_H
 
-#include
+#include <linux/sunrpc/sched.h>
 
 void failover_handle(struct rpc_task *task);
 bool failover_prepare_transmit(struct rpc_task *task);

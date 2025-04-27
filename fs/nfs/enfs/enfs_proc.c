@@ -2,15 +2,14 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
+#include <linux/module.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include <linux/spinlock.h>
+#include <linux/sunrpc/clnt.h>
+#include <linux/sunrpc/metrics.h>
+#include <linux/sunrpc/xprtsock.h>
+#include <net/netns/generic.h>
 
 #include "../../../net/sunrpc/netns.h"
 

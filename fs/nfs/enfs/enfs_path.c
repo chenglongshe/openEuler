@@ -2,8 +2,9 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-#include
-#include
+
+#include <linux/sunrpc/metrics.h>
+#include <linux/sunrpc/xprt.h>
 
 #include "enfs.h"
 #include "enfs_log.h"

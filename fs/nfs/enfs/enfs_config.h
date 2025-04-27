@@ -6,7 +6,7 @@
 #ifndef ENFS_CONFIG_H
 #define ENFS_CONFIG_H
 
-#include
+#include <linux/types.h>
 
 #define ENFS_VERSION 4		// client version is 4, server version is 10002
 #define ENFS_SERVER_VERSION_BASE 10001	// 24A server version is 10001

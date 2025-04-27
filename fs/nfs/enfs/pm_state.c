@@ -3,8 +3,9 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
 #include "pm_state.h"
-#include
-#include
+#include <linux/sunrpc/xprt.h>
+
+#include "enfs.h"
 #include "enfs_log.h"
 
 pm_path_state pm_get_path_state(struct rpc_xprt *xprt)
