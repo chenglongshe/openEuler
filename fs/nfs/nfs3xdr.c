@@ -2456,51 +2456,62 @@ out_default:
 
 #endif  /* CONFIG_NFS_V3_ACL */
 
-static int nfs3_xdr_dec_extend3res(struct rpc_rqst *req, struct xdr_stream *xdr,
-                                   void *result)
+static int nfs3_xdr_dec_extend3res(struct rpc_rqst * req, struct xdr_stream * xdr, 
+	void * result)
 {
-    enum nfs_stat status;
-    int error;
-    struct nfs_extend_xdr_arg *decArg = result;
-    int length;
-    __be32 *p;
+	enum nfs_stat status;
+	int 			error;
 
-    // check the status
-    error = decode_nfsstat3(xdr, &status);
-    if (unlikely(error))
-        goto out;
-    if (status != NFS3_OK)
-        goto out_default;
+	struct nfs_extend_xdr_arg * decArg = result;
+	int 			length;
+	__be32 *		p;
 
-    // important for upgrade scenario
-    memset(decArg->pBuf, '\0', decArg->maxsize);
+	// check the status
+	error = decode_nfsstat3(xdr, &status);
 
-    // decode legth of opaque data
-    p = xdr_inline_decode(xdr, 4);
-    if (unlikely(!p)) {
-        return -EIO;
-    }
-    length = be32_to_cpup(p++);
-    if (unlikely(length > decArg->maxsize)) {
-        dprintk("NFS: response size (%u) too big , max_size is %d\n", length,
-                decArg->maxsize);
-        return -E2BIG;
-    }
-    // decode length number of bytes
-    p = xdr_inline_decode(xdr, length);
-    if (unlikely(!p)) {
-        return -EIO;
-    }
+	if (unlikely(error))
+		goto out;
 
-    decArg->buflen = length;
-    memcpy(decArg->pBuf, p, decArg->buflen);
-    dprintk("NFS: extend response size (%u)\n", length);
+	if (status != NFS3_OK)
+		goto out_default;
+
+	// important for upgrade scenario
+	memset(decArg->pBuf, '\0', decArg->maxsize);
+
+	// decode legth of opaque data
+	p = xdr_inline_decode(xdr, 4);
+
+	if (unlikely(!p))
+		return - EIO;
+
+	length = be32_to_cpup(p++);
+
+	if (unlikely(length > decArg->maxsize)) {
+		dprintk("NFS: response size (%u) too big , max_size is %d\n", length, 
+			decArg->maxsize);
+		return - E2BIG;
+	}
+
+	// decode length number of bytes
+	p = xdr_inline_decode(xdr, length);
+
+	if (unlikely(!p))
+		return - EIO;
+
+	decArg->buflen = length;
+	memcpy(decArg->pBuf, p, decArg->buflen);
+	dprintk("NFS: extend response size (%u)\n", length);
+
 
 out:
-    return error;
+	return error;
+
+
 out_default:
-    return nfs3_stat_to_errno(status);
+	return nfs3_stat_to_errno(status);
 }
+
+
 
 
 /*

@@ -457,13 +457,14 @@ struct nfs_client *nfs4_init_client(struct nfs_client *clp,
 	if (error < 0)
 		goto error;
 
-	error = nfs_create_multi_path_client(clp, cl_init);
-    if (error < 0) {
-        printk("nfs4_create_multi_path_client faild.%d\n.", error);
-        nfs_put_client(clp);
-        clp = ERR_PTR(error);
-        return clp;
-    }
+	error = nfs_create_multi_path_client (clp, cl_init);
+	
+	if (error < 0) {
+		printk ("nfs4_create_multi_path_client faild.%d\n.", error);
+		nfs_put_client (clp);
+		clp = ERR_PTR (error);
+		return clp;
+	}
 
 	error = nfs4_discover_server_trunking(clp, &old);
 	if (error < 0)

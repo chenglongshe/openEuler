@@ -322,53 +322,55 @@ static DEFINE_MUTEX(g_nfs41_clntid_cachelist_lock);
 static LIST_HEAD(g_nfs41_clntid_cachelist);
 
 typedef struct {
-    struct list_head list_node;
-    u64 nfs41_clntid;
+	struct list_head list_node;
+	u64 nfs41_clntid;
 } nfs4_clntid_locknode;
 
 static nfs4_clntid_locknode *_nfs41_get_clntid_locknode(u64 clientid)
 {
-    nfs4_clntid_locknode *node = NULL;
-    nfs4_clntid_locknode *ret_node = NULL;
+	nfs4_clntid_locknode *node = NULL;
+	nfs4_clntid_locknode *ret_node = NULL;
 
-    mutex_lock(&g_nfs41_clntid_cachelist_lock);
-    list_for_each_entry(node, &g_nfs41_clntid_cachelist, list_node) {
-        if (node->nfs41_clntid != clientid)
-            continue;
-        ret_node = node;
-        break;
-    }
+	mutex_lock(&g_nfs41_clntid_cachelist_lock);
+	list_for_each_entry(node, &g_nfs41_clntid_cachelist, list_node) {
+		if (node->nfs41_clntid != clientid)
+			continue;
+		ret_node = node;
+		break;
+	}
 
-    if (ret_node != NULL) {
-        mutex_unlock(&g_nfs41_clntid_cachelist_lock);
-        return NULL;
-    }
+	if (ret_node != NULL) {
+		mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+		return NULL;
+	}
 
-    ret_node = (nfs4_clntid_locknode *)kzalloc(sizeof(nfs4_clntid_locknode), GFP_NOFS);
-    if (ret_node == NULL) {
-        printk("NFSv41: Failed to alloc clntid lock node %llu.\n", clientid);
-        mutex_unlock(&g_nfs41_clntid_cachelist_lock);
-        return NULL;
-    }
-    INIT_LIST_HEAD(&ret_node->list_node);
-    ret_node->nfs41_clntid = clientid;
-    list_add_tail(&ret_node->list_node, &g_nfs41_clntid_cachelist);
-    mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+	ret_node = (nfs4_clntid_locknode *)kzalloc(sizeof(nfs4_clntid_locknode),
+						   GFP_NOFS);
+	if (ret_node == NULL) {
+		printk("NFSv41: Failed to alloc clntid lock node %llu.\n",
+		       clientid);
+		mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+		return NULL;
+	}
+	INIT_LIST_HEAD(&ret_node->list_node);
+	ret_node->nfs41_clntid = clientid;
+	list_add_tail(&ret_node->list_node, &g_nfs41_clntid_cachelist);
+	mutex_unlock(&g_nfs41_clntid_cachelist_lock);
 
-    return ret_node;
+	return ret_node;
 }
 
 static void _nfs41_put_clntid_locknode(nfs4_clntid_locknode *lock_node)
 {
-    if (lock_node == NULL) {
-        return;
-    }
+	if (lock_node == NULL) {
+		return;
+	}
 
-    mutex_lock(&g_nfs41_clntid_cachelist_lock);
-    list_del(&lock_node->list_node);
-    kfree(lock_node);
-    mutex_unlock(&g_nfs41_clntid_cachelist_lock);
-    return;
+	mutex_lock(&g_nfs41_clntid_cachelist_lock);
+	list_del(&lock_node->list_node);
+	kfree(lock_node);
+	mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+	return;
 }
 
 int nfs41_init_clientid(struct nfs_client *clp, const struct cred *cred)

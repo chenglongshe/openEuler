@@ -664,12 +664,12 @@ struct nfs_client *nfs_init_client(struct nfs_client *clp,
 		return clp;
 
 	error = nfs_create_multi_path_client(clp, cl_init);
-    if (error < 0) {
-        printk("nfs_create_multi_path_client faild.%d\n.", error);
-        nfs_put_client(clp);
-        clp = ERR_PTR(error);
-        return clp;
-    }
+	if (error < 0) {
+		dprintk("%s: create failed.%d!\n", __func__, error);
+		nfs_put_client(clp);
+		clp = ERR_PTR(error);
+		return clp;
+	}
 
 	/*
 	 * Create a client RPC handle for doing FSSTAT with UNIX auth only
