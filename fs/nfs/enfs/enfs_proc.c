@@ -337,11 +337,7 @@ static int enfs_rpc_proc_show(struct seq_file *seq, void *v)
 
 static int rpc_proc_open(struct inode *inode, struct file *file)
 {
-#ifdef ENFS_OPENEULER_660
 	struct rpc_clnt *clnt = pde_data(inode);
-#else
-	struct rpc_clnt *clnt = PDE_DATA(inode);
-#endif
 	enfs_log_debug("rpc_proc_open %p\n", clnt);
 	return single_open(file, enfs_rpc_proc_show, clnt);
 }
@@ -403,15 +399,10 @@ static ssize_t enfs_proc_write(struct file *file, const char __user *user_buf,
 
 static int rpc_proc_show_path(struct inode *inode, struct file *file)
 {
-#ifdef ENFS_OPENEULER_660
 	struct rpc_clnt *clnt = pde_data(inode);
-#else
-	struct rpc_clnt *clnt = PDE_DATA(inode);
-#endif
 	return single_open(file, rpc_proc_clnt_showpath, clnt);
 }
 
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 static const struct proc_ops rpc_proc_fops = {
 	.proc_flags = PROC_ENTRY_PERMANENT,
 	.proc_open = rpc_proc_open,
@@ -420,18 +411,7 @@ static const struct proc_ops rpc_proc_fops = {
 	.proc_release = single_release,
 	.proc_write = enfs_proc_write,
 };
-#else
-static const struct file_operations rpc_proc_fops = {
-	.owner = THIS_MODULE,
-	.open = rpc_proc_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-	.write = enfs_proc_write,
-};
-#endif
 
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 static const struct proc_ops rpc_show_path_fops = {
 	.proc_flags = PROC_ENTRY_PERMANENT,
 	.proc_open = rpc_proc_show_path,
@@ -439,15 +419,6 @@ static const struct proc_ops rpc_show_path_fops = {
 	.proc_lseek = seq_lseek,
 	.proc_release = single_release,
 };
-#else
-static const struct file_operations rpc_show_path_fops = {
-	.owner = THIS_MODULE,
-	.open = rpc_proc_show_path,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-#endif
 
 static int clnt_proc_name(struct rpc_clnt *clnt, char *buf, int len)
 {
@@ -560,11 +531,7 @@ static int shardview_proc_help(struct seq_file *seq, void *v)
 
 static int shardview_proc_open(struct inode *inode, struct file *file)
 {
-#ifdef ENFS_OPENEULER_660
 	void *data = pde_data(inode);
-#else
-	void *data = PDE_DATA(inode);
-#endif
 	return single_open(file, shardview_proc_help, data);
 }
 

@@ -91,11 +91,7 @@ int NfsExtendProcInfoExtendEncode(char *pbuf, int buflen, EXTEND3args *pObj)
 
 	xdr_buf_init(&xdrBuf, pbuf, buflen);
 	xdrBuf.head[0].iov_len = 0;
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 	xdr_init_encode(&xdrStream, &xdrBuf, NULL, NULL);
-#else
-	xdr_init_encode(&xdrStream, &xdrBuf, NULL);
-#endif
 
 	start = xdr_reserve_space(&xdrStream, 8);
 	if (unlikely(!start)) {

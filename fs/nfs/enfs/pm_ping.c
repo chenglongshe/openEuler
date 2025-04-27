@@ -24,7 +24,6 @@
 #include "enfs_log.h"
 #include "enfs_config.h"
 #include "enfs_tp_common.h"
-#include "netns.h"
 
 #define SLEEP_INTERVAL 2
 
@@ -257,11 +256,7 @@ static int pm_ping_add_work(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
 		xprt_get(xprt);
 		INIT_WORK(&work_info->ping_work, pm_ping_execute_work);
 		pm_ping_set_path_check_state(xprt, PM_CHECK_WAITING);
-#ifdef ENFS_OPENEULER_660
 		if (!refcount_inc_not_zero(&clnt->cl_count)) {
-#else
-		if (!atomic_inc_not_zero(&clnt->cl_count)) {
-#endif
 			xprt_put(work_info->xprt);
 			kfree(item);
 			kfree(work_info);

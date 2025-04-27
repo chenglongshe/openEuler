@@ -13,7 +13,8 @@
 #include <linux/moduleparam.h>
 #include <linux/lockd/lockd.h>
 #include "../../../net/sunrpc/netns.h"
-
+#include "../../../fs/nfs/nfs4_fs.h"
+#include "../../../fs/nfs/netns.h"
 #include "dns_internal.h"
 #include "enfs.h"
 #include "enfs_config.h"
@@ -23,17 +24,11 @@
 #include "exten_call.h"
 #include "pm_state.h"
 #include "shard.h"
-#include "netns.h"
-#include "enfs_adapter.h"
 
 unsigned int enfs_uuid_debug;
 module_param_named(uuid, enfs_uuid_debug, uint, 0600);
 MODULE_PARM_DESC(uuid, "print nfsv3 req uuid debugging mask");
 
-#ifdef ENFS_EULER_5_10
-#else
-#define list_entry_is_head(pos, head, member) (&((pos)->member) == (head))
-#endif
 #define MAX_SHARD_COUNT_TIME 5	// 5 second
 #define FAULT_DETECTED 1
 
@@ -1904,11 +1899,7 @@ static int shard_update_work(struct clnt_uuid_info *info,
 
 	INIT_WORK(&shard_work->work, do_shared_update);
 	shard_work->info = *info;
-#ifdef ENFS_OPENEULER_660
 	if (!refcount_inc_not_zero(&shard_work->info.clnt->cl_count)) {
-#else
-	if (!atomic_inc_not_zero(&shard_work->info.clnt->cl_count)) {
-#endif
 		xprt_switch_put(shard_work->xps);
 		kfree(item);
 		kfree(shard_work);

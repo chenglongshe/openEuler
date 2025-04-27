@@ -14,7 +14,6 @@
 #include "enfs_multipath_parse.h"
 #include "enfs_multipath_client.h"
 #include "enfs_remount.h"
-#include "init.h"
 #include "enfs_lookup_cache.h"
 #include "enfs_rpc_init.h"
 #include "enfs_log.h"

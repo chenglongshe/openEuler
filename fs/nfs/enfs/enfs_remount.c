@@ -97,11 +97,7 @@ static bool enfs_delete_xprt_from_switch(struct rpc_xprt *xprt,
 		print_enfs_multipath_addr((struct sockaddr *)&ctx->srcaddr,
 					  (struct sockaddr *)&xprt->addr);
 		LVOS_TP_START(REMOUNT_REMOVE_XPRT_FAILED, &ctx);	// just match paramete,ctx is not used.
-#ifdef ENFS_OPENEULER_660
 		rpc_xprt_switch_remove_xprt(xps, xprt, false);
-#else
-		rpc_xprt_switch_remove_xprt(xps, xprt);
-#endif
 		enfs_link_count_add(-1);
 		LVOS_TP_END;
 		return true;
@@ -132,11 +128,7 @@ void enfs_clnt_delete_obsolete_xprts(struct nfs_client *nfs_client,
 				xprt_count++;
 			}
 		} else {
-#ifdef ENFS_OPENEULER_660
 			rpc_xprt_switch_remove_xprt(xps, pos, false);
-#else
-			rpc_xprt_switch_remove_xprt(xps, pos);
-#endif
 			enfs_link_count_add(-1);
 		}
 	}

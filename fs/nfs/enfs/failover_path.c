@@ -255,12 +255,6 @@ bool failover_prepare_transmit(struct rpc_task *task)
  */
 static void reselect_xprt(struct rpc_task *task)
 {
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
-#else
-	if (RPC_ASSASSINATED(task))
-		return;
-#endif
-
 	rpc_task_release_transport(task);
 	task->tk_xprt = rpc_task_get_next_xprt(task->tk_client);
 }

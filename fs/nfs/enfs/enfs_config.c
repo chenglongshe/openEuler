@@ -12,7 +12,7 @@
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <linux/delay.h>
-
+#include <linux/namei.h>
 #include "enfs.h"
 #include "enfs_errcode.h"
 #include "enfs_log.h"

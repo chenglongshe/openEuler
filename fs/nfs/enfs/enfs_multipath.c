@@ -26,7 +26,9 @@
 #include <linux/utsname.h>
 #include <linux/workqueue.h>
 #include <trace/events/sunrpc.h>
-#include <linux/sunrpc/sunrpc_enfs_adapter.h>
+#include <linux/inet.h>
+#include <linux/inetdevice.h>
+#include <net/addrconf.h>
 
 #include "enfs_config.h"
 #include "enfs_log.h"
@@ -727,19 +729,12 @@ static void enfs_auto_fill_local_inet(struct nfs_ip_list *list,
 				      struct in_device *dvice)
 {
 	char buf[INET6_ADDRSTRLEN];
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 	const struct in_ifaddr *ifa;
-#else
-#endif
 
 	if (!dvice) {
 		return;
 	}
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 	in_dev_for_each_ifa_rcu(ifa, dvice) {
-#else
-	for_ifa(dvice) {
-#endif
 		if (list->count >= enfs_get_config_link_count_per_mount()) {
 			break;
 		}
@@ -753,10 +748,6 @@ static void enfs_auto_fill_local_inet(struct nfs_ip_list *list,
 		list->count++;
 		enfs_log_debug("IPv4: %s\n", buf);
 	}
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
-#else
-	endfor_ifa(in_dev);
-#endif
 }
 
 static void enfs_auto_fill_local_inet6(struct nfs_ip_list *list,
