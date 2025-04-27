@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ */
 #ifndef _ENFS_MULTIPATH_PARSE_H_
 #define _ENFS_MULTIPATH_PARSE_H_
 

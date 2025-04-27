@@ -1,5 +1,6 @@
-/* 
- * Copy from net/dns_resolver, please see the original file.
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
 #ifndef _DNS_INTERNAL_H_
 #define _DNS_INTERNAL_H_

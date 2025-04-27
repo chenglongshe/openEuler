@@ -1,4 +1,7 @@
-
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ */
 #include
 #include
 #include
@@ -11,9 +14,6 @@
 #include "enfs_config.h"
 #include "enfs.h"
 
-// TODO:Adjust the code structure based on the open-source format.
-
-// TODO:use linux header
 #define MAX_IPV6_ADDR_LEN  (64)
 #define EOPNOTSUPP 95
 #define ENFS_DNS_MAX_NAME_LEN 256
@@ -600,11 +600,7 @@ int NfsExtendProcInfoExtendDecode(char *buf, uint32_t bufLen,
 	ENfsExtendOpDecode func = NULL;
 	xdr_buf_init(&xdrBuf, buf, bufLen);
 	xdrBuf.len = bufLen;
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 	xdr_init_decode(&xdrStream, &xdrBuf, NULL, NULL);
-#else
-	xdr_init_decode(&xdrStream, &xdrBuf, NULL);
-#endif
 	p = xdr_inline_decode(&xdrStream, 8);
 	if (unlikely(p == NULL)) {
 		return true;

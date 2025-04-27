@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
 #include
 #include
@@ -290,7 +291,6 @@ static const check_and_assign_value g_check_and_assign_value[] = {
 	{ "native_link_io_enable", enfs_check_and_assign_int_value, 0, 1 },
 };
 
-#ifdef ENFS_OPENEULER_660
 static int32_t enfs_read_config_file_in_openeuler(char *buffer, char *file_path)
 {
 	int ret;
@@ -316,51 +316,6 @@ static int32_t enfs_read_config_file_in_openeuler(char *buffer, char *file_path)
 	}
 	return ENFS_RET_OK;
 }
-#else
-static int32_t enfs_read_config_file(char *buffer, char *file_path)
-{
-	int ret;
-	struct file *filp = NULL;
-	loff_t f_pos = 0;
-	mm_segment_t fs;
-
-	LVOS_TP_START(OPEN_CONFIG_FILE_FAILED, &filp);
-	filp = filp_open(file_path, O_RDONLY, 0);
-	LVOS_TP_END;
-	if (IS_ERR(filp)) {
-		enfs_log_error("Failed to open file %s\n", CONFIG_FILE_PATH);
-		ret = -ENOENT;
-		return ret;
-	}
-
-#ifdef ENFS_EULER_5_10
-	fs = force_uaccess_begin();
-#else
-	fs = get_fs();
-	set_fs(get_ds());
-#endif
-
-#ifdef ENFS_KERNEL_READ_FS
-	kernel_read(filp, f_pos, buffer, MAX_FILE_SIZE);
-#else
-	kernel_read(filp, buffer, MAX_FILE_SIZE, &f_pos);
-#endif
-
-#ifdef ENFS_EULER_5_10
-	force_uaccess_end(fs);
-#else
-	set_fs(fs);
-#endif
-
-	ret = filp_close(filp, NULL);
-	if (ret) {
-		enfs_log_error("Close File:%s failed:%d.\n", CONFIG_FILE_PATH,
-			       ret);
-		return -EINVAL;
-	}
-	return ENFS_RET_OK;
-}
-#endif
 
 // 处理一行
 static int32_t enfs_deal_with_comment_line(char *buffer)
@@ -498,11 +453,7 @@ int32_t enfs_config_load(void)
 	    sizeof(g_check_and_assign_value) /
 	    sizeof(g_check_and_assign_value[0]);
 
-#ifdef ENFS_OPENEULER_660
 	ret = enfs_read_config_file_in_openeuler(buffer, CONFIG_FILE_PATH);
-#else
-	ret = enfs_read_config_file(buffer, CONFIG_FILE_PATH);
-#endif
 	if (ret != 0) {
 		kfree(buffer);
 		return ret;
@@ -713,7 +664,6 @@ static bool enfs_file_changed(const char *filename)
 	int err;
 	struct kstat file_stat;
 
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 	struct path fpath;
 	err = kern_path(filename, LOOKUP_FOLLOW, &fpath);
 	if (err) {
@@ -721,9 +671,7 @@ static bool enfs_file_changed(const char *filename)
 	}
 	err = vfs_getattr(&fpath, &file_stat, STATX_BASIC_STATS, 0);
 	path_put(&fpath);
-#else
-	err = vfs_stat(filename, &file_stat);
-#endif
+
 	if (err) {
 		enfs_log_debug("failed to open file:%s err:%d\n", filename,
 			       err);

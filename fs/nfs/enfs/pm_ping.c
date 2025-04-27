@@ -1,8 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.    //TODO: 删除注释，暴露枚举，初始化状态，暴露set函数
- * Description: path state header file
- * Author: x00833432
- * Create: 2023-08-21
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
 
 #include "pm_ping.h"

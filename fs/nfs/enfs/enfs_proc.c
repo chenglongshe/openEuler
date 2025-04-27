@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
+ */
 #include
 #include
 #include
@@ -593,7 +597,6 @@ static ssize_t shardview_proc_write(struct file *file,
 	return len;
 }
 
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 static const struct proc_ops shardview_proc_fops = {
 	.proc_flags = PROC_ENTRY_PERMANENT,
 	.proc_open = shardview_proc_open,
@@ -602,16 +605,6 @@ static const struct proc_ops shardview_proc_fops = {
 	.proc_release = single_release,
 	.proc_write = shardview_proc_write,
 };
-#else
-static const struct file_operations shardview_proc_fops = {
-	.owner = THIS_MODULE,
-	.open = shardview_proc_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-	.write = shardview_proc_write,
-};
-#endif
 
 static int enfs_proc_create_parent(void)
 {

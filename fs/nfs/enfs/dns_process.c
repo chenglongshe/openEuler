@@ -1,7 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-
 #include
 #include
 #include
@@ -863,11 +863,8 @@ static int dns_update_work(struct nfs_client *clp, void *data)
 	*wk->clp_info->remote_ip_list = *clp_info->remote_ip_list;
 	*wk->clp_info->local_ip_list = *clp_info->local_ip_list;
 	*wk->clp_info->pRemoteDnsInfo = *clp_info->pRemoteDnsInfo;
-#ifdef ENFS_OPENEULER_660
+
 	if (!refcount_inc_not_zero(&clp->cl_rpcclient->cl_count)) {
-#else
-	if (!atomic_inc_not_zero(&clp->cl_rpcclient->cl_count)) {
-#endif
 		enfs_free_nfsclient_info(wk->clp_info);
 		kfree(wk);
 		kfree(item);
