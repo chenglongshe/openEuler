@@ -66,7 +66,8 @@
 #include "callback.h"
 #include "delegation.h"
 #include "iostat.h"
-#include "internal.h"
+//#include "internal.h"
+#include "enfs_adapter.h"
 #include "fscache.h"
 #include "nfs4session.h"
 #include "pnfs.h"
@@ -559,6 +560,7 @@ int nfs_show_options(struct seq_file *m, struct dentry *root)
 	seq_printf(m, ",addr=%s",
 			rpc_peeraddr2str(nfss->nfs_client->cl_rpcclient,
 							RPC_DISPLAY_ADDR));
+	nfs_multipath_show_client_info(m, nfss);
 	rcu_read_unlock();
 
 	return 0;
@@ -663,6 +665,7 @@ int nfs_show_stats(struct seq_file *m, struct dentry *root)
 	seq_puts(m, root->d_sb->s_flags & SB_NOATIME ? ",noatime" : "");
 	seq_puts(m, root->d_sb->s_flags & SB_NODIRATIME ? ",nodiratime" : "");
 	nfs_show_mount_options(m, nfss, 1);
+	nfs_multipath_show_client_info(m, nfss);
 
 	seq_printf(m, "\n\tage:\t%lu", (jiffies - nfss->mount_time) / HZ);
 
@@ -1013,6 +1016,7 @@ nfs_compare_remount_data(struct nfs_server *nfss,
 
 int nfs_reconfigure(struct fs_context *fc)
 {
+	int error;
 	struct nfs_fs_context *ctx = nfs_fc2context(fc);
 	struct super_block *sb = fc->root->d_sb;
 	struct nfs_server *nfss = sb->s_fs_info;
@@ -1029,6 +1033,14 @@ int nfs_reconfigure(struct fs_context *fc)
 	if (ctx->skip_reconfig_option_check)
 		return 0;
 
+	if (ctx->enfs_option) {
+        error = nfs_remount_iplist(nfss->nfs_client, ctx->enfs_option);
+        if (error) {
+            /* release remount option member */
+            enfs_free_mount_options(ctx);
+            return error;
+        }
+    }
 	/*
 	 * noac is a special case. It implies -o sync, but that's not
 	 * necessarily reflected in the mtab options. reconfigure_super
@@ -1331,6 +1343,9 @@ int nfs_get_tree_common(struct fs_context *fc)
 
 	s->s_flags |= SB_ACTIVE;
 	error = 0;
+
+    if (server)
+        enfs_trigger_get_server_capability(server);
 
 out:
 	return error;
