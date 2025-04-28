@@ -5,10 +5,10 @@
 #ifndef _ENFS_LOOKUP_CACHE_H_
 #define _ENFS_LOOKUP_CACHE_H_
 
-#include
-#include
-#include
-#include
+#include <linux/types.h>
+#include <linux/nfs.h>
+#include <linux/nfs_fs.h>
+#include <linux/sunrpc/clnt.h>
 
 #define FILE_UUID_BUFF_LEN 38
 #define MAX_EXPID_LEN 32

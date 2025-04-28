@@ -2,16 +2,16 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
-#include
+#include <linux/kthread.h>
+#include <linux/nfs3.h>
+#include <linux/nfs_fs.h>
+#include <linux/nfs_xdr.h>
+#include <linux/sunrpc/clnt.h>
+#include <linux/sunrpc/svc.h>
+#include <linux/sunrpc/types.h>
+#include <linux/sunrpc/xprt.h>
+#include <linux/moduleparam.h>
+#include <linux/lockd/lockd.h>
 #include "../../../net/sunrpc/netns.h"
 
 #include "dns_internal.h"

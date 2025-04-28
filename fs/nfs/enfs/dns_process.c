@@ -2,11 +2,11 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-#include
-#include
-#include
-#include
-#include
+#include <linux/kthread.h>
+#include <linux/nfs_fs.h>
+#include <linux/sunrpc/addr.h>
+#include <linux/sunrpc/clnt.h>
+#include <net/netns.generic.h>
 
 #include "../../../fs/nfs/nfs4_fs.h"
 #include "../../../fs/nfs/netns.h"

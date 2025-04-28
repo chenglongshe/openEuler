@@ -2,11 +2,11 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
-#include
-#include
-#include
-#include
-#include
+#include <linux/string.h>
+#include <linux/sunrpc/clnt.h>
+#include <linux/nfs.h>
+#include <linux/nfs_fs.h>
+#include <linux/nfs_xdr.h>
 
 #include "enfs_log.h"
 #include "exten_call.h"

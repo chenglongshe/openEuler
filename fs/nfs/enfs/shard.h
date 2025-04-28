@@ -6,7 +6,7 @@
 #ifndef _ENFS_SHARD_H_
 #define _ENFS_SHARD_H_
 
-#include
+#include  <linux/types.h>
 #include "exten_call.h"
 
 extern unsigned int enfs_uuid_debug;

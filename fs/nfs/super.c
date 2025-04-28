@@ -1034,13 +1034,13 @@ int nfs_reconfigure(struct fs_context *fc)
 		return 0;
 
 	if (ctx->enfs_option) {
-        error = nfs_remount_iplist(nfss->nfs_client, ctx->enfs_option);
-        if (error) {
-            /* release remount option member */
-            enfs_free_mount_options(ctx);
-            return error;
-        }
-    }
+		error = nfs_remount_iplist(nfss->nfs_client, ctx->enfs_option);
+		if (error) {
+			/* release remount option member */
+			enfs_free_mount_options(ctx);
+			return error;
+		}
+	}
 	/*
 	 * noac is a special case. It implies -o sync, but that's not
 	 * necessarily reflected in the mtab options. reconfigure_super

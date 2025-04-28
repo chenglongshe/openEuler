@@ -5,9 +5,9 @@
 #ifndef _DNS_INTERNAL_H_
 #define _DNS_INTERNAL_H_
 
-#include
-#include
-#include
+#include <linux/compiler.h>
+#include <linux/kernel.h>
+#include <linux/sched.h>
 
 #include "enfs_log.h"
 

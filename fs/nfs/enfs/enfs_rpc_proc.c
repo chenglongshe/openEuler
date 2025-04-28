@@ -3,8 +3,8 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
 
-#include
-#include
+#include <linux/sunrpc/sched.h>
+#include <linux/sunrpc/clnt.h>
 #include "enfs_rpc_proc.h"
 #include "enfs_lookup_cache.h"
 #include "enfs_log.h"
