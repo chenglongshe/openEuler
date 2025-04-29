@@ -73,6 +73,7 @@ struct nlm_host {
 	const struct cred	*h_cred;
 	char			nodename[UNX_MAXNODENAME + 1];
 	const struct nlmclnt_operations	*h_nlmclnt_ops;	/* Callback ops for NLM users */
+	int enfs_flag; /* enfs falgs */
 };
 
 /*

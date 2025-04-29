@@ -58,6 +58,11 @@
 #include "sysfs.h"
 #include "fail.h"
 
+struct xprt_client_private {
+    void *reserve_context;
+    char servername;
+};
+
 /*
  * Local variables
  */
@@ -265,6 +270,7 @@ static void xprt_clear_locked(struct rpc_xprt *xprt)
 int xprt_reserve_xprt(struct rpc_xprt *xprt, struct rpc_task *task)
 {
 	struct rpc_rqst *req = task->tk_rqstp;
+	struct rpc_multipath_ops *mops = NULL;
 
 	if (test_and_set_bit(XPRT_LOCKED, &xprt->state)) {
 		if (task == xprt->snd_task)
@@ -282,6 +288,11 @@ out_locked:
 out_unlock:
 	xprt_clear_locked(xprt);
 out_sleep:
+	mops = rpc_multipath_ops_get();
+    if (mops && mops->adjust_task_timeout) {
+        mops->adjust_task_timeout(task, NULL);
+    }
+    rpc_multipath_ops_put(mops);
 	task->tk_status = -EAGAIN;
 	if  (RPC_IS_SOFT(task))
 		rpc_sleep_on_timeout(&xprt->sending, task, NULL,
@@ -329,6 +340,7 @@ xprt_test_and_clear_congestion_window_wait(struct rpc_xprt *xprt)
 int xprt_reserve_xprt_cong(struct rpc_xprt *xprt, struct rpc_task *task)
 {
 	struct rpc_rqst *req = task->tk_rqstp;
+	struct rpc_multipath_ops *mops = NULL;
 
 	if (test_and_set_bit(XPRT_LOCKED, &xprt->state)) {
 		if (task == xprt->snd_task)
@@ -348,6 +360,11 @@ int xprt_reserve_xprt_cong(struct rpc_xprt *xprt, struct rpc_task *task)
 out_unlock:
 	xprt_clear_locked(xprt);
 out_sleep:
+	mops = rpc_multipath_ops_get();
+    if (mops && mops->adjust_task_timeout) {
+        mops->adjust_task_timeout(task, NULL);
+    }
+    rpc_multipath_ops_put(mops);
 	task->tk_status = -EAGAIN;
 	if (RPC_IS_SOFT(task))
 		rpc_sleep_on_timeout(&xprt->sending, task, NULL,
@@ -608,6 +625,15 @@ EXPORT_SYMBOL_GPL(xprt_wake_pending_tasks);
  */
 void xprt_wait_for_buffer_space(struct rpc_xprt *xprt)
 {
+	struct rpc_task *task = xprt->snd_task;
+    struct rpc_multipath_ops *mops = NULL;
+
+	mops = rpc_multipath_ops_get();
+	if (mops && mops->adjust_task_timeout) {
+		mops->adjust_task_timeout(task, NULL);
+	}
+	rpc_multipath_ops_put(mops);
+
 	set_bit(XPRT_WRITE_SPACE, &xprt->state);
 }
 EXPORT_SYMBOL_GPL(xprt_wait_for_buffer_space);
@@ -1873,6 +1899,7 @@ xprt_request_init(struct rpc_task *task)
 {
 	struct rpc_xprt *xprt = task->tk_xprt;
 	struct rpc_rqst	*req = task->tk_rqstp;
+	struct rpc_multipath_ops *mops = NULL;
 
 	req->rq_task	= task;
 	req->rq_xprt    = xprt;
@@ -1887,6 +1914,12 @@ xprt_request_init(struct rpc_task *task)
 	req->rq_rcv_buf.bvec = NULL;
 	req->rq_release_snd_buf = NULL;
 	xprt_init_majortimeo(task, req);
+
+	mops = rpc_multipath_ops_get();
+    if (mops && mops->init_task_req) {
+        mops->init_task_req(task, req);
+    }
+    rpc_multipath_ops_put(mops);
 
 	trace_xprt_reserve(req);
 }
@@ -1950,6 +1983,7 @@ void xprt_release(struct rpc_task *task)
 {
 	struct rpc_xprt	*xprt;
 	struct rpc_rqst	*req = task->tk_rqstp;
+	struct rpc_multipath_ops *mops;
 
 	if (req == NULL) {
 		if (task->tk_client) {
@@ -1961,6 +1995,13 @@ void xprt_release(struct rpc_task *task)
 
 	xprt = req->rq_xprt;
 	xprt_request_dequeue_xprt(task);
+
+	mops = rpc_multipath_ops_get();
+    if (task->tk_client && mops && mops->xprt_iostat) {
+        mops->xprt_iostat(task);
+    }
+    rpc_multipath_ops_put(mops);
+
 	spin_lock(&xprt->transport_lock);
 	xprt->ops->release_xprt(xprt, task);
 	if (xprt->ops->release_request)
@@ -1980,6 +2021,7 @@ void xprt_release(struct rpc_task *task)
 	else
 		xprt_free_bc_request(req);
 }
+EXPORT_SYMBOL_GPL(xprt_release);
 
 #ifdef CONFIG_SUNRPC_BACKCHANNEL
 void
@@ -2030,6 +2072,74 @@ static void xprt_init(struct rpc_xprt *xprt, struct net *net)
 	xprt->xprt_net = get_net_track(net, &xprt->ns_tracker, GFP_KERNEL);
 }
 
+const char *xprt_set_servername(const char *s, gfp_t gfp)
+{
+    size_t len;
+    struct xprt_client_private *buf;
+
+    if (!s)
+        return NULL;
+
+    len = sizeof(struct xprt_client_private) + strlen(s) + 1;
+    buf = kmalloc(len, gfp);
+    if (buf) {
+        memset(buf, 0, len);
+        memcpy(&(buf->servername), s, strlen(s) + 1);
+        return &(buf->servername);
+    }
+    return NULL;
+}
+
+void xprt_free_servername(struct rpc_xprt *xprt)
+{
+    struct xprt_client_private *buf;
+    struct rpc_multipath_ops *mops;
+
+    if (xprt == NULL || xprt->servername == NULL) {
+        return;
+    }
+
+    buf = container_of(xprt->servername, struct xprt_client_private, servername);
+    if (buf->reserve_context) {
+        mops = rpc_multipath_ops_get();
+        if (mops && mops->destroy_xprt) {
+            mops->destroy_xprt(xprt);
+        }
+        rpc_multipath_ops_put(mops);
+    }
+
+    kfree((void *)buf);
+    xprt->servername = NULL;
+    return;
+}
+
+void *xprt_get_reserve_context(struct rpc_xprt *xprt)
+{
+    struct xprt_client_private *buf;
+
+    if (xprt == NULL || xprt->servername == NULL) {
+        return NULL;
+    }
+
+    buf = container_of(xprt->servername, struct xprt_client_private, servername);
+    return buf->reserve_context;
+}
+EXPORT_SYMBOL_GPL(xprt_get_reserve_context);
+
+void xprt_set_reserve_context(struct rpc_xprt *xprt, void *context)
+{
+    struct xprt_client_private *buf;
+
+    if (xprt == NULL || xprt->servername == NULL) {
+        return;
+    }
+
+    buf = container_of(xprt->servername, struct xprt_client_private, servername);
+    buf->reserve_context = context;
+    return;
+}
+EXPORT_SYMBOL_GPL(xprt_set_reserve_context);
+
 /**
  * xprt_create_transport - create an RPC transport
  * @args: rpc transport creation arguments
@@ -2039,6 +2149,7 @@ struct rpc_xprt *xprt_create_transport(struct xprt_create *args)
 {
 	struct rpc_xprt	*xprt;
 	const struct xprt_class *t;
+	struct rpc_multipath_ops *mops;
 
 	t = xprt_class_find_by_ident(args->ident);
 	if (!t) {
@@ -2063,11 +2174,22 @@ struct rpc_xprt *xprt_create_transport(struct xprt_create *args)
 		xprt_destroy(xprt);
 		return ERR_PTR(-EINVAL);
 	}
-	xprt->servername = kstrdup(args->servername, GFP_KERNEL);
+	xprt->servername = xprt_set_servername(args->servername, GFP_KERNEL);
 	if (xprt->servername == NULL) {
 		xprt_destroy(xprt);
 		return ERR_PTR(-ENOMEM);
 	}
+
+	mops = rpc_multipath_ops_get();
+    if (mops && mops->create_xprt) {
+        mops->create_xprt(xprt);
+        if (!xprt_get_reserve_context(xprt)) {
+            xprt_destroy(xprt);
+            rpc_multipath_ops_put(mops);
+            return ERR_PTR(-ENOMEM);
+        }
+    }
+    rpc_multipath_ops_put(mops);
 
 	rpc_xprt_debugfs_register(xprt);
 
@@ -2088,7 +2210,7 @@ static void xprt_destroy_cb(struct work_struct *work)
 	rpc_destroy_wait_queue(&xprt->pending);
 	rpc_destroy_wait_queue(&xprt->sending);
 	rpc_destroy_wait_queue(&xprt->backlog);
-	kfree(xprt->servername);
+	xprt_free_servername(xprt);
 	/*
 	 * Destroy any existing back channel
 	 */
