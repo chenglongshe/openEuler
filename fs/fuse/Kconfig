@@ -52,3 +52,9 @@ config FUSE_DAX
 
 	  If you want to allow mounting a Virtio Filesystem with the "dax"
 	  option, answer Y.
+
+config FUSE_FASTPATH
+	bool "fuse fastpath support"
+	default n
+	depends on FUSE_FS
+	depends on KERNEL_IPC
