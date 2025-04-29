@@ -99,7 +99,9 @@
 #endif
 #include <linux/posix-timers.h>
 #include <linux/time_namespace.h>
+#ifdef CONFIG_PROC_CPU_RESCTRL
 #include <linux/resctrl.h>
+#endif
 #include <linux/cn_proc.h>
 #include <linux/ksm.h>
 #include <trace/events/oom.h>
