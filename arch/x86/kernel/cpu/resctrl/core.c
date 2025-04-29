@@ -61,7 +61,7 @@ mba_wrmsr_amd(struct rdt_domain *d, struct msr_param *m,
 
 #define domain_init(id) LIST_HEAD_INIT(rdt_resources_all[id].r_resctrl.domains)
 
-struct rdt_hw_resource rdt_resources_all[] = {
+struct rdt_hw_resource rdt_resources_all[RDT_NUM_RESOURCES] = {
 	[RDT_RESOURCE_L3] =
 	{
 		.r_resctrl = {
@@ -71,6 +71,7 @@ struct rdt_hw_resource rdt_resources_all[] = {
 			.domains		= domain_init(RDT_RESOURCE_L3),
 			.format_str		= "%d=%0*x",
 			.fflags			= RFTYPE_RES_CACHE,
+			.schema_fmt		= RESCTRL_SCHEMA_BITMAP,
 		},
 		.msr_base		= MSR_IA32_L3_CBM_BASE,
 		.msr_update		= cat_wrmsr,
@@ -84,6 +85,7 @@ struct rdt_hw_resource rdt_resources_all[] = {
 			.domains		= domain_init(RDT_RESOURCE_L2),
 			.format_str		= "%d=%0*x",
 			.fflags			= RFTYPE_RES_CACHE,
+			.schema_fmt		= RESCTRL_SCHEMA_BITMAP,
 		},
 		.msr_base		= MSR_IA32_L2_CBM_BASE,
 		.msr_update		= cat_wrmsr,
@@ -97,6 +99,7 @@ struct rdt_hw_resource rdt_resources_all[] = {
 			.domains		= domain_init(RDT_RESOURCE_MBA),
 			.format_str		= "%d=%*u",
 			.fflags			= RFTYPE_RES_MB,
+			.schema_fmt		= RESCTRL_SCHEMA_PERCENT,
 		},
 	},
 	[RDT_RESOURCE_SMBA] =
@@ -108,6 +111,7 @@ struct rdt_hw_resource rdt_resources_all[] = {
 			.domains		= domain_init(RDT_RESOURCE_SMBA),
 			.format_str		= "%d=%*u",
 			.fflags			= RFTYPE_RES_MB,
+			.schema_fmt		= RESCTRL_SCHEMA_PERCENT,
 		},
 	},
 };
