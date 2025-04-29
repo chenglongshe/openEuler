@@ -7714,6 +7714,8 @@ CONFIG_DLM_DEBUG=y
 CONFIG_IO_WQ=y
 # end of File systems
 
+# CONFIG_KERNEL_IPC is not set
+
 #
 # Security options
 #
