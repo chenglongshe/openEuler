@@ -31,6 +31,22 @@ enum mpam_class_types {
 	MPAM_CLASS_UNKNOWN,     /* Everything else, e.g. SMMU */
 };
 
+/*
+ * Monitor Event IDs, representative a variety of monitoring events.
+ * QOS_L3_OCCUP_EVENT_ID:     L3 Cache Occupancy statistics event
+ * QOS_L3_MBM_TOTAL_EVENT_ID: Memory Bandwidth statistics event
+ * QOS_L3_MBM_LOCAL_EVENT_ID: L3 Cache Bandwidth statistics event
+ * QOS_L2_OCCUP_EVENT_ID:     L2 Cache Occupancy statistics event
+ * QOS_L2_MBM_CORE_EVENT_ID:  L2 Cache Bandwidth statistics event
+ */
+enum resctrl_event_id {
+	QOS_L3_OCCUP_EVENT_ID           = 0x01,
+	QOS_L3_MBM_TOTAL_EVENT_ID       = 0x02,
+	QOS_L3_MBM_LOCAL_EVENT_ID       = 0x03,
+	QOS_L2_OCCUP_EVENT_ID           = 0x04,
+	QOS_L2_MBM_CORE_EVENT_ID        = 0x05,
+};
+
 #ifdef CONFIG_ACPI_MPAM
 /* Parse the ACPI description of resources entries for this MSC. */
 int acpi_mpam_parse_resources(struct mpam_msc *msc,
@@ -64,6 +80,8 @@ static inline bool resctrl_arch_event_is_free_running(enum resctrl_event_id evt)
 bool resctrl_arch_alloc_capable(void);
 bool resctrl_arch_mon_capable(void);
 bool resctrl_arch_is_llc_occupancy_enabled(void);
+bool resctrl_arch_is_l2c_occupancy_enabled(void);
+bool resctrl_arch_is_mbm_core_enabled(void);
 bool resctrl_arch_is_mbm_local_enabled(void);
 bool resctrl_arch_is_mbm_total_enabled(void);
 bool resctrl_arch_would_mbm_overflow(void);
