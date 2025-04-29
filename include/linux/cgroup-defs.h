@@ -223,6 +223,11 @@ struct css_set {
 
 	/* all threaded csets whose ->dom_cset points to this cset */
 	struct list_head threaded_csets;
+
+	/* This is only used for cgroup v2 threaded, and is empty for
+	 * cgroup v1. Use it as mg_dst_preload_node to keep KABI, this is
+	 * fine for cgroup v1. For 4.18 4.19, only cgroup v1 is supported.
+	 */
 	struct list_head threaded_csets_node;
 
 	/*
@@ -240,8 +245,12 @@ struct css_set {
 	/*
 	 * List of csets participating in the on-going migration either as
 	 * source or destination.  Protected by cgroup_mutex.
+	 * mg_preload_node -> used as mg_src_preload_node to keep KABI
 	 */
 	struct list_head mg_preload_node;
+	/* struct list_head mg_dst_preload_node;
+	 * is disguised by threaded_csets_node
+	 */
 	struct list_head mg_node;
 
 	/*
@@ -261,6 +270,10 @@ struct css_set {
 	/* For RCU-protected deletion */
 	struct rcu_head rcu_head;
 };
+
+/* To keep KABI, define the name to disguised */
+#define mg_src_preload_node mg_preload_node
+#define mg_dst_preload_node threaded_csets_node
 
 struct cgroup_base_stat {
 	struct task_cputime cputime;
