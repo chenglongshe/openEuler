@@ -1725,6 +1725,12 @@ struct nfs_renamedata {
 	bool cancelled;
 };
 
+struct nfs_extend_xdr_arg {
+    int     maxsize;
+    int     buflen;
+    char    *pBuf;
+};
+
 struct nfs_access_entry;
 struct nfs_client;
 struct rpc_timeout;
