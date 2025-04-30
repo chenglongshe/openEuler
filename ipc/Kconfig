@@ -1,0 +1,5 @@
+config KERNEL_IPC
+    tristate "Kernel IPC Call"
+    default n
+    help
+       Used to to enable fast process switching.
