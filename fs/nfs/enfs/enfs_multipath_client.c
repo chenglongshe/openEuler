@@ -363,7 +363,6 @@ void print_dns_info(struct seq_file *seq, NFS_ROUTE_DNS_INFO_S *pRemoteDnsInfo,
 		seq_printf(seq, "~%s", name);
 	}
 }
-}
 
 static void multipath_print_sockaddr(struct seq_file *seq,
 				     struct sockaddr *addr)

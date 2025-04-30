@@ -18,4 +18,4 @@ void enfs_count_iostat(struct rpc_task *task);
 void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data),
 			    void *data);
 
-#endif /*
+#endif

@@ -16,4 +16,4 @@
 int enfs_rpc_send(struct rpc_clnt *clnt, unsigned int opcode,
 		  EnfsGetConfigArgs *args, EnfsGetConfigRes *res);
 void enfs_proc_reg(unsigned int opcode, const struct rpc_procinfo *rpc_proc);
-#endif /*
+#endif

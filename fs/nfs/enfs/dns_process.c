@@ -517,9 +517,9 @@ void query_dns_each_name(NFS_ROUTE_DNS_INFO_S *dns_info, int slot,
 		ret = query_dns_cross_protocol(ipList, dnsName, slot, family);
 		if (ret != 0)
 			enfs_log_error("dns multi query dns failed.\n");
-		enfs_update_domain_name(dnsName, ipList);
+		else
+			enfs_update_domain_name(dnsName, ipList);
 	}
-}
 }
 
 int multipath_query_dns(struct multipath_mount_options *opt,

@@ -567,8 +567,9 @@ static const struct proc_ops shardview_proc_fops = {
 
 static int enfs_proc_create_parent(void)
 {
+#ifdef NFS_CLIENT_DEBUG
 	struct proc_dir_entry *stat_entry;
-
+#endif
 	LVOS_TP_START(PROC_CREATE_ENFS_FAILED, &enfs_proc_parent);
 	enfs_proc_parent = proc_mkdir(ENFS_PROC_DIR, NULL);
 	LVOS_TP_END;

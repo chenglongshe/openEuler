@@ -426,7 +426,8 @@ int EnfsGetFsInfoDecode(EXTEND3res **extend3ResOut, uint32_t version, __be32 *p,
 
 	if (version < ENFS_SERVER_VERSION_BASE)
 		ret = NfsExtendDecodeFsShard(extend3ResOut, p, xdrStream);
-	decode_version = ((version > ENFS_SERVER_VERSION_BASE) &&
+	else {
+		decode_version = ((version > ENFS_SERVER_VERSION_BASE) &&
 			  ((version - ENFS_SERVER_VERSION_BASE) >=
 			   sizeof(g_decodeFuncByVersion) /
 				   sizeof(EnfsExtendProcVersionFunc))) ?
@@ -434,16 +435,16 @@ int EnfsGetFsInfoDecode(EXTEND3res **extend3ResOut, uint32_t version, __be32 *p,
 					  sizeof(EnfsExtendProcVersionFunc) -
 				  1) :
 				 version - ENFS_SERVER_VERSION_BASE;
-	func = g_decodeFuncByVersion[decode_version].fsShardInfoFunc;
-	if (!func) {
-		enfs_log_error(
-			"Enfs getFsShard deocde func is null, resp version:%u",
-			version);
-		return true;
+		func = g_decodeFuncByVersion[decode_version].fsShardInfoFunc;
+		if (!func) {
+			enfs_log_error(
+				"Enfs getFsShard deocde func is null, resp version:%u",
+				version);
+			return true;
+		}
+		ret = func(extend3ResOut, p, xdrStream);
 	}
-	ret = func(extend3ResOut, p, xdrStream);
-}
-return ret;
+	return ret;
 }
 
 int EnfsGetLifInfoDecode(EXTEND3res **extend3ResOut, uint32_t version,
@@ -455,7 +456,8 @@ int EnfsGetLifInfoDecode(EXTEND3res **extend3ResOut, uint32_t version,
 
 	if (version < ENFS_SERVER_VERSION_BASE)
 		ret = NfsExtendDecodeLifInfo(extend3ResOut, p, xdrStream);
-	decode_version = ((version > ENFS_SERVER_VERSION_BASE) &&
+	else {
+		decode_version = ((version > ENFS_SERVER_VERSION_BASE) &&
 			  ((version - ENFS_SERVER_VERSION_BASE) >=
 			   sizeof(g_decodeFuncByVersion) /
 				   sizeof(EnfsExtendProcVersionFunc))) ?
@@ -463,16 +465,16 @@ int EnfsGetLifInfoDecode(EXTEND3res **extend3ResOut, uint32_t version,
 					  sizeof(EnfsExtendProcVersionFunc) -
 				  1) :
 				 version - ENFS_SERVER_VERSION_BASE;
-	func = g_decodeFuncByVersion[decode_version].lifInfoFunc;
-	if (!func) {
-		enfs_log_error(
-			"Enfs getLifInfo deocde func is null, resp version:%u",
-			version);
-		return true;
+		func = g_decodeFuncByVersion[decode_version].lifInfoFunc;
+		if (!func) {
+			enfs_log_error(
+				"Enfs getLifInfo deocde func is null, resp version:%u",
+				version);
+			return true;
+		}
+		ret = func(extend3ResOut, p, xdrStream);
 	}
-	ret = func(extend3ResOut, p, xdrStream);
-}
-return ret;
+	return ret;
 }
 
 int EnfsQueryDnsInfoDecode(EXTEND3res **extend3ResOut, uint32_t version,
