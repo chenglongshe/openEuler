@@ -1741,9 +1741,9 @@ size_t rpc_max_bc_payload(struct rpc_clnt *clnt)
 
 	rcu_read_lock();
 	if (clnt_reserve->cl_enfs == 0)
-	xprt = rcu_dereference(clnt->cl_xprt);
+		xprt = rcu_dereference(clnt->cl_xprt);
+	else
 		xprt = rpc_task_get_next_xprt(clnt);
-	}
 	ret = xprt->ops->bc_maxpayload(xprt);
 	if (clnt_reserve->cl_enfs == 1 && xprt)
 		xprt_put(xprt);
