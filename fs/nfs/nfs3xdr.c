@@ -23,8 +23,11 @@
 #include <linux/nfsacl.h>
 #include "nfstrace.h"
 #include "internal.h"
+#include "linux/nfs_xdr.h"
 
 #define NFSDBG_FACILITY		NFSDBG_XDR
+
+#define EXTEND_CMD_MAX_BUF_LEN 819200 /* 800K */
 
 /* Mapping from NFS error code to "errno" error code. */
 #define errno_NFSERR_IO		EIO
@@ -65,6 +68,7 @@
 #define NFS3_readdirargs_sz	(NFS3_fh_sz+NFS3_cookieverf_sz+3)
 #define NFS3_readdirplusargs_sz	(NFS3_fh_sz+NFS3_cookieverf_sz+4)
 #define NFS3_commitargs_sz	(NFS3_fh_sz+3)
+#define NFS3_extendargs_sz	(4 + XDR_QUADLEN(EXTEND_CMD_MAX_BUF_LEN))
 
 #define NFS3_getattrres_sz	(1+NFS3_fattr_sz)
 #define NFS3_setattrres_sz	(1+NFS3_wcc_data_sz)
@@ -82,6 +86,7 @@
 #define NFS3_fsinfores_sz	(1+NFS3_post_op_attr_sz+12)
 #define NFS3_pathconfres_sz	(1+NFS3_post_op_attr_sz+6)
 #define NFS3_commitres_sz	(1+NFS3_wcc_data_sz+2)
+#define NFS3_extendres_sz	(1 + 4 + XDR_QUADLEN(EXTEND_CMD_MAX_BUF_LEN))
 
 #define ACL3_getaclargs_sz	(NFS3_fh_sz+1)
 #define ACL3_setaclargs_sz	(NFS3_fh_sz+1+ \
@@ -1369,6 +1374,17 @@ static void nfs3_xdr_enc_setacl3args(struct rpc_rqst *req,
 
 #endif  /* CONFIG_NFS_V3_ACL */
 
+static void nfs3_xdr_enc_extend3args(struct rpc_rqst *req,
+									 struct xdr_stream *xdr, const void *data)
+{
+	const struct nfs_extend_xdr_arg *encArg = data;
+	__be32 *p;
+
+	WARN_ON_ONCE(encArg->buflen > EXTEND_CMD_MAX_BUF_LEN);
+	p = xdr_reserve_space(xdr, 4 + encArg->buflen);
+	xdr_encode_opaque(p, encArg->pBuf, encArg->buflen);
+}
+
 /*
  * NFSv3 XDR decode functions
  *
@@ -2440,6 +2456,63 @@ out_default:
 
 #endif  /* CONFIG_NFS_V3_ACL */
 
+static int nfs3_xdr_dec_extend3res(struct rpc_rqst *req, struct xdr_stream *xdr,
+	void *result)
+{
+	enum nfs_stat status;
+	int			error;
+
+	struct nfs_extend_xdr_arg *decArg = result;
+	int			length;
+	__be32 *p;
+
+	// check the status
+	error = decode_nfsstat3(xdr, &status);
+
+	if (unlikely(error))
+		goto out;
+
+	if (status != NFS3_OK)
+		goto out_default;
+
+	// important for upgrade scenario
+	memset(decArg->pBuf, '\0', decArg->maxsize);
+
+	// decode legth of opaque data
+	p = xdr_inline_decode(xdr, 4);
+
+	if (unlikely(!p))
+		return -EIO;
+
+	length = be32_to_cpup(p++);
+
+	if (unlikely(length > decArg->maxsize)) {
+		dprintk("NFS: response size (%u) too big , max_size is %d\n", length,
+			decArg->maxsize);
+		return -E2BIG;
+	}
+
+	// decode length number of bytes
+	p = xdr_inline_decode(xdr, length);
+
+	if (unlikely(!p))
+		return -EIO;
+
+	decArg->buflen = length;
+	memcpy(decArg->pBuf, p, decArg->buflen);
+	dprintk("NFS: extend response size (%u)\n", length);
+
+
+out:
+	return error;
+
+
+out_default:
+	return nfs3_stat_to_errno(status);
+}
+
+
+
 
 /*
  * We need to translate between nfs status return values and
@@ -2517,6 +2590,8 @@ static int nfs3_stat_to_errno(enum nfs_stat status)
 	.p_name      = #proc,						\
 	}
 
+#define NFS3PROC_EXTEND		22
+
 const struct rpc_procinfo nfs3_procedures[] = {
 	PROC(GETATTR,		getattr,	getattr,	1),
 	PROC(SETATTR,		setattr,	setattr,	0),
@@ -2539,7 +2614,9 @@ const struct rpc_procinfo nfs3_procedures[] = {
 	PROC(FSINFO,		getattr,	fsinfo,		0),
 	PROC(PATHCONF,		getattr,	pathconf,	0),
 	PROC(COMMIT,		commit,		commit,		5),
+	PROC(EXTEND,		extend,		extend,		0),
 };
+EXPORT_SYMBOL_GPL(nfs3_procedures);
 
 static unsigned int nfs_version3_counts[ARRAY_SIZE(nfs3_procedures)];
 const struct rpc_version nfs_version3 = {

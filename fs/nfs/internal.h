@@ -84,6 +84,7 @@ struct nfs_client_initdata {
 	struct xprtsec_parms xprtsec;
 	unsigned long connect_timeout;
 	unsigned long reconnect_timeout;
+	void *enfs_option; /* struct multipath_mount_options */
 };
 
 /*
@@ -151,6 +152,8 @@ struct nfs_fs_context {
 		struct nfs_fattr	*fattr;
 		unsigned int		inherited_bsize;
 	} clone_data;
+
+	void *enfs_option; /* struct multipath_mount_options */
 };
 
 #define nfs_errorf(fc, fmt, ...) ((fc)->log.log ?		\

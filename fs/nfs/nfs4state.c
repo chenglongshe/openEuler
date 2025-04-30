@@ -318,9 +318,71 @@ static void nfs41_finish_session_reset(struct nfs_client *clp)
 	nfs4_setup_state_renewal(clp);
 }
 
+static DEFINE_MUTEX(g_nfs41_clntid_cachelist_lock);
+static LIST_HEAD(g_nfs41_clntid_cachelist);
+
+typedef struct {
+	struct list_head list_node;
+	u64 nfs41_clntid;
+} nfs4_clntid_locknode;
+
+static nfs4_clntid_locknode *_nfs41_get_clntid_locknode(u64 clientid)
+{
+	nfs4_clntid_locknode *node = NULL;
+	nfs4_clntid_locknode *ret_node = NULL;
+
+	mutex_lock(&g_nfs41_clntid_cachelist_lock);
+	list_for_each_entry(node, &g_nfs41_clntid_cachelist, list_node) {
+		if (node->nfs41_clntid != clientid)
+			continue;
+		ret_node = node;
+		break;
+	}
+
+	if (ret_node != NULL) {
+		mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+		return NULL;
+	}
+
+	ret_node = (nfs4_clntid_locknode *)kzalloc(sizeof(nfs4_clntid_locknode),
+						   GFP_NOFS);
+	if (ret_node == NULL) {
+		printk("NFSv41: Failed to alloc clntid lock node %llu.\n",
+			   clientid);
+		mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+		return NULL;
+	}
+	INIT_LIST_HEAD(&ret_node->list_node);
+	ret_node->nfs41_clntid = clientid;
+	list_add_tail(&ret_node->list_node, &g_nfs41_clntid_cachelist);
+	mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+
+	return ret_node;
+}
+
+static void _nfs41_put_clntid_locknode(nfs4_clntid_locknode *lock_node)
+{
+	if (lock_node == NULL)
+		return;
+
+	mutex_lock(&g_nfs41_clntid_cachelist_lock);
+	list_del(&lock_node->list_node);
+	kfree(lock_node);
+	mutex_unlock(&g_nfs41_clntid_cachelist_lock);
+	return;
+}
+
 int nfs41_init_clientid(struct nfs_client *clp, const struct cred *cred)
 {
 	int status;
+	nfs4_clntid_locknode *node = NULL;
+
+	node = _nfs41_get_clntid_locknode(clp->cl_clientid);
+	if (node == NULL) {
+		status = -EAGAIN; // finally goes to nfs4_handle_reclaim_lease_error, will retry 1s later
+		printk_ratelimited("NFSv41: get clntid %llu lock node failed, retry later.\n", clp->cl_clientid);
+		goto out;
+	}
 
 	if (test_bit(NFS4CLNT_LEASE_CONFIRM, &clp->cl_state))
 		goto do_confirm;
@@ -337,6 +399,7 @@ do_confirm:
 	nfs41_finish_session_reset(clp);
 	nfs_mark_client_ready(clp, NFS_CS_READY);
 out:
+	_nfs41_put_clntid_locknode(node);
 	return status;
 }
 
@@ -375,7 +438,7 @@ int nfs41_discover_server_trunking(struct nfs_client *clp,
 	 * server via Transparent State Migration.
 	 */
 	if (clp->cl_exchange_flags & EXCHGID4_FLAG_CONFIRMED_R) {
-		if (!test_bit(NFS_CS_TSM_POSSIBLE, &clp->cl_flags))
+		if ((!test_bit(NFS_CS_TSM_POSSIBLE, &clp->cl_flags)) && (clp->cl_multipath_data == NULL))
 			set_bit(NFS4CLNT_PURGE_STATE, &clp->cl_state);
 		else
 			set_bit(NFS4CLNT_LEASE_CONFIRM, &clp->cl_state);
