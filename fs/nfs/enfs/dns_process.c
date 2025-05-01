@@ -7,7 +7,7 @@
 #include <linux/sunrpc/addr.h>
 #include <linux/sunrpc/clnt.h>
 #include <net/netns/generic.h>
-
+#include <linux/dns_resolver.h>
 #include "../../../fs/nfs/nfs4_fs.h"
 #include "../../../fs/nfs/netns.h"
 #include "dns_internal.h"
