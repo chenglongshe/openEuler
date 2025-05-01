@@ -104,16 +104,9 @@ int nfs4_multipath_client_match(struct nfs_client *src,
 }
 
 static inline
-void enfs_free_mount_options(struct nfs_parsed_mount_data *data)
+void enfs_free_mount_options(struct nfs_fs_context *data)
 {
 
-}
-
-static inline
-int enfs_check_mount_parse_info(char *p, int token,
-		struct nfs_parsed_mount_data *mnt, const substring_t *args)
-{
-	return 1;
 }
 
 int nfs_remount_iplist(struct nfs_client *nfs_client, void *data)
@@ -124,6 +117,10 @@ int nfs_remount_iplist(struct nfs_client *nfs_client, void *data)
 bool nfs_has_created_multipath(struct nfs_client *nfs_client)
 {
 	return false;
+}
+
+static inline void nfs_multipath_set_mount_data(void **opt, const char *hostname)
+{
 }
 
 #endif // CONFIG_ENFS

@@ -68,6 +68,7 @@
 #include "nfs4session.h"
 #include "fscache.h"
 #include "nfs42.h"
+#include "enfs_adapter.h"
 
 #include "nfs4trace.h"
 

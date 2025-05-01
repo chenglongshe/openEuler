@@ -370,6 +370,7 @@ out_invalid_xprtsec_policy:
 	return nfs_invalf(fc, "NFS: Transport does not support xprtsec");
 }
 
+#if IS_ENABLED(CONFIG_ENFS)
 enum nfsmultipathoptions getNfsMultiPathOpt(int token)
 {
 	switch (token) {
@@ -382,7 +383,7 @@ enum nfsmultipathoptions getNfsMultiPathOpt(int token)
 	}
 	return INVALID_OPTION;
 }
-
+#endif
 /*
  * For text based NFSv2/v3 mounts, the mount protocol transport default
  * settings should depend upon the specified NFS transport.
