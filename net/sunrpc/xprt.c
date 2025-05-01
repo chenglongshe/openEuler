@@ -264,7 +264,6 @@ static void xprt_clear_locked(struct rpc_xprt *xprt)
 int xprt_reserve_xprt(struct rpc_xprt *xprt, struct rpc_task *task)
 {
 	struct rpc_rqst *req = task->tk_rqstp;
-	struct rpc_multipath_ops *mops = NULL;
 
 	if (test_and_set_bit(XPRT_LOCKED, &xprt->state)) {
 		if (task == xprt->snd_task)
