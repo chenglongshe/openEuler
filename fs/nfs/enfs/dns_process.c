@@ -928,8 +928,6 @@ static int dns_update_loop(void *data)
 
 int enfs_dns_init(void)
 {
-	int ret;
-
 	spin_lock_init(&dns_cache_lock);
 
 	dns_workq = create_workqueue("enfs_dns_workqueue");
