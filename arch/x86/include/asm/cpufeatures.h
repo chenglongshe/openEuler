@@ -422,6 +422,11 @@
 #define X86_FEATURE_SMCA		(17*32+ 3) /* Scalable MCA */
 
 /* AMD-defined SRSO vulnerability features, CPUID level 0x80000021 (EAX), word 20 */
+#define X86_FEATURE_NO_NESTED_DATA_BP	(17*32+ 10) /* "" No Nested Data Breakpoints */
+#define X86_FEATURE_LFENCE_RDTSC	(17*32+ 12) /* "" LFENCE always serializing / synchronizes RDTSC */
+#define X86_FEATURE_NULL_SEL_CLR_BASE	(17*32+ 16) /* "" Null Selector Clears Base */
+#define X86_FEATURE_AUTOIBRS		(17*32+ 18) /* "" Automatic IBRS */
+#define X86_FEATURE_NO_SMM_CTL_MSR	(17*32+ 19) /* "" SMM_CTL MSR is not present */
 #define X86_FEATURE_SBPB		(17*32+24)
 #define X86_FEATURE_IBPB_BRTYPE		(17*32+25)
 #define X86_FEATURE_SRSO_NO		(17*32+26)
@@ -456,13 +461,6 @@
 #define X86_FEATURE_ARCH_CAPABILITIES	(18*32+29) /* IA32_ARCH_CAPABILITIES MSR (Intel) */
 #define X86_FEATURE_CORE_CAPABILITIES	(18*32+30) /* "" IA32_CORE_CAPABILITIES MSR */
 #define X86_FEATURE_SPEC_CTRL_SSBD	(18*32+31) /* "" Speculative Store Bypass Disable */
-
-/* AMD-defined Extended Feature 2 EAX, CPUID level 0x80000021 (EAX), word 20 */
-#define X86_FEATURE_NO_NESTED_DATA_BP	(20*32+ 0) /* "" No Nested Data Breakpoints */
-#define X86_FEATURE_LFENCE_RDTSC	(20*32+ 2) /* "" LFENCE always serializing / synchronizes RDTSC */
-#define X86_FEATURE_NULL_SEL_CLR_BASE	(20*32+ 6) /* "" Null Selector Clears Base */
-#define X86_FEATURE_AUTOIBRS		(20*32+ 8) /* "" Automatic IBRS */
-#define X86_FEATURE_NO_SMM_CTL_MSR	(20*32+ 9) /* "" SMM_CTL MSR is not present */
 
 /*
  * BUG word(s)
