@@ -244,17 +244,7 @@ bool rpc_clnt_has_multipath(struct rpc_clnt *clnt)
 	return clnt_reserve->cl_enfs ? true : false;
 }
 
-void rpc_multipath_ops_destroy_xprt(struct rpc_xprt *xprt)
-{
-	struct rpc_multipath_ops *mops;
 
-	if (xprt->multipath_context) {
-		mops = rpc_multipath_ops_get();
-		if (mops && mops->destroy_xprt)
-			mops->destroy_xprt(xprt);
-		rpc_multipath_ops_put(mops);
-	}
-}
 
 void rpc_multipath_ops_xprt_iostat(struct rpc_task *task)
 {
