@@ -56,7 +56,7 @@
 #include "nfs4_fs.h"
 #include "callback.h"
 #include "delegation.h"
-#include "internal.h"
+#include "enfs_adapter.h"
 #include "nfs4idmap.h"
 #include "nfs4session.h"
 #include "pnfs.h"
