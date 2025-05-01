@@ -235,9 +235,9 @@ static inline uint64_t get_objectid_from_uuid(FILE_UUID *file_uuid)
 	(*((uint64_t *)((puuid)->data + UUID_FID_OFFSET)))
 #define ENFS_GET_FSID_HIGHEST_BIT(fsid) (((fsid) >> 31) & 1)
 #define ENFS_GET_LOCAL_FSPID_FROM_FID(fid) \
-	(uint32_t)(((fid) >> NID_BITS_POS) & 0xFFF)
+	((uint32_t)(((fid) >> NID_BITS_POS) & 0xFFF))
 #define ENFS_GET_GLOBAL_FSPID_FROM_FID(fid) \
-	(uint32_t)(((fid) >> ENFS_GLOBAL_OID_BITS) & 0xFFFF)
+	((uint32_t)(((fid) >> ENFS_GLOBAL_OID_BITS) & 0xFFFF))
 #define ENFS_GET_FSP_FROM_FSID_FID(fsid, fid)          \
 	(ENFS_GET_FSID_HIGHEST_BIT(fsid) ?             \
 		 ENFS_GET_GLOBAL_FSPID_FROM_FID(fid) : \

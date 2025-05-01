@@ -441,7 +441,8 @@ int nfs41_discover_server_trunking(struct nfs_client *clp,
 	 * server via Transparent State Migration.
 	 */
 	if (clp->cl_exchange_flags & EXCHGID4_FLAG_CONFIRMED_R) {
-		if ((!test_bit(NFS_CS_TSM_POSSIBLE, &clp->cl_flags)) && !nfs_has_created_multipath(clp))
+		if ((!test_bit(NFS_CS_TSM_POSSIBLE, &clp->cl_flags)) &&
+		    !nfs_has_created_multipath(clp))
 			set_bit(NFS4CLNT_PURGE_STATE, &clp->cl_state);
 		else
 			set_bit(NFS4CLNT_LEASE_CONFIRM, &clp->cl_state);

@@ -956,13 +956,20 @@ static int nfs_fs_context_parse_param(struct fs_context *fc,
 #if IS_ENABLED(CONFIG_ENFS)
 	case Opt_local_iplist:
 	case Opt_remote_addrs:
-		switch (enfs_parse_mount_options(getNfsMultiPathOpt(opt), param->string, ctx, fc)) {
-			case  0: break;
-			case -ENOMEM: goto out_nomem;
-			case -ENOSPC: goto out_limit;
-			case -EINVAL: goto out_invalid_address;
-			case -EOPNOTSUPP: goto out_invalid_address;
-			case -ENOTSUPP: goto out_invalid_address;
+		switch (enfs_parse_mount_options(getNfsMultiPathOpt(opt),
+						 param->string, ctx, fc)) {
+		case 0:
+			break;
+		case -ENOMEM:
+			goto out_nomem;
+		case -ENOSPC:
+			goto out_limit;
+		case -EINVAL:
+			goto out_invalid_address;
+		case -EOPNOTSUPP:
+			goto out_invalid_address;
+		case -ENOTSUPP:
+			goto out_invalid_address;
 		}
 		break;
 	case Opt_enfs_info:

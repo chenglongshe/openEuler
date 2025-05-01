@@ -169,14 +169,14 @@ void pm_get_xprt_state_desc(struct rpc_xprt *xprt, char *buf, int len)
 {
 	int i;
 	unsigned long state;
-	static unsigned long xprt_mask[] = {
-		XPRT_LOCKED, XPRT_CONNECTED, XPRT_CONNECTING, XPRT_CLOSE_WAIT,
-		XPRT_BOUND, XPRT_BINDING, XPRT_CLOSING, XPRT_CONGESTED
-	};
-	static const char *xprt_state_desc[] =
-	    { "LOCKED", "CONNECTED", "CONNECTING", "CLOSE_WAIT",
-		"BOUND", "BINDING", "CLOSING", "CONGESTED"
-	};
+	static unsigned long xprt_mask[] = { XPRT_LOCKED,     XPRT_CONNECTED,
+					     XPRT_CONNECTING, XPRT_CLOSE_WAIT,
+					     XPRT_BOUND,      XPRT_BINDING,
+					     XPRT_CLOSING,    XPRT_CONGESTED };
+	static const char *xprt_state_desc[] = { "LOCKED",     "CONNECTED",
+						 "CONNECTING", "CLOSE_WAIT",
+						 "BOUND",      "BINDING",
+						 "CLOSING",    "CONGESTED" };
 	int pos = 0;
 	int ret = 0;
 

@@ -114,6 +114,6 @@ void failover_init_task_req(struct rpc_task *task, struct rpc_rqst *req)
 		req->rq_majortimeo = (timeout - current_timeout) + jiffies;
 	else
 		req->rq_majortimeo = jiffies;
-	
+
 	return;
 }

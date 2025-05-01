@@ -1939,11 +1939,12 @@ static int shard_update_loop(void *data)
 
 	while (!kthread_should_stop()) {
 		LVOS_TP_START(QUICK_UPDATE_SHARD, &interval_ms);
-		interval_ms = enfs_need_quick_update_shard() ? 
-			(SHARD_VIEW_UPDATE_INTERVAL_UNDER_LOCK *
-			 SECOND_TO_MILLISECOND)
-			: (enfs_get_config_shardview_update_interval() *
-			   SECOND_TO_MILLISECOND);
+		interval_ms =
+			enfs_need_quick_update_shard() ?
+				(SHARD_VIEW_UPDATE_INTERVAL_UNDER_LOCK *
+				 SECOND_TO_MILLISECOND) :
+				(enfs_get_config_shardview_update_interval() *
+				 SECOND_TO_MILLISECOND);
 		LVOS_TP_END;
 		if (enfs_timeout_ms(&start, interval_ms)
 			&& enfs_get_config_multipath_state() ==
