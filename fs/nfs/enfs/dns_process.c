@@ -280,7 +280,7 @@ static int multi_query_dns(struct nfs_ip_list *ip_list, char *name, int slot,
 
 	net = current->nsproxy->net_ns;
 	enfs_log_debug("domain_name:%s option:%s\n", name, options);
-	ip_len = enfs_euler_dns_query(net, NULL, name, strlen(name), options,
+	ip_len = dns_query(net, NULL, name, strlen(name), options,
 				      &ip_addr, NULL, true);
 	if (ip_len <= 0) {
 		enfs_log_info("dns query:%s error.\n", ip_addr);
