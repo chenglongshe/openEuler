@@ -12,6 +12,7 @@
 #include <linux/nfs_fs.h>
 #include <linux/nfs_fs_sb.h>
 #include "linux/sunrpc/sunrpc_enfs_adapter.h"
+#include "../enfs_adapter.h"
 
 #define IP_ADDRESS_LEN_MAX 64
 #define MAX_IP_PAIR_PER_MOUNT 8

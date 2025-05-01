@@ -6,7 +6,6 @@
 #define _ENFS_MULTIPATH_PARSE_H_
 
 #include "enfs.h"
-#include "enfs_adapter.h"
 
 struct multipath_mount_options {
 	int version;
