@@ -60,8 +60,8 @@ void *xprt_get_reserve_context(struct rpc_xprt *xprt);
 void xprt_set_reserve_context(struct rpc_xprt *xprt, void *context);
 const char *rpc_multipath_set_servername(const char *s, gfp_t gfp);
 void rpc_multipath_free_servername(struct rpc_xprt *xprt);
-void rpc_multipath_ops_inc_queuelen(struct rpc_clnt *clnt);
-void rpc_multipath_ops_dec_queuelen(struct rpc_clnt *clnt);
+void rpc_multipath_ops_inc_queuelen(struct rpc_xprt *xprt);
+void rpc_multipath_ops_dec_queuelen(struct rpc_xprt *xprt);
 
 #else
 static inline void rpc_xps_nactive_add_one(struct rpc_xprt_switch *xps)
@@ -74,6 +74,7 @@ static inline void rpc_xps_nactive_sub_one(struct rpc_xprt_switch *xps)
 
 static inline void *xprt_get_reserve_context(struct rpc_xprt *xprt)
 {
+	return NULL;
 }
 
 static inline void xprt_set_reserve_context(struct rpc_xprt *xprt, void *context)
@@ -138,20 +139,16 @@ static inline
 	return false;
 }
 
-static inline void rpc_multipath_ops_failover_handle(struct rpc_task *task)
-{
-}
-
 static inline
 	void rpc_multipath_ops_update_rpc_program(struct rpc_task *task, u32 *cl_prog, u32 *cl_vers)
 {
 }
 
-static inline void rpc_multipath_ops_inc_queuelen(struct rpc_clnt *clnt)
+static inline void rpc_multipath_ops_inc_queuelen(struct rpc_xprt *xprt)
 {
 }
 
-static inline void rpc_multipath_ops_dec_queuelen(struct rpc_clnt *clnt)
+static inline void rpc_multipath_ops_dec_queuelen(struct rpc_xprt *xprt)
 {
 }
 #endif

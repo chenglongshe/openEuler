@@ -1087,7 +1087,8 @@ rpc_task_get_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt)
 	if (!xprt)
 		return NULL;
 
-	rpc_multipath_ops_inc_queuelen(xprt);	rcu_read_lock();
+	rpc_multipath_ops_inc_queuelen(xprt);
+	rcu_read_lock();
 	xps = rcu_dereference(clnt->cl_xpi.xpi_xpswitch);
 	atomic_long_inc(&xps->xps_queuelen);
 	rcu_read_unlock();

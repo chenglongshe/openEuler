@@ -53,7 +53,7 @@
 #include <linux/sched/mm.h>
 
 #include <trace/events/sunrpc.h>
-
+#include <linux/sunrpc/sunrpc_enfs_adapter.h>
 #include "sunrpc.h"
 #include "sysfs.h"
 #include "fail.h"
@@ -2100,7 +2100,6 @@ struct rpc_xprt *xprt_create_transport(struct xprt_create *args)
 	if (!rpc_multipath_ops_create_xprt(xprt)) {
 			xprt_destroy(xprt);
 			return ERR_PTR(-ENOMEM);
-		}
 	}
 
 	rpc_xprt_debugfs_register(xprt);

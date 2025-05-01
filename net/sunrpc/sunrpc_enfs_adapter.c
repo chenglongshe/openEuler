@@ -173,24 +173,24 @@ void rpc_multipath_ops_releas_clnt(struct rpc_clnt *clnt)
 	rpc_multipath_ops_put(mops);
 }
 
-void rpc_multipath_ops_inc_queuelen(struct rpc_clnt *clnt)
+void rpc_multipath_ops_inc_queuelen(struct rpc_xprt *xprt)
 {
 	struct rpc_multipath_ops *mops;
 
 	mops = rpc_multipath_ops_get();
 	if (mops && mops->inc_queuelen)
-		mops->inc_queuelen(clnt);
+		mops->inc_queuelen(xprt);
 
 	rpc_multipath_ops_put(mops);
 }
 
-void rpc_multipath_ops_dec_queuelen(struct rpc_clnt *clnt)
+void rpc_multipath_ops_dec_queuelen(struct rpc_xprt *xprt)
 {
 	struct rpc_multipath_ops *mops;
 
 	mops = rpc_multipath_ops_get();
 	if (mops && mops->dec_queuelen)
-		mops->dec_queuelen(clnt);
+		mops->dec_queuelen(xprt);
 
 	rpc_multipath_ops_put(mops);
 }
