@@ -931,11 +931,6 @@ int enfs_dns_init(void)
 	int ret;
 
 	spin_lock_init(&dns_cache_lock);
-	ret = init_dns_resolver();
-	if (ret != 0) {
-		enfs_log_error("Init dns resolver err:%d.\n", ret);
-		return ret;
-	}
 
 	dns_workq = create_workqueue("enfs_dns_workqueue");
 	if (!dns_workq) {
@@ -960,6 +955,4 @@ void enfs_dns_exit(void)
 		flush_workqueue(dns_workq);
 		destroy_workqueue(dns_workq);
 	}
-
-	exit_dns_resolver();
 }

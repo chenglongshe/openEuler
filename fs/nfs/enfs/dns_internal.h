@@ -45,9 +45,6 @@ int enfs_euler_dns_query(struct net *net, const char *type, const char *name,
 			 size_t namelen, const char *options, char **_result,
 			 time64_t *_expiry, bool invalidate);
 
-int init_dns_resolver(void);
-void exit_dns_resolver(void);
-
 void enfs_add_domain_name(struct multipath_mount_options *opt);
 void enfs_debug_print_name_list(void);
 

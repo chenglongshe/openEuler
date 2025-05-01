@@ -1,4 +1,3 @@
-
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  *  Client-side ENFS adapt header.
@@ -10,7 +9,7 @@
 #include "enfs_multipath_client.h"
 #include "enfs_log.h"
 #include "enfs_config.h"
-#include "netns.h"
+#include "../../../fs/nfs/netns.h"
 #include "enfs.h"
 
 #define ENFS_LOOKUPCACHE_ACTIVE \
@@ -334,12 +333,8 @@ int lookupcache_add_work(struct nfs_fh *fh, struct nfs_server *server,
 		return -ENOMEM;
 	}
 
-#ifdef ENFS_OPENEULER_660
 	if (!refcount_inc_not_zero(
 		    &server->nfs_client->cl_rpcclient->cl_count)) {
-#else
-	if (!atomic_inc_not_zero(&server->nfs_client->cl_rpcclient->cl_count)) {
-#endif
 		kfree(work_info);
 		kfree(item);
 	}
