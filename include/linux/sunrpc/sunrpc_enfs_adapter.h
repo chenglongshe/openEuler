@@ -128,7 +128,7 @@ static inline bool rpc_multipath_ops_prepare_transmit(struct rpc_task *task)
 	return false;
 }
 
-static inline 
+static inline
 	void rpc_multipath_ops_set_transport(struct rpc_task *task, struct rpc_clnt *clnt)
 {
 }
