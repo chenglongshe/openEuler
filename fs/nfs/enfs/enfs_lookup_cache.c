@@ -19,13 +19,13 @@
 	SB_ACTIVE /* Indicates that the file system is currently active */
 
 static struct task_struct *lookupcache_thread;
-static struct workqueue_struct *lookupcache_workq = NULL;
+static struct workqueue_struct *lookupcache_workq;
 static spinlock_t lookupcache_workq_lock;
 static spinlock_t g_lookupcache_switch_lock;
 static int g_lookupcache_switch = ENFS_LOOKUPCACHE_ENABLE;
 static ktime_t start_query_lookup = { 0 };
 
-static bool start_query_lookup_init = false;
+static bool start_query_lookup_init;
 
 const struct rpc_procinfo enfs_lookup_cahce = { PROC(LOOKUPCACHE, lookupcache,
 						     lookupcache, 1) };
@@ -531,7 +531,7 @@ void enfs_lookupcache_fini(void)
 	lookupcache_workqueue_fini();
 }
 
-int enfs_lookupcache_init()
+int enfs_lookupcache_init(void)
 {
 	spin_lock_init(&g_lookupcache_switch_lock);
 	enfs_proc_reg(ENFSPROC_LOOKUPCACHE, &enfs_lookup_cahce);

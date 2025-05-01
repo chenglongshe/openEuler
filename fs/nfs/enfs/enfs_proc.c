@@ -617,8 +617,7 @@ static int enfs_proc_destroy_clnt(struct rpc_clnt *clnt, void *data)
 	return 0;
 }
 
-void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data),
-			    void *data)
+void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data), void *data)
 {
 	struct net *net;
 	struct sunrpc_net *sn;
