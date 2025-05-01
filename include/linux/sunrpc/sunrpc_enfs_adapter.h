@@ -48,7 +48,6 @@ void rpc_multipath_ops_create_clnt(struct rpc_create_args *args,
 				   struct rpc_clnt *clnt);
 void rpc_multipath_ops_releas_clnt(struct rpc_clnt *clnt);
 bool rpc_multipath_ops_create_xprt(struct rpc_xprt *xprt);
-void rpc_multipath_ops_destroy_xprt(struct rpc_xprt *xprt);
 void rpc_multipath_ops_xprt_iostat(struct rpc_task *task);
 void rpc_multipath_ops_failover_handle(struct rpc_task *task);
 bool rpc_multipath_ops_task_need_call_start_again(struct rpc_task *task);
@@ -98,10 +97,6 @@ static inline void rpc_multipath_ops_releas_clnt(struct rpc_clnt *clnt)
 static inline bool rpc_multipath_ops_create_xprt(struct rpc_xprt *xprt)
 {
 	return false;
-}
-
-static inline void rpc_multipath_ops_destroy_xprt(struct rpc_xprt *xprt)
-{
 }
 
 static inline void rpc_multipath_ops_xprt_iostat(struct rpc_task *task)
