@@ -38,6 +38,7 @@ struct rpc_sysfs_client {
 	struct rpc_xprt_switch *xprt_switch;
 };
 
+#if IS_ENABLED(CONFIG_ENFS)
 struct rpc_clnt_reserve {
 	atomic_t		cl_count;	/* Number of references */
 	unsigned int		cl_clid;	/* client id */
@@ -62,7 +63,7 @@ struct rpc_clnt_reserve {
 				cl_reserve  : 11,/* reserve bits */
 				cl_enfs   : 1;/* be enfs */
 };
-
+#endif
 
 /*
  * The high-level client handle
@@ -189,7 +190,9 @@ struct rpc_create_args {
 
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
+#if IS_ENABLED(CONFIG_ENFS)
 	void *multipath_option;
+#endif
 };
 
 struct rpc_add_xprt_test {
@@ -315,27 +318,4 @@ static inline void rpc_task_close_connection(struct rpc_task *task)
 	if (task->tk_xprt)
 		xprt_force_disconnect(task->tk_xprt);
 }
-
-struct rpc_multipath_ops {
-	struct module *owner;
-	void (*create_clnt)(struct rpc_create_args *args, struct rpc_clnt *clnt);
-	void (*releas_clnt)(struct rpc_clnt *clnt);
-	void (*create_xprt)(struct rpc_xprt *xprt);
-	void (*destroy_xprt)(struct rpc_xprt *xprt);
-	void (*xprt_iostat)(struct rpc_task *task);
-	void (*failover_handle)(struct rpc_task *task);
-	void (*adjust_task_timeout)(struct rpc_task *task, void *condition);
-	void (*init_task_req)(struct rpc_task *task, struct rpc_rqst *req);
-	bool (*prepare_transmit)(struct rpc_task *task);
-	void (*set_transport)(struct rpc_task *task, struct rpc_clnt *clnt);
-	void (*inc_queuelen)(struct rpc_xprt *xprt);
-	void (*dec_queuelen)(struct rpc_xprt *xprt);
-	void (*get_rpc_program)(struct rpc_task *task, u32 *program, u32 *version);
-	bool (*task_need_call_start_again)(struct rpc_task *task);
-};
-extern struct rpc_multipath_ops __rcu *multipath_ops;
-int rpc_multipath_ops_register(struct rpc_multipath_ops *ops);
-int rpc_multipath_ops_unregister(struct rpc_multipath_ops *ops);
-struct rpc_multipath_ops *rpc_multipath_ops_get(void);
-void rpc_multipath_ops_put(struct rpc_multipath_ops *ops);
 #endif /* _LINUX_SUNRPC_CLNT_H */

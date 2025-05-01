@@ -28,6 +28,10 @@ struct rpc_xprt_switch {
 
 	struct rpc_sysfs_xprt_switch *xps_sysfs;
 	struct rcu_head		xps_rcu;
+#if IS_ENABLED(CONFIG_ENFS)
+	unsigned int		xps_nactive;
+	atomic_long_t		xps_queuelen;
+#endif
 };
 
 struct rpc_xprt_iter {

@@ -88,8 +88,6 @@ bool is_valid_option(enum nfsmultipathoptions option)
 int enfs_parse_mount_options(enum nfsmultipathoptions option, char *str,
 			     struct nfs_fs_context *mnt, struct fs_context *fc)
 {
-	//parseMultiPathOptions(getNfsMultiPathOpt(token), string, mnt);
-
 	int rc;
 	struct enfs_adapter_ops *ops;
 
@@ -247,6 +245,16 @@ int nfs_remount_iplist(struct nfs_client *nfs_client, void *enfs_option)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(nfs_remount_iplist);
+
+bool nfs_has_created_multipath(struct nfs_client *nfs_client)
+{
+	if (nfs_client == NULL || nfs_client->cl_multipath_data == NULL)
+		return false;
+	else
+		return true;
+}
+EXPORT_SYMBOL_GPL(nfs_has_created_multipath);
+
 
 void nfs_multipath_set_mount_data(void **opt, const char *hostname)
 {

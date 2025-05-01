@@ -8884,7 +8884,7 @@ static int _nfs4_proc_exchange_id(struct nfs_client *clp, const struct cred *cre
 
 	if (clp->cl_serverscope != NULL &&
 	    !nfs41_same_server_scope(clp->cl_serverscope,
-				resp->server_scope) && clp->cl_multipath_data == NULL) {
+				resp->server_scope) && !nfs_has_created_multipath()) {
 		dprintk("%s: server_scope mismatch detected\n",
 			__func__);
 		set_bit(NFS4CLNT_SERVER_SCOPE_MISMATCH, &clp->cl_state);
@@ -9014,14 +9014,10 @@ static int nfs4_proc_destroy_clientid(struct nfs_client *clp,
 	for (loop = NFS4_MAX_LOOP_ON_RECOVER; loop != 0; loop--) {
 		ret = _nfs4_proc_destroy_clientid(clp, cred);
 		switch (ret) {
-		case -NFS4ERR_DELAY: {
+		case -NFS4ERR_DELAY:
+		case -NFS4ERR_CLIENTID_BUSY:
 			ssleep(1);
 			break;
-		}
-		case -NFS4ERR_CLIENTID_BUSY: {
-			msleep(200);
-			break;
-		}
 		default:
 			return ret;
 		}

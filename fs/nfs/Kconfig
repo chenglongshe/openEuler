@@ -216,7 +216,7 @@ config NFS_V4_2_READ_PLUS
 config ENFS
 	tristate "NFS client support for ENFS"
 	depends on NFS_FS
-	default n
+	default y
 	help
 	 This option enables support multipath of the NFS protocol
 	 in the kernel's NFS client.

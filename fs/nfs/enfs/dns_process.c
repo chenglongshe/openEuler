@@ -276,18 +276,12 @@ static int multi_query_dns(struct nfs_ip_list *ip_list, char *name, int slot,
 	char *ip_addr = NULL;
 	int ip_len;
 
-#if (defined(ENFS_EULER_5_10) || defined(ENFS_OPENEULER_660))
 	struct net *net;
 
 	net = current->nsproxy->net_ns;
 	enfs_log_debug("domain_name:%s option:%s\n", name, options);
 	ip_len = enfs_euler_dns_query(net, NULL, name, strlen(name), options,
 				      &ip_addr, NULL, true);
-#else
-	enfs_log_debug("domain_name:%s option:%s\n", name, options);
-	ip_len = enfs_dns_query(NULL, name, strlen(name), options, &ip_addr,
-				NULL);
-#endif
 	if (ip_len <= 0) {
 		enfs_log_info("dns query:%s error.\n", ip_addr);
 		return -ESRCH;

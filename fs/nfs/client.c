@@ -44,7 +44,6 @@
 #include "callback.h"
 #include "delegation.h"
 #include "iostat.h"
-//#include "internal.h"
 #include "enfs_adapter.h"
 #include "fscache.h"
 #include "pnfs.h"
@@ -318,27 +317,28 @@ again:
 
 		/* Match the full socket address */
 		if (!rpc_cmp_addr_port(sap, clap)) {
+#if IS_ENABLED(CONFIG_ENFS)
 			if (data->enfs_option != NULL)
 				continue;
+#endif
 			/* Match all xprt_switch full socket addresses */
 			if (IS_ERR(clp->cl_rpcclient) ||
                             !rpc_clnt_xprt_switch_has_addr(clp->cl_rpcclient,
 							   sap))
 				continue;
 		}
+#if IS_ENABLED(CONFIG_ENFS)
 		if (!nfs_multipath_client_match(clp->cl_multipath_data, data->enfs_option)) {
-			printk("not match client src %p dst %p.\n", clp->cl_multipath_data, data->enfs_option);
 			continue;
-		}
+#endif
+
 		/* Match the xprt security policy */
 		if (clp->cl_xprtsec.policy != data->xprtsec.policy)
 			continue;
 
 		refcount_inc(&clp->cl_count);
-		printk("match client %p.\n", clp);
 		return clp;
 	}
-	printk("not match client .\n");
 	return NULL;
 }
 
@@ -526,7 +526,9 @@ int nfs_create_rpc_client(struct nfs_client *clp,
 		.xprtsec	= cl_init->xprtsec,
 		.connect_timeout = cl_init->connect_timeout,
 		.reconnect_timeout = cl_init->reconnect_timeout,
+#if IS_ENABLED(CONFIG_ENFS)
 		.multipath_option = cl_init->enfs_option,
+#endif
 	};
 
 	if (test_bit(NFS_CS_DISCRTRY, &clp->cl_flags))
@@ -703,7 +705,9 @@ static int nfs_init_server(struct nfs_server *server,
 		.nconnect = ctx->nfs_server.nconnect,
 		.init_flags = (1UL << NFS_CS_REUSEPORT),
 		.xprtsec = ctx->xprtsec,
+#if IS_ENABLED(CONFIG_ENFS)
 		.enfs_option = ctx->enfs_option
+#endif
 	};
 	struct nfs_client *clp;
 	int error;

@@ -1360,11 +1360,6 @@ static loff_t nfs_llseek_dir(struct file *filp, loff_t offset, int whence)
 	return offset;
 }
 
-bool nfs_check_have_lookup_cache_flag(struct nfs_server *server, int flag)
-{
-	return enfs_check_have_lookup_cache_flag(server, flag);
-}
-
 /*
  * All directory operations under NFS are synchronous, so fsync()
  * is a dummy operation.
@@ -1498,6 +1493,15 @@ static int nfs_dentry_verify_change(struct inode *dir, struct dentry *dentry)
 	    d_really_is_negative(dentry))
 		return dentry->d_time == inode_peek_iversion_raw(dir);
 	return nfs_verify_change_attribute(dir, dentry->d_time);
+}
+
+bool nfs_check_have_lookup_cache_flag(struct nfs_server *server, int flag)
+{
+#if IS_ENABLED(CONFIG_ENFS)
+	return enfs_check_have_lookup_cache_flag(server, flag);
+#else
+	return (server->flags & NFS_MOUNT_LOOKUP_CACHE_NONE);
+#
 }
 
 /*

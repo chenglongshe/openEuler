@@ -22,7 +22,6 @@
 #include <net/handshake.h>
 
 #include "nfs.h"
-// #include "internal.h"
 #include "enfs_adapter.h"
 
 #include "nfstrace.h"
@@ -93,11 +92,13 @@ enum nfs_param {
 	Opt_wsize,
 	Opt_write,
 	Opt_xprtsec,
+#if IS_ENABLED(CONFIG_ENFS)
 	Opt_remote_addrs,
 	Opt_local_iplist,
 	Opt_enfs_info,
 	Opt_slookupcache,
 	Opt_alookupcache,
+#endif
 };
 
 enum {
@@ -205,11 +206,13 @@ static const struct fs_parameter_spec nfs_fs_parameters[] = {
 	fsparam_enum  ("write",		Opt_write, nfs_param_enums_write),
 	fsparam_u32   ("wsize",		Opt_wsize),
 	fsparam_string("xprtsec",	Opt_xprtsec),
+#if IS_ENABLED(CONFIG_ENFS)
 	fsparam_string("localaddrs",	Opt_local_iplist),
 	fsparam_string("remoteaddrs",	Opt_remote_addrs),
 	fsparam_string("enfs_info",	Opt_enfs_info),
 	fsparam_string("slookupcache",	Opt_slookupcache),
 	fsparam_string("alookupcache",	Opt_alookupcache),
+#endif
 	{}
 };
 
@@ -923,17 +926,6 @@ static int nfs_fs_context_parse_param(struct fs_context *fc,
 			goto out_invalid_value;
 		}
 		break;
-	case Opt_local_iplist:
-	case Opt_remote_addrs:
-		switch (enfs_parse_mount_options(getNfsMultiPathOpt(opt), param->string, ctx, fc)) {
-			case  0: break;
-			case -ENOMEM: goto out_nomem;
-			case -ENOSPC: goto out_limit;
-			case -EINVAL: goto out_invalid_address;
-			case -EOPNOTSUPP: goto out_invalid_address;
-			case -ENOTSUPP: goto out_invalid_address;
-		}
-		break;
 	case Opt_write:
 		trace_nfs_mount_assign(param->key, param->string);
 		switch (result.uint_32) {
@@ -960,12 +952,23 @@ static int nfs_fs_context_parse_param(struct fs_context *fc,
 	case Opt_sloppy:
 		ctx->sloppy = true;
 		break;
+#if IS_ENABLED(CONFIG_ENFS)
+	case Opt_local_iplist:
+	case Opt_remote_addrs:
+		switch (enfs_parse_mount_options(getNfsMultiPathOpt(opt), param->string, ctx, fc)) {
+			case  0: break;
+			case -ENOMEM: goto out_nomem;
+			case -ENOSPC: goto out_limit;
+			case -EINVAL: goto out_invalid_address;
+			case -EOPNOTSUPP: goto out_invalid_address;
+			case -ENOTSUPP: goto out_invalid_address;
+		}
+		break;
 	case Opt_enfs_info:
 	case Opt_slookupcache:
 	case Opt_alookupcache:
 		break;
-	default:
-		dfprintk(MOUNT, "NFS:   unrecognized mount option");
+#endif
 	}
 
 	return 0;
@@ -978,10 +981,12 @@ out_of_bounds:
 	return nfs_invalf(fc, "NFS: Value for '%s' out of range", param->key);
 out_bad_transport:
 	return nfs_invalf(fc, "NFS: Unrecognized transport protocol");
+#if IS_ENABLED(CONFIG_ENFS)
 out_limit:
 	return nfs_invalf(fc, "NFS: param is more than supported limit");
 out_nomem:
 	return nfs_invalf(fc, "NFS: not enough memory to parse option");
+#endif
 }
 
 /*

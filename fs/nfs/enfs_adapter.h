@@ -5,12 +5,21 @@
  *  Copyright (c) 2023. Huawei Technologies Co., Ltd. All rights reserved.
  */
 
-#ifndef _NFS_MULTIPATH_H_
-#define _NFS_MULTIPATH_H_
+#ifndef _NFS_ADAPTER_H_
+#define _NFS_ADAPTER_H_
 
+#include <linux/parser.h>
 #include "internal.h"
 
-enum nfsmultipathoptions { REMOTEADDR, LOCALADDR, INVALID_OPTION };
+#if IS_ENABLED(CONFIG_ENFS)
+enum nfs_multi_path_options {
+	REMOTEADDR,
+	LOCALADDR,
+	REMOTEDNSNAME,
+	REMOUNTREMOTEADDR,
+	REMOUNTLOCALADDR,
+	INVALID_OPTION
+};
 
 /* enfs_flag in struct nfs_server bitmap define */
 #define ENFS_SERVER_FLAG_GET_CAP_RUNNING \
@@ -23,22 +32,15 @@ enum nfsmultipathoptions { REMOTEADDR, LOCALADDR, INVALID_OPTION };
 struct enfs_adapter_ops {
 	const char *name;
 	struct module *owner;
-	//int (*alloc_mount_option)
 	int (*parse_mount_options)(enum nfsmultipathoptions option, char *str,
 				   void **enfs_option, struct net *net_ns);
 	void (*free_mount_options)(void **data);
-
-	//void *(*dup_mount_options)(struct nfs_fs_context *ctx);
 	int (*client_info_init)(void **data,
 				const struct nfs_client_initdata *cl_init);
 	void (*client_info_free)(void *data);
 	int (*client_info_match)(void *src, void *dst);
 	int (*nfs4_client_info_match)(void *src, void *dst);
 	void (*client_info_show)(struct seq_file *mount_option, void *data);
-	// int (*client_info_clone)(struct nfs_server *src, struct nfs_server *dst,
-	//	rpc_authflavor_t flavor);
-	// struct rpc_clnt *(*get_best_conn)(struct nfs_client *clp, struct nfs_fh *fh);
-	// void (*conn_set_unavailable)(struct nfs_client *clp, struct rpc_clnt *clnt);
 	int (*remount_ip_list)(struct nfs_client *nfs_client,
 			       void *enfs_option);
 	void (*set_mount_data)(void **opt, const char *hostname);
@@ -64,5 +66,65 @@ int enfs_adapter_unregister(struct enfs_adapter_ops *ops);
 int nfs_remount_iplist(struct nfs_client *nfs_client, void *enfs_option);
 bool enfs_check_have_lookup_cache_flag(struct nfs_server *server, int flag);
 void enfs_trigger_get_server_capability(struct nfs_server *server);
-#endif
+bool nfs_has_created_multipath(struct nfs_client *nfs_client);
 
+#else
+static inline
+void nfs_free_multi_path_client(struct nfs_client *clp)
+{
+
+}
+
+static inline
+int nfs_multipath_client_match(struct nfs_client *clp,
+			const struct nfs_client_initdata *sap)
+{
+	return 1;
+}
+
+static inline
+int nfs_create_multi_path_client(struct nfs_client *client,
+			const struct nfs_client_initdata *cl_init)
+{
+	return 0;
+}
+
+static inline
+void nfs_multipath_show_client_info(struct seq_file *mount_option,
+			struct nfs_server *server)
+{
+
+}
+
+static inline
+int nfs4_multipath_client_match(struct nfs_client *src,
+			struct nfs_client *dst)
+{
+	return 1;
+}
+
+static inline
+void enfs_free_mount_options(struct nfs_parsed_mount_data *data)
+{
+
+}
+
+static inline
+int enfs_check_mount_parse_info(char *p, int token,
+		struct nfs_parsed_mount_data *mnt, const substring_t *args)
+{
+	return 1;
+}
+
+int nfs_remount_iplist(struct nfs_client *nfs_client, void *data)
+{
+	return 1;
+}
+
+bool nfs_has_created_multipath(struct nfs_client *nfs_client)
+{
+	return false;
+}
+
+#endif // CONFIG_ENFS
+#endif

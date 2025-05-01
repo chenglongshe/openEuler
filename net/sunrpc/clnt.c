@@ -38,6 +38,7 @@
 #include <linux/sunrpc/rpc_pipe_fs.h>
 #include <linux/sunrpc/metrics.h>
 #include <linux/sunrpc/bc_xprt.h>
+#include <linux/sunrpc/sunrpc_enfs_adapter.h>
 #include <trace/events/sunrpc.h>
 
 #include "sunrpc.h"
@@ -53,8 +54,6 @@
  */
 
 static DECLARE_WAIT_QUEUE_HEAD(destroy_wait);
-
-struct rpc_multipath_ops __rcu *multipath_ops;
 
 
 static void	call_start(struct rpc_task *task);
@@ -79,8 +78,7 @@ static int	rpc_decode_header(struct rpc_task *task,
 				  struct xdr_stream *xdr);
 static int	rpc_ping(struct rpc_clnt *clnt);
 static int	rpc_ping_noreply(struct rpc_clnt *clnt);
-static void	rpc_check_timeout(struct rpc_task *task);
-static void	rpc_check_timeout_trans(struct rpc_task *task);
+static void	rpc_check_timeout(struct rpc_task *task, bool failover);
 
 static void rpc_register_client(struct rpc_clnt *clnt)
 {
@@ -460,60 +458,11 @@ out_no_rpciod:
 	return ERR_PTR(err);
 }
 
-struct rpc_multipath_ops *rpc_multipath_ops_get(void)
-{
-	struct rpc_multipath_ops *ops;
-
-	rcu_read_lock();
-	ops = rcu_dereference(multipath_ops);
-	if (!ops) {
-		rcu_read_unlock();
-		return NULL;
-	}
-	if (!try_module_get(ops->owner))
-		ops = NULL;
-	rcu_read_unlock();
-	return ops;
-}
-EXPORT_SYMBOL_GPL(rpc_multipath_ops_get);
-
-void rpc_multipath_ops_put(struct rpc_multipath_ops *ops)
-{
-	if (ops)
-		module_put(ops->owner);
-}
-EXPORT_SYMBOL_GPL(rpc_multipath_ops_put);
-
-int rpc_multipath_ops_register(struct rpc_multipath_ops *ops)
-{
-	struct rpc_multipath_ops *old;
-
-	old = cmpxchg((struct rpc_multipath_ops **)&multipath_ops, NULL, ops);
-	if (!old || old == ops)
-		return 0;
-	printk(KERN_ERR "regist rpc_multipath ops %p fail. old %p\n", ops, old);
-	return -EPERM;
-}
-EXPORT_SYMBOL_GPL(rpc_multipath_ops_register);
-
-int rpc_multipath_ops_unregister(struct rpc_multipath_ops *ops)
-{
-	struct rpc_multipath_ops *old;
-
-	old = cmpxchg((struct rpc_multipath_ops **)&multipath_ops, ops, NULL);
-	if (!old || old == ops)
-		return 0;
-	printk(KERN_ERR "regist rpc_multipath ops %p fail. old %p\n", ops, old);
-	return -EPERM;
-}
-EXPORT_SYMBOL_GPL(rpc_multipath_ops_unregister);
-
 static struct rpc_clnt *rpc_create_xprt(struct rpc_create_args *args,
 					struct rpc_xprt *xprt)
 {
 	struct rpc_clnt *clnt = NULL;
 	struct rpc_xprt_switch *xps;
-	struct rpc_multipath_ops *mops;
 
 	if (args->bc_xprt && args->bc_xprt->xpt_bc_xps) {
 		WARN_ON_ONCE(!(args->protocol & XPRT_TRANSPORT_BC));
@@ -548,12 +497,7 @@ static struct rpc_clnt *rpc_create_xprt(struct rpc_create_args *args,
 		}
 	}
 
-	if (args->multipath_option) {
-		mops = rpc_multipath_ops_get();
-		if (mops && mops->create_clnt)
-			mops->create_clnt(args, clnt);
-		rpc_multipath_ops_put(mops);
-	}
+	rpc_multipath_ops_create_clnt(args, clnt);
 
 	clnt->cl_softrtry = 1;
 	if (args->flags & (RPC_CLNT_CREATE_HARDRTRY|RPC_CLNT_CREATE_SOFTERR)) {
@@ -1003,8 +947,6 @@ EXPORT_SYMBOL_GPL(rpc_clnt_disconnect);
  */
 void rpc_shutdown_client(struct rpc_clnt *clnt)
 {
-	struct rpc_multipath_ops *mops;
-
 	might_sleep();
 
 	trace_rpc_clnt_shutdown(clnt);
@@ -1015,10 +957,7 @@ void rpc_shutdown_client(struct rpc_clnt *clnt)
 			list_empty(&clnt->cl_tasks), 1*HZ);
 	}
 
-	mops = rpc_multipath_ops_get();
-	if (mops && mops->releas_clnt)
-		mops->releas_clnt(clnt);
-	rpc_multipath_ops_put(mops);
+	rpc_multipath_ops_releas_clnt(clnt);
 
 	rpc_release_client(clnt);
 }
@@ -1144,17 +1083,11 @@ struct rpc_xprt *
 rpc_task_get_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt)
 {
 	struct rpc_xprt_switch *xps;
-	struct rpc_multipath_ops *mops;
 
 	if (!xprt)
 		return NULL;
 
-	mops = rpc_multipath_ops_get();
-	if (mops && mops->inc_queuelen)
-		mops->inc_queuelen(xprt);
-	rpc_multipath_ops_put(mops);
-
-	rcu_read_lock();
+	rpc_multipath_ops_inc_queuelen(xprt);	rcu_read_lock();
 	xps = rcu_dereference(clnt->cl_xpi.xpi_xpswitch);
 	atomic_long_inc(&xps->xps_queuelen);
 	rcu_read_unlock();
@@ -1167,13 +1100,8 @@ static void
 rpc_task_release_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt)
 {
 	struct rpc_xprt_switch *xps;
-	struct rpc_multipath_ops *mops;
 
-	mops = rpc_multipath_ops_get();
-	if (mops && mops->dec_queuelen)
-		mops->dec_queuelen(xprt);
-	rpc_multipath_ops_put(mops);
-
+	rpc_multipath_ops_dec_queuelen(xprt);
 	atomic_long_dec(&xprt->queuelen);
 	rcu_read_lock();
 	xps = rcu_dereference(clnt->cl_xpi.xpi_xpswitch);
@@ -1234,12 +1162,7 @@ EXPORT_SYMBOL_GPL(rpc_task_get_next_xprt);
 static
 void rpc_task_set_transport(struct rpc_task *task, struct rpc_clnt *clnt)
 {
-	struct rpc_multipath_ops *mops;
-
-	mops = rpc_multipath_ops_get();
-	if (mops && mops->set_transport)
-		mops->set_transport(task, clnt);
-	rpc_multipath_ops_put(mops);
+	rpc_multipath_ops_set_transport(task, clnt);
 
 	if (task->tk_xprt) {
 		if (!(test_bit(XPRT_OFFLINE, &task->tk_xprt->state) &&
@@ -1735,17 +1658,14 @@ size_t rpc_max_bc_payload(struct rpc_clnt *clnt)
 {
 	struct rpc_xprt *xprt;
 	size_t ret;
-	struct rpc_clnt_reserve *clnt_reserve;
-
-	clnt_reserve = (struct rpc_clnt_reserve *)clnt;
 
 	rcu_read_lock();
-	if (clnt_reserve->cl_enfs == 0)
+	if (!rpc_clnt_has_multipath(clnt))
 		xprt = rcu_dereference(clnt->cl_xprt);
 	else
 		xprt = rpc_task_get_next_xprt(clnt);
 	ret = xprt->ops->bc_maxpayload(xprt);
-	if (clnt_reserve->cl_enfs == 1 && xprt)
+	if (rpc_clnt_has_multipath(clnt) && xprt)
 		xprt_put(xprt);
 	rcu_read_unlock();
 	return ret;
@@ -1887,7 +1807,6 @@ static void call_retry_reserve(struct rpc_task *task);
 static void
 call_reserveresult(struct rpc_task *task)
 {
-	struct rpc_multipath_ops *mpath_ops = NULL;
 	int status = task->tk_status;
 
 	/*
@@ -1912,17 +1831,14 @@ call_reserveresult(struct rpc_task *task)
 	case -EAGAIN:	/* woken up; retry */
 		task->tk_action = call_retry_reserve;
 		return;
+#if IS_ENABLED(CONFIG_ENFS)
 	case -ETIMEDOUT:	/* woken up; restart */
-		mpath_ops = rpc_multipath_ops_get();
-		if (mpath_ops && mpath_ops->task_need_call_start_again &&
-		    mpath_ops->task_need_call_start_again(task)) {
-			rpc_multipath_ops_put(mpath_ops);
+		if (rpc_multipath_ops_task_need_call_start_again(task)) {
 			rpc_task_release_transport(task);
 			task->tk_action = call_start;
-			return;
 		}
-		rpc_multipath_ops_put(mpath_ops);
 		return;
+#endif
 	default:
 		rpc_call_rpcerror(task, status);
 	}
@@ -2250,7 +2166,7 @@ out_next:
 retry_timeout:
 	task->tk_status = 0;
 	task->tk_action = call_bind;
-	rpc_check_timeout(task);
+	rpc_check_timeout(task, true);
 }
 
 /*
@@ -2376,7 +2292,7 @@ out_next:
 out_retry:
 	/* Check for timeouts before looping back to call_bind */
 	task->tk_action = call_bind;
-	rpc_check_timeout(task);
+	rpc_check_timeout(task, true);
 }
 
 /*
@@ -2468,7 +2384,7 @@ call_transmit_status(struct rpc_task *task)
 		task->tk_status = 0;
 		break;
 	}
-	rpc_check_timeout_trans(task);
+	rpc_check_timeout(task, false);
 }
 
 #if defined(CONFIG_SUNRPC_BACKCHANNEL)
@@ -2618,7 +2534,7 @@ call_status(struct rpc_task *task)
 		goto out_exit;
 	}
 	task->tk_action = call_encode;
-	rpc_check_timeout(task);
+	rpc_check_timeout(task, true);
 	return;
 out_exit:
 	rpc_call_rpcerror(task, status);
@@ -2634,80 +2550,16 @@ rpc_check_connected(const struct rpc_rqst *req)
 }
 
 static void
-rpc_check_timeout_trans(struct rpc_task *task)
+rpc_check_timeout(struct rpc_task *task, bool failover)
 {
 	struct rpc_clnt	*clnt = task->tk_client;
-
-	if (RPC_SIGNALLED(task)) {
-		rpc_call_rpcerror(task, -ERESTARTSYS);
-		return;
-	}
-
-	if (xprt_adjust_timeout(task->tk_rqstp) == 0)
-		return;
-
-	trace_rpc_timeout_status(task);
-	task->tk_timeouts++;
-
-	if (RPC_IS_SOFTCONN(task) && !rpc_check_connected(task->tk_rqstp)) {
-		rpc_call_rpcerror(task, -ETIMEDOUT);
-		return;
-	}
-
-	if (RPC_IS_SOFT(task)) {
-		/*
-		 * Once a "no retrans timeout" soft tasks (a.k.a NFSv4) has
-		 * been sent, it should time out only if the transport
-		 * connection gets terminally broken.
-		 */
-		if ((task->tk_flags & RPC_TASK_NO_RETRANS_TIMEOUT) &&
-		    rpc_check_connected(task->tk_rqstp))
-			return;
-
-		if (clnt->cl_chatty) {
-			pr_notice_ratelimited(
-				"%s: server %s not responding, timed out\n",
-				clnt->cl_program->name,
-				task->tk_xprt->servername);
-		}
-		if (task->tk_flags & RPC_TASK_TIMEOUT)
-			rpc_call_rpcerror(task, -ETIMEDOUT);
-		else
-			__rpc_call_rpcerror(task, -EIO, -ETIMEDOUT);
-		return;
-	}
-
-	if (!(task->tk_flags & RPC_CALL_MAJORSEEN)) {
-		task->tk_flags |= RPC_CALL_MAJORSEEN;
-		if (clnt->cl_chatty) {
-			pr_notice_ratelimited(
-				"%s: server %s not responding, still trying\n",
-				clnt->cl_program->name,
-				task->tk_xprt->servername);
-		}
-	}
-	rpc_force_rebind(clnt);
-	/*
-	 * Did our request time out due to an RPCSEC_GSS out-of-sequence
-	 * event? RFC2203 requires the server to drop all such requests.
-	 */
-	rpcauth_invalcred(task);
-}
-
-static void
-rpc_check_timeout(struct rpc_task *task)
-{
-	struct rpc_clnt	*clnt = task->tk_client;
-	struct rpc_multipath_ops *mpath_ops = NULL;
 
 	if (RPC_SIGNALLED(task))
 		return;
 
 	if (xprt_adjust_timeout(task->tk_rqstp) == 0) {
-		mpath_ops = rpc_multipath_ops_get();
-		if (mpath_ops && mpath_ops->failover_handle)
-			mpath_ops->failover_handle(task);
-		rpc_multipath_ops_put(mpath_ops);
+		if (failover)
+			rpc_multipath_ops_failover_handle(task);
 		return;
 	}
 
@@ -2820,26 +2672,14 @@ out:
 			xprt_conditional_disconnect(req->rq_xprt,
 						    req->rq_connect_cookie);
 		task->tk_action = call_encode;
-		rpc_check_timeout(task);
+		rpc_check_timeout(task, true);
 		break;
 	case -EKEYREJECTED:
 		task->tk_action = call_reserve;
-		rpc_check_timeout(task);
+		rpc_check_timeout(task, true);
 		rpcauth_invalcred(task);
 		/* Ensure we obtain a new XID if we retry! */
 		xprt_release(task);
-	}
-}
-
-void update_rpc_program(struct rpc_task *task, u32 *cl_prog, u32 *cl_vers)
-{
-	struct rpc_multipath_ops *mops;
-
-	if (task->tk_flags & RPC_TASK_ENFS) {
-		mops = rpc_multipath_ops_get();
-		if (mops && mops->get_rpc_program)
-			mops->get_rpc_program(task, cl_prog, cl_vers);
-		rpc_multipath_ops_put(mops);
 	}
 }
 
@@ -2853,7 +2693,7 @@ rpc_encode_header(struct rpc_task *task, struct xdr_stream *xdr)
 	u32 cl_prog = clnt->cl_prog;
 	u32 cl_vers = clnt->cl_vers;
 
-	update_rpc_program(task, &cl_prog, &cl_vers);
+	rpc_multipath_ops_update_rpc_program(task, &cl_prog, &cl_vers);
 	error = -EMSGSIZE;
 	p = xdr_reserve_space(xdr, RPC_CALLHDRSIZE << 2);
 	if (!p)
@@ -3300,7 +3140,6 @@ int rpc_clnt_add_xprt(struct rpc_clnt *clnt,
 {
 	struct rpc_xprt_switch *xps;
 	struct rpc_xprt *xprt;
-	struct rpc_clnt_reserve *clnt_reserve;
 	unsigned long connect_timeout;
 	unsigned long reconnect_timeout;
 	unsigned char resvport, reuseport;
@@ -3341,8 +3180,7 @@ int rpc_clnt_add_xprt(struct rpc_clnt *clnt,
 				connect_timeout,
 				reconnect_timeout);
 
-	clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-	if (!clnt_reserve->cl_enfs)
+	if (!rpc_clnt_has_multipath(clnt))
 		rpc_xprt_switch_set_roundrobin(xps);
 	if (setup) {
 		ret = setup(clnt, xps, xprt, data);

@@ -23,11 +23,12 @@
 #include <linux/nfsacl.h>
 #include "nfstrace.h"
 #include "internal.h"
+#if IS_ENABLED(CONFIG_ENFS)
 #include "linux/nfs_xdr.h"
-
+#define EXTEND_CMD_MAX_BUF_LEN 819200 /* 800K */
+#endif
 #define NFSDBG_FACILITY		NFSDBG_XDR
 
-#define EXTEND_CMD_MAX_BUF_LEN 819200 /* 800K */
 
 /* Mapping from NFS error code to "errno" error code. */
 #define errno_NFSERR_IO		EIO
@@ -68,8 +69,9 @@
 #define NFS3_readdirargs_sz	(NFS3_fh_sz+NFS3_cookieverf_sz+3)
 #define NFS3_readdirplusargs_sz	(NFS3_fh_sz+NFS3_cookieverf_sz+4)
 #define NFS3_commitargs_sz	(NFS3_fh_sz+3)
+#if IS_ENABLED(CONFIG_ENFS)
 #define NFS3_extendargs_sz	(4 + XDR_QUADLEN(EXTEND_CMD_MAX_BUF_LEN))
-
+#endif
 #define NFS3_getattrres_sz	(1+NFS3_fattr_sz)
 #define NFS3_setattrres_sz	(1+NFS3_wcc_data_sz)
 #define NFS3_removeres_sz	(NFS3_setattrres_sz)
@@ -86,7 +88,9 @@
 #define NFS3_fsinfores_sz	(1+NFS3_post_op_attr_sz+12)
 #define NFS3_pathconfres_sz	(1+NFS3_post_op_attr_sz+6)
 #define NFS3_commitres_sz	(1+NFS3_wcc_data_sz+2)
+#if IS_ENABLED(CONFIG_ENFS)
 #define NFS3_extendres_sz	(1 + 4 + XDR_QUADLEN(EXTEND_CMD_MAX_BUF_LEN))
+#endif
 
 #define ACL3_getaclargs_sz	(NFS3_fh_sz+1)
 #define ACL3_setaclargs_sz	(NFS3_fh_sz+1+ \
@@ -1374,6 +1378,7 @@ static void nfs3_xdr_enc_setacl3args(struct rpc_rqst *req,
 
 #endif  /* CONFIG_NFS_V3_ACL */
 
+#if IS_ENABLED(CONFIG_ENFS)
 static void nfs3_xdr_enc_extend3args(struct rpc_rqst *req,
 									 struct xdr_stream *xdr, const void *data)
 {
@@ -1384,6 +1389,7 @@ static void nfs3_xdr_enc_extend3args(struct rpc_rqst *req,
 	p = xdr_reserve_space(xdr, 4 + encArg->buflen);
 	xdr_encode_opaque(p, encArg->pBuf, encArg->buflen);
 }
+#endif
 
 /*
  * NFSv3 XDR decode functions
@@ -2456,6 +2462,7 @@ out_default:
 
 #endif  /* CONFIG_NFS_V3_ACL */
 
+#if IS_ENABLED(CONFIG_ENFS)
 static int nfs3_xdr_dec_extend3res(struct rpc_rqst *req, struct xdr_stream *xdr,
 	void *result)
 {
@@ -2510,9 +2517,7 @@ out:
 out_default:
 	return nfs3_stat_to_errno(status);
 }
-
-
-
+#endif
 
 /*
  * We need to translate between nfs status return values and
@@ -2590,8 +2595,6 @@ static int nfs3_stat_to_errno(enum nfs_stat status)
 	.p_name      = #proc,						\
 	}
 
-#define NFS3PROC_EXTEND		22
-
 const struct rpc_procinfo nfs3_procedures[] = {
 	PROC(GETATTR,		getattr,	getattr,	1),
 	PROC(SETATTR,		setattr,	setattr,	0),
@@ -2614,7 +2617,9 @@ const struct rpc_procinfo nfs3_procedures[] = {
 	PROC(FSINFO,		getattr,	fsinfo,		0),
 	PROC(PATHCONF,		getattr,	pathconf,	0),
 	PROC(COMMIT,		commit,		commit,		5),
+#if IS_ENABLED(CONFIG_ENFS)
 	PROC(EXTEND,		extend,		extend,		0),
+#endif
 };
 EXPORT_SYMBOL_GPL(nfs3_procedures);
 

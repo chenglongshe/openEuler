@@ -124,7 +124,9 @@ struct nfs_client {
 	char			cl_ipaddr[48];
 	struct net		*cl_net;
 	struct list_head	pending_cb_stateids;
+#if IS_ENABLED(CONFIG_ENFS)
 	void *cl_multipath_data; /* multi path private structure (struct multipath_client_info *) */
+#endif
 };
 
 /*
@@ -266,7 +268,9 @@ struct nfs_server {
 	const struct cred	*cred;
 	bool			has_sec_mnt_opts;
 	struct kobject		kobj;
+#if IS_ENABLED(CONFIG_ENFS)
 	int  enfs_flags;  /* ENFS_SERVER_FLAG_xx */
+#endif
 };
 
 /* Server capabilities */

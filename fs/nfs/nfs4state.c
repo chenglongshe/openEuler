@@ -317,7 +317,7 @@ static void nfs41_finish_session_reset(struct nfs_client *clp)
 	clear_bit(NFS4CLNT_BIND_CONN_TO_SESSION, &clp->cl_state);
 	nfs4_setup_state_renewal(clp);
 }
-
+#if IS_ENABLED(CONFIG_ENFS)
 static DEFINE_MUTEX(g_nfs41_clntid_cachelist_lock);
 static LIST_HEAD(g_nfs41_clntid_cachelist);
 
@@ -371,18 +371,22 @@ static void _nfs41_put_clntid_locknode(nfs4_clntid_locknode *lock_node)
 	mutex_unlock(&g_nfs41_clntid_cachelist_lock);
 	return;
 }
+#endif
 
 int nfs41_init_clientid(struct nfs_client *clp, const struct cred *cred)
 {
 	int status;
+#if IS_ENABLED(CONFIG_ENFS)
 	nfs4_clntid_locknode *node = NULL;
 
 	node = _nfs41_get_clntid_locknode(clp->cl_clientid);
 	if (node == NULL) {
 		status = -EAGAIN; // finally goes to nfs4_handle_reclaim_lease_error, will retry 1s later
 		printk_ratelimited("NFSv41: get clntid %llu lock node failed, retry later.\n", clp->cl_clientid);
+		_nfs41_put_clntid_locknode(node);
 		goto out;
 	}
+#endif
 
 	if (test_bit(NFS4CLNT_LEASE_CONFIRM, &clp->cl_state))
 		goto do_confirm;
@@ -399,7 +403,6 @@ do_confirm:
 	nfs41_finish_session_reset(clp);
 	nfs_mark_client_ready(clp, NFS_CS_READY);
 out:
-	_nfs41_put_clntid_locknode(node);
 	return status;
 }
 
@@ -438,7 +441,7 @@ int nfs41_discover_server_trunking(struct nfs_client *clp,
 	 * server via Transparent State Migration.
 	 */
 	if (clp->cl_exchange_flags & EXCHGID4_FLAG_CONFIRMED_R) {
-		if ((!test_bit(NFS_CS_TSM_POSSIBLE, &clp->cl_flags)) && (clp->cl_multipath_data == NULL))
+		if ((!test_bit(NFS_CS_TSM_POSSIBLE, &clp->cl_flags)) && !nfs_has_created_multipath(clp))
 			set_bit(NFS4CLNT_PURGE_STATE, &clp->cl_state);
 		else
 			set_bit(NFS4CLNT_LEASE_CONFIRM, &clp->cl_state);
