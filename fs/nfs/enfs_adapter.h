@@ -109,12 +109,12 @@ void enfs_free_mount_options(struct nfs_fs_context *data)
 
 }
 
-int nfs_remount_iplist(struct nfs_client *nfs_client, void *data)
+static inline int nfs_remount_iplist(struct nfs_client *nfs_client, void *data)
 {
 	return 1;
 }
 
-bool nfs_has_created_multipath(struct nfs_client *nfs_client)
+static inline bool nfs_has_created_multipath(struct nfs_client *nfs_client)
 {
 	return false;
 }
