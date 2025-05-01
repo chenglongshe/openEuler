@@ -12,7 +12,7 @@
 #include "internal.h"
 
 #if IS_ENABLED(CONFIG_ENFS)
-enum nfs_multi_path_options {
+enum nfsmultipathoptions {
 	REMOTEADDR,
 	LOCALADDR,
 	REMOTEDNSNAME,

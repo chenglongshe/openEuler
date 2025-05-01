@@ -328,7 +328,7 @@ again:
 				continue;
 		}
 #if IS_ENABLED(CONFIG_ENFS)
-		if (!nfs_multipath_client_match(clp->cl_multipath_data, data->enfs_option)) {
+		if (!nfs_multipath_client_match(clp->cl_multipath_data, data->enfs_option))
 			continue;
 #endif
 
