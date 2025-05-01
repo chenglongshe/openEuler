@@ -814,19 +814,12 @@ void rpc_prepare_task(struct rpc_task *task)
 	task->tk_ops->rpc_call_prepare(task, task->tk_calldata);
 }
 
-void rpc_init_task_retry_counters(struct rpc_task *task)
-{
-	/* Initialize retry counters */
-	task->tk_garb_retry = 2;
-	task->tk_cred_retry = 2;
-}
-EXPORT_SYMBOL_GPL(rpc_init_task_retry_counters);
-
 static void
 rpc_init_task_statistics(struct rpc_task *task)
 {
 	/* Initialize retry counters */
-	rpc_init_task_retry_counters(task);
+	task->tk_garb_retry = 2;
+	task->tk_cred_retry = 2;
 
 	/* starting timestamp */
 	task->tk_start = ktime_get();

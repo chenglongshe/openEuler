@@ -17,7 +17,6 @@ void rpc_init_task_retry_counters(struct rpc_task *task)
 	/* Initialize retry counters */
 	task->tk_garb_retry = 2;
 	task->tk_cred_retry = 2;
-	task->tk_rebind_retry = 2;
 }
 EXPORT_SYMBOL_GPL(rpc_init_task_retry_counters);
 
@@ -223,18 +222,6 @@ void rpc_multipath_ops_set_transport(struct rpc_task *task, struct rpc_clnt *cln
 
 	rpc_multipath_ops_put(mops);
 }
-
-void rpc_multipath_ops_failover_handle(struct rpc_task *task)
-{
-	struct rpc_multipath_ops *mops;
-
-	mops = rpc_multipath_ops_get();
-	if (mops && mops->failover_handle)
-		mops->failover_handle(task);
-
-	rpc_multipath_ops_put(mops);
-}
-
 
 void rpc_multipath_ops_update_rpc_program(struct rpc_task *task, u32 *cl_prog, u32 *cl_vers)
 {
