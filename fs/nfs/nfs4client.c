@@ -1198,7 +1198,7 @@ static int nfs4_init_server(struct nfs_server *server, struct fs_context *fc)
 #if IS_ENABLED(CONFIG_ENFS)
 				ctx->enfs_option,
 #endif
-				&ctx->xprtsec;
+				&ctx->xprtsec);
 	if (error < 0)
 		return error;
 

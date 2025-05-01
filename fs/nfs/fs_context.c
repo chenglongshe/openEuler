@@ -1504,8 +1504,9 @@ static int nfs_fs_context_validate(struct fs_context *fc)
 	ret = nfs_parse_source(fc, max_namelen, max_pathlen);
 	if (ret < 0)
 		return ret;
+#if IS_ENABLED(CONFIG_ENFS)
 	nfs_multipath_set_mount_data(&ctx->enfs_option, ctx->nfs_server.hostname);
-
+#endif
 	/* Load the NFS protocol module if we haven't done so yet */
 	if (!ctx->nfs_mod) {
 		nfs_mod = get_nfs_version(ctx->version);
@@ -1589,7 +1590,9 @@ static int nfs_fs_context_dup(struct fs_context *fc, struct fs_context *src_fc)
 	ctx->nfs_server.hostname	= NULL;
 	ctx->fscache_uniq		= NULL;
 	ctx->clone_data.fattr		= NULL;
+#if IS_ENABLED(CONFIG_ENFS)
 	ctx->enfs_option = NULL;
+#endif
 	fc->fs_private = ctx;
 	return 0;
 }
