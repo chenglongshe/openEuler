@@ -58,7 +58,7 @@
 
 #include "nfs4_fs.h"
 #include "delegation.h"
-#include "internal.h"
+#include "enfs_adapter.h"
 #include "iostat.h"
 #include "callback.h"
 #include "pnfs.h"
@@ -8884,7 +8884,7 @@ static int _nfs4_proc_exchange_id(struct nfs_client *clp, const struct cred *cre
 
 	if (clp->cl_serverscope != NULL &&
 	    !nfs41_same_server_scope(clp->cl_serverscope,
-				resp->server_scope)) {
+				resp->server_scope) && !nfs_has_created_multipath(clp)) {
 		dprintk("%s: server_scope mismatch detected\n",
 			__func__);
 		set_bit(NFS4CLNT_SERVER_SCOPE_MISMATCH, &clp->cl_state);
