@@ -32,7 +32,7 @@
 #define NLM_HOST_COLLECT	(120 * HZ)
 
 #if IS_ENABLED(CONFIG_ENFS)
-ine ENFS_CAPABILITY_LSID_SUPPORT 0x0002 /* lsversion query capability */
+#define ENFS_CAPABILITY_LSID_SUPPORT 0x0002 /* lsversion query capability */
 #endif
 
 static struct hlist_head	nlm_server_hosts[NLM_HOST_NRHASH];
