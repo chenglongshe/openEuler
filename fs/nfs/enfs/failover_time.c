@@ -108,8 +108,9 @@ void failover_init_task_req(struct rpc_task *task, struct rpc_rqst *req)
 		LVOS_TP_END;
 	}
 
-	current_timeout = (ktime_ms_delta(ktime_get(), task->tk_start)) * HZ /
-			  MSEC_PER_SEC;
+	current_timeout =
+		(unsigned long)(((unsigned int)ktime_ms_delta(ktime_get(), task->tk_start)) *
+				HZ / 1000);
 	if (timeout > current_timeout)
 		req->rq_majortimeo = (timeout - current_timeout) + jiffies;
 	else

@@ -136,7 +136,7 @@ static void __exit exit_enfs(void)
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Huawei Tech. Co., Ltd.");
-MODULE_DESCRIPTION("Nfs client router");
+MODULE_DESCRIPTION("Nfs client multipath");
 MODULE_VERSION("1.0");
 
 module_init(init_enfs);

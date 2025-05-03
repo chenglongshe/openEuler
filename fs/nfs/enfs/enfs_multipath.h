@@ -22,6 +22,6 @@ int multipath_query_dns(struct multipath_mount_options *opt,
 			unsigned short family, bool use_cache,
 			struct rpc_clnt *clnt);
 void enfs_for_each_rpc_clnt(int (*fn)(struct rpc_clnt *clnt, void *data),
-			    void *data);
+	void *data);
 
 #endif // ENFS_MULTIPATH_H
