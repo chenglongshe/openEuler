@@ -580,8 +580,7 @@ int multipath_query_dns(struct multipath_mount_options *opt,
 }
 
 int enfs_for_each_nfs_clnt(int (*fn)(struct nfs_client *clp, void *data),
-	void *data)
-{
+	void *data) {
 	struct net *net;
 	struct nfs_net *nn;
 	struct nfs_client *clp;
