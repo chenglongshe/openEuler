@@ -6,6 +6,7 @@
 #ifndef _ENFS_H_
 #define _ENFS_H_
 #include <linux/atomic.h>
+#include <asm/div64.h>
 #include <linux/nfs.h>
 #include <linux/nfs4.h>
 #include <linux/nfs3.h>
