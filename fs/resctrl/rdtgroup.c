@@ -967,6 +967,80 @@ static int rdtgroup_tasks_show(struct kernfs_open_file *of,
 	return ret;
 }
 
+#ifdef CONFIG_ARM64_MPAM
+static void update_prefetch_tasks(struct rdtgroup *r, u32 prefetch_dis)
+{
+	struct task_struct *p, *t;
+
+	rcu_read_lock();
+
+	for_each_process_thread(p, t) {
+		if (is_closid_match(t, r) || is_rmid_match(t, r)) {
+			WRITE_ONCE(task_thread_info(t)->prefetch_dis, prefetch_dis);
+			/* Update task_struct and will send IPI to target cpu */
+			smp_mb();
+			update_task_closid_rmid(t);
+		}
+	}
+
+	rcu_read_unlock();
+}
+
+static ssize_t rdtgroup_prefetch_write(struct kernfs_open_file *of,
+				       char *buf, size_t nbytes, loff_t off)
+{
+	struct rdtgroup *rdtgrp;
+	int ret = 0;
+	u32 prefetch_dis;
+
+	rdtgrp = rdtgroup_kn_lock_live(of->kn);
+	if (!rdtgrp) {
+		rdtgroup_kn_unlock(of->kn);
+		return -ENOENT;
+	}
+	rdt_last_cmd_clear();
+
+	if (rdtgrp->mode == RDT_MODE_PSEUDO_LOCKED ||
+	    rdtgrp->mode == RDT_MODE_PSEUDO_LOCKSETUP) {
+		ret = -EINVAL;
+		rdt_last_cmd_puts("Pseudo-locking in progress\n");
+		goto unlock;
+	}
+
+	if (kstrtou32(buf, 0, &prefetch_dis)) {
+		rdt_last_cmd_printf("Task list parsing error prefetch %s\n", buf);
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	if (rdtgrp->prefetch_dis != prefetch_dis) {
+		rdtgrp->prefetch_dis = prefetch_dis;
+		update_prefetch_tasks(rdtgrp, prefetch_dis);
+	}
+
+unlock:
+	rdtgroup_kn_unlock(of->kn);
+
+	return ret ?: nbytes;
+}
+
+static int rdtgroup_prefetch_show(struct kernfs_open_file *of,
+				  struct seq_file *s, void *v)
+{
+	struct rdtgroup *rdtgrp;
+	int ret = 0;
+
+	rdtgrp = rdtgroup_kn_lock_live(of->kn);
+	if (rdtgrp)
+		seq_printf(s, "%u\n", rdtgrp->prefetch_dis);
+	else
+		ret = -ENOENT;
+	rdtgroup_kn_unlock(of->kn);
+
+	return ret;
+}
+#endif
+
 static int rdtgroup_closid_show(struct kernfs_open_file *of,
 				struct seq_file *s, void *v)
 {
@@ -2036,6 +2110,16 @@ static struct rftype res_common_files[] = {
 		.seq_show	= rdtgroup_tasks_show,
 		.fflags		= RFTYPE_BASE,
 	},
+#ifdef CONFIG_ARM64_MPAM
+	{
+		.name		= "prefetch_dis",
+		.mode		= 0644,
+		.kf_ops		= &rdtgroup_kf_single_ops,
+		.write		= rdtgroup_prefetch_write,
+		.seq_show	= rdtgroup_prefetch_show,
+		.fflags		= RFTYPE_BASE,
+	},
+#endif
 	{
 		.name		= "mon_hw_id",
 		.mode		= 0444,

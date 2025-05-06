@@ -143,15 +143,30 @@ static inline void resctrl_arch_set_rmid(struct task_struct *tsk, u32 rmid)
 #endif
 }
 
+#define setbit(x, y)	(x |= (1<<y))
+#define clrbit(x, y)	(x &= ~(1<<y))
+
 static inline void mpam_thread_switch(struct task_struct *tsk)
 {
 	u64 oldregval;
 	int cpu = smp_processor_id();
 	u64 regval = mpam_get_regval(tsk);
+	u64 val, val1;
 
 	if (!IS_ENABLED(CONFIG_ARM64_MPAM) ||
 	    !static_branch_likely(&mpam_enabled))
 		return;
+
+	asm volatile("mrs %0, S3_1_c15_c6_4" : "=r" (val));
+	val1 = val;
+
+	if (task_thread_info(tsk)->prefetch_dis)
+		setbit(val1, 0);
+	else
+		clrbit(val1, 0);
+
+	if (val1 != val)
+		asm volatile("msr S3_1_c15_c6_4, %0" : : "r"(val1));
 
 	if (regval == READ_ONCE(mpam_resctrl_default_group))
 		regval = READ_ONCE(per_cpu(arm64_mpam_default, cpu));
