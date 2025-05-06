@@ -417,6 +417,8 @@ void			xprt_free(struct rpc_xprt *);
 void			xprt_add_backlog(struct rpc_xprt *xprt, struct rpc_task *task);
 bool			xprt_wake_up_backlog(struct rpc_xprt *xprt, struct rpc_rqst *req);
 void			xprt_cleanup_ids(void);
+void *xprt_get_reserve_context(struct rpc_xprt *xprt);
+void xprt_set_reserve_context(struct rpc_xprt *xprt, void *context);
 
 static inline int
 xprt_enable_swap(struct rpc_xprt *xprt)

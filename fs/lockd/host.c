@@ -31,6 +31,8 @@
 #define NLM_HOST_EXPIRE		(300 * HZ)
 #define NLM_HOST_COLLECT	(120 * HZ)
 
+#define ENFS_CAPABILITY_LSID_SUPPORT 0x0002 /* lsversion query capability */
+
 static struct hlist_head	nlm_server_hosts[NLM_HOST_NRHASH];
 static struct hlist_head	nlm_client_hosts[NLM_HOST_NRHASH];
 
@@ -446,7 +448,7 @@ nlm_bind_host(struct nlm_host *host)
 			.to_initval	= increment,
 			.to_increment	= increment,
 			.to_maxval	= increment * 6UL,
-			.to_retries	= 5U,
+			.to_retries	= 0,
 		};
 		struct rpc_create_args args = {
 			.net		= host->net,
@@ -569,10 +571,17 @@ void nlm_host_rebooted(const struct net *net, const struct nlm_reboot *info)
 	 * To avoid processing a host several times, we match the nsmstate.
 	 */
 	while ((host = next_host_state(nlm_server_hosts, nsm, info)) != NULL) {
+		if (host->enfs_flag & ENFS_CAPABILITY_LSID_SUPPORT) {
+            continue;
+        }
 		nlmsvc_free_host_resources(host);
 		nlmsvc_release_host(host);
 	}
 	while ((host = next_host_state(nlm_client_hosts, nsm, info)) != NULL) {
+		if (host->enfs_flag & ENFS_CAPABILITY_LSID_SUPPORT) {
+            dprintk("lockd: ignore nsm notify. \n");
+            continue;
+        }
 		nlmclnt_recovery(host);
 		nlmclnt_release_host(host);
 	}
