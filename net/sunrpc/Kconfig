@@ -115,3 +115,14 @@ config SUNRPC_XPRT_RDMA
 
 	  If unsure, or you know there is no RDMA capability on your
 	  hardware platform, say N.
+
+config SUNRPC_ENFS
+	tristate "sunrpc support ENFS"
+	depends on SUNRPC
+	default y
+	help
+	  This option allows the NFS client can use multipath load balance.
+
+	  This feature will improve performance and reliability.
+
+	  If sure, say Y.
