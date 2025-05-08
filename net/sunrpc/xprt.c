@@ -53,11 +53,10 @@
 #include <linux/sched/mm.h>
 
 #include <trace/events/sunrpc.h>
-
+#include <linux/sunrpc/sunrpc_enfs_adapter.h>
 #include "sunrpc.h"
 #include "sysfs.h"
 #include "fail.h"
-
 /*
  * Local variables
  */
@@ -282,6 +281,7 @@ out_locked:
 out_unlock:
 	xprt_clear_locked(xprt);
 out_sleep:
+	rpc_multipath_ops_adjust_task_timeout(task, NULL);
 	task->tk_status = -EAGAIN;
 	if  (RPC_IS_SOFT(task))
 		rpc_sleep_on_timeout(&xprt->sending, task, NULL,
@@ -329,7 +329,6 @@ xprt_test_and_clear_congestion_window_wait(struct rpc_xprt *xprt)
 int xprt_reserve_xprt_cong(struct rpc_xprt *xprt, struct rpc_task *task)
 {
 	struct rpc_rqst *req = task->tk_rqstp;
-
 	if (test_and_set_bit(XPRT_LOCKED, &xprt->state)) {
 		if (task == xprt->snd_task)
 			goto out_locked;
@@ -348,6 +347,8 @@ int xprt_reserve_xprt_cong(struct rpc_xprt *xprt, struct rpc_task *task)
 out_unlock:
 	xprt_clear_locked(xprt);
 out_sleep:
+	rpc_multipath_ops_adjust_task_timeout(task, NULL);
+
 	task->tk_status = -EAGAIN;
 	if (RPC_IS_SOFT(task))
 		rpc_sleep_on_timeout(&xprt->sending, task, NULL,
@@ -608,6 +609,8 @@ EXPORT_SYMBOL_GPL(xprt_wake_pending_tasks);
  */
 void xprt_wait_for_buffer_space(struct rpc_xprt *xprt)
 {
+	struct rpc_task *task = xprt->snd_task;
+	rpc_multipath_ops_adjust_task_timeout(task, NULL);
 	set_bit(XPRT_WRITE_SPACE, &xprt->state);
 }
 EXPORT_SYMBOL_GPL(xprt_wait_for_buffer_space);
@@ -1888,6 +1891,8 @@ xprt_request_init(struct rpc_task *task)
 	req->rq_release_snd_buf = NULL;
 	xprt_init_majortimeo(task, req);
 
+	rpc_multipath_ops_init_task_req(task, req);
+
 	trace_xprt_reserve(req);
 }
 
@@ -1961,6 +1966,9 @@ void xprt_release(struct rpc_task *task)
 
 	xprt = req->rq_xprt;
 	xprt_request_dequeue_xprt(task);
+
+	rpc_multipath_ops_xprt_iostat(task);
+
 	spin_lock(&xprt->transport_lock);
 	xprt->ops->release_xprt(xprt, task);
 	if (xprt->ops->release_request)
@@ -1980,6 +1988,7 @@ void xprt_release(struct rpc_task *task)
 	else
 		xprt_free_bc_request(req);
 }
+EXPORT_SYMBOL_GPL(xprt_release);
 
 #ifdef CONFIG_SUNRPC_BACKCHANNEL
 void
@@ -2030,6 +2039,24 @@ static void xprt_init(struct rpc_xprt *xprt, struct net *net)
 	xprt->xprt_net = get_net_track(net, &xprt->ns_tracker, GFP_KERNEL);
 }
 
+const char *xprt_set_servername(const char *s, gfp_t gfp)
+{
+#if IS_ENABLED(CONFIG_SUNRPC_ENFS)
+	return rpc_multipath_set_servername(s, gfp);
+#else
+	return kstrdup(s, gfp);
+#endif
+}
+
+void xprt_free_servername(struct rpc_xprt *xprt)
+{
+#if IS_ENABLED(CONFIG_SUNRPC_ENFS)
+	rpc_multipath_free_servername(xprt);
+#else
+	kfree(xprt->servername);
+#endif
+}
+
 /**
  * xprt_create_transport - create an RPC transport
  * @args: rpc transport creation arguments
@@ -2063,10 +2090,15 @@ struct rpc_xprt *xprt_create_transport(struct xprt_create *args)
 		xprt_destroy(xprt);
 		return ERR_PTR(-EINVAL);
 	}
-	xprt->servername = kstrdup(args->servername, GFP_KERNEL);
+	xprt->servername = xprt_set_servername(args->servername, GFP_KERNEL);
 	if (xprt->servername == NULL) {
 		xprt_destroy(xprt);
 		return ERR_PTR(-ENOMEM);
+	}
+
+	if (!rpc_multipath_ops_create_xprt(xprt)) {
+			xprt_destroy(xprt);
+			return ERR_PTR(-ENOMEM);
 	}
 
 	rpc_xprt_debugfs_register(xprt);
@@ -2088,7 +2120,7 @@ static void xprt_destroy_cb(struct work_struct *work)
 	rpc_destroy_wait_queue(&xprt->pending);
 	rpc_destroy_wait_queue(&xprt->sending);
 	rpc_destroy_wait_queue(&xprt->backlog);
-	kfree(xprt->servername);
+	xprt_free_servername(xprt);
 	/*
 	 * Destroy any existing back channel
 	 */

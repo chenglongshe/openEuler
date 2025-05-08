@@ -11,7 +11,7 @@
 #include <linux/sunrpc/xprt.h>
 #include <linux/sunrpc/bc_xprt.h>
 #include <linux/sunrpc/rpc_pipe_fs.h>
-#include "internal.h"
+#include "enfs_adapter.h"
 #include "callback.h"
 #include "delegation.h"
 #include "nfs4session.h"
@@ -455,7 +455,16 @@ struct nfs_client *nfs4_init_client(struct nfs_client *clp,
 	error = nfs4_init_client_minor_version(clp);
 	if (error < 0)
 		goto error;
+#if IS_ENABLED(CONFIG_ENFS)
+	error = nfs_create_multi_path_client(clp, cl_init);
 
+	if (error < 0) {
+		printk("nfs4_create_multi_path_client failed.%d\n.", error);
+		nfs_put_client(clp);
+		clp = ERR_PTR(error);
+		return clp;
+	}
+#endif
 	error = nfs4_discover_server_trunking(clp, &old);
 	if (error < 0)
 		goto error;
@@ -565,7 +574,10 @@ static int nfs4_match_client(struct nfs_client  *pos,  struct nfs_client *new,
 	 */
 	if (!nfs4_match_client_owner_id(pos, new))
 		return 1;
-
+#if IS_ENABLED(CONFIG_ENFS)
+	if (!nfs4_multipath_client_match(pos->cl_multipath_data, new->cl_multipath_data))
+		return 1;
+#endif
 	return 0;
 }
 
@@ -901,6 +913,9 @@ static int nfs4_set_client(struct nfs_server *server,
 		u32 minorversion, unsigned int nconnect,
 		unsigned int max_connect,
 		struct net *net,
+#if IS_ENABLED(CONFIG_ENFS)
+		void *enfs_option,
+#endif
 		struct xprtsec_parms *xprtsec)
 {
 	struct nfs_client_initdata cl_init = {
@@ -915,6 +930,9 @@ static int nfs4_set_client(struct nfs_server *server,
 		.timeparms = timeparms,
 		.cred = server->cred,
 		.xprtsec = *xprtsec,
+#if IS_ENABLED(CONFIG_ENFS)
+		.enfs_option = enfs_option,
+#endif
 	};
 	struct nfs_client *clp;
 
@@ -1177,6 +1195,9 @@ static int nfs4_init_server(struct nfs_server *server, struct fs_context *fc)
 				ctx->nfs_server.nconnect,
 				ctx->nfs_server.max_connect,
 				fc->net_ns,
+#if IS_ENABLED(CONFIG_ENFS)
+				ctx->enfs_option,
+#endif
 				&ctx->xprtsec);
 	if (error < 0)
 		return error;
@@ -1268,6 +1289,9 @@ struct nfs_server *nfs4_create_referral_server(struct fs_context *fc)
 				parent_client->cl_nconnect,
 				parent_client->cl_max_connect,
 				parent_client->cl_net,
+#if IS_ENABLED(CONFIG_ENFS)
+				NULL,
+#endif
 				&parent_client->cl_xprtsec);
 	if (!error)
 		goto init_server;
@@ -1288,6 +1312,9 @@ struct nfs_server *nfs4_create_referral_server(struct fs_context *fc)
 				parent_client->cl_nconnect,
 				parent_client->cl_max_connect,
 				parent_client->cl_net,
+#if IS_ENABLED(CONFIG_ENFS)
+				NULL,
+#endif
 				&parent_client->cl_xprtsec);
 	if (error < 0)
 		goto error;
@@ -1363,7 +1390,11 @@ int nfs4_update_server(struct nfs_server *server, const char *hostname,
 				clp->cl_proto, clnt->cl_timeout,
 				clp->cl_minorversion,
 				clp->cl_nconnect, clp->cl_max_connect,
-				net, &clp->cl_xprtsec);
+				net,
+#if IS_ENABLED(CONFIG_ENFS)
+				NULL,
+#endif
+				&clp->cl_xprtsec);
 	clear_bit(NFS_MIG_TSM_POSSIBLE, &server->mig_status);
 	if (error != 0) {
 		nfs_server_insert_lists(server);
