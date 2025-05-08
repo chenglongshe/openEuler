@@ -40,11 +40,11 @@
 
 #define DEFAULT_PATH_DETECT_INTERVAL 10
 #define DEFAULT_PATH_DETECT_TIMEOUT 5
-#define DEFAULT_MULTIPATH_TIMEOUT 0 // 0表示使用用户mount命令指定的timeo时间
+#define DEFAULT_MULTIPATH_TIMEOUT 0 // 0 means use mount cmd para
 #define DEFAULT_MULTIPATH_STATE ENFS_MULTIPATH_ENABLE
 #define DEFAULT_LOADBALANCE_MODE ENFS_LOADBALANCE_RR
 #define DEFAULT_DNS_UPDATE_INTERVAL 5 // 5 minute
-#define DEFAULT_DNS_AUTO_MULTIPATH_RESOLUTION 1 // 默认开启NFS原生域名参数解析
+#define DEFAULT_DNS_AUTO_MULTIPATH_RESOLUTION 0 // default is disable
 #define DEFAULT_SHARDVIEW_UPDATE_INTERVAL 60 // 60 second
 #define MAX_PRIOPITY_ARRAY_WWNS 6
 #define MAX_IP_PREFIX 8
@@ -90,7 +90,7 @@ static int enfs_check_config_value(char *value, int min_value, int max_value)
 	unsigned long num_value;
 	int ret;
 
-	ret = kstrtol(value, 10, &num_value); // 转换为10进制
+	ret = kstrtol(value, 10, &num_value);
 	if (ret != 0) {
 		enfs_log_error("Failed to convert string to int\n");
 		return -EINVAL;
@@ -102,7 +102,6 @@ static int enfs_check_config_value(char *value, int min_value, int max_value)
 	return num_value;
 }
 
-// 检查并赋值
 static int32_t enfs_check_and_assign_int_value(char *field_name, char *value,
 					       int min_value, int max_value)
 {
@@ -309,7 +308,6 @@ static int32_t enfs_read_config_file_in_openeuler(char *buffer, char *file_path)
 	return ENFS_RET_OK;
 }
 
-// 处理一行
 static int32_t enfs_deal_with_comment_line(char *buffer)
 {
 	int ret;
@@ -365,17 +363,17 @@ static int32_t enfs_get_value_from_config_file(char *buffer, char *field_name,
 	char val[STRING_BUF_SIZE + 1] = { 0 };
 
 	while (buffer[0] != '\0') {
-		// 每次处理一行
+		// parse one line
 		if (buffer[0] == '\n') {
-			// 处理空行
+			// handle space line
 			buffer++;
 		} else if (buffer[0] == '#') {
-			// 处理注释行
+			// handle comment
 			ret = enfs_deal_with_comment_line(buffer);
 			if (ret > 0)
 				buffer += ret;
 		} else {
-			// 处理正常字符串
+			// normal config line
 			ret = enfs_parse_key_value_from_config(buffer, key, val,
 							       STRING_BUF_SIZE,
 							       STRING_BUF_SIZE);
@@ -391,7 +389,6 @@ static int32_t enfs_get_value_from_config_file(char *buffer, char *field_name,
 			buffer += ret;
 
 			if (strcmp(field_name, key) == 0) {
-				// 判断key和field_name是否一致，一致给value赋值
 				strncpy(value, val, valueLen);
 				return ENFS_RET_OK;
 			}
@@ -419,14 +416,14 @@ int32_t enfs_config_load(void)
 	}
 	memset(buffer, 0, MAX_FILE_SIZE);
 
-	// 初始化为默认值
+	// default value
 	g_enfs_config_info.path_detect_interval = DEFAULT_PATH_DETECT_INTERVAL;
 	g_enfs_config_info.path_detect_timeout = DEFAULT_PATH_DETECT_TIMEOUT;
 	g_enfs_config_info.multipath_timeout = DEFAULT_MULTIPATH_TIMEOUT;
 	g_enfs_config_info.multipath_state = DEFAULT_MULTIPATH_STATE;
 	g_enfs_config_info.loadbalance_mode = DEFAULT_LOADBALANCE_MODE;
 	g_enfs_config_info.dns_update_interval = DEFAULT_DNS_UPDATE_INTERVAL;
-	g_enfs_config_info.dns_auto_multipath_resolution = 1;
+	g_enfs_config_info.dns_auto_multipath_resolution = 0;
 	g_enfs_config_info.shardview_update_interval =
 		DEFAULT_SHARDVIEW_UPDATE_INTERVAL;
 	g_enfs_config_info.priopity_wwn_count = 0;

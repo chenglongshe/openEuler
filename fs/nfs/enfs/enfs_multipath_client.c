@@ -253,7 +253,6 @@ int nfs_multipath_dns_list_info_match(const NFS_ROUTE_DNS_INFO_S *dns_src,
 	return true;
 }
 
-// 待处理 内容一样 顺序不一致场景
 int nfs_multipath_client_info_match(void *src, void *dst)
 {
 	int ret = true;

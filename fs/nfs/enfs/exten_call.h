@@ -32,15 +32,15 @@ typedef struct {
 	char ipAddr[0];
 } LIF_ARGS;
 typedef struct {
-	uint32_t ipType; // 需要存储返的ip类型对应Ip, IP_TYPE_E中的值
+	uint32_t ipType; // IP_TYPE_E
 	uint32_t dnsNameCount;
 	char dnsName[0];
 } DNS_ARGS;
 typedef enum IP_TYPE_E {
-	IP_TYPE_V4 = 0, /* *< 只需要IPv4类型 */
-	IP_TYPE_V6 = 1, /* *< 只需要IPv6类型 */
-	IP_TYPE_BOTH = 2, /* 同时需要ipv4 ipv6  */
-	IP_TYPE_BUTT = 3 /* *< 无效值 */
+	IP_TYPE_V4 = 0,
+	IP_TYPE_V6 = 1,
+	IP_TYPE_BOTH = 2,
+	IP_TYPE_BUTT = 3
 } IP_TYPE_E;
 
 typedef struct {
@@ -156,15 +156,13 @@ int dorado_query_dns(struct rpc_clnt *clnt,
 int dorado_query_lsId(struct rpc_clnt *clnt,
 		      EXTEND_GET_LS_VERSION **resDataOut);
 
-// =============
-// =============
 #define NFS3PROC_EXTEND 22
 
 #define DIR_BIT_POS 63
 #define NID_BITS_SZ 12
 
 #ifndef NID_BITS_MASK
-#define NID_BITS_MASK ((1 << NID_BITS_SZ) - 1) // ???????????
+#define NID_BITS_MASK ((1 << NID_BITS_SZ) - 1)
 #endif
 #define NID_BITS_POS (DIR_BIT_POS - NID_BITS_SZ)
 #define ENFS_GLOBAL_OID_BITS 47
@@ -242,7 +240,6 @@ static inline uint64_t get_objectid_from_uuid(FILE_UUID *file_uuid)
 	(ENFS_GET_FSID_HIGHEST_BIT(fsid) ?             \
 		 ENFS_GET_GLOBAL_FSPID_FROM_FID(fid) : \
 		 ENFS_GET_LOCAL_FSPID_FROM_FID(fid))
-// =============
 
 static inline uint64_t get_fspid_from_uuid(FILE_UUID *file_uuid)
 {

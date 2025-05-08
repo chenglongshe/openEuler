@@ -49,7 +49,6 @@ typedef struct NFS_ROUTE_DNS_INFO_T {
 		[MAX_DNS_SUPPORTED]; // valid only if dnsExist is true
 } NFS_ROUTE_DNS_INFO_S;
 
-// TODO:寻找合适的头文件放
 struct rpc_iostats;
 struct enfs_xprt_context {
 	int version;

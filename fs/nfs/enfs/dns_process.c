@@ -442,7 +442,7 @@ int enfs_server_query_dns(struct rpc_clnt *clnt, NFS_ROUTE_DNS_INFO_S *dns_info,
 	int tmpSlot = slot;
 	DNS_QUERY_LSID_INFO *dnsQueryLsidInfo = NULL;
 	DNS_QUERY_IP_INFO_SINGLE *dnsQueryIpInfo = NULL;
-	// malloc 最大節點數256
+	// malloc max node 256
 	int ipNumber;
 	int lsidCount;
 
