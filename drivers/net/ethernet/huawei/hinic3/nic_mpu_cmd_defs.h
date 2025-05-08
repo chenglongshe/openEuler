@@ -20,6 +20,10 @@
 #define NIC_TCAM_BLOCK_LARGE_NUM	256
 #define NIC_TCAM_BLOCK_LARGE_SIZE	16
 
+#define TRAFFIC_BIFUR_MODEL_TYPE 2
+
+#define NIC_TCAM_FLOW_BIFUR_FLAG (1 << 0)
+
 #ifndef BIT
 #define BIT(n) (1UL << (n))
 #endif
@@ -106,6 +110,7 @@ struct hinic3_port_state {
 
 #define HINIC3_SET_PORT_CAR_PROFILE 0
 #define HINIC3_SET_PORT_CAR_STATE 1
+#define HINIC3_GET_PORT_CAR_LIMIT_SPEED 2
 
 struct hinic3_port_car_info {
 	u32 cir; /* unit: kbps, range:[1,400*1000*1000], i.e. 1Kbps~400Gbps(400M*kbps) */
@@ -120,7 +125,7 @@ struct hinic3_cmd_set_port_car {
 	u8 port_id;
 	u8 opcode; /* 0--set car profile, 1--set car state */
 	u8 state; /* 0--disable, 1--enable */
-	u8 rsvd;
+	u8 level;
 
 	struct hinic3_port_car_info car;
 };
@@ -371,6 +376,14 @@ struct hinic3_cmd_local_lro_state {
 	u8 state; /* 0: disable, 1: enable */
 };
 
+struct hinic3_cmd_gtp_inner_parse_status {
+	struct hinic3_mgmt_msg_head msg_head;
+
+	u16 func_id;
+	u8 opcode; /* 0: get state, 1: set state */
+	u8 status; /* 0: disable, 1: enable */
+};
+
 struct hinic3_cmd_vf_vlan_config {
 	struct hinic3_mgmt_msg_head msg_head;
 
@@ -394,7 +407,8 @@ struct hinic3_cmd_tx_rate_cfg {
 	struct hinic3_mgmt_msg_head msg_head;
 
 	u16 func_id;
-	u16 rsvd1;
+	u8 rsvd1;
+	u8 direct;
 	u32 min_rate;
 	u32 max_rate;
 	u8 rsvd2[8];
@@ -437,8 +451,22 @@ struct hinic3_cmd_vlan_config {
 
 	u16 func_id;
 	u8 opcode;
-	u8 rsvd1;
+	u8 outband_defvid_flag;
 	u16 vlan_id;
+	u8 blacklist_flag;
+	u8 rsvd2;
+};
+
+#define VLAN_BLACKLIST_ENABLE  1
+#define VLAN_BLACKLIST_DISABLE 0
+
+struct hinic3_cmd_vxlan_port_info {
+	struct hinic3_mgmt_msg_head msg_head;
+
+	u16 func_id;
+	u8 opcode;
+	u8 cfg_mode;
+	u16 vxlan_port;
 	u16 rsvd2;
 };
 
@@ -587,6 +615,7 @@ struct hinic3_up_ets_cfg { /* delet */
 #define CMD_QOS_ETS_COS_PRIO	BIT(2)
 #define CMD_QOS_ETS_COS_BW	BIT(3)
 #define CMD_QOS_ETS_TC_PRIO	BIT(4)
+#define CMD_QOS_ETS_TC_RATELIMIT     BIT(5)
 struct hinic3_cmd_ets_cfg {
 	struct hinic3_mgmt_msg_head head;
 
@@ -601,6 +630,7 @@ struct hinic3_cmd_ets_cfg {
 	u8 cos_prio[NIC_DCB_COS_MAX];	/* 0 - DWRR, 1 - STRICT */
 	u8 cos_bw[NIC_DCB_COS_MAX];
 	u8 tc_prio[NIC_DCB_TC_MAX];	/* 0 - DWRR, 1 - STRICT */
+	u8 rate_limit[NIC_DCB_TC_MAX];
 };
 
 struct hinic3_cmd_set_dcb_state {
@@ -687,6 +717,8 @@ struct nic_cmd_pause_inquiry_cfg {
 
 	u32 type; /* 1: set, 2: get */
 
+	u32 cos_id;
+
 	u32 rx_inquiry_pause_drop_pkts_en;
 	u32 rx_inquiry_pause_period_ms;
 	u32 rx_inquiry_pause_times;
@@ -699,7 +731,7 @@ struct nic_cmd_pause_inquiry_cfg {
 	u32 tx_inquiry_pause_times;	/* tx pause Default Times Period 5 */
 	u32 tx_inquiry_pause_frame_thd;	/* tx pause Detection Threshold */
 	u32 tx_inquiry_rx_total_pkts;
-	u32 rsvd[4];
+	u32 rsvd[3];
 };
 
 /* pfc/pause Storm TX exception reporting */
@@ -924,7 +956,9 @@ struct nic_cmd_fdir_get_block_rules {
 };
 
 struct hinic3_tcam_key_ipv4_mem {
-	u32 rsvd1 : 4;
+	u32 rsvd1 : 1;
+	u32 bifur_flag : 2;
+	u32 model : 1;
 	u32 tunnel_type : 4;
 	u32 ip_proto : 8;
 	u32 rsvd0 : 16;
@@ -956,14 +990,16 @@ union hinic3_tag_tcam_ext_info {
 		u32 id : 16;	/* id */
 		u32 type : 4;	/* type: 0-func, 1-vmdq, 2-port, 3-rsvd, 4-trunk, 5-dp, 6-mc */
 		u32 host_id : 3;
-		u32 rsv : 8;
+		u32 rss_q_num : 8; /* rss queue num */
 		u32 ext : 1;
 	} bs;
 	u32 value;
 };
 
 struct hinic3_tcam_key_ipv6_mem {
-	u32 rsvd1 : 4;
+	u32 bifur_flag : 2;
+	u32 vlan_flag : 1;
+	u32 outer_ip_type : 1;
 	u32 tunnel_type : 4;
 	u32 ip_proto : 8;
 	u32 rsvd0 : 16;
@@ -1065,7 +1101,7 @@ struct hinic3_ppa_cfg_ppa_en_cmd {
 
 	u16 func_id;
 	u8 ppa_en;
-	u8 rsvd;
+	u8 ppa_miss_drop_en;
 };
 
 struct hinic3_func_flow_bifur_en_cmd {
@@ -1079,7 +1115,8 @@ struct hinic3_port_flow_bifur_en_cmd {
 	struct hinic3_mgmt_msg_head msg_head;
 	u16 port_id;
 	u8 flow_bifur_en;
-	u8 rsvd[5];
+	u8 flow_bifur_type; /* 0->vf bifur, 2->traffic bifur */
+	u8 rsvd[4];
 };
 
 struct hinic3_bond_mask_cmd {
@@ -1146,59 +1183,102 @@ enum {
 	NIC_NVM_DATA_VLAN_PRI = BIT(3),
 	NIC_NVM_DATA_VLAN_ID = BIT(4),
 	NIC_NVM_DATA_WORK_MODE = BIT(5),
-	NIC_NVM_DATA_PF_SPEED_LIMIT = BIT(6),
+	NIC_NVM_DATA_PF_TX_SPEED_LIMIT = BIT(6),
 	NIC_NVM_DATA_GE_MODE = BIT(7),
 	NIC_NVM_DATA_AUTO_NEG = BIT(8),
 	NIC_NVM_DATA_LINK_FEC = BIT(9),
 	NIC_NVM_DATA_PF_ADAPTIVE_LINK = BIT(10),
 	NIC_NVM_DATA_SRIOV_CONTROL = BIT(11),
 	NIC_NVM_DATA_EXTEND_MODE = BIT(12),
+	NIC_NVM_DATA_LEGACY_VLAN = BIT(13),
+	NIC_NVM_DATA_LEGACY_VLAN_PRI = BIT(14),
+	NIC_NVM_DATA_LEGACY_VLAN_ID = BIT(15),
 	NIC_NVM_DATA_RESET = BIT(31),
 };
 
-#define BIOS_CFG_SIGNATURE		0x1923E518
-#define BIOS_OP_CFG_ALL(op_code_val)	((((op_code_val) >> 1) & (0xFFFFFFFF)) != 0)
-#define BIOS_OP_CFG_WRITE(op_code_val)	((((op_code_val) & NIC_NVM_DATA_SET)) != 0)
-#define BIOS_OP_CFG_PXE_EN(op_code_val)	(((op_code_val) & NIC_NVM_DATA_PXE) != 0)
-#define BIOS_OP_CFG_VLAN_EN(op_code_val)	(((op_code_val) & NIC_NVM_DATA_VLAN) != 0)
-#define BIOS_OP_CFG_VLAN_PRI(op_code_val)	(((op_code_val) & NIC_NVM_DATA_VLAN_PRI) != 0)
-#define BIOS_OP_CFG_VLAN_ID(op_code_val)	(((op_code_val) & NIC_NVM_DATA_VLAN_ID) != 0)
-#define BIOS_OP_CFG_WORK_MODE(op_code_val)	(((op_code_val) & NIC_NVM_DATA_WORK_MODE) != 0)
-#define BIOS_OP_CFG_PF_BW(op_code_val)	(((op_code_val) & NIC_NVM_DATA_PF_SPEED_LIMIT) != 0)
-#define BIOS_OP_CFG_GE_SPEED(op_code_val)	(((op_code_val) & NIC_NVM_DATA_GE_MODE) != 0)
-#define BIOS_OP_CFG_AUTO_NEG(op_code_val)	(((op_code_val) & NIC_NVM_DATA_AUTO_NEG) != 0)
-#define BIOS_OP_CFG_LINK_FEC(op_code_val)	(((op_code_val) & NIC_NVM_DATA_LINK_FEC) != 0)
-#define BIOS_OP_CFG_AUTO_ADPAT(op_code_val) (((op_code_val) & NIC_NVM_DATA_PF_ADAPTIVE_LINK) != 0)
-#define BIOS_OP_CFG_SRIOV_ENABLE(op_code_val) (((op_code_val) & NIC_NVM_DATA_SRIOV_CONTROL) != 0)
-#define BIOS_OP_CFG_EXTEND_MODE(op_code_val)	(((op_code_val) & NIC_NVM_DATA_EXTEND_MODE) != 0)
-#define BIOS_OP_CFG_RST_DEF_SET(op_code_val)	(((op_code_val) & (u32)NIC_NVM_DATA_RESET) != 0)
+#define BIOS_CFG_SIGNATURE	0x1923E518
+#define BIOS_OP_CFG_ALL(op_code_val) \
+	((((op_code_val) >> 1) & (0xFFFFFFFF)) != 0)
+#define BIOS_OP_CFG_WRITE(op_code_val) \
+	((((op_code_val) & NIC_NVM_DATA_SET)) != 0)
+#define BIOS_OP_CFG_PXE_EN(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_PXE) != 0)
+#define BIOS_OP_CFG_VLAN_EN(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_VLAN) != 0)
+#define BIOS_OP_CFG_VLAN_PRI(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_VLAN_PRI) != 0)
+#define BIOS_OP_CFG_VLAN_ID(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_VLAN_ID) != 0)
+#define BIOS_OP_CFG_WORK_MODE(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_WORK_MODE) != 0)
+#define BIOS_OP_CFG_PF_BW(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_PF_TX_SPEED_LIMIT) != 0)
+#define BIOS_OP_CFG_GE_SPEED(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_GE_MODE) != 0)
+#define BIOS_OP_CFG_AUTO_NEG(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_AUTO_NEG) != 0)
+#define BIOS_OP_CFG_LINK_FEC(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_LINK_FEC) != 0)
+#define BIOS_OP_CFG_AUTO_ADPAT(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_PF_ADAPTIVE_LINK) != 0)
+#define BIOS_OP_CFG_SRIOV_ENABLE(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_SRIOV_CONTROL) != 0)
+#define BIOS_OP_CFG_EXTEND_MODE(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_EXTEND_MODE) != 0)
+#define BIOS_OP_CFG_LEGACY_VLAN_EN(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_LEGACY_VLAN) != 0)
+#define BIOS_OP_CFG_LEGACY_VLAN_PRI(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_LEGACY_VLAN_PRI) != 0)
+#define BIOS_OP_CFG_LEGACY_VLAN_ID(op_code_val) \
+	(((op_code_val) & NIC_NVM_DATA_LEGACY_VLAN_ID) != 0)
+#define BIOS_OP_CFG_RST_DEF_SET(op_code_val) \
+	(((op_code_val) & (u32)NIC_NVM_DATA_RESET) != 0)
+
 
 #define NIC_BIOS_CFG_MAX_PF_BW 100
+
+struct nic_legacy_vlan_cfg {
+	/* Legacy mode PXE VLAN enable: 0 - disable 1 - enable */
+	u8 pxe_vlan_en : 1;
+	/* Legacy mode PXE VLAN priority: 0-7 */
+	u8 pxe_vlan_pri : 3;
+	/* Legacy mode PXE VLAN ID 1-4094 */
+	u16 pxe_vlan_id : 12;
+};
+
 /* Note: This structure must be 4-byte aligned. */
 struct nic_bios_cfg {
 	u32 signature;
-	u8 pxe_en;	/* PXE enable: 0 - disable 1 - enable */
+	u8 pxe_en;
 	u8 extend_mode;
-	u8 rsvd0[2];
-	u8 pxe_vlan_en;	/* PXE VLAN enable: 0 - disable 1 - enable */
-	u8 pxe_vlan_pri;	/* PXE VLAN priority: 0-7 */
-	u16 pxe_vlan_id;	/* PXE VLAN ID 1-4094 */
-	u32 service_mode;	/* @See CHIPIF_SERVICE_MODE_x */
-	u32 pf_bw;		/* PF rate, in percentage. The value ranges from 0 to 100. */
-	u8 speed;		/* enum of port speed */
-	u8 auto_neg;		/* Auto-Negotiation Switch 0 - Invalid Field 1 - On 2 - Off */
-	u8 lanes;		/* lane num */
-	u8 fec;			/* FEC mode, @See enum mag_cmd_port_fec */
-	u8 auto_adapt;	/* Adaptive Mode Configuration 0 - Invalid Configuration 1 - On 2 - Off */
-	u8 func_valid;	/* Whether func_id is valid; 0: invalid; other: valid */
-	u8 func_id;	/* This member is valid only when func_valid is not set to 0. */
-	u8 sriov_en;	/* SRIOV-EN: 0 - Invalid configuration, 1 - On, 2 - Off */
+	struct nic_legacy_vlan_cfg nlvc;
+	u8 pxe_vlan_en;
+	u8 pxe_vlan_pri;
+	u16 pxe_vlan_id;
+	u32 service_mode;
+	u32 pf_tx_bw;
+	u8 speed;
+	u8 auto_neg;
+	u8 lanes;
+	u8 fec;
+	u8 auto_adapt;
+	u8 func_valid;
+	u8 func_id;
+	u8 sriov_en;
 };
 
 struct nic_cmd_bios_cfg {
 	struct hinic3_mgmt_msg_head head;
 	u32 op_code; /* Operation Code: Bit0[0: read 1:write, BIT1-6: cfg_mask */
 	struct nic_bios_cfg bios_cfg;
+};
+
+struct nic_rx_rate_bios_cfg {
+	struct mgmt_msg_head msg_head;
+
+	u32 op_code; /* Operation Code:[0:read 1:write] */
+	u8 rx_rate_limit;
+	u8 func_id;
 };
 
 struct nic_cmd_vhd_config {
@@ -1222,7 +1302,8 @@ struct hinic3_create_bond_info {
 	u32 active_port_max_num;	/* Maximum number of active bond member interfaces */
 	u32 active_port_min_num;	/* Minimum number of active bond member interfaces */
 	u32 xmit_hash_policy;
-	u32 rsvd[2];
+	u32 default_param_flag;
+	u32 rsvd;
 };
 
 struct hinic3_cmd_create_bond {
@@ -1317,12 +1398,43 @@ struct hinic3_smac_check_state {
 	struct hinic3_mgmt_msg_head head;
 	u8 smac_check_en; /* 1: enable 0: disable */
 	u8 op_code; /* 1: set 0: get */
-	u8 rsvd[2];
+	u8 flash_en; /* 1: enable 0: disable */
+	u8 rsvd;
 };
 
 struct hinic3_clear_log_state {
 	struct hinic3_mgmt_msg_head head;
 	u32 type;
+};
+
+struct hinic3_outband_cfg_info {
+	struct hinic3_mgmt_msg_head msg_head;
+
+	u16 outband_default_vid;
+	u16 func_id;
+};
+
+struct hinic3_wr_ordering {
+	struct hinic3_mgmt_msg_head head;
+	u8 op_code; /* 1: set 0: get */
+	u8 wr_pkt_so_ro;
+	u8 rd_pkt_so_ro;
+	u8 rsvd;
+};
+
+struct hinic3_function_active_info {
+	struct hinic3_mgmt_msg_head head;
+	u16 func_id;
+	u16 rsvd1;
+};
+
+struct hinic3_rq_info {
+	struct hinic3_mgmt_msg_head head;
+	u16 func_id;
+	u16 rq_depth;
+	u16 rq_num;
+	u16 pf_num;
+	u16 port_num;
 };
 
 #endif /* HINIC_MGMT_INTERFACE_H */
