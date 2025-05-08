@@ -283,14 +283,14 @@ EXPORT_SYMBOL_GPL(nfs_multipath_set_mount_data);
 
 bool enfs_check_have_lookup_cache_flag(struct nfs_server *server, int flag)
 {
-	/*
-		rule:
+	/* rule:
 		1. first check user lookupcache flag match or not
-		2. then if user lookupcache option is positive/none, will ignore server lookupcache flag.
-		   if user lookupcache option is all, will check server lookupcache flag.
+		2. then if user lookupcache option is positive/none, will ignore server
+		lookupcache flag. if user lookupcache option is all, will check server
+		lookupcache flag.
 
-		we don't use enfs ops to check, because during upgrade ops will be null, it will cause
-		result will change when upgrade.
+		we don't use enfs ops to check, because during upgrade ops will be null, it will
+		cause result will change when upgrade.
 	*/
 	if (server->flags & flag)
 		return true;

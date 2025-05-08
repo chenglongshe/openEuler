@@ -303,7 +303,8 @@ bool rpc_clnt_xprt_switch_has_addr(struct rpc_clnt *clnt,
 void rpc_clnt_xprt_set_online(struct rpc_clnt *clnt, struct rpc_xprt *xprt);
 void rpc_clnt_disconnect(struct rpc_clnt *clnt);
 void rpc_cleanup_clids(void);
-int rpc_clnt_test_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt, const struct rpc_call_ops *ops, void *data, int flags);
+int rpc_clnt_test_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
+	const struct rpc_call_ops *ops, void *data, int flags);
 
 struct rpc_xprt *rpc_task_get_next_xprt(struct rpc_clnt *clnt);
 

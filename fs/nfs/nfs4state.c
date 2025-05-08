@@ -369,7 +369,6 @@ static void _nfs41_put_clntid_locknode(nfs4_clntid_locknode *lock_node)
 	list_del(&lock_node->list_node);
 	kfree(lock_node);
 	mutex_unlock(&g_nfs41_clntid_cachelist_lock);
-	return;
 }
 #endif
 
@@ -381,8 +380,9 @@ int nfs41_init_clientid(struct nfs_client *clp, const struct cred *cred)
 
 	node = _nfs41_get_clntid_locknode(clp->cl_clientid);
 	if (node == NULL) {
-		status = -EAGAIN; // finally goes to nfs4_handle_reclaim_lease_error, will retry 1s later
-		printk_ratelimited("NFSv41: get clntid %llu lock node failed, retry later.\n", clp->cl_clientid);
+		status = -EAGAIN; // finally goes to nfs4_handle_reclaim_lease_error, retry later
+		printk_ratelimited("NFSv41: get clntid %llu lock node failed, retry later.\n",
+			clp->cl_clientid);
 		_nfs41_put_clntid_locknode(node);
 		goto out;
 	}

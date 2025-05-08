@@ -119,7 +119,7 @@ config SUNRPC_XPRT_RDMA
 config SUNRPC_ENFS
 	tristate "sunrpc support ENFS"
 	depends on SUNRPC
-        depends on X86 || X86_64 || ARM64
+	depends on X86 || X86_64 || ARM64
 	default y
 	help
 	  This option allows the NFS client can use multipath load balance.

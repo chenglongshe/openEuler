@@ -1380,7 +1380,7 @@ static void nfs3_xdr_enc_setacl3args(struct rpc_rqst *req,
 
 #if IS_ENABLED(CONFIG_ENFS)
 static void nfs3_xdr_enc_extend3args(struct rpc_rqst *req,
-									 struct xdr_stream *xdr, const void *data)
+	struct xdr_stream *xdr, const void *data)
 {
 	const struct nfs_extend_xdr_arg *encArg = data;
 	__be32 *p;

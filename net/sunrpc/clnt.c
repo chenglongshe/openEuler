@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  *  linux/net/sunrpc/clnt.c
@@ -3023,21 +3024,22 @@ success:
 }
 EXPORT_SYMBOL_GPL(rpc_clnt_test_and_add_xprt);
 
-/*
- * rpc_clnt_test_xprt - Test and add a new transport to a rpc_clnt
+/**
+ rpc_clnt_test_xprt - Test and add a new transport to a rpc_clnt
  * @clnt: pointer to struct rpc_clnt
  * @xprt: pointer struct rpc_xprt
  * @ops: async operation
  */
-int rpc_clnt_test_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt, const struct rpc_call_ops *ops, void *data, int flags)
+int rpc_clnt_test_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
+	const struct rpc_call_ops *ops, void *data, int flags)
 {
 	struct rpc_cred *cred;
 	struct rpc_task *task;
 
 	cred = authnull_ops.lookup_cred(NULL, NULL, 0);
 	task = rpc_call_null_helper(clnt, xprt, cred,
-			RPC_TASK_SOFT | RPC_TASK_SOFTCONN | flags,
-			ops, data);
+		RPC_TASK_SOFT | RPC_TASK_SOFTCONN | flags,
+		ops, data);
 	put_rpccred(cred);
 	if (IS_ERR(task))
 		return PTR_ERR(task);

@@ -73,13 +73,13 @@ static int enfs_parse_ip_range(struct net *net_ns, const char *cursor,
 		       sizeof(addr));
 	if (!len)
 		return -EINVAL;
-	// 判断是否IPV4/IPV6混杂
+
 	if (addr.ss_family != ip_list->address[ip_list->count - 1].ss_family) {
 		pr_info("NFS:   parsing nfs mount option type: %d fail. both have ipv4 and ipv6 address[%s]\n",
 			type, __func__);
 		return -EINVAL;
 	}
-	// 判断范围IP是否为同一个IP
+
 	if (rpc_cmp_addr((const struct sockaddr *)&ip_list
 				 ->address[ip_list->count - 1],
 			 (const struct sockaddr *)&addr)) {
@@ -118,7 +118,7 @@ static int enfs_parse_ip_range(struct net *net_ns, const char *cursor,
 				 (const struct sockaddr *)&addr)) {
 			is_complete = true;
 		}
-		// 去重处理 连续重复需要连续跳过
+
 		for (i = 0; i < ip_list->count; i++) {
 			duplicate_flag = false;
 			if (rpc_cmp_addr((const struct sockaddr *)&ip_list
@@ -132,11 +132,11 @@ static int enfs_parse_ip_range(struct net *net_ns, const char *cursor,
 				break;
 			}
 		}
-		// 若多次重复 下一个IP需要加多次 若这个没有重复了 下一个IP还是+1
+
 		if (duplicate_flag == false) {
 			pr_info("this ip not duplicate;");
 			add_num = 1;
-			// 不重复但是已经超规格就返回错
+
 			if ((type == LOCALADDR &&
 			     ip_list->count >= MAX_SUPPORTED_LOCAL_IP_COUNT) ||
 			    (type == REMOTEADDR &&
@@ -176,13 +176,13 @@ int enfs_parse_ip_single(struct nfs_ip_list *ip_list, struct net *net_ns,
 	if (!len)
 		return -EINVAL;
 
-	// 判断和之前的IP是否重复
+	// check same as exist ip
 	for (i = 0; i < ip_list->count; i++) {
 		if (rpc_cmp_addr((const struct sockaddr *)&ip_list->address[i],
 				 (const struct sockaddr *)&addr)) {
 			pr_info("NFS:   parsing nfs mount option '%s' type: %d index %d same as before index %d [%s]\n",
 				cursor, type, ip_list->count, i, __func__);
-			// 防止这个IP是范围IP的起始地址，就算重复了 也要将它放在当前列表的最后一个位置
+
 			swap = ip_list->address[i];
 			ip_list->address[i] =
 				ip_list->address[ip_list->count - 1];
@@ -190,7 +190,7 @@ int enfs_parse_ip_single(struct nfs_ip_list *ip_list, struct net *net_ns,
 			return 0;
 		}
 	}
-	// 若不重复 判断是否超规格
+
 	if ((type == LOCALADDR &&
 	     ip_list->count >= MAX_SUPPORTED_LOCAL_IP_COUNT) ||
 	    (type == REMOTEADDR &&
@@ -657,7 +657,7 @@ int nfs_multipath_parse_options(enum nfsmultipathoptions type, char *str,
 	else
 		rc = -EOPNOTSUPP;
 
-	// 解析结束之后 需要判断local 和 remote的地址是否有一样的 如果有就不合法
+	// if have some ip return err
 	if (rc == 0)
 		rc = nfs_multipath_parse_options_check_duplicate(options);
 

@@ -6,10 +6,9 @@
 
 struct rpc_multipath_ops __rcu *multipath_ops;
 
-
 struct xprt_client_private {
 	void *reserve_context;
-	char servername;
+	char servername[];
 };
 
 void rpc_init_task_retry_counters(struct rpc_task *task)
@@ -19,7 +18,6 @@ void rpc_init_task_retry_counters(struct rpc_task *task)
 	task->tk_cred_retry = 2;
 }
 EXPORT_SYMBOL_GPL(rpc_init_task_retry_counters);
-
 
 int rpc_multipath_ops_register(struct rpc_multipath_ops *ops)
 {
@@ -69,7 +67,6 @@ void rpc_multipath_ops_put(struct rpc_multipath_ops *ops)
 }
 EXPORT_SYMBOL_GPL(rpc_multipath_ops_put);
 
-
 const char *rpc_multipath_set_servername(const char *s, gfp_t gfp)
 {
 	size_t len;
@@ -82,8 +79,8 @@ const char *rpc_multipath_set_servername(const char *s, gfp_t gfp)
 	buf = kmalloc(len, gfp);
 	if (buf) {
 		memset(buf, 0, len);
-		memcpy(&buf->servername, s, strlen(s) + 1);
-		return &buf->servername;
+		memcpy(buf->servername, s, strlen(s) + 1);
+		return buf->servername;
 	}
 	return NULL;
 }
@@ -96,7 +93,7 @@ void rpc_multipath_free_servername(struct rpc_xprt *xprt)
 	if (!xprt || !xprt->servername)
 		return;
 
-	buf = container_of(xprt->servername, struct xprt_client_private, servername);
+	buf = container_of((void *)xprt->servername, struct xprt_client_private, servername);
 	if (buf->reserve_context) {
 		mops = rpc_multipath_ops_get();
 		if (mops && mops->destroy_xprt)
@@ -106,9 +103,7 @@ void rpc_multipath_free_servername(struct rpc_xprt *xprt)
 
 	kfree((void *)buf);
 	xprt->servername = NULL;
-	return;
 }
-
 
 void *xprt_get_reserve_context(struct rpc_xprt *xprt)
 {
@@ -117,7 +112,7 @@ void *xprt_get_reserve_context(struct rpc_xprt *xprt)
 	if (!xprt || !xprt->servername)
 		return NULL;
 
-	buf = container_of(xprt->servername, struct xprt_client_private, servername);
+	buf = container_of(void *)xprt->servername, struct xprt_client_private, servername);
 	return buf->reserve_context;
 }
 EXPORT_SYMBOL_GPL(xprt_get_reserve_context);
@@ -129,9 +124,8 @@ void xprt_set_reserve_context(struct rpc_xprt *xprt, void *context)
 	if (!xprt || !xprt->servername)
 		return;
 
-	buf = container_of(xprt->servername, struct xprt_client_private, servername);
+	buf = container_of(void *)xprt->servername, struct xprt_client_private, servername);
 	buf->reserve_context = context;
-	return;
 }
 EXPORT_SYMBOL_GPL(xprt_set_reserve_context);
 
@@ -194,7 +188,6 @@ void rpc_multipath_ops_dec_queuelen(struct rpc_xprt *xprt)
 	rpc_multipath_ops_put(mops);
 }
 
-
 bool rpc_multipath_ops_create_xprt(struct rpc_xprt *xprt)
 {
 	struct rpc_multipath_ops *mops = NULL;
@@ -210,7 +203,6 @@ bool rpc_multipath_ops_create_xprt(struct rpc_xprt *xprt)
 	rpc_multipath_ops_put(mops);
 	return true;
 }
-
 
 void rpc_multipath_ops_set_transport(struct rpc_task *task, struct rpc_clnt *clnt)
 {
@@ -243,8 +235,6 @@ bool rpc_clnt_has_multipath(struct rpc_clnt *clnt)
 
 	return clnt_reserve->cl_enfs ? true : false;
 }
-
-
 
 void rpc_multipath_ops_xprt_iostat(struct rpc_task *task)
 {

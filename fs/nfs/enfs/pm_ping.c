@@ -235,7 +235,11 @@ static int pm_ping_add_work(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
 		return 0;
 	}
 
-	if (pm_ping_get_path_check_state(xprt) == PM_CHECK_FINISH || pm_ping_get_path_check_state(xprt) == PM_CHECK_INIT) {	// check xprt pending status, if pending status equals Finish, means this xprt can inster to work queue
+	if (pm_ping_get_path_check_state(xprt) == PM_CHECK_FINISH ||
+		pm_ping_get_path_check_state(xprt) == PM_CHECK_INIT) {
+		/* check xprt pending status, if pending status equals Finish,
+			means this xprt can inster to work queue
+		*/
 		enfs_log_debug("find xprt pointer.   %p\n", xprt);
 		work_info = kzalloc(sizeof(struct ping_xprt_work), GFP_ATOMIC);
 		if (work_info == NULL)

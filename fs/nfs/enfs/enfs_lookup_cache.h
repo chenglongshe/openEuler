@@ -27,7 +27,7 @@ typedef enum {
 
 struct lookupcache_work {
 	struct nfs_fh fh;
-	void *server; /* struct nfs_server pointer, don't access the mem, because maybe already freed */
+	void *server; /* struct nfs_server pointer, don't access the mem, maybe already freed */
 	struct rpc_clnt *cl_rpcclient;
 	struct work_struct work_lookup;
 };

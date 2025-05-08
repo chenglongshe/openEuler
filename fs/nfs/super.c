@@ -1033,6 +1033,7 @@ int nfs_reconfigure(struct fs_context *fc)
 #if IS_ENABLED(CONFIG_ENFS)
 	if (ctx->enfs_option) {
 		int error = nfs_remount_iplist(nfss->nfs_client, ctx->enfs_option);
+
 		if (error) {
 			/* release remount option member */
 			enfs_free_mount_options(ctx);

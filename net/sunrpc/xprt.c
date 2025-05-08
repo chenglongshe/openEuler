@@ -610,6 +610,7 @@ EXPORT_SYMBOL_GPL(xprt_wake_pending_tasks);
 void xprt_wait_for_buffer_space(struct rpc_xprt *xprt)
 {
 	struct rpc_task *task = xprt->snd_task;
+
 	rpc_multipath_ops_adjust_task_timeout(task, NULL);
 	set_bit(XPRT_WRITE_SPACE, &xprt->state);
 }
@@ -2097,8 +2098,8 @@ struct rpc_xprt *xprt_create_transport(struct xprt_create *args)
 	}
 
 	if (!rpc_multipath_ops_create_xprt(xprt)) {
-			xprt_destroy(xprt);
-			return ERR_PTR(-ENOMEM);
+		xprt_destroy(xprt);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	rpc_xprt_debugfs_register(xprt);

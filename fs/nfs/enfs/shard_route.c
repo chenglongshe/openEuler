@@ -487,7 +487,7 @@ static void copy_ls_entry(struct ls_info *info,
 	int target;
 
 	for (i = 0; i < ls_view->num; i++) {
-		target = find_same_lsid(info, ls_view->num, ls_view->lsInfo[i].lsId);	// 二分查找
+		target = find_same_lsid(info, ls_view->num, ls_view->lsInfo[i].lsId);
 		if (info->entry[target].lsVersion !=
 			ls_view->lsInfo[i].lsVersion) {
 			*flag = FAULT_DETECTED;
