@@ -896,7 +896,6 @@ static int query_and_update_shard(struct rpc_clnt *clnt, FILE_UUID *file_uuid,
 
 	ret = dorado_query_fs_shard(clnt, file_uuid, &fsshard_view);
 	if (ret) {
-		enfs_log_error("update shard err:%d.\n", ret);
 		return ret;
 	}
 

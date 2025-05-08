@@ -673,10 +673,6 @@ int dorado_extend_op(struct rpc_clnt *clnt, char *buf, int *buflen)
 				       RPC_TASK_SOFTCONN);
 	LVOS_TP_END;
 	LVOS_TP_END;
-	if (status) {
-		enfs_log_info("NFS reply status:%d resp_len:%d\n", status,
-			      xdr_arg.buflen);
-	}
 	*buflen = xdr_arg.buflen;
 	return status;
 }
@@ -729,10 +725,9 @@ int dorado_query_fs_shard(struct rpc_clnt *clnt, FILE_UUID *file_uuid,
 	ret = NfsExtendProcInfoExtendEncode(buf, bufLen, args);
 
 	ret = dorado_extend_op(clnt, buf, &bufLen);
-	// 老版本存储不支持NfsExtendOp，返回该值
+
 	if (ret == -EOPNOTSUPP || ret == -ENOTSUPP) {
 		// UpdateServerSupportStatus(ctx->devId, SERVER_NOT_SUPPORT);
-		printk(KERN_ERR "%s: no support NfsExtendOp.\n", __func__);
 		kfree(args);
 		kfree(buf);
 		return ret;
@@ -740,7 +735,6 @@ int dorado_query_fs_shard(struct rpc_clnt *clnt, FILE_UUID *file_uuid,
 
 	// another err handle
 	if (ret) {
-		printk(KERN_ERR "NfsExtendOp get fsInfo failed %d.\n", ret);
 		kfree(args);
 		kfree(buf);
 		return ret;
@@ -755,7 +749,6 @@ int dorado_query_fs_shard(struct rpc_clnt *clnt, FILE_UUID *file_uuid,
 		return ret;
 	}
 
-	// 注意:1.检查shardnum的范围 2.分配固定大小，避免越界
 	resData = (FS_SHARD_VIEW *)kmalloc(
 		sizeof(FS_SHARD_VIEW) +
 			sizeof(FS_SHARD_VIEW_SINGLE) *
@@ -803,7 +796,7 @@ int dorado_query_lsId(struct rpc_clnt *clnt, EXTEND_GET_LS_VERSION **resDataOut)
 	ret = NfsExtendProcInfoExtendEncode(buf, bufLen, args);
 
 	ret = dorado_extend_op(clnt, buf, &bufLen);
-	// 老版本存储不支持NfsExtendOp，返回该值
+
 	if (ret == -EOPNOTSUPP || ret == -ENOTSUPP) {
 		printk(KERN_ERR "%s: no support NfsExtendOp.\n", __func__);
 		kfree(args);
@@ -1051,7 +1044,7 @@ int dorado_query_dns(struct rpc_clnt *clnt,
 	ret = NfsExtendProcInfoExtendEncode(buf, bufLen, args);
 
 	ret = dorado_extend_op(clnt, buf, &bufLen);
-	// 老版本存储不支持NfsExtendOp，返回该值
+
 	if (ret == -EOPNOTSUPP || ret == -ENOTSUPP) {
 		printk(KERN_ERR "%s: no support NfsExtendOp.\n", __func__);
 		goto out;
