@@ -112,7 +112,7 @@ void *xprt_get_reserve_context(struct rpc_xprt *xprt)
 	if (!xprt || !xprt->servername)
 		return NULL;
 
-	buf = container_of(void *)xprt->servername, struct xprt_client_private, servername);
+	buf = container_of((void *)xprt->servername, struct xprt_client_private, servername);
 	return buf->reserve_context;
 }
 EXPORT_SYMBOL_GPL(xprt_get_reserve_context);
@@ -124,7 +124,7 @@ void xprt_set_reserve_context(struct rpc_xprt *xprt, void *context)
 	if (!xprt || !xprt->servername)
 		return;
 
-	buf = container_of(void *)xprt->servername, struct xprt_client_private, servername);
+	buf = container_of((void *)xprt->servername, struct xprt_client_private, servername);
 	buf->reserve_context = context;
 }
 EXPORT_SYMBOL_GPL(xprt_set_reserve_context);
