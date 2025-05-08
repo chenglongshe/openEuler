@@ -36,7 +36,5 @@ obj-$(CONFIG_PNFS_FILE_LAYOUT) += filelayout/
 obj-$(CONFIG_PNFS_BLOCK) += blocklayout/
 obj-$(CONFIG_PNFS_FLEXFILE_LAYOUT) += flexfilelayout/
 
-ifeq ($(ARCH),$(filter $(ARCH),x86 x86_64 arm64))
 nfs-$(CONFIG_ENFS) += enfs_adapter.o
 obj-$(CONFIG_ENFS) += enfs/
-endif

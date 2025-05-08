@@ -19,6 +19,4 @@ sunrpc-$(CONFIG_SUNRPC_DEBUG) += debugfs.o
 sunrpc-$(CONFIG_SUNRPC_BACKCHANNEL) += backchannel_rqst.o
 sunrpc-$(CONFIG_PROC_FS) += stats.o
 sunrpc-$(CONFIG_SYSCTL) += sysctl.o
-ifeq ($(ARCH),$(filter $(ARCH),x86 x86_64 arm64))
 sunrpc-$(CONFIG_SUNRPC_ENFS) += sunrpc_enfs_adapter.o
-endif
