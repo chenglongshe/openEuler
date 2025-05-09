@@ -438,6 +438,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
 	switch_fpu_prepare(prev_fpu, cpu);
 
+	switch_kernel_fpu_prepare(prev_p, cpu);
+
 	/* We must save %fs and %gs before load_TLS() because
 	 * %fs and %gs may be cleared by load_TLS().
 	 *
@@ -488,6 +490,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 			next->gsindex, next->gsbase, GS);
 
 	switch_fpu_finish(next_fpu, cpu);
+
+	switch_kernel_fpu_finish(next_p);
 
 	/*
 	 * Switch the PDA and FPU contexts.
