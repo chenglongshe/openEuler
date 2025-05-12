@@ -293,6 +293,12 @@ static void fxgmac_disable_rx(struct fxgmac_pdata *priv)
 		fxgmac_dma_wr_bits(channel, DMA_CH_RCR, DMA_CH_RCR_SR, 0);
 }
 
+static void fxgmac_default_speed_duplex_config(struct fxgmac_pdata *priv)
+{
+	priv->mac_duplex = DUPLEX_FULL;
+	priv->mac_speed = SPEED_1000;
+}
+
 /**
  * fxgmac_set_oob_wol - disable or enable oob wol crtl function
  * @priv: driver private struct
@@ -320,10 +326,49 @@ static void fxgmac_pre_powerdown(struct fxgmac_pdata *priv)
 	fxgmac_set_oob_wol(priv, 1);
 	fsleep(2000);
 }
+
+static void fxgmac_restore_nonstick_reg(struct fxgmac_pdata *priv)
+{
+	for (u32 i = GLOBAL_CTRL0; i < MSI_PBA; i += 4)
+		fxgmac_io_wr(priv, i,
+			     priv->reg_nonstick[(i - GLOBAL_CTRL0) >> 2]);
+}
+
 static void fxgmac_phy_release(struct fxgmac_pdata *priv)
 {
 	fxgmac_io_wr_bits(priv, EPHY_CTRL, EPHY_CTRL_RESET, 1);
 	fsleep(100);
+}
+
+static void fxgmac_hw_exit(struct fxgmac_pdata *priv)
+{
+	/* Reset CHIP, it will reset trigger circuit and reload efuse patch */
+	fxgmac_io_wr_bits(priv, SYS_RESET, SYS_RESET_RESET, 1);
+	fsleep(9000);
+
+	fxgmac_phy_release(priv);
+
+	/* Reset will clear nonstick registers. */
+	fxgmac_restore_nonstick_reg(priv);
+}
+
+static void fxgmac_pcie_init(struct fxgmac_pdata *priv)
+{
+	/* snoopy + non-snoopy */
+	fxgmac_io_wr_bits(priv, LTR_IDLE_ENTER, LTR_IDLE_ENTER_REQUIRE, 1);
+	fxgmac_io_wr_bits(priv, LTR_IDLE_ENTER, LTR_IDLE_ENTER_SCALE,
+			  LTR_IDLE_ENTER_SCALE_1024_NS);
+	fxgmac_io_wr_bits(priv, LTR_IDLE_ENTER, LTR_IDLE_ENTER_ENTER,
+			  LTR_IDLE_ENTER_900_US);
+
+	/* snoopy + non-snoopy */
+	fxgmac_io_wr_bits(priv, LTR_IDLE_EXIT, LTR_IDLE_EXIT_REQUIRE, 1);
+	fxgmac_io_wr_bits(priv, LTR_IDLE_EXIT, LTR_IDLE_EXIT_SCALE, 2);
+	fxgmac_io_wr_bits(priv, LTR_IDLE_EXIT, LTR_IDLE_EXIT_EXIT,
+			  LTR_IDLE_EXIT_171_US);
+
+	fxgmac_io_wr_bits(priv, PCIE_SERDES_PLL, PCIE_SERDES_PLL_AUTOOFF, 1);
+}
 
 static void fxgmac_phy_reset(struct fxgmac_pdata *priv)
 {
@@ -403,6 +448,401 @@ static int fxgmac_net_powerdown(struct fxgmac_pdata *priv)
 	fxgmac_config_powerdown(priv);
 	fxgmac_free_tx_data(priv);
 	fxgmac_free_rx_data(priv);
+
+	return 0;
+}
+
+#define EFUSE_FISRT_UPDATE_ADDR				255
+#define EFUSE_SECOND_UPDATE_ADDR			209
+#define EFUSE_MAX_ENTRY					39
+#define EFUSE_PATCH_ADDR_START				0
+#define EFUSE_PATCH_DATA_START				2
+#define EFUSE_PATCH_SIZE				6
+#define EFUSE_REGION_A_B_LENGTH				18
+
+static bool fxgmac_efuse_read_data(struct fxgmac_pdata *priv, u32 offset,
+				   u8 *value)
+{
+	u32 val = 0, wait = 1000;
+	bool ret = false;
+
+	val |= field_prep(EFUSE_OP_ADDR, offset);
+	val |= EFUSE_OP_START;
+	val |= field_prep(EFUSE_OP_MODE, EFUSE_OP_MODE_ROW_READ);
+	fxgmac_io_wr(priv, EFUSE_OP_CTRL_0, val);
+
+	while (wait--) {
+		fsleep(20);
+		val = fxgmac_io_rd(priv, EFUSE_OP_CTRL_1);
+		if (field_get(EFUSE_OP_DONE, val)) {
+			ret = true;
+			break;
+		}
+	}
+
+	if (!ret) {
+		dev_err(priv->dev, "Reading efuse Byte:%d failed\n", offset);
+		return ret;
+	}
+
+	if (value)
+		*value = field_get(EFUSE_OP_RD_DATA, val) & 0xff;
+
+	return ret;
+}
+
+static bool fxgmac_efuse_read_index_patch(struct fxgmac_pdata *priv, u8 index,
+					  u32 *offset, u32 *value)
+{
+	u8 tmp[EFUSE_PATCH_SIZE - EFUSE_PATCH_DATA_START];
+	u32 addr, i;
+	bool ret;
+
+	if (index >= EFUSE_MAX_ENTRY) {
+		dev_err(priv->dev, "Reading efuse out of range, index %d\n",
+			index);
+		return false;
+	}
+
+	for (i = EFUSE_PATCH_ADDR_START; i < EFUSE_PATCH_DATA_START; i++) {
+		addr = EFUSE_REGION_A_B_LENGTH + index * EFUSE_PATCH_SIZE + i;
+		ret = fxgmac_efuse_read_data(priv, addr,
+					     tmp + i - EFUSE_PATCH_ADDR_START);
+		if (!ret) {
+			dev_err(priv->dev, "Reading efuse Byte:%d failed\n",
+				addr);
+			return ret;
+		}
+	}
+	/* tmp[0] is low 8bit date, tmp[1] is high 8bit date */
+	if (offset)
+		*offset = tmp[0] | (tmp[1] << 8);
+
+	for (i = EFUSE_PATCH_DATA_START; i < EFUSE_PATCH_SIZE; i++) {
+		addr = EFUSE_REGION_A_B_LENGTH + index * EFUSE_PATCH_SIZE + i;
+		ret = fxgmac_efuse_read_data(priv, addr,
+					     tmp + i - EFUSE_PATCH_DATA_START);
+		if (!ret) {
+			dev_err(priv->dev, "Reading efuse Byte:%d failed\n",
+				addr);
+			return ret;
+		}
+	}
+	/* tmp[0] is low 8bit date, tmp[1] is low 8bit date
+	 * ...  tmp[3] is highest 8bit date
+	 */
+	if (value)
+		*value = tmp[0] | (tmp[1] << 8) | (tmp[2] << 16) |
+			 (tmp[3] << 24);
+
+	return ret;
+}
+
+static bool fxgmac_efuse_read_mac_subsys(struct fxgmac_pdata *priv,
+					 u8 *mac_addr, u32 *subsys, u32 *revid)
+{
+	u32 machr = 0, maclr = 0, offset = 0, val = 0;
+
+	for (u8 index = 0; index < EFUSE_MAX_ENTRY; index++) {
+		if (!fxgmac_efuse_read_index_patch(priv, index, &offset, &val))
+			return false;
+
+		if (offset == 0x00)
+			break; /* Reach the blank. */
+		if (offset == MACA0LR_FROM_EFUSE)
+			maclr = val;
+		if (offset == MACA0HR_FROM_EFUSE)
+			machr = val;
+		if (offset == PCI_REVISION_ID && revid)
+			*revid = val;
+		if (offset == PCI_SUBSYSTEM_VENDOR_ID && subsys)
+			*subsys = val;
+	}
+
+	if (mac_addr) {
+		mac_addr[5] = (u8)(maclr & 0xFF);
+		mac_addr[4] = (u8)((maclr >> 8) & 0xFF);
+		mac_addr[3] = (u8)((maclr >> 16) & 0xFF);
+		mac_addr[2] = (u8)((maclr >> 24) & 0xFF);
+		mac_addr[1] = (u8)(machr & 0xFF);
+		mac_addr[0] = (u8)((machr >> 8) & 0xFF);
+	}
+
+	return true;
+}
+
+static int fxgmac_read_mac_addr(struct fxgmac_pdata *priv)
+{
+	u8 default_addr[ETH_ALEN] = { 0, 0x55, 0x7b, 0xb5, 0x7d, 0xf7 };
+	struct net_device *ndev = priv->ndev;
+	int ret;
+
+	/* If efuse have mac addr, use it. if not, use static mac address. */
+	ret = fxgmac_efuse_read_mac_subsys(priv, priv->mac_addr, NULL, NULL);
+	if (!ret)
+		return -1;
+
+	if (is_zero_ether_addr(priv->mac_addr))
+		/* Use a static mac address for test */
+		memcpy(priv->mac_addr, default_addr, ndev->addr_len);
+
+	return 0;
+}
+
+static void fxgmac_default_config(struct fxgmac_pdata *priv)
+{
+	priv->sysclk_rate = 125000000; /* System clock is 125 MHz */
+	priv->tx_threshold = MTL_Q_TQOMR_TTC_THRESHOLD_128;
+	priv->rx_threshold = MTL_Q_RQOMR_RTC_THRESHOLD_128;
+	priv->tx_osp_mode =  1;	/* Enable DMA OSP */
+	priv->tx_sf_mode = 1;	/* Enable MTL TSF */
+	priv->rx_sf_mode = 1;	/* Enable MTL RSF */
+	priv->pblx8 = 1;	/* Enable DMA PBL X8 */
+	priv->tx_pause = 1;	/* Enable tx pause */
+	priv->rx_pause = 1;	/* Enable rx pause */
+	priv->tx_pbl = DMA_CH_PBL_16;
+	priv->rx_pbl = DMA_CH_PBL_4;
+
+	fxgmac_default_speed_duplex_config(priv);
+}
+
+static void fxgmac_get_all_hw_features(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_hw_features *hw_feat = &priv->hw_feat;
+	unsigned int mac_hfr0, mac_hfr1, mac_hfr2, mac_hfr3;
+
+	mac_hfr0 = fxgmac_io_rd(priv, MAC_HWF0R);
+	mac_hfr1 = fxgmac_io_rd(priv, MAC_HWF1R);
+	mac_hfr2 = fxgmac_io_rd(priv, MAC_HWF2R);
+	mac_hfr3 = fxgmac_io_rd(priv, MAC_HWF3R);
+	memset(hw_feat, 0, sizeof(*hw_feat));
+	hw_feat->version = fxgmac_io_rd(priv, MAC_VR);
+
+	/* Hardware feature register 0 */
+	hw_feat->phyifsel = field_get(MAC_HWF0R_ACTPHYIFSEL, mac_hfr0);
+	hw_feat->vlhash = field_get(MAC_HWF0R_VLHASH, mac_hfr0);
+	hw_feat->sma = field_get(MAC_HWF0R_SMASEL, mac_hfr0);
+	hw_feat->rwk = field_get(MAC_HWF0R_RWKSEL, mac_hfr0);
+	hw_feat->mgk = field_get(MAC_HWF0R_MGKSEL, mac_hfr0);
+	hw_feat->mmc = field_get(MAC_HWF0R_MMCSEL, mac_hfr0);
+	hw_feat->aoe = field_get(MAC_HWF0R_ARPOFFSEL, mac_hfr0);
+	hw_feat->ts = field_get(MAC_HWF0R_TSSEL, mac_hfr0);
+	hw_feat->eee = field_get(MAC_HWF0R_EEESEL, mac_hfr0);
+	hw_feat->tx_coe = field_get(MAC_HWF0R_TXCOESEL, mac_hfr0);
+	hw_feat->rx_coe = field_get(MAC_HWF0R_RXCOESEL, mac_hfr0);
+	hw_feat->addn_mac = field_get(MAC_HWF0R_ADDMACADRSEL, mac_hfr0);
+	hw_feat->ts_src = field_get(MAC_HWF0R_TSSTSSEL, mac_hfr0);
+	hw_feat->sa_vlan_ins = field_get(MAC_HWF0R_SAVLANINS, mac_hfr0);
+
+	/* Hardware feature register 1 */
+	hw_feat->rx_fifo_size = field_get(MAC_HWF1R_RXFIFOSIZE, mac_hfr1);
+	hw_feat->tx_fifo_size = field_get(MAC_HWF1R_TXFIFOSIZE, mac_hfr1);
+	hw_feat->adv_ts_hi = field_get(MAC_HWF1R_ADVTHWORD, mac_hfr1);
+	hw_feat->dma_width = field_get(MAC_HWF1R_ADDR64, mac_hfr1);
+	hw_feat->dcb = field_get(MAC_HWF1R_DCBEN, mac_hfr1);
+	hw_feat->sph = field_get(MAC_HWF1R_SPHEN, mac_hfr1);
+	hw_feat->tso = field_get(MAC_HWF1R_TSOEN, mac_hfr1);
+	hw_feat->dma_debug = field_get(MAC_HWF1R_DBGMEMA, mac_hfr1);
+	hw_feat->avsel = field_get(MAC_HWF1R_AVSEL, mac_hfr1);
+	hw_feat->ravsel = field_get(MAC_HWF1R_RAVSEL, mac_hfr1);
+	hw_feat->hash_table_size = field_get(MAC_HWF1R_HASHTBLSZ, mac_hfr1);
+	hw_feat->l3l4_filter_num = field_get(MAC_HWF1R_L3L4FNUM, mac_hfr1);
+	hw_feat->tx_q_cnt = field_get(MAC_HWF2R_TXQCNT, mac_hfr1);
+	hw_feat->rx_ch_cnt = field_get(MAC_HWF2R_RXCHCNT, mac_hfr1);
+	hw_feat->tx_ch_cnt = field_get(MAC_HWF2R_TXCHCNT, mac_hfr1);
+	hw_feat->pps_out_num = field_get(MAC_HWF2R_PPSOUTNUM, mac_hfr1);
+	hw_feat->aux_snap_num = field_get(MAC_HWF2R_AUXSNAPNUM, mac_hfr1);
+
+	/* Translate the Hash Table size into actual number */
+	switch (hw_feat->hash_table_size) {
+	case 0:
+		break;
+	case 1:
+		hw_feat->hash_table_size = 64;
+		break;
+	case 2:
+		hw_feat->hash_table_size = 128;
+		break;
+	case 3:
+		hw_feat->hash_table_size = 256;
+		break;
+	}
+
+	/* Translate the address width setting into actual number */
+	switch (hw_feat->dma_width) {
+	case 0:
+		hw_feat->dma_width = 32;
+		break;
+	case 1:
+		hw_feat->dma_width = 40;
+		break;
+	case 2:
+		hw_feat->dma_width = 48;
+		break;
+	default:
+		hw_feat->dma_width = 32;
+	}
+
+	/* The Queue, Channel are zero based so increment them
+	 * to get the actual number
+	 */
+	hw_feat->tx_q_cnt++;
+	hw_feat->rx_ch_cnt++;
+	hw_feat->tx_ch_cnt++;
+
+	/* HW implement 1 rx fifo, 4 dma channel.  but from software
+	 * we see 4 logical queues. hardcode to 4 queues.
+	 */
+	hw_feat->rx_q_cnt = 4;
+	hw_feat->hwfr3 = mac_hfr3;
+}
+
+static unsigned int fxgmac_usec_to_riwt(struct fxgmac_pdata *priv,
+					unsigned int usec)
+{
+	/* Convert the input usec value to the watchdog timer value. Each
+	 * watchdog timer value is equivalent to 256 clock cycles.
+	 * Calculate the required value as:
+	 *  ( usec * ( system_clock_mhz / 10^6) / 256
+	 */
+	return (usec * (priv->sysclk_rate / 1000000)) / 256;
+}
+
+static void fxgmac_save_nonstick_reg(struct fxgmac_pdata *priv)
+{
+	for (u32 i = GLOBAL_CTRL0; i < MSI_PBA; i += 4) {
+		priv->reg_nonstick[(i - GLOBAL_CTRL0) >> 2] =
+			fxgmac_io_rd(priv, i);
+	}
+}
+
+static int fxgmac_init(struct fxgmac_pdata *priv, bool save_private_reg)
+{
+	struct net_device *ndev = priv->ndev;
+	int ret;
+
+	fxgmac_default_config(priv);	/* Set default configuration data */
+	ndev->irq = priv->dev_irq;
+	ndev->base_addr = (unsigned long)priv->hw_addr;
+
+	ret = fxgmac_read_mac_addr(priv);
+	if (ret) {
+		dev_err(priv->dev, "Read mac addr failed:%d\n", ret);
+		return ret;
+	}
+	eth_hw_addr_set(ndev, priv->mac_addr);
+
+	if (save_private_reg)
+		fxgmac_save_nonstick_reg(priv);
+
+	fxgmac_hw_exit(priv);	/* Reset here to get hw features correctly */
+	fxgmac_get_all_hw_features(priv);
+
+	/* Set the DMA mask */
+	ret = dma_set_mask_and_coherent(priv->dev,
+					DMA_BIT_MASK(priv->hw_feat.dma_width));
+	if (ret) {
+		ret = dma_set_mask_and_coherent(priv->dev, DMA_BIT_MASK(32));
+		if (ret) {
+			dev_err(priv->dev, "No usable DMA configuration, aborting\n");
+			return ret;
+		}
+	}
+
+	if (field_get(INT_FLAG_LEGACY, priv->int_flag)) {
+		/* We should disable msi and msix here when we use legacy
+		 * interrupt,for two reasons:
+		 * 1. Exit will restore msi and msix config regisiter,
+		 * that may enable them.
+		 * 2. When the driver that uses the msix interrupt by default
+		 * is compiled into the OS, uninstall the driver through rmmod,
+		 * and then install the driver that uses the legacy interrupt,
+		 * at which time the msix enable will be turned on again by
+		 * default after waking up from S4 on some
+		 * platform. such as UOS platform.
+		 */
+		pci_disable_msi(to_pci_dev(priv->dev));
+		pci_disable_msix(to_pci_dev(priv->dev));
+	}
+
+	BUILD_BUG_ON_NOT_POWER_OF_2(FXGMAC_TX_DESC_CNT);
+	priv->tx_desc_count = FXGMAC_TX_DESC_CNT;
+	BUILD_BUG_ON_NOT_POWER_OF_2(FXGMAC_RX_DESC_CNT);
+	priv->rx_desc_count = FXGMAC_RX_DESC_CNT;
+
+	ret = netif_set_real_num_tx_queues(ndev, FXGMAC_TX_1_Q);
+	if (ret) {
+		dev_err(priv->dev, "Setting real tx queue count failed\n");
+		return ret;
+	}
+
+	priv->rx_ring_count = min_t(unsigned int,
+				    netif_get_num_default_rss_queues(),
+				    priv->hw_feat.rx_ch_cnt);
+	priv->rx_ring_count = min_t(unsigned int, priv->rx_ring_count,
+				    priv->hw_feat.rx_q_cnt);
+	priv->rx_q_count = priv->rx_ring_count;
+	ret = netif_set_real_num_rx_queues(ndev, priv->rx_q_count);
+	if (ret) {
+		dev_err(priv->dev, "Setting real rx queue count failed\n");
+		return ret;
+	}
+
+	priv->channel_count =
+		max_t(unsigned int, FXGMAC_TX_1_RING, priv->rx_ring_count);
+
+	ndev->min_mtu = ETH_MIN_MTU;
+	ndev->max_mtu =
+		FXGMAC_JUMBO_PACKET_MTU + (ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN);
+
+	ndev->netdev_ops = fxgmac_get_netdev_ops();/* Set device operations */
+
+	/* Set device features */
+	if (priv->hw_feat.tso) {
+		ndev->hw_features = NETIF_F_TSO;
+		ndev->hw_features |= NETIF_F_TSO6;
+		ndev->hw_features |= NETIF_F_SG;
+		ndev->hw_features |= NETIF_F_IP_CSUM;
+		ndev->hw_features |= NETIF_F_IPV6_CSUM;
+	} else if (priv->hw_feat.tx_coe) {
+		ndev->hw_features = NETIF_F_IP_CSUM;
+		ndev->hw_features |= NETIF_F_IPV6_CSUM;
+	}
+
+	if (priv->hw_feat.rx_coe) {
+		ndev->hw_features |= NETIF_F_RXCSUM;
+		ndev->hw_features |= NETIF_F_GRO;
+	}
+
+	ndev->hw_features |= NETIF_F_RXHASH;
+	ndev->vlan_features |= ndev->hw_features;
+	ndev->hw_features |= NETIF_F_HW_VLAN_CTAG_RX;
+
+	if (priv->hw_feat.sa_vlan_ins)
+		ndev->hw_features |= NETIF_F_HW_VLAN_CTAG_TX;
+
+	ndev->features |= ndev->hw_features;
+
+	ndev->priv_flags |= IFF_UNICAST_FLT;
+	ndev->watchdog_timeo = msecs_to_jiffies(5000);
+
+#define NIC_MAX_TCP_OFFLOAD_SIZE 7300
+	netif_set_tso_max_size(ndev, NIC_MAX_TCP_OFFLOAD_SIZE);
+
+/* Default coalescing parameters */
+#define FXGMAC_INIT_DMA_TX_USECS INT_MOD_200_US
+#define FXGMAC_INIT_DMA_TX_FRAMES 25
+#define FXGMAC_INIT_DMA_RX_USECS INT_MOD_200_US
+#define FXGMAC_INIT_DMA_RX_FRAMES 25
+
+	/* Tx coalesce parameters initialization */
+	priv->tx_usecs = FXGMAC_INIT_DMA_TX_USECS;
+	priv->tx_frames = FXGMAC_INIT_DMA_TX_FRAMES;
+
+	/* Rx coalesce parameters initialization */
+	priv->rx_riwt = fxgmac_usec_to_riwt(priv, FXGMAC_INIT_DMA_RX_USECS);
+	priv->rx_usecs = FXGMAC_INIT_DMA_RX_USECS;
+	priv->rx_frames = FXGMAC_INIT_DMA_RX_FRAMES;
 
 	return 0;
 }
