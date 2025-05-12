@@ -22,6 +22,7 @@
 #include "yt6801_desc.h"
 
 const struct net_device_ops *fxgmac_get_netdev_ops(void);
+static void fxgmac_napi_enable(struct fxgmac_pdata *priv);
 
 #define PHY_WR_CONFIG(reg_offset)	(0x8000205 + ((reg_offset) * 0x10000))
 static int fxgmac_phy_write_reg(struct fxgmac_pdata *priv, u32 reg_id, u32 data)
@@ -109,6 +110,11 @@ static int fxgmac_mdio_register(struct fxgmac_pdata *priv)
 	return 0;
 }
 
+static void fxgmac_enable_msix_one_irq(struct fxgmac_pdata *priv, u32 int_id)
+{
+	fxgmac_io_wr(priv, MSIX_TBL_MASK + int_id * 16, 0);
+}
+
 static void fxgmac_disable_mgm_irq(struct fxgmac_pdata *priv)
 {
 	fxgmac_io_wr_bits(priv, MGMT_INT_CTRL0, MGMT_INT_CTRL0_INT_MASK,
@@ -173,6 +179,75 @@ static void fxgmac_free_irqs(struct fxgmac_pdata *priv)
 		}
 }
 
+static int fxgmac_request_irqs(struct fxgmac_pdata *priv)
+{
+	u32 rx_irq[] = {INT_FLAG_RX0_IRQ, INT_FLAG_RX1_IRQ,
+			INT_FLAG_RX2_IRQ, INT_FLAG_RX3_IRQ};
+	u32 i = 0, msi = field_get(INT_FLAG_MSI, priv->int_flag);
+	struct fxgmac_channel *channel = priv->channel_head;
+	struct net_device *ndev = priv->ndev;
+	int ret;
+
+	if (!field_get(INT_FLAG_MSIX, priv->int_flag) &&
+	    !field_get(INT_FLAG_LEGACY_IRQ, priv->int_flag)) {
+		priv->int_flag |= INT_FLAG_LEGACY_IRQ;
+		ret = devm_request_irq(priv->dev, priv->dev_irq, fxgmac_isr,
+				       msi ? 0 : IRQF_SHARED, ndev->name,
+				       priv);
+		if (ret) {
+			dev_err(priv->dev, "Requesting irq:%d, failed:%d\n",
+				priv->dev_irq, ret);
+			return ret;
+		}
+	}
+
+	if (!priv->per_channel_irq)
+		return 0;
+
+	if (!field_get(INT_FLAG_TX_IRQ, priv->int_flag)) {
+		snprintf(channel->dma_irq_tx_name,
+			 sizeof(channel->dma_irq_tx_name) - 1,
+			 "%s-ch%d-Tx-%u", netdev_name(ndev), 0,
+			 channel->queue_index);
+		priv->int_flag |= INT_FLAG_TX_IRQ;
+		ret = devm_request_irq(priv->dev, channel->dma_irq_tx,
+				       fxgmac_dma_isr, 0,
+				       channel->dma_irq_tx_name, channel);
+		if (ret) {
+			dev_err(priv->dev, "dev:%p, channel:%p\n",
+				priv->dev, channel);
+
+			dev_err(priv->dev, "Requesting tx irq:%d, failed:%d\n",
+				channel->dma_irq_tx, ret);
+			goto err_irq;
+		}
+	}
+
+	for (i = 0; i < priv->channel_count; i++, channel++) {
+		snprintf(channel->dma_irq_rx_name,
+			 sizeof(channel->dma_irq_rx_name) - 1, "%s-ch%d-Rx-%u",
+			 netdev_name(ndev), i, channel->queue_index);
+
+		if ((priv->int_flag & rx_irq[i]) != rx_irq[i]) {
+			priv->int_flag |= rx_irq[i];
+			ret = devm_request_irq(priv->dev, channel->dma_irq_rx,
+					       fxgmac_dma_isr, 0,
+					       channel->dma_irq_rx_name,
+					       channel);
+			if (ret) {
+				dev_err(priv->dev, "Requesting rx irq:%d, failed:%d\n",
+					channel->dma_irq_rx, ret);
+				goto err_irq;
+			}
+		}
+	}
+
+	return 0;
+
+err_irq:
+	fxgmac_free_irqs(priv);
+	return ret;
+}
 static void fxgmac_free_tx_data(struct fxgmac_pdata *priv)
 {
 	struct fxgmac_channel *channel = priv->channel_head;
@@ -203,6 +278,20 @@ static void fxgmac_free_rx_data(struct fxgmac_pdata *priv)
 			fxgmac_desc_data_unmap(priv,
 					       FXGMAC_GET_DESC_DATA(ring, j));
 	}
+}
+
+static void fxgmac_enable_tx(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+
+	/* Enable Tx DMA channel */
+	fxgmac_dma_wr_bits(channel, DMA_CH_TCR, DMA_CH_TCR_ST, 1);
+
+	/* Enable Tx queue */
+	fxgmac_mtl_wr_bits(priv, 0, MTL_Q_TQOMR, MTL_Q_TQOMR_TXQEN,
+			   MTL_Q_ENABLED);
+	/* Enable MAC Tx */
+	fxgmac_io_wr_bits(priv, MAC_CR, MAC_CR_TE, 1);
 }
 
 static void fxgmac_prepare_tx_stop(struct fxgmac_pdata *priv,
@@ -246,6 +335,27 @@ static void fxgmac_disable_tx(struct fxgmac_pdata *priv)
 
 	/* Disable Tx DMA channel */
 	fxgmac_dma_wr_bits(channel, DMA_CH_TCR, DMA_CH_TCR_ST, 0);
+}
+
+static void fxgmac_enable_rx(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+	u32 val = 0, i;
+
+	/* Enable each Rx DMA channel */
+	for (i = 0; i < priv->channel_count; i++, channel++)
+		fxgmac_dma_wr_bits(channel, DMA_CH_RCR, DMA_CH_RCR_SR, 1);
+
+	/* Enable each Rx queue */
+	for (i = 0; i < priv->rx_q_count; i++)
+		val |= (0x02 << (i << 1));
+
+	fxgmac_io_wr(priv, MAC_RQC0R, val);
+
+	/* Enable MAC Rx */
+	fxgmac_io_wr_bits(priv, MAC_CR, MAC_CR_CST, 1);
+	fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_ACS, 1);
+	fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_RE, 1);
 }
 
 static void fxgmac_prepare_rx_stop(struct fxgmac_pdata *priv,
@@ -299,6 +409,144 @@ static void fxgmac_default_speed_duplex_config(struct fxgmac_pdata *priv)
 {
 	priv->mac_duplex = DUPLEX_FULL;
 	priv->mac_speed = SPEED_1000;
+}
+
+static void fxgmac_config_mac_speed(struct fxgmac_pdata *priv)
+{
+	if (priv->mac_duplex == DUPLEX_UNKNOWN &&
+	    priv->mac_speed == SPEED_UNKNOWN)
+		fxgmac_default_speed_duplex_config(priv);
+
+	fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_DM, priv->mac_duplex);
+
+	switch (priv->mac_speed) {
+	case SPEED_1000:
+		fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_PS, 0);
+		fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_FES, 0);
+		break;
+	case SPEED_100:
+		fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_PS, 1);
+		fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_FES, 1);
+		break;
+	case SPEED_10:
+		fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_PS, 1);
+		fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_FES, 0);
+		break;
+	default:
+		WARN_ON(1);
+		break;
+	}
+}
+
+static void fxgmac_phylink_handler(struct net_device *ndev)
+{
+	struct fxgmac_pdata *priv = netdev_priv(ndev);
+
+	priv->mac_speed = priv->phydev->speed;
+	priv->mac_duplex = priv->phydev->duplex;
+
+	if (priv->phydev->link) {
+		fxgmac_config_mac_speed(priv);
+		fxgmac_enable_rx(priv);
+		fxgmac_enable_tx(priv);
+		if (netif_running(priv->ndev))
+			netif_tx_wake_all_queues(priv->ndev);
+	} else {
+		netif_tx_stop_all_queues(priv->ndev);
+		fxgmac_disable_rx(priv);
+		fxgmac_disable_tx(priv);
+	}
+
+	phy_print_status(priv->phydev);
+}
+
+static int fxgmac_phy_connect(struct fxgmac_pdata *priv)
+{
+	struct phy_device *phydev = priv->phydev;
+	int ret;
+
+	priv->phydev->irq = PHY_POLL;
+	ret = phy_connect_direct(priv->ndev, phydev, fxgmac_phylink_handler,
+				 PHY_INTERFACE_MODE_INTERNAL);
+	if (ret)
+		return ret;
+
+	phy_support_asym_pause(phydev);
+	priv->phydev->mac_managed_pm = 1;
+	phy_attached_info(phydev);
+
+	return 0;
+}
+
+static void fxgmac_enable_msix_irqs(struct fxgmac_pdata *priv)
+{
+	for (u32 intid = 0; intid < MSIX_TBL_MAX_NUM; intid++)
+		fxgmac_enable_msix_one_irq(priv, intid);
+}
+
+static void fxgmac_enable_dma_interrupts(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+	u32 ch_sr;
+
+	for (u32 i = 0; i < priv->channel_count; i++, channel++) {
+		/* Clear all the interrupts which are set */
+		ch_sr = fxgmac_dma_io_rd(channel, DMA_CH_SR);
+		fxgmac_dma_io_wr(channel, DMA_CH_SR, ch_sr);
+
+		ch_sr = 0;
+		/* Enable Normal Interrupt Summary Enable and Fatal Bus Error
+		 * Enable interrupts.
+		 */
+		ch_sr |= (DMA_CH_IER_NIE | DMA_CH_IER_FBEE);
+
+		/* only one tx, enable Transmit Interrupt Enable interrupts */
+		if (i == 0 && channel->tx_ring)
+			ch_sr |= DMA_CH_IER_TIE;
+
+		/* Enable Receive Buffer Unavailable Enable and Receive
+		 * Interrupt Enable interrupts.
+		 */
+		if (channel->rx_ring)
+			ch_sr |= (DMA_CH_IER_RBUE | DMA_CH_IER_RIE);
+
+		fxgmac_dma_io_wr(channel, DMA_CH_IER, ch_sr);
+	}
+}
+
+static void fxgmac_dismiss_all_int(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+	u32 i;
+
+	/* Clear all the interrupts which are set */
+	for (i = 0; i < priv->channel_count; i++, channel++)
+		fxgmac_dma_io_wr(channel, DMA_CH_SR,
+				 fxgmac_dma_io_rd(channel, DMA_CH_SR));
+
+	for (i = 0; i < priv->hw_feat.rx_q_cnt; i++)
+		fxgmac_mtl_io_wr(priv, i, MTL_Q_IR,
+				 fxgmac_mtl_io_rd(priv, i, MTL_Q_IR));
+
+	fxgmac_io_rd(priv, MAC_ISR);      /* Clear all MAC interrupts */
+	fxgmac_io_rd(priv, MAC_TX_RX_STA);/* Clear tx/rx error interrupts */
+	fxgmac_io_rd(priv, MAC_PMT_STA);
+	fxgmac_io_rd(priv, MAC_LPI_STA);
+
+	fxgmac_io_wr(priv, MAC_DBG_STA, fxgmac_io_rd(priv, MAC_DBG_STA));
+}
+
+static void fxgmac_set_interrupt_moderation(struct fxgmac_pdata *priv)
+{
+	fxgmac_io_wr_bits(priv, INT_MOD, INT_MOD_TX, priv->tx_usecs);
+	fxgmac_io_wr_bits(priv, INT_MOD, INT_MOD_RX, priv->rx_usecs);
+}
+
+static void fxgmac_enable_mgm_irq(struct fxgmac_pdata *priv)
+{
+	fxgmac_io_wr_bits(priv, MGMT_INT_CTRL0, MGMT_INT_CTRL0_INT_STATUS, 0);
+	fxgmac_io_wr_bits(priv, MGMT_INT_CTRL0, MGMT_INT_CTRL0_INT_MASK,
+			  MGMT_INT_CTRL0_INT_MASK_MISC);
 }
 
 /**
@@ -376,6 +624,63 @@ static void fxgmac_phy_reset(struct fxgmac_pdata *priv)
 {
 	fxgmac_io_wr_bits(priv, EPHY_CTRL, EPHY_CTRL_RESET, 0);
 	fsleep(1500);
+}
+
+static int fxgmac_start(struct fxgmac_pdata *priv)
+{
+	int ret;
+
+	if (priv->dev_state != FXGMAC_DEV_OPEN &&
+	    priv->dev_state != FXGMAC_DEV_STOP &&
+	    priv->dev_state != FXGMAC_DEV_RESUME) {
+		return 0;
+	}
+
+	if (priv->dev_state != FXGMAC_DEV_STOP) {
+		fxgmac_phy_reset(priv);
+		fxgmac_phy_release(priv);
+	}
+
+	if (priv->dev_state == FXGMAC_DEV_OPEN) {
+		ret = fxgmac_phy_connect(priv);
+		if (ret < 0)
+			return ret;
+	}
+
+	fxgmac_pcie_init(priv);
+	if (test_bit(FXGMAC_POWER_STATE_DOWN, &priv->power_state)) {
+		dev_err(priv->dev, "fxgmac powerstate is %lu when config power up.\n",
+			priv->power_state);
+	}
+
+	fxgmac_config_powerup(priv);
+	fxgmac_dismiss_all_int(priv);
+	ret = fxgmac_hw_init(priv);
+	if (ret < 0) {
+		dev_err(priv->dev, "fxgmac hw init failed.\n");
+		return ret;
+	}
+
+	fxgmac_napi_enable(priv);
+	ret = fxgmac_request_irqs(priv);
+	if (ret < 0)
+		return ret;
+
+	/* Config interrupt to level signal */
+	fxgmac_io_wr_bits(priv, DMA_MR, DMA_MR_INTM, 2);
+	fxgmac_io_wr_bits(priv, DMA_MR, DMA_MR_QUREAD, 1);
+
+	fxgmac_enable_mgm_irq(priv);
+	fxgmac_set_interrupt_moderation(priv);
+
+	if (priv->per_channel_irq)
+		fxgmac_enable_msix_irqs(priv);
+
+	fxgmac_enable_dma_interrupts(priv);
+	priv->dev_state = FXGMAC_DEV_START;
+	phy_start(priv->phydev);
+
+	return 0;
 }
 
 static void fxgmac_disable_msix_irqs(struct fxgmac_pdata *priv)
@@ -1031,6 +1336,40 @@ static const struct net_device_ops fxgmac_netdev_ops = {
 const struct net_device_ops *fxgmac_get_netdev_ops(void)
 {
 	return &fxgmac_netdev_ops;
+}
+
+static void napi_add_enable(struct fxgmac_pdata *priv, struct napi_struct *napi,
+			    int (*poll)(struct napi_struct *, int),
+			    u32 flag)
+{
+	netif_napi_add(priv->ndev, napi, poll);
+	napi_enable(napi);
+	priv->int_flag |= flag;
+}
+
+static void fxgmac_napi_enable(struct fxgmac_pdata *priv)
+{
+	u32 rx_napi[] = {INT_FLAG_RX0_NAPI, INT_FLAG_RX1_NAPI,
+			 INT_FLAG_RX2_NAPI, INT_FLAG_RX3_NAPI};
+	struct fxgmac_channel *channel = priv->channel_head;
+
+	if (!priv->per_channel_irq) {
+		if (field_get(INT_FLAG_LEGACY_NAPI, priv->int_flag))
+			return;
+
+		napi_add_enable(priv, &priv->napi, fxgmac_all_poll,
+				INT_FLAG_LEGACY_NAPI);
+		return;
+	}
+
+	if (!field_get(INT_FLAG_TX_NAPI, priv->int_flag))
+		napi_add_enable(priv, &channel->napi_tx, fxgmac_one_poll_tx,
+				INT_FLAG_TX_NAPI);
+
+	for (u32 i = 0; i < priv->channel_count; i++, channel++)
+		if (!(priv->int_flag & rx_napi[i]))
+			napi_add_enable(priv, &channel->napi_rx,
+					fxgmac_one_poll_rx, rx_napi[i]);
 }
 
 static int fxgmac_probe(struct pci_dev *pcidev, const struct pci_device_id *id)
