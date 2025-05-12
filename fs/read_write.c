@@ -635,6 +635,7 @@ static int xcall_read(struct prefetch_item *pfi, struct fd *f, unsigned int fd,
 
 	if (!spin_trylock(&pfi->pfi_lock)) {
 		this_cpu_inc(xcall_cache_wait);
+		trace_epoll_rc_wait(fd);
 		spin_lock(&pfi->pfi_lock);
 	}
 
@@ -663,6 +664,7 @@ static int xcall_read(struct prefetch_item *pfi, struct fd *f, unsigned int fd,
 
 hit_return:
 	this_cpu_inc(xcall_cache_hit);
+	trace_epoll_rc_hit(fd, copy_len);
 	fdput_pos(*f);
 	spin_unlock(&pfi->pfi_lock);
 
@@ -681,6 +683,7 @@ reset_pfi:
 	pfi->state = EPOLL_FILE_CACHE_NONE;
 	this_cpu_inc(xcall_cache_miss);
 	cancel_work(&pfi->work);
+	trace_epoll_rc_miss(fd);
 	spin_unlock(&pfi->pfi_lock);
 
 	return -EAGAIN;

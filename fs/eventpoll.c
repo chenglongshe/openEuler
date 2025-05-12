@@ -38,6 +38,7 @@
 #include <linux/compat.h>
 #include <linux/rculist.h>
 #include <net/busy_poll.h>
+#include <trace/events/fs.h>
 
 /*
  * LOCKING:
@@ -1255,6 +1256,7 @@ static void do_prefetch_item(struct prefetch_item *pfi)
 	pfi->len = kernel_read(pfi->f, pfi->cache,
 			       max_fd_cache_pages * PAGE_SIZE, &pfi->f->f_pos);
 	pfi->state = EPOLL_FILE_CACHE_READY;
+	trace_epoll_rc_ready(pfi->fd, pfi->len);
 }
 
 struct cpumask xcall_numa_cpumask[4] __read_mostly;
@@ -1380,6 +1382,7 @@ static void ep_prefetch_item_enqueue(struct eventpoll *ep, struct epitem *epi)
 
 	spin_lock(&pfi->pfi_lock);
 	pfi->state = EPOLL_FILE_CACHE_QUEUED;
+	trace_epoll_rc_queue(epi->ffd.fd, t_cpu);
 	queue_work_on(t_cpu, rc_work, &pfi->work);
 	spin_unlock(&pfi->pfi_lock);
 }
