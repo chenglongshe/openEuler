@@ -16,18 +16,28 @@
 #define __SYSCALL(x, y)
 #endif
 
+#ifndef __XCALL
+#define __XCALL(x, y)
+#endif
+
 #if __BITS_PER_LONG == 32 || defined(__SYSCALL_COMPAT)
 #define __SC_3264(_nr, _32, _64) __SYSCALL(_nr, _32)
+#define __XCALL_SC_3264(_nr, _32, _64) __XCALL(_nr, _32)
 #else
 #define __SC_3264(_nr, _32, _64) __SYSCALL(_nr, _64)
+#define __XCALL_SC_3264(_nr, _32, _64) __XCALL(_nr, _64)
 #endif
 
 #ifdef __SYSCALL_COMPAT
 #define __SC_COMP(_nr, _sys, _comp) __SYSCALL(_nr, _comp)
 #define __SC_COMP_3264(_nr, _32, _64, _comp) __SYSCALL(_nr, _comp)
+#define __XCALL_SC_COMP(_nr, _sys, _comp) __XCALL(_nr, _comp)
+#define __XCALL_SC_COMP_3264(_nr, _32, _64, _comp) __XCALL(_nr, _comp)
 #else
 #define __SC_COMP(_nr, _sys, _comp) __SYSCALL(_nr, _sys)
 #define __SC_COMP_3264(_nr, _32, _64, _comp) __SC_3264(_nr, _32, _64)
+#define __XCALL_SC_COMP(_nr, _sys, _comp) __XCALL(_nr, _sys)
+#define __XCALL_SC_COMP_3264(_nr, _32, _64, _comp) __XCALL_SC_3264(_nr, _32, _64)
 #endif
 
 #define __NR_io_setup 0
