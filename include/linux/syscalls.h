@@ -236,6 +236,13 @@ static inline int is_syscall_trace_event(struct trace_event_call *tp_event)
 
 #define XCALL_DEFINEx(x, sname, ...)				\
 	__XCALL_DEFINEx(x, sname, __VA_ARGS__)
+
+extern unsigned long *xcall_numa_cpumask_bits0;
+extern unsigned long *xcall_numa_cpumask_bits1;
+extern unsigned long *xcall_numa_cpumask_bits2;
+extern unsigned long *xcall_numa_cpumask_bits3;
+int proc_xcall_numa_cpumask(struct ctl_table *table, int write,
+			   void *buffer, size_t *lenp, loff_t *ppos);
 #endif
 
 #define __PROTECT(...) asmlinkage_protect(__VA_ARGS__)

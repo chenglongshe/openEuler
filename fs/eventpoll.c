@@ -128,6 +128,8 @@ struct nested_calls {
 	spinlock_t lock;
 };
 
+static struct workqueue_struct *rc_work;
+
 /*
  * Each file descriptor added to the eventpoll interface will
  * have an entry of this type linked to the "rbr" RB tree.
@@ -768,6 +770,45 @@ static void epi_rcu_free(struct rcu_head *head)
 	kmem_cache_free(epi_cache, epi);
 }
 
+#ifdef CONFIG_FAST_SYSCALL
+#define PREFETCH_ITEM_HASH_BITS 6
+#define PREFETCH_ITEM_TABLE_SIZE (1 << PREFETCH_ITEM_HASH_BITS)
+DEFINE_HASHTABLE(xcall_item_table, PREFETCH_ITEM_HASH_BITS);
+DEFINE_RAW_SPINLOCK(xcall_table_lock);
+
+struct prefetch_item *find_prefetch_item(struct file *file)
+{
+	struct prefetch_item *found = NULL;
+	unsigned hash = 0;
+
+	hash = hash_64((u64)file, PREFETCH_ITEM_HASH_BITS);
+	raw_spin_lock(&xcall_table_lock);
+	hash_for_each_possible(xcall_item_table, found, node, hash) {
+		if (found->f == file)
+			break;
+	}
+	raw_spin_unlock(&xcall_table_lock);
+
+	return found;
+}
+
+void free_prefetch_item(struct file *file)
+{
+	struct prefetch_item *pfi = find_prefetch_item(file);
+	if (pfi) {
+		raw_spin_lock(&xcall_table_lock);
+		hlist_del_init(&pfi->node);
+		raw_spin_unlock(&xcall_table_lock);
+
+		if (pfi->cache) {
+			kfree(pfi->cache);
+			pfi->cache = NULL;
+		}
+		kfree(pfi);
+	}
+}
+#endif
+
 /*
  * Removes a "struct epitem" from the eventpoll RB tree and deallocates
  * all the associated resources. Must be called with "mtx" held.
@@ -782,6 +823,15 @@ static int ep_remove(struct eventpoll *ep, struct epitem *epi)
 	 * Removes poll wait queue hooks.
 	 */
 	ep_unregister_pollwait(ep, epi);
+
+#ifdef CONFIG_FAST_SYSCALL
+       if (current->xcall_select &&
+	   test_bit(__NR_epoll_pwait, current->xcall_select)) {
+		struct prefetch_item *pfi = find_prefetch_item(file);
+		if (pfi)
+			cancel_work_sync(&pfi->work);
+	}
+#endif
 
 	/* Remove the current item from the list of epoll hooks */
 	spin_lock(&file->f_lock);
@@ -1190,6 +1240,150 @@ static inline bool chain_epi_lockless(struct epitem *epi)
 
 	return true;
 }
+
+
+#ifdef CONFIG_FAST_SYSCALL
+int max_fd_cache_pages = 1;
+static void do_prefetch_item(struct prefetch_item *pfi)
+{
+	if (pfi && (pfi->state != EPOLL_FILE_CACHE_QUEUED))
+		return;
+
+	if (pfi->len > 0)
+		return;
+
+	pfi->len = kernel_read(pfi->f, pfi->cache,
+			       max_fd_cache_pages * PAGE_SIZE, &pfi->f->f_pos);
+	pfi->state = EPOLL_FILE_CACHE_READY;
+}
+
+struct cpumask xcall_numa_cpumask[4] __read_mostly;
+unsigned long *xcall_numa_cpumask_bits0 = cpumask_bits(&xcall_numa_cpumask[0]);
+unsigned long *xcall_numa_cpumask_bits1 = cpumask_bits(&xcall_numa_cpumask[1]);
+unsigned long *xcall_numa_cpumask_bits2 = cpumask_bits(&xcall_numa_cpumask[2]);
+unsigned long *xcall_numa_cpumask_bits3 = cpumask_bits(&xcall_numa_cpumask[3]);
+
+#ifdef CONFIG_SYSCTL
+static void proc_xcall_update(void)
+{
+	int i;
+
+	/* Remove impossible cpus to keep sysctl output clean. */
+	for (i = 0; i < 4; i++)
+		cpumask_and(&xcall_numa_cpumask[i], &xcall_numa_cpumask[i], cpu_possible_mask);
+}
+
+int proc_xcall_numa_cpumask(struct ctl_table *table, int write,
+			   void *buffer, size_t *lenp, loff_t *ppos)
+{
+	int err;
+
+	// todo: add lock
+	err = proc_do_large_bitmap(table, write, buffer, lenp, ppos);
+	if (!err && write)
+		proc_xcall_update();
+
+	return err;
+}
+#endif /* CONFIG_SYSCTL */
+
+static void prefetch_work_fn(struct work_struct *work)
+{
+	struct prefetch_item *pfi = container_of(work, struct prefetch_item, work);
+
+	spin_lock(&pfi->pfi_lock);
+	do_prefetch_item(pfi);
+	spin_unlock(&pfi->pfi_lock);
+}
+
+static int get_nth_cpu_in_cpumask(const struct cpumask *mask, int n)
+{
+	int count = 0;
+	int cpu;
+
+	for_each_cpu(cpu, mask) {
+		if (count == n)
+			return cpu;
+		count++;
+	}
+
+	return cpumask_first(mask);
+}
+
+static struct prefetch_item *alloc_prefetch_item(struct epitem *epi)
+{
+	struct file *tfile = epi->ffd.file;
+	struct prefetch_item *pfi;
+	int fd = epi->ffd.fd;
+	int cpu, nid;
+
+	if (!current->xcall_select ||
+	    !test_bit(__NR_epoll_pwait, current->xcall_select))
+		return NULL;
+
+	/* Initialization prefetch item */
+	pfi = kmalloc(sizeof(struct prefetch_item), GFP_KERNEL);
+	if (!pfi)
+		return NULL;
+
+	pfi->cache = kzalloc(max_fd_cache_pages * PAGE_SIZE, GFP_KERNEL);
+	if (!pfi->cache) {
+		kfree(pfi);
+		return NULL;
+	}
+
+	/* Init Read Cache mode */
+	pfi->state = EPOLL_FILE_CACHE_NONE;
+	INIT_WORK(&pfi->work, prefetch_work_fn);
+	INIT_HLIST_NODE(&pfi->node);
+	spin_lock_init(&pfi->pfi_lock);
+	pfi->fd = fd;
+	pfi->f = tfile;
+	pfi->len = 0;
+	pfi->pos = 0;
+	cpu = smp_processor_id();
+	nid = numa_node_id();
+	cpumask_and(&pfi->related_cpus, cpu_cpu_mask(cpu), cpu_online_mask);
+	if (nid <= 3 && !cpumask_empty(&xcall_numa_cpumask[nid]) &&
+	    cpumask_subset(&xcall_numa_cpumask[nid], cpu_cpu_mask(cpu)))
+		cpumask_and(&pfi->related_cpus, &pfi->related_cpus, &xcall_numa_cpumask[nid]);
+	pfi->cpu = get_nth_cpu_in_cpumask(&pfi->related_cpus, fd % cpumask_weight(&pfi->related_cpus));
+
+	raw_spin_lock(&xcall_table_lock);
+	hash_add(xcall_item_table, &pfi->node, hash_64((u64)tfile, PREFETCH_ITEM_HASH_BITS));
+	raw_spin_unlock(&xcall_table_lock);
+
+	return pfi;
+}
+
+static void ep_prefetch_item_enqueue(struct eventpoll *ep, struct epitem *epi)
+{
+	struct prefetch_item *pfi = find_prefetch_item(epi->ffd.file);
+	int t_cpu;
+
+	if (!pfi) {
+		pfi = alloc_prefetch_item(epi);
+		if (pfi == NULL)
+			return;
+	}
+
+	if (!pfi->cache || !(epi->event.events & EPOLLIN) ||
+	    pfi->state != EPOLL_FILE_CACHE_NONE)
+		return;
+
+	if (pfi->cpu == smp_processor_id()) {
+		t_cpu = cpumask_next(pfi->cpu, &pfi->related_cpus);
+		if (t_cpu > cpumask_last(&pfi->related_cpus))
+			t_cpu = cpumask_first(&pfi->related_cpus);
+	} else
+		t_cpu = pfi->cpu;
+
+	spin_lock(&pfi->pfi_lock);
+	pfi->state = EPOLL_FILE_CACHE_QUEUED;
+	queue_work_on(t_cpu, rc_work, &pfi->work);
+	spin_unlock(&pfi->pfi_lock);
+}
+#endif
 
 /*
  * This is the callback that is passed to the wait queue wakeup
@@ -1750,6 +1944,12 @@ static __poll_t ep_send_events_proc(struct eventpoll *ep, struct list_head *head
 		revents = ep_item_poll(epi, &pt, 1);
 		if (!revents)
 			continue;
+
+#ifdef CONFIG_FAST_SYSCALL
+		if (current->xcall_select &&
+		    test_bit(__NR_epoll_pwait, current->xcall_select))
+			ep_prefetch_item_enqueue(ep, epi);
+#endif
 
 		if (__put_user(revents, &uevent->events) ||
 		    __put_user(epi->event.data, &uevent->data)) {
@@ -2383,6 +2583,26 @@ SYSCALL_DEFINE6(epoll_pwait, int, epfd, struct epoll_event __user *, events,
 		size_t, sigsetsize)
 {
 	int error;
+	/*
+	 * If the caller wants a certain signal mask to be set during the wait,
+	 * we apply it here.
+	 */
+	error = set_user_sigmask(sigmask, sigsetsize);
+	if (error)
+		return error;
+
+	error = do_epoll_wait(epfd, events, maxevents, timeout);
+	restore_saved_sigmask_unless(error == -EINTR);
+
+	return error;
+}
+
+#ifdef CONFIG_FAST_SYSCALL
+XCALL_DEFINE6(epoll_pwait, int, epfd, struct epoll_event __user *, events,
+		int, maxevents, int, timeout, const sigset_t __user *, sigmask,
+		size_t, sigsetsize)
+{
+	int error;
 
 	/*
 	 * If the caller wants a certain signal mask to be set during the wait,
@@ -2397,6 +2617,7 @@ SYSCALL_DEFINE6(epoll_pwait, int, epfd, struct epoll_event __user *, events,
 
 	return error;
 }
+#endif
 
 #ifdef CONFIG_COMPAT
 COMPAT_SYSCALL_DEFINE6(epoll_pwait, int, epfd,
@@ -2453,6 +2674,14 @@ static int __init eventpoll_init(void)
 	/* Allocates slab cache used to allocate "struct eppoll_entry" */
 	pwq_cache = kmem_cache_create("eventpoll_pwq",
 		sizeof(struct eppoll_entry), 0, SLAB_PANIC|SLAB_ACCOUNT, NULL);
+
+#ifdef CONFIG_FAST_SYSCALL
+	rc_work = alloc_workqueue("eventpoll_rc", 0, 0);
+	if (!rc_work)
+		return -ENOMEM;
+
+	hash_init(xcall_item_table);
+#endif
 
 	return 0;
 }

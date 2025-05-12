@@ -617,13 +617,103 @@ static inline loff_t *file_ppos(struct file *file)
 	return file->f_mode & FMODE_STREAM ? NULL : &file->f_pos;
 }
 
+#ifdef CONFIG_FAST_SYSCALL
+DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_hit);
+EXPORT_PER_CPU_SYMBOL(xcall_cache_hit);
+
+DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
+EXPORT_PER_CPU_SYMBOL(xcall_cache_miss);
+
+DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_wait);
+EXPORT_PER_CPU_SYMBOL(xcall_cache_wait);
+
+static int xcall_read(struct prefetch_item *pfi, struct fd *f, unsigned int fd,
+		      char __user *buf, size_t count)
+{
+	ssize_t copy_ret = -1;
+	ssize_t copy_len;
+
+	if (!spin_trylock(&pfi->pfi_lock)) {
+		this_cpu_inc(xcall_cache_wait);
+		spin_lock(&pfi->pfi_lock);
+	}
+
+	copy_len = pfi->len;
+	if (pfi->state != EPOLL_FILE_CACHE_READY || copy_len < 0)
+		goto reset_pfi;
+
+	if (copy_len == 0) {
+		copy_ret = 0;
+		goto hit_return;
+	}
+
+	if (copy_len >= count)
+		copy_len = count;
+
+	copy_ret = copy_to_user(buf, (void *)(pfi->cache + pfi->pos), copy_len);
+	pfi->len -= copy_len;
+	if (pfi->len <= 0) {
+		pfi->len = 0;
+		pfi->state = EPOLL_FILE_CACHE_NONE;
+	}
+
+	pfi->pos += copy_len;
+	if (pfi->pos >= (max_fd_cache_pages * PAGE_SIZE) || pfi->len == 0)
+		pfi->pos = 0;
+
+hit_return:
+	this_cpu_inc(xcall_cache_hit);
+	fdput_pos(*f);
+	spin_unlock(&pfi->pfi_lock);
+
+	/*
+	 * 1. copy_len = 0.
+	 * 2. copy_len > 0 && copy_to_user() works fine.
+	 */
+	if (copy_ret == 0)
+		return copy_len;
+	else
+		return -EBADF;
+
+reset_pfi:
+	/* Always reset cache state to none */
+	pfi->len = 0;
+	pfi->state = EPOLL_FILE_CACHE_NONE;
+	this_cpu_inc(xcall_cache_miss);
+	cancel_work(&pfi->work);
+	spin_unlock(&pfi->pfi_lock);
+
+	return -EAGAIN;
+}
+#endif
+
 ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 {
 	struct fd f = fdget_pos(fd);
 	ssize_t ret = -EBADF;
+	loff_t pos, *ppos;
+#ifdef CONFIG_FAST_SYSCALL
+	struct prefetch_item *pfi;
+
+	if (!current->xcall_select ||
+	    !test_bit(__NR_epoll_pwait, current->xcall_select))
+		goto vfs_read;
+
+	if (!f.file)
+		goto vfs_read;
+
+	pfi = find_prefetch_item(f.file);
+	if (!pfi || !pfi->cache)
+		goto vfs_read;
+
+	ret = xcall_read(pfi, &f, fd, buf, count);
+	if (ret != -EAGAIN)
+		return ret;
+vfs_read:
+#endif
 
 	if (f.file) {
-		loff_t pos, *ppos = file_ppos(f.file);
+		ppos = file_ppos(f.file);
 		if (ppos) {
 			pos = *ppos;
 			ppos = &pos;
