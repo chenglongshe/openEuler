@@ -35,6 +35,62 @@
 #define EPHY_CTRL_STA_DUPLEX			BIT(2)
 #define EPHY_CTRL_STA_SPEED			GENMASK(4, 3)
 
+#define OOB_WOL_CTRL				0x1010
+#define OOB_WOL_CTRL_DIS			BIT(0)
+
+/* MAC management registers */
+#define MGMT_INT_CTRL0				0x1100
+#define MGMT_INT_CTRL0_INT_STATUS		GENMASK(15, 0)
+#define  MGMT_INT_CTRL0_INT_STATUS_RX		0x000f
+#define  MGMT_INT_CTRL0_INT_STATUS_TX		0x0010
+#define  MGMT_INT_CTRL0_INT_STATUS_MISC		0x0020
+#define  MGMT_INT_CTRL0_INT_STATUS_RXTX		0x0030
+#define MGMT_INT_CTRL0_INT_MASK			GENMASK(31, 16)
+#define  MGMT_INT_CTRL0_INT_MASK_RXCH		0x000f
+#define  MGMT_INT_CTRL0_INT_MASK_TXCH		0x0010
+#define  MGMT_INT_CTRL0_INT_MASK_MISC		0x0020
+#define  MGMT_INT_CTRL0_INT_MASK_EX_PMT		0xf7ff
+#define  MGMT_INT_CTRL0_INT_MASK_DISABLE	0xf000
+#define  MGMT_INT_CTRL0_INT_MASK_MASK		0xffff
+
+/* msi table */
+#define MSI_ID_RXQ0				0
+#define MSI_ID_RXQ1				1
+#define MSI_ID_RXQ2				2
+#define MSI_ID_RXQ3				3
+#define MSI_ID_TXQ0				4
+#define MSIX_TBL_MAX_NUM			5
+
+/****************  GMAC register. *********************/
+#define MAC_CR				0x2000
+#define MAC_CR_RE			BIT(0)
+#define MAC_CR_TE			BIT(1)
+#define MAC_CR_LM			BIT(12)
+#define MAC_CR_DM			BIT(13)
+#define MAC_CR_FES			BIT(14)
+#define MAC_CR_PS			BIT(15)
+#define MAC_CR_JE			BIT(16)
+#define MAC_CR_ACS			BIT(20)
+#define MAC_CR_CST			BIT(21)
+#define MAC_CR_IPC			BIT(27)
+#define MAC_CR_ARPEN			BIT(31)
+
+#define MAC_RQC0R			0x20a0
+#define MAC_RQC1R			0x20a4
+#define MAC_RQC2R			0x20a8
+#define MAC_RQC2_INC			4
+#define MAC_RQC2_Q_PER_REG		4
+
+#define MAC_PMT_STA			0x20c0
+#define MAC_PMT_STA_PWRDWN		BIT(0)
+#define MAC_PMT_STA_MGKPKTEN		BIT(1)
+#define MAC_PMT_STA_RWKPKTEN		BIT(2)
+#define MAC_PMT_STA_MGKPRCVD		BIT(5)
+#define MAC_PMT_STA_RWKPRCVD		BIT(6)
+#define MAC_PMT_STA_GLBLUCAST		BIT(9)
+#define MAC_PMT_STA_RWKPTR		GENMASK(27, 24)
+#define MAC_PMT_STA_RWKFILTERST		BIT(31)
+
 #define MAC_MDIO_ADDR			0x2200
 #define MAC_MDIO_ADDR_BUSY		BIT(0)
 #define MAC_MDIO_ADDR_GOC		GENMASK(3, 2)
@@ -42,6 +98,153 @@
 #define MAC_MDIO_DATA			0x2204
 #define MAC_MDIO_DATA_GD		GENMASK(15, 0)
 #define MAC_MDIO_DATA_RA		GENMASK(31, 16)
+
+/* MTL queue registers */
+#define MTL_Q_BASE			0x2d00
+#define MTL_Q_INC			0x40
+
+#define MTL_Q_TQOMR			0x00
+#define MTL_Q_TQOMR_FTQ			BIT(0)
+#define MTL_Q_TQOMR_TSF			BIT(1)
+#define MTL_Q_TQOMR_TXQEN		GENMASK(3, 2)
+#define MTL_Q_DISABLED			0x00
+#define MTL_Q_EN_IF_AV			0x01
+#define MTL_Q_ENABLED			0x02
+
+#define MTL_Q_RQDR			0x38
+#define MTL_Q_RQDR_RXQSTS		GENMASK(5, 4)
+#define MTL_Q_RQDR_PRXQ			GENMASK(29, 16)
+#define DMA_DSRX_INC				4
+#define DMA_DSR0				0x300c
+#define DMA_DSR0_TPS				GENMASK(15, 12)
+#define  DMA_TPS_STOPPED			0x00
+#define  DMA_TPS_SUSPENDED			0x06
+
+/* DMA channel registers */
+#define DMA_CH_BASE			0x3100
+#define DMA_CH_INC			0x80
+
+#define DMA_CH_TCR			0x04
+#define DMA_CH_TCR_ST			BIT(0)
+#define DMA_CH_TCR_OSP			BIT(4)
+#define DMA_CH_TCR_TSE			BIT(12)
+#define DMA_CH_TCR_PBL			GENMASK(21, 16)
+#define  DMA_CH_PBL_1			1
+#define  DMA_CH_PBL_2			2
+#define  DMA_CH_PBL_4			4
+#define  DMA_CH_PBL_8			8
+#define  DMA_CH_PBL_16			16
+#define  DMA_CH_PBL_32			32
+#define  DMA_CH_PBL_64			64
+#define  DMA_CH_PBL_128			128
+#define  DMA_CH_PBL_256			256
+
+#define DMA_CH_RCR			0x08
+#define DMA_CH_RCR_SR			BIT(0)
+#define DMA_CH_RCR_RBSZ			GENMASK(14, 1)
+#define DMA_CH_RCR_PBL			GENMASK(21, 16)
+
+/* Page allocation related values */
+struct fxgmac_page_alloc {
+	struct page *pages;
+	unsigned int pages_len;
+	unsigned int pages_offset;
+	dma_addr_t pages_dma;
+};
+
+/* Ring entry buffer data */
+struct fxgmac_buffer_data {
+	struct fxgmac_page_alloc pa;
+	struct fxgmac_page_alloc pa_unmap;
+
+	dma_addr_t dma_base;
+	unsigned long dma_off;
+	unsigned int dma_len;
+};
+
+struct fxgmac_tx_desc_data {
+	unsigned int packets;		/* BQL packet count */
+	unsigned int bytes;		/* BQL byte count */
+};
+
+struct fxgmac_rx_desc_data {
+	struct fxgmac_buffer_data hdr;	/* Header locations */
+	struct fxgmac_buffer_data buf;	/* Payload locations */
+	unsigned short hdr_len;		/* Length of received header */
+	unsigned short len;		/* Length of received packet */
+};
+
+struct fxgmac_desc_data {
+	struct fxgmac_dma_desc *dma_desc;  /* Virtual address of descriptor */
+	dma_addr_t dma_desc_addr;          /* DMA address of descriptor */
+	struct sk_buff *skb;               /* Virtual address of SKB */
+	dma_addr_t skb_dma;                /* DMA address of SKB data */
+	unsigned int skb_dma_len;          /* Length of SKB DMA area */
+
+	/* Tx/Rx -related data */
+	struct fxgmac_tx_desc_data tx;
+	struct fxgmac_rx_desc_data rx;
+
+	unsigned int mapped_as_page;
+};
+
+struct fxgmac_ring {
+	struct fxgmac_pkt_info pkt_info;  /* packet related information */
+
+	/* Virtual/DMA addresses of DMA descriptor list */
+	struct fxgmac_dma_desc *dma_desc_head;
+	dma_addr_t dma_desc_head_addr;
+	unsigned int dma_desc_count;
+
+	/* Array of descriptor data corresponding the DMA descriptor
+	 * (always use the FXGMAC_GET_DESC_DATA macro to access this data)
+	 */
+	struct fxgmac_desc_data *desc_data_head;
+
+	/* Page allocation for RX buffers */
+	struct fxgmac_page_alloc rx_hdr_pa;
+	struct fxgmac_page_alloc rx_buf_pa;
+
+	/* Ring index values
+	 * cur  - Tx: index of descriptor to be used for current transfer
+	 *        Rx: index of descriptor to check for packet availability
+	 * dirty - Tx: index of descriptor to check for transfer complete
+	 *         Rx: index of descriptor to check for buffer reallocation
+	 */
+	unsigned int cur;
+	unsigned int dirty;
+
+	struct {
+		unsigned int xmit_more;
+		unsigned int queue_stopped;
+		unsigned short cur_mss;
+		unsigned short cur_vlan_ctag;
+	} tx;
+} ____cacheline_aligned;
+
+struct fxgmac_channel {
+	char name[16];
+
+	/* Address of private data area for device */
+	struct fxgmac_pdata *priv;
+
+	/* Queue index and base address of queue's DMA registers */
+	unsigned int queue_index;
+
+	/* Per channel interrupt irq number */
+	u32 dma_irq_rx;
+	char dma_irq_rx_name[IFNAMSIZ + 32];
+	u32 dma_irq_tx;
+	char dma_irq_tx_name[IFNAMSIZ + 32];
+
+	/* ndev related settings */
+	struct napi_struct napi_tx;
+	struct napi_struct napi_rx;
+
+	void __iomem *dma_regs;
+	struct fxgmac_ring *tx_ring;
+	struct fxgmac_ring *rx_ring;
+} ____cacheline_aligned;
 
 struct fxgmac_resources {
 	void __iomem *addr;
@@ -64,6 +267,16 @@ struct fxgmac_pdata {
 	struct phy_device *phydev;
 
 	void __iomem *hw_addr;			/* Registers base */
+
+	/* Rings for Tx/Rx on a DMA channel */
+	struct fxgmac_channel *channel_head;
+	unsigned int channel_count;
+	unsigned int rx_ring_count;
+	unsigned int rx_desc_count;
+	unsigned int rx_q_count;
+#define FXGMAC_TX_1_RING	1
+#define FXGMAC_TX_1_Q		1
+	unsigned int tx_desc_count;
 
 	/* Device interrupt */
 	int dev_irq;
@@ -90,6 +303,9 @@ struct fxgmac_pdata {
 
 	u32 msg_enable;
 	enum fxgmac_dev_state dev_state;
+#define FXGMAC_POWER_STATE_DOWN			0
+#define FXGMAC_POWER_STATE_UP			1
+	unsigned long power_state;
 };
 
 /* Non-constant mask variant of FIELD_GET() and FIELD_PREP() */
@@ -122,6 +338,72 @@ fxgmac_io_wr_bits(struct fxgmac_pdata *priv, u32 reg, u32 mask, u32 set)
 	cfg &= ~mask;
 	cfg |= field_prep(mask, set);
 	fxgmac_io_wr(priv, reg, cfg);
+}
+
+static inline u32 fxgmac_mtl_io_rd(struct fxgmac_pdata *priv, u8 n, u32 reg)
+{
+	return fxgmac_io_rd(priv, reg + n * MTL_Q_INC);
+}
+
+static inline u32
+fxgmac_mtl_rd_bits(struct fxgmac_pdata *priv, u8 n, u32 reg, u32 mask)
+{
+	return fxgmac_io_rd_bits(priv,  reg + n * MTL_Q_INC, mask);
+}
+
+static inline void
+fxgmac_mtl_io_wr(struct fxgmac_pdata *priv, u8 n, u32 reg, u32 set)
+{
+	return fxgmac_io_wr(priv,  reg + n * MTL_Q_INC, set);
+}
+
+static inline void
+fxgmac_mtl_wr_bits(struct fxgmac_pdata *priv, u8 n, u32 reg, u32 mask, u32 set)
+{
+	return fxgmac_io_wr_bits(priv,  reg + n * MTL_Q_INC, mask, set);
+}
+
+static inline u32 fxgmac_dma_io_rd(struct fxgmac_channel *channel, u32 reg)
+{
+	return ioread32(channel->dma_regs + reg);
+}
+
+static inline u32
+fxgmac_dma_rd_bits(struct fxgmac_channel *channel, u32 reg, u32 mask)
+{
+	u32 cfg = fxgmac_dma_io_rd(channel, reg);
+
+	return field_get(mask, cfg);
+}
+
+static inline void
+fxgmac_dma_io_wr(struct fxgmac_channel *channel, u32 reg, u32 set)
+{
+	iowrite32(set, channel->dma_regs + reg);
+}
+
+static inline void
+fxgmac_dma_wr_bits(struct fxgmac_channel *channel, u32 reg, u32 mask, u32 set)
+{
+	u32 cfg = fxgmac_dma_io_rd(channel, reg);
+
+	cfg &= ~mask;
+	cfg |= field_prep(mask, set);
+	fxgmac_dma_io_wr(channel, reg, cfg);
+}
+
+static inline u32 fxgmac_desc_rd_bits(__le32 desc, u32 mask)
+{
+	return field_get(mask, le32_to_cpu(desc));
+}
+
+static inline void fxgmac_desc_wr_bits(__le32 *desc, u32 mask, u32 set)
+{
+	u32 cfg = le32_to_cpu(*desc);
+
+	cfg &= ~mask;
+	cfg |= field_prep(mask, set);
+	*desc = cpu_to_le32(cfg);
 }
 
 #endif /* YT6801_TYPE_H */

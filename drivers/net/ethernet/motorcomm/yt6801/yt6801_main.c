@@ -19,6 +19,7 @@
 
 #include <linux/module.h>
 #include "yt6801_type.h"
+#include "yt6801_desc.h"
 
 #define PHY_WR_CONFIG(reg_offset)	(0x8000205 + ((reg_offset) * 0x10000))
 static int fxgmac_phy_write_reg(struct fxgmac_pdata *priv, u32 reg_id, u32 data)
@@ -106,6 +107,219 @@ static int fxgmac_mdio_register(struct fxgmac_pdata *priv)
 	return 0;
 }
 
+static void fxgmac_disable_mgm_irq(struct fxgmac_pdata *priv)
+{
+	fxgmac_io_wr_bits(priv, MGMT_INT_CTRL0, MGMT_INT_CTRL0_INT_MASK,
+			  MGMT_INT_CTRL0_INT_MASK_MASK);
+}
+
+static void napi_disable_del(struct fxgmac_pdata *priv, struct napi_struct *n,
+			     u32 flag)
+{
+	napi_disable(n);
+	netif_napi_del(n);
+	priv->int_flag &= ~flag;
+}
+
+static void fxgmac_napi_disable(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+	u32 rx_napi[] = {INT_FLAG_RX0_NAPI, INT_FLAG_RX1_NAPI,
+			INT_FLAG_RX2_NAPI, INT_FLAG_RX3_NAPI};
+
+	if (!priv->per_channel_irq) {
+		if (!field_get(INT_FLAG_LEGACY_NAPI, priv->int_flag))
+			return;
+
+		napi_disable_del(priv, &priv->napi,
+				 INT_FLAG_LEGACY_NAPI);
+		return;
+	}
+
+	if (field_get(INT_FLAG_TX_NAPI, priv->int_flag))
+		napi_disable_del(priv, &channel->napi_tx, INT_FLAG_TX_NAPI);
+
+	for (u32 i = 0; i < priv->channel_count; i++, channel++)
+		if (priv->int_flag & rx_napi[i])
+			napi_disable_del(priv, &channel->napi_rx, rx_napi[i]);
+}
+
+static void fxgmac_free_irqs(struct fxgmac_pdata *priv)
+{
+	u32 rx_irq[] = {INT_FLAG_RX0_IRQ, INT_FLAG_RX1_IRQ,
+			INT_FLAG_RX2_IRQ, INT_FLAG_RX3_IRQ};
+	struct fxgmac_channel *channel = priv->channel_head;
+
+	if (!field_get(INT_FLAG_MSIX, priv->int_flag) &&
+	    field_get(INT_FLAG_LEGACY_IRQ, priv->int_flag)) {
+		devm_free_irq(priv->dev, priv->dev_irq, priv);
+		priv->int_flag &= ~INT_FLAG_LEGACY_IRQ;
+	}
+
+	if (!priv->per_channel_irq)
+		return;
+
+	if (field_get(INT_FLAG_TX_IRQ, priv->int_flag)) {
+		priv->int_flag &= ~INT_FLAG_TX_IRQ;
+		devm_free_irq(priv->dev, channel->dma_irq_tx, channel);
+	}
+
+	for (u32 i = 0; i < priv->channel_count; i++, channel++)
+		if (priv->int_flag & rx_irq[i]) {
+			priv->int_flag &= ~rx_irq[i];
+			devm_free_irq(priv->dev, channel->dma_irq_rx, channel);
+		}
+}
+
+static void fxgmac_free_tx_data(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+	struct fxgmac_ring *ring;
+
+	for (u32 i = 0; i < priv->channel_count; i++, channel++) {
+		ring = channel->tx_ring;
+		if (!ring)
+			break;
+
+		for (u32 j = 0; j < ring->dma_desc_count; j++)
+			fxgmac_desc_data_unmap(priv,
+					       FXGMAC_GET_DESC_DATA(ring, j));
+	}
+}
+
+static void fxgmac_free_rx_data(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+	struct fxgmac_ring *ring;
+
+	for (u32 i = 0; i < priv->channel_count; i++, channel++) {
+		ring = channel->rx_ring;
+		if (!ring)
+			break;
+
+		for (u32 j = 0; j < ring->dma_desc_count; j++)
+			fxgmac_desc_data_unmap(priv,
+					       FXGMAC_GET_DESC_DATA(ring, j));
+	}
+}
+
+static void fxgmac_prepare_tx_stop(struct fxgmac_pdata *priv,
+				   struct fxgmac_channel *channel)
+{
+	unsigned long tx_timeout;
+	unsigned int tx_status;
+
+	/* The Tx engine cannot be stopped if it is actively processing
+	 * descriptors. Wait for the Tx engine to enter the stopped or
+	 * suspended state.
+	 */
+	tx_timeout = jiffies + (FXGMAC_DMA_STOP_TIMEOUT * HZ);
+
+	while (time_before(jiffies, tx_timeout)) {
+		tx_status = fxgmac_io_rd(priv, DMA_DSR0);
+		tx_status = field_get(DMA_DSR0_TPS, tx_status);
+		if (tx_status == DMA_TPS_STOPPED ||
+		    tx_status == DMA_TPS_SUSPENDED)
+			break;
+
+		fsleep(500);
+	}
+
+	if (!time_before(jiffies, tx_timeout))
+		dev_err(priv->dev, "timed out waiting for Tx DMA channel  stop\n");
+}
+
+static void fxgmac_disable_tx(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+
+	/* Prepare for Tx DMA channel stop */
+	fxgmac_prepare_tx_stop(priv, channel);
+
+	fxgmac_io_wr_bits(priv, MAC_CR, MAC_CR_TE, 0); /* Disable MAC Tx */
+
+	/* Disable Tx queue */
+	fxgmac_mtl_wr_bits(priv, 0, MTL_Q_TQOMR, MTL_Q_TQOMR_TXQEN,
+			   MTL_Q_DISABLED);
+
+	/* Disable Tx DMA channel */
+	fxgmac_dma_wr_bits(channel, DMA_CH_TCR, DMA_CH_TCR_ST, 0);
+}
+
+static void fxgmac_prepare_rx_stop(struct fxgmac_pdata *priv,
+				   unsigned int queue)
+{
+	unsigned int rx_status, rx_q, rx_q_sts;
+	unsigned long rx_timeout;
+
+	/* The Rx engine cannot be stopped if it is actively processing
+	 * packets. Wait for the Rx queue to empty the Rx fifo.
+	 */
+	rx_timeout = jiffies + (FXGMAC_DMA_STOP_TIMEOUT * HZ);
+
+	while (time_before(jiffies, rx_timeout)) {
+		rx_status = fxgmac_mtl_io_rd(priv, queue, MTL_Q_RQDR);
+		rx_q = field_get(MTL_Q_RQDR_PRXQ, rx_status);
+		rx_q_sts = field_get(MTL_Q_RQDR_RXQSTS, rx_status);
+		if (rx_q == 0 && rx_q_sts == 0)
+			break;
+
+		fsleep(500);
+	}
+
+	if (!time_before(jiffies, rx_timeout))
+		dev_err(priv->dev, "timed out waiting for Rx queue %u to empty\n",
+			queue);
+}
+
+static void fxgmac_disable_rx(struct fxgmac_pdata *priv)
+{
+	struct fxgmac_channel *channel = priv->channel_head;
+	u32 i;
+
+	/* Disable MAC Rx */
+	fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_CST, 0);
+	fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_ACS, 0);
+	fxgmac_io_wr_bits(priv, MAC_CR,  MAC_CR_RE, 0);
+
+	/* Prepare for Rx DMA channel stop */
+	for (i = 0; i < priv->rx_q_count; i++)
+		fxgmac_prepare_rx_stop(priv, i);
+
+	fxgmac_io_wr(priv, MAC_RQC0R, 0); /* Disable each Rx queue */
+
+	/* Disable each Rx DMA channel */
+	for (i = 0; i < priv->channel_count; i++, channel++)
+		fxgmac_dma_wr_bits(channel, DMA_CH_RCR, DMA_CH_RCR_SR, 0);
+}
+
+/**
+ * fxgmac_set_oob_wol - disable or enable oob wol crtl function
+ * @priv: driver private struct
+ * @en: 1 or 0
+ *
+ * Description:  After enable OOB_WOL from efuse, mac will loopcheck phy status,
+ *   and lead to panic sometimes. So we should disable it from powerup,
+ *   enable it from power down.
+ */
+static void fxgmac_set_oob_wol(struct fxgmac_pdata *priv, unsigned int en)
+{
+	/* en = 1 is disable */
+	fxgmac_io_wr_bits(priv, OOB_WOL_CTRL, OOB_WOL_CTRL_DIS, !en);
+}
+
+static void fxgmac_config_powerup(struct fxgmac_pdata *priv)
+{
+	fxgmac_set_oob_wol(priv, 0);
+	/* GAMC power up */
+	fxgmac_io_wr_bits(priv, MAC_PMT_STA, MAC_PMT_STA_PWRDWN, 0);
+}
+
+static void fxgmac_pre_powerdown(struct fxgmac_pdata *priv)
+{
+	fxgmac_set_oob_wol(priv, 1);
+	fsleep(2000);
+}
 static void fxgmac_phy_release(struct fxgmac_pdata *priv)
 {
 	fxgmac_io_wr_bits(priv, EPHY_CTRL, EPHY_CTRL_RESET, 1);
@@ -115,6 +329,82 @@ static void fxgmac_phy_reset(struct fxgmac_pdata *priv)
 {
 	fxgmac_io_wr_bits(priv, EPHY_CTRL, EPHY_CTRL_RESET, 0);
 	fsleep(1500);
+}
+
+static void fxgmac_disable_msix_irqs(struct fxgmac_pdata *priv)
+{
+	for (u32 intid = 0; intid < MSIX_TBL_MAX_NUM; intid++)
+		fxgmac_disable_msix_one_irq(priv, intid);
+}
+
+static void fxgmac_stop(struct fxgmac_pdata *priv)
+{
+	struct net_device *ndev = priv->ndev;
+	struct netdev_queue *txq;
+
+	if (priv->dev_state != FXGMAC_DEV_START)
+		return;
+
+	priv->dev_state = FXGMAC_DEV_STOP;
+
+	if (priv->per_channel_irq)
+		fxgmac_disable_msix_irqs(priv);
+	else
+		fxgmac_disable_mgm_irq(priv);
+
+	netif_carrier_off(ndev);
+	netif_tx_stop_all_queues(ndev);
+	fxgmac_disable_tx(priv);
+	fxgmac_disable_rx(priv);
+	fxgmac_free_irqs(priv);
+	fxgmac_napi_disable(priv);
+	phy_stop(priv->phydev);
+
+	txq = netdev_get_tx_queue(ndev, priv->channel_head->queue_index);
+	netdev_tx_reset_queue(txq);
+}
+
+static void fxgmac_config_powerdown(struct fxgmac_pdata *priv)
+{
+	fxgmac_io_wr_bits(priv, MAC_CR, MAC_CR_RE, 1); /* Enable MAC Rx */
+	fxgmac_io_wr_bits(priv, MAC_CR, MAC_CR_TE, 1); /* Enable MAC TX */
+
+	/* Set GAMC power down */
+	fxgmac_io_wr_bits(priv, MAC_PMT_STA, MAC_PMT_STA_PWRDWN, 1);
+}
+
+static int fxgmac_net_powerdown(struct fxgmac_pdata *priv)
+{
+	struct net_device *ndev = priv->ndev;
+
+	/* Signal that we are down to the interrupt handler */
+	if (__test_and_set_bit(FXGMAC_POWER_STATE_DOWN, &priv->power_state))
+		return 0; /* do nothing if already down */
+
+	__clear_bit(FXGMAC_POWER_STATE_UP, &priv->power_state);
+	netif_tx_stop_all_queues(ndev); /* Shut off incoming Tx traffic */
+
+	/* Call carrier off first to avoid false dev_watchdog timeouts */
+	netif_carrier_off(ndev);
+	netif_tx_disable(ndev);
+	fxgmac_disable_rx(priv);
+
+	/* Synchronize_rcu() needed for pending XDP buffers to drain */
+	synchronize_rcu();
+
+	fxgmac_stop(priv);
+	fxgmac_pre_powerdown(priv);
+
+	if (!test_bit(FXGMAC_POWER_STATE_DOWN, &priv->power_state))
+		dev_err(priv->dev, "fxgmac powerstate is %lu when config powe down.\n",
+			priv->power_state);
+
+	/* Set mac to lowpower mode */
+	fxgmac_config_powerdown(priv);
+	fxgmac_free_tx_data(priv);
+	fxgmac_free_rx_data(priv);
+
+	return 0;
 }
 
 static void fxgmac_init_interrupt_scheme(struct fxgmac_pdata *priv)
@@ -270,6 +560,25 @@ static void fxgmac_remove(struct pci_dev *pcidev)
 	}
 }
 
+static void __fxgmac_shutdown(struct pci_dev *pcidev)
+{
+	struct fxgmac_pdata *priv = dev_get_drvdata(&pcidev->dev);
+	struct net_device *ndev = priv->ndev;
+
+	fxgmac_net_powerdown(priv);
+	netif_device_detach(ndev);
+}
+
+static void fxgmac_shutdown(struct pci_dev *pcidev)
+{
+	rtnl_lock();
+	 __fxgmac_shutdown(pcidev);
+	if (system_state == SYSTEM_POWER_OFF) {
+		pci_wake_from_d3(pcidev, false);
+		pci_set_power_state(pcidev, PCI_D3hot);
+	}
+	rtnl_unlock();
+}
 #define MOTORCOMM_PCI_ID			0x1f0a
 #define YT6801_PCI_DEVICE_ID			0x6801
 
@@ -285,6 +594,7 @@ static struct pci_driver fxgmac_pci_driver = {
 	.id_table	= fxgmac_pci_tbl,
 	.probe		= fxgmac_probe,
 	.remove		= fxgmac_remove,
+	.shutdown	= fxgmac_shutdown,
 };
 
 module_pci_driver(fxgmac_pci_driver);
