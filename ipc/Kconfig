@@ -1,0 +1,5 @@
+config FAST_IPC
+    tristate "Fast IPC support"
+    default n
+    help
+       Fast Inter-process call, used to switch threads quickly.
