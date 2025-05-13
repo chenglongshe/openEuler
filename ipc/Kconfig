@@ -1,0 +1,5 @@
+config KERNEL_IPC
+    tristate "Kernel IPC Call"
+    default n
+    help
+       Inter-process call, used to switch threads quickly.
