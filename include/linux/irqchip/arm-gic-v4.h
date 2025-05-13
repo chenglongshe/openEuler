@@ -38,6 +38,7 @@ struct its_vm {
 	KABI_EXTEND(struct page		*vpeid_page)
 	KABI_EXTEND(bool			nassgireq)
 	bool			enable_ipiv_from_vmm;
+	bool			enable_ipiv_from_guest;
 #endif
 };
 
