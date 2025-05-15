@@ -2605,10 +2605,12 @@ static void kvm_track_tsc_matching(struct kvm_vcpu *vcpu)
  * point number (mult + frac * 2^(-N)).
  *
  * N equals to kvm_caps.tsc_scaling_ratio_frac_bits.
+ *
+ * add 1 to compensate for precision loss.
  */
 static inline u64 __scale_tsc(u64 ratio, u64 tsc)
 {
-	return mul_u64_u64_shr(tsc, ratio, kvm_caps.tsc_scaling_ratio_frac_bits);
+	return mul_u64_u64_shr(tsc, ratio, kvm_caps.tsc_scaling_ratio_frac_bits) + 1;
 }
 
 u64 kvm_scale_tsc(u64 tsc, u64 ratio)
