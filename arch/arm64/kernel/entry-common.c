@@ -6,6 +6,9 @@
  */
 
 #include <linux/context_tracking.h>
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+#include <linux/irqchip/arm-gic-v3.h>
+#endif
 #include <linux/kasan.h>
 #include <linux/linkage.h>
 #include <linux/lockdep.h>
@@ -151,7 +154,7 @@ asmlinkage void noinstr asm_exit_to_user_mode(struct pt_regs *regs)
 	exit_to_user_mode(regs);
 }
 
-#if defined(CONFIG_FAST_SYSCALL) || defined(CONFIG_FAST_IRQ)
+#if defined(CONFIG_FAST_SYSCALL) || defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XCALL)
 /*
  * Copy from exit_to_user_mode_prepare
  */
@@ -607,7 +610,7 @@ static void noinstr el0_xint(struct pt_regs *regs, u64 nmi_flag,
 }
 
 
-asmlinkage void noinstr el0t_64_xint_handler(struct pt_regs *regs)
+asmlinkage void noinstr el0t_64_sw_xint_handler(struct pt_regs *regs)
 {
 	el0_xint(regs, ISR_EL1_IS, handle_arch_irq, handle_arch_nmi_irq);
 }
@@ -815,7 +818,7 @@ static void noinstr el0_fpac(struct pt_regs *regs, unsigned long esr)
 	exit_to_user_mode(regs);
 }
 
-#ifdef CONFIG_FAST_SYSCALL
+#if defined(CONFIG_FAST_SYSCALL) || defined(CONFIG_ARCH_SUPPORTS_XCALL)
 /* Copy from el0_sync */
 static void noinstr el0_xcall(struct pt_regs *regs)
 {
@@ -966,6 +969,30 @@ asmlinkage void noinstr el0t_64_error_handler(struct pt_regs *regs)
 	__el0_error_handler_common(regs);
 }
 
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+asmlinkage void noinstr el0t_64_xint_handler(struct pt_regs *regs)
+{
+	u32 irqnr = read_sysreg_s(SYS_ICC_HPPIR1_EL1);
+
+	if (gic_irqnr_is_special(irqnr))
+		return;
+
+	if (is_xint(irqnr))
+		fast_handle_xint(regs, irqnr);
+	else
+		el0t_64_irq_handler(regs);
+}
+#else
+#ifdef CONFIG_AARCH32_EL0
+asmlinkage void noinstr el0t_32_irq_handler(struct pt_regs *regs)
+{
+	__el0_irq_handler_common(regs);
+}
+#else /* CONFIG_AARCH32_EL0 */
+UNHANDLED(el0t, 32, irq)
+#endif
+#endif
+
 #ifdef CONFIG_AARCH32_EL0
 static void noinstr el0_cp15(struct pt_regs *regs, unsigned long esr)
 {
@@ -1028,11 +1055,6 @@ asmlinkage void noinstr el0t_32_sync_handler(struct pt_regs *regs)
 	}
 }
 
-asmlinkage void noinstr el0t_32_irq_handler(struct pt_regs *regs)
-{
-	__el0_irq_handler_common(regs);
-}
-
 asmlinkage void noinstr el0t_32_fiq_handler(struct pt_regs *regs)
 {
 	__el0_fiq_handler_common(regs);
@@ -1044,7 +1066,6 @@ asmlinkage void noinstr el0t_32_error_handler(struct pt_regs *regs)
 }
 #else /* CONFIG_AARCH32_EL0 */
 UNHANDLED(el0t, 32, sync)
-UNHANDLED(el0t, 32, irq)
 UNHANDLED(el0t, 32, fiq)
 UNHANDLED(el0t, 32, error)
 #endif /* CONFIG_AARCH32_EL0 */

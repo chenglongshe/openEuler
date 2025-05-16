@@ -2412,8 +2412,12 @@ static bool has_xcall_support(const struct arm64_cpu_capabilities *entry, int __
 }
 #endif
 
-#ifdef CONFIG_FAST_IRQ
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ARCH_SUPPORTS_XINT)
 bool is_xint_support;
+bool hw_xint_support;
+#endif
+
+#ifdef CONFIG_FAST_IRQ
 static int __init xint_setup(char *str)
 {
 	if (!cpus_have_cap(ARM64_HAS_GIC_CPUIF_SYSREGS))
@@ -2427,6 +2431,89 @@ __setup("xint", xint_setup);
 static bool has_xint_support(const struct arm64_cpu_capabilities *entry, int __unused)
 {
 	return is_xint_support;
+}
+#endif
+
+#if defined(CONFIG_ARCH_SUPPORTS_XINT) || defined(CONFIG_ARCH_SUPPORTS_XCALL)
+static bool test_has_xfunc(bool is_xint)
+{
+	u64 new, old = read_sysreg(actlr_el1);
+
+	if (is_xint)
+		write_sysreg(old | ACTLR_ELx_XINT, actlr_el1);
+	else
+		write_sysreg(old | ACTLR_ELx_XCALL, actlr_el1);
+
+	isb();
+	new = read_sysreg(actlr_el1);
+	if (is_xint && (new & ACTLR_ELx_XINT)) {
+		write_sysreg(old, actlr_el1);
+		hw_xint_support = true;
+		return true;
+	}
+
+	if (!is_xint && (new & ACTLR_ELx_XCALL)) {
+		write_sysreg(old, actlr_el1);
+		return true;
+	}
+
+	return false;
+}
+
+static void enable_xfunc(bool is_xint)
+{
+	u64 actlr_el1, actlr_el2;
+	u64 el;
+
+	el = read_sysreg(CurrentEL);
+	if (el == CurrentEL_EL2) {
+		actlr_el2 = read_sysreg(actlr_el2);
+		actlr_el2 |= (is_xint ? ACTLR_ELx_XINT : ACTLR_ELx_XCALL);
+		write_sysreg(actlr_el2, actlr_el2);
+		isb();
+		actlr_el2 = read_sysreg(actlr_el2);
+		pr_info("actlr_el2: %llx, cpu:%d\n", actlr_el2, smp_processor_id());
+	}
+
+	actlr_el1 = read_sysreg(actlr_el1);
+	actlr_el1 |= (is_xint ? ACTLR_ELx_XINT : ACTLR_ELx_XCALL);
+	write_sysreg(actlr_el1, actlr_el1);
+	isb();
+	actlr_el1 = read_sysreg(actlr_el1);
+	pr_info("actlr_el1: %llx, cpu:%d\n", actlr_el1, smp_processor_id());
+}
+#endif
+
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+static bool test_has_xint(const struct arm64_cpu_capabilities *entry, int scope)
+{
+	if (!IS_ENABLED(CONFIG_ARM64_NMI))
+		pr_info("CONFIG_ARM64_NMI disabled, using XINTs for guests only\n");
+#ifdef CONFIG_ARM64_PSEUDO_NMI
+	else if (IS_ENABLED(CONFIG_ARM64_PSEUDO_NMI) && enable_pseudo_nmi) {
+		pr_info("Pseudo NMI enabled, not using architected XINT\n");
+		return false;
+	}
+#endif
+
+	return test_has_xfunc(true);
+}
+
+static void xint_enable(const struct arm64_cpu_capabilities *__unused)
+{
+	enable_xfunc(true);
+}
+#endif
+
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+static bool test_has_xcall(const struct arm64_cpu_capabilities *entry, int scope)
+{
+	return test_has_xfunc(false);
+}
+
+static void xcall_enable(const struct arm64_cpu_capabilities *__unused)
+{
+	enable_xfunc(false);
 }
 #endif
 
@@ -2976,6 +3063,24 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
 		.capability = ARM64_HAS_XINT,
 		.type = ARM64_CPUCAP_SYSTEM_FEATURE,
 		.matches = has_xint_support,
+	},
+#endif
+#ifdef CONFIG_ARCH_SUPPORTS_XINT
+	{
+		.desc = "Hardware xint Support",
+		.capability = ARM64_HAS_HW_XINT,
+		.type = ARM64_CPUCAP_SYSTEM_FEATURE,
+		.matches = test_has_xint,
+		.cpu_enable = xint_enable,
+	},
+#endif
+#ifdef CONFIG_ARCH_SUPPORTS_XCALL
+	{
+		.desc = "Hardware xcall Support",
+		.capability = ARM64_HAS_HW_XCALL,
+		.type = ARM64_CPUCAP_SYSTEM_FEATURE,
+		.matches = test_has_xcall,
+		.cpu_enable = xcall_enable,
 	},
 #endif
 	{},
