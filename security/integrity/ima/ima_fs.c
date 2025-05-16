@@ -381,7 +381,8 @@ static ssize_t ima_read_policy(char *path)
 			   dentry == digest_list_data_del) {
 			/* Only check size when adding digest lists */
 			if (dentry == digest_list_data &&
-			    size > ima_digest_db_max_size - ima_digest_db_size) {
+			    ((size > ima_digest_db_max_size - ima_digest_db_size) ||
+			    ima_digest_db_size > ima_digest_db_max_size)) {
 				pr_err("digest DB is full: %d\n", ima_digest_db_size);
 				rc = -ENOMEM;
 				break;
