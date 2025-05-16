@@ -1717,6 +1717,18 @@ config ARCH_DEFAULT_KEXEC_IMAGE_VERIFY_SIG
 config ARCH_SUPPORTS_CRASH_DUMP
 	def_bool y
 
+config ARCH_SUPPORTS_XINT
+	bool "Hardware xint support"
+	default n
+	depends on ARM64_NMI
+	depends on ARM_GIC_V3
+	depends on !COMPAT
+
+config ARCH_SUPPORTS_XCALL
+	bool "Hardware xcall support"
+	depends on !COMPAT
+	default n
+
 config TRANS_TABLE
 	def_bool y
 	depends on HIBERNATION || KEXEC_CORE
