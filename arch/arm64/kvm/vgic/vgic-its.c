@@ -498,6 +498,12 @@ static unsigned long vgic_mmio_read_its_typer(struct kvm *kvm,
 	return extract_bytes(reg, addr & 7, len);
 }
 
+/*
+ * Use bit7 not used by GITS_IIDR to indicate whether IPIV is
+ * enabled for guest OS.
+ */
+#define HISI_GUEST_ENABLE_IPIV_SHIFT 7
+
 static unsigned long vgic_mmio_read_its_iidr(struct kvm *kvm,
 					     struct vgic_its *its,
 					     gpa_t addr, unsigned int len)
@@ -506,6 +512,13 @@ static unsigned long vgic_mmio_read_its_iidr(struct kvm *kvm,
 
 	val = (its->abi_rev << GITS_IIDR_REV_SHIFT) & GITS_IIDR_REV_MASK;
 	val |= (PRODUCT_ID_KVM << GITS_IIDR_PRODUCTID_SHIFT) | IMPLEMENTER_ARM;
+
+#ifdef CONFIG_ARM64_HISI_IPIV
+	if (kvm->arch.vgic.its_vm.enable_ipiv_from_guest) {
+		val |= 1UL << HISI_GUEST_ENABLE_IPIV_SHIFT;
+	}
+#endif
+
 	return val;
 }
 
@@ -518,6 +531,13 @@ static int vgic_mmio_uaccess_write_its_iidr(struct kvm *kvm,
 
 	if (rev >= NR_ITS_ABIS)
 		return -EINVAL;
+
+#ifdef CONFIG_ARM64_HISI_IPIV
+	if (val & (1UL << HISI_GUEST_ENABLE_IPIV_SHIFT)) {
+		kvm->arch.vgic.its_vm.enable_ipiv_from_guest = true;
+	}
+#endif
+
 	return vgic_its_set_abi(its, rev);
 }
 
