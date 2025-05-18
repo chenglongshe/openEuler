@@ -71,6 +71,9 @@ enum user_switch_type {
 	USER_SWITCH_BACK_TO_MEM_SAMPLING,
 };
 
+DECLARE_STATIC_KEY_FALSE(sched_numabalancing_mem_sampling);
+extern struct static_key_false mem_sampling_access_hints;
+
 #ifdef CONFIG_ARM_SPE_MEM_SAMPLING
 int mm_spe_start(void);
 void mm_spe_stop(void);
