@@ -89,5 +89,8 @@ static inline int mm_spe_enabled(void) { return 0; }
 #if IS_ENABLED(CONFIG_MEM_SAMPLING)
 void mem_sampling_process(void);
 void arm_spe_set_user(enum arm_spe_user_e user);
+void mem_sampling_sched_in(struct task_struct *prev, struct task_struct *curr);
+#else
+static inline void mem_sampling_sched_in(struct task_struct *prev, struct task_struct *curr) { }
 #endif /* CONFIG_MEM_SAMPLING */
 #endif	/* __MEM_SAMPLING_H */
