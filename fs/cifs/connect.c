@@ -4207,6 +4207,10 @@ static int mount_get_conns(struct smb_vol *vol, struct cifs_sb_info *cifs_sb,
 
 	cifs_sb->wsize = server->ops->negotiate_wsize(tcon, vol);
 	cifs_sb->rsize = server->ops->negotiate_rsize(tcon, vol);
+	if (cifs_sb->rsize == 0) {
+		cifs_dbg(VFS, "Negotiated rsize is 0, get connect failed\n");
+		return -EINVAL;
+	}
 
 	return 0;
 }
