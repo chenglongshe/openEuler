@@ -48,6 +48,7 @@
 #include <linux/ratelimit.h>
 #include <linux/task_work.h>
 #include <linux/rbtree_augmented.h>
+#include <linux/mem_sampling.h>
 
 #include <asm/switch_to.h>
 
@@ -3367,6 +3368,18 @@ static void task_numa_work(struct callback_head *work)
 	unsigned long nr_pte_updates = 0;
 	long pages, virtpages;
 	struct vma_iterator vmi;
+
+#ifdef CONFIG_NUMABALANCING_MEM_SAMPLING
+	/*
+	 * If we are using access hints from hardware (like using
+	 * SPE), don't scan the address space.
+	 * Note that currently PMD-level page migration is not
+	 * supported.
+	 */
+	if (static_branch_unlikely(&mem_sampling_access_hints) &&
+		static_branch_unlikely(&sched_numabalancing_mem_sampling))
+		return;
+#endif
 
 	SCHED_WARN_ON(p != container_of(work, struct task_struct, numa_work));
 
