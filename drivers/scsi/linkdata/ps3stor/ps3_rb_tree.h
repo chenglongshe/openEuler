@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef __PS3_RBTREE_H__
 #define __PS3_RBTREE_H__
 

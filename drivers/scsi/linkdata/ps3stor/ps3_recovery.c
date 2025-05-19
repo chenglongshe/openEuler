@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #include "ps3_recovery.h"
 
 #ifndef _WINDOWS
@@ -70,7 +69,7 @@ ps3_wait_watchdog_dect_recovery(struct ps3_instance *instance)
 	}
 }
 
-struct ps3_recovery_context *ps3_recovery_context_alloc(void)
+static struct ps3_recovery_context *ps3_recovery_context_alloc(void)
 {
 	struct ps3_recovery_context *context;
 
@@ -80,13 +79,13 @@ struct ps3_recovery_context *ps3_recovery_context_alloc(void)
 
 	return context;
 }
-void ps3_recovery_context_free(struct ps3_recovery_context *context)
+static void ps3_recovery_context_free(struct ps3_recovery_context *context)
 {
 	if (context != NULL)
 		kfree(context);
 }
 
-void ps3_recovery_context_delete(struct ps3_recovery_context *context)
+static void ps3_recovery_context_delete(struct ps3_recovery_context *context)
 {
 	if (context != NULL) {
 		if (context->recovery_wq) {
@@ -202,7 +201,7 @@ l_out:
 	return IRQ_HANDLED;
 }
 
-void ps3_recovery_irq_queue_destroy(struct ps3_instance *instance)
+static void ps3_recovery_irq_queue_destroy(struct ps3_instance *instance)
 {
 	if (instance->recovery_irq_queue) {
 		flush_workqueue(instance->recovery_irq_queue);
@@ -361,7 +360,7 @@ void ps3_recovery_context_exit(struct ps3_instance *instance)
 	}
 
 }
-int ps3_recovery_state_transfer(struct ps3_instance *instance,
+static int ps3_recovery_state_transfer(struct ps3_instance *instance,
 				unsigned int dest_state)
 {
 	unsigned int recovery_origin_state;
@@ -482,13 +481,13 @@ static inline void ps3_wait_hard_reset_finish(struct ps3_instance *instance)
 				   PS3_HARD_RECOVERY_DECIDE)) {
 				continue;
 			} else {
-				cancel_work_sync(&instance->recovery_context
+				ps3_cancel_work_sync(&instance->recovery_context
 							  ->recovery_work);
 				break;
 			}
 		} while (1);
 	} else {
-		cancel_work_sync(&instance->recovery_context->recovery_work);
+		ps3_cancel_work_sync(&instance->recovery_context->recovery_work);
 	}
 }
 int ps3_recovery_cancel_work_sync(struct ps3_instance *instance)
@@ -527,7 +526,7 @@ static int ps3_recovery_start(struct ps3_instance *instance)
 		goto l_out;
 	}
 
-	cancel_work_sync(&instance->recovery_context->recovery_work);
+	ps3_cancel_work_sync(&instance->recovery_context->recovery_work);
 
 	ps3_mutex_lock(&instance->state_machine.lock);
 	if (instance->recovery_context->recovery_state ==
@@ -2698,7 +2697,7 @@ static void ps3_recovery_wait_reg_access_done(struct ps3_instance *instance)
 		  PS3_HOST(instance));
 }
 
-void ps3_hard_recovery_state_finish(struct ps3_instance *instance)
+static void ps3_hard_recovery_state_finish(struct ps3_instance *instance)
 {
 	ps3_mutex_lock(&instance->state_machine.lock);
 	if (instance->recovery_context->host_reset_state ==

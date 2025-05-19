@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef __PS3_MGR_EVT_COMMON_H__
 #define __PS3_MGR_EVT_COMMON_H__
 

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #ifdef _WINDOWS
 #include "ps3_def.h"
 

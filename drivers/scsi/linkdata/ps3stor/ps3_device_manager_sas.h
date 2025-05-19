@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 #ifndef _WINDOWS
 
 #ifndef _PS3_DEVICE_MANAGER_SAS_H_

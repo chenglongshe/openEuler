@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #ifndef _WINDOWS
 
 #include <linux/kernel.h>
@@ -305,7 +304,7 @@ void ps3_host_mem_info_buf_free(struct ps3_instance *instance)
 	}
 }
 
-int ps3_hard_reset_to_ready(struct ps3_instance *instance)
+static int ps3_hard_reset_to_ready(struct ps3_instance *instance)
 {
 	int ret = PS3_SUCCESS;
 

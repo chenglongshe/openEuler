@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
 
 #ifndef __PS3_HTP_TRACE_ID_H__
 #define __PS3_HTP_TRACE_ID_H__

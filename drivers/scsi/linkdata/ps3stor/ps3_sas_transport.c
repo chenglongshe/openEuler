@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #ifndef _WINDOWS
 #include <linux/compiler.h>
 
@@ -405,7 +404,7 @@ l_out:
 	return ret;
 }
 
-int ps3_sas_update_phy_info(struct sas_phy *phy)
+static int ps3_sas_update_phy_info(struct sas_phy *phy)
 {
 	int ret = -PS3_FAILED;
 	struct PS3SasMgr sas_req_param;
