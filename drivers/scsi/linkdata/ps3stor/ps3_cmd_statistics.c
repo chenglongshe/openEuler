@@ -82,7 +82,7 @@ void ps3_cmd_statistics_exit(struct ps3_instance *instance)
 	ps3_last_stat_buf_free(instance);
 }
 
-void ps3_cmd_stat_content_clear(struct ps3_instance *instance)
+static void ps3_cmd_stat_content_clear(struct ps3_instance *instance)
 {
 	struct ps3_cmd_statistics_context *ctx = &instance->cmd_statistics;
 
@@ -400,7 +400,7 @@ void ps3_io_outstand_inc(struct ps3_instance *instance,
 	}
 }
 
-void ps3_io_recv_ok_stat_inc(struct ps3_instance *ins,
+static void ps3_io_recv_ok_stat_inc(struct ps3_instance *ins,
 			     const struct ps3_cmd *cmd)
 {
 	if (ins == NULL || cmd == NULL)

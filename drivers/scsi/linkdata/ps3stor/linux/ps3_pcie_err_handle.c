@@ -15,10 +15,6 @@ static pci_ers_result_t ps3_pci_mmio_enabled(struct pci_dev *pdev);
 static pci_ers_result_t ps3_pci_slot_reset(struct pci_dev *pdev);
 static void ps3_pci_resume(struct pci_dev *pdev);
 
-extern int ps3_pci_init(struct pci_dev *pdev, struct ps3_instance *instance);
-extern int ps3_pci_init_complete(struct ps3_instance *instance);
-extern void ps3_pci_init_complete_exit(struct ps3_instance *instance);
-
 static struct pci_error_handlers ps3_err_handlers = {
 	.error_detected = ps3_pci_err_detected,
 	.mmio_enabled = ps3_pci_mmio_enabled,

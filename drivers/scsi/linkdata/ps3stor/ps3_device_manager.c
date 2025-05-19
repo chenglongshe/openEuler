@@ -1047,6 +1047,9 @@ int ps3_dev_mgr_pd_list_get(struct ps3_instance *instance)
 	struct ps3_dev_context *p_dev_ctx = &instance->dev_context;
 	struct PS3DevList *p_pd_list = p_dev_ctx->pd_list_buf;
 	struct PS3Dev *p_dev = NULL;
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+	union PS3Device *devs = p_pd_list->devs;
+#endif
 
 	ret = ps3_pd_list_get(instance);
 	if (ret != PS3_SUCCESS) {
@@ -1063,9 +1066,13 @@ int ps3_dev_mgr_pd_list_get(struct ps3_instance *instance)
 		 p_pd_list->count);
 
 	for (i = 0; i < p_pd_list->count; i++) {
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+		p_dev = PS3_DEV(&devs[i].pd.diskPos);
+		if (PS3_DEV_INVALID(devs[i].pd.diskPos)) {
+#else
 		p_dev = PS3_DEV(&p_pd_list->devs[i].pd.diskPos);
-
 		if (PS3_PDID_INVALID(&p_pd_list->devs[i].pd.diskPos)) {
+#endif
 			LOG_WARN("hno:%u, get pd list %d dev pdid is 0\n",
 				 PS3_HOST(instance), i);
 			continue;
@@ -1082,12 +1089,18 @@ int ps3_dev_mgr_pd_list_get(struct ps3_instance *instance)
 			"hno:%u, pd list %d dev[%u:%u:%u], magic[%#x], state[%s]\n",
 			PS3_HOST(instance), i, p_dev->softChan, p_dev->devID,
 			p_dev->phyDiskID,
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+			devs[i].pd.diskPos.diskMagicNum,
+			getDeviceStateName((enum DeviceState)devs[i].pd.diskState));
+			p_dev_ctx->pd_pool.devs[p_dev->softChan][p_dev->devID].pd = devs[i].pd;
+#else
 			p_pd_list->devs[i].pd.diskPos.diskMagicNum,
 			getDeviceStateName((enum DeviceState)p_pd_list->devs[i]
 						   .pd.diskState));
 
 		p_dev_ctx->pd_pool.devs[p_dev->softChan][p_dev->devID].pd =
 			p_pd_list->devs[i].pd;
+#endif
 	}
 l_out:
 	return ret;
@@ -1100,6 +1113,9 @@ int ps3_dev_mgr_vd_list_get(struct ps3_instance *instance)
 	struct ps3_dev_context *p_dev_ctx = &instance->dev_context;
 	struct PS3DevList *p_vd_list = p_dev_ctx->vd_list_buf;
 	struct PS3Dev *p_dev = NULL;
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+	union PS3Device *devs = p_vd_list->devs;
+#endif
 
 	ret = ps3_vd_list_get(instance);
 	if (ret != PS3_SUCCESS) {
@@ -1116,9 +1132,13 @@ int ps3_dev_mgr_vd_list_get(struct ps3_instance *instance)
 		 p_vd_list->count);
 
 	for (i = 0; i < p_vd_list->count; i++) {
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+		p_dev = PS3_DEV(&devs[i].vd.diskPos);
+		if (PS3_DEV_INVALID(devs[i].vd.diskPos)) {
+#else
 		p_dev = PS3_DEV(&p_vd_list->devs[i].vd.diskPos);
-
 		if (PS3_VDID_INVALID(&p_vd_list->devs[i].vd.diskPos)) {
+#endif
 			LOG_WARN("hno:%u, get vd list %d vdid is 0\n",
 				 PS3_HOST(instance), i);
 			continue;
@@ -1132,12 +1152,17 @@ int ps3_dev_mgr_vd_list_get(struct ps3_instance *instance)
 		}
 
 		LOG_INFO("hno:%u, vd list %d dev[%u:%u:%u], magic[%#x]\n",
-			 PS3_HOST(instance), i, p_dev->softChan, p_dev->devID,
-			 p_dev->virtDiskID,
-			 p_vd_list->devs[i].vd.diskPos.diskMagicNum);
+			PS3_HOST(instance), i, p_dev->softChan, p_dev->devID,
+			p_dev->virtDiskID,
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+			devs[i].vd.diskPos.diskMagicNum);
+			p_dev_ctx->vd_pool.devs[p_dev->softChan][p_dev->devID].vd = devs[i].vd;
+#else
+			p_vd_list->devs[i].vd.diskPos.diskMagicNum);
 
 		p_dev_ctx->vd_pool.devs[p_dev->softChan][p_dev->devID].vd =
 			p_vd_list->devs[i].vd;
+#endif
 	}
 l_out:
 	return ret;
@@ -1578,7 +1603,7 @@ static inline void ps3_init_vd_stream(struct ps3_vd_stream_detect *vdsd)
 		}
 	}
 }
-int ps3_scsi_private_init_pd(struct scsi_device *sdev)
+static int ps3_scsi_private_init_pd(struct scsi_device *sdev)
 {
 	int ret = PS3_SUCCESS;
 	struct ps3_scsi_priv_data *p_priv_data = NULL;
@@ -1660,7 +1685,7 @@ void ps3_vd_busy_scale_get(struct PS3VDEntry *vd_entry)
 	vd_entry->dev_busy_scale = scale;
 }
 
-int ps3_scsi_private_init_vd(struct scsi_device *sdev)
+static int ps3_scsi_private_init_vd(struct scsi_device *sdev)
 {
 	int ret = PS3_SUCCESS;
 	struct ps3_scsi_priv_data *p_priv_data = NULL;

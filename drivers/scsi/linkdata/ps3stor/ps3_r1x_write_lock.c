@@ -575,7 +575,7 @@ struct ps3_write_r1x_hash_tmp {
 	unsigned char resv[7];
 };
 
-int ps3_r1x_hash_bit_check(struct ps3_r1x_hash_bit_mgr *hash_mgr,
+static int ps3_r1x_hash_bit_check(struct ps3_r1x_hash_bit_mgr *hash_mgr,
 			   unsigned long long lba, unsigned int len,
 			   struct ps3_write_r1x_hash_tmp *hash_tmp,
 			   unsigned short hash_idx)
@@ -675,7 +675,7 @@ exit_fail:
 	return is_conflict;
 }
 
-void ps3_r1x_conflict_queue_hash_bit_lock(struct ps3_r1x_lock_mgr *mgr,
+static void ps3_r1x_conflict_queue_hash_bit_lock(struct ps3_r1x_lock_mgr *mgr,
 					  struct ps3_cmd *cmd)
 {
 	unsigned int i = 0;
@@ -727,7 +727,8 @@ void ps3_r1x_conflict_queue_hash_bit_lock(struct ps3_r1x_lock_mgr *mgr,
 
 }
 
-int ps3_r1x_hash_bit_lock(struct ps3_r1x_lock_mgr *mgr, struct ps3_cmd *cmd)
+static int ps3_r1x_hash_bit_lock(struct ps3_r1x_lock_mgr *mgr,
+				struct ps3_cmd *cmd)
 {
 	int ret = PS3_SUCCESS;
 	unsigned int i = 0;
@@ -985,7 +986,7 @@ exit_fail:
 	return ret;
 }
 
-void ps3_r1x_hash_bit_unlock(struct ps3_r1x_lock_mgr *mgr, struct ps3_cmd *cmd)
+static void ps3_r1x_hash_bit_unlock(struct ps3_r1x_lock_mgr *mgr, struct ps3_cmd *cmd)
 {
 	struct ps3_r1x_hash_bit_item *hash_item = NULL;
 	unsigned int bit_start = 0;
@@ -1170,7 +1171,7 @@ struct ps3_r1x_hash_range_mgr {
 	((ps3_container_of(rbNodePtr, struct ps3_range_tree_node, rbNode))     \
 		 ->extent)
 
-int ps3_range_check_and_insert(struct ps3_range_tree_root *range_root,
+static int ps3_range_check_and_insert(struct ps3_range_tree_root *range_root,
 			       struct ps3_range_tree_node *range_node)
 {
 	int ret = PS3_SUCCESS;
@@ -1228,7 +1229,8 @@ static inline void ps3_range_del_node(struct ps3_range_tree_root *range_root,
 	}
 }
 
-int ps3_r1x_hash_range_lock(struct ps3_r1x_lock_mgr *mgr, struct ps3_cmd *cmd)
+static int ps3_r1x_hash_range_lock(struct ps3_r1x_lock_mgr *mgr,
+			struct ps3_cmd *cmd)
 {
 	int ret = PS3_SUCCESS;
 	unsigned long long hash_idx = 0;
@@ -1309,7 +1311,7 @@ exit_fail:
 	return ret;
 }
 
-void ps3_r1x_hash_range_unlock(struct ps3_r1x_lock_mgr *mgr,
+static void ps3_r1x_hash_range_unlock(struct ps3_r1x_lock_mgr *mgr,
 			       struct ps3_cmd *cmd)
 {
 	unsigned int i = 0;

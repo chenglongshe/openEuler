@@ -1323,6 +1323,9 @@ static int ps3_update_multi_pd_info(struct ps3_instance *instance)
 	struct ps3_dev_context *p_dev_ctx = &instance->dev_context;
 	struct PS3DevList *p_pd_list = p_dev_ctx->pd_list_buf;
 	struct PS3Dev *p_dev = NULL;
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+	union PS3Device *devs = p_pd_list->devs;
+#endif
 
 	LOG_DEBUG("hno:%u  ready to update full pd info\n", PS3_HOST(instance));
 
@@ -1337,9 +1340,13 @@ static int ps3_update_multi_pd_info(struct ps3_instance *instance)
 		 p_pd_list->count);
 
 	for (i = 0; i < p_pd_list->count; i++) {
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+		p_dev = PS3_DEV(&devs[i].pd.diskPos);
+		if (PS3_DEV_INVALID(devs[i].pd.diskPos)) {
+#else
 		p_dev = PS3_DEV(&p_pd_list->devs[i].pd.diskPos);
-
 		if (PS3_PDID_INVALID(&p_pd_list->devs[i].pd.diskPos)) {
+#endif
 			LOG_WARN("hno:%u  check pd list %d dev pdid is 0\n",
 				 PS3_HOST(instance), i);
 			continue;
@@ -1353,15 +1360,19 @@ static int ps3_update_multi_pd_info(struct ps3_instance *instance)
 		}
 
 		LOG_INFO("hno:%u update pd info %d dev[%u:%u:%u], magic[%#x], state[%s]\n",
-			 PS3_HOST(instance), i, p_dev->softChan, p_dev->devID,
-			 p_dev->phyDiskID,
-			 p_pd_list->devs[i].pd.diskPos.diskMagicNum,
-			 getDeviceStateName((enum DeviceState)p_pd_list->devs[i]
-						    .pd.diskState));
-
-		ret_tmp = ps3_update_single_pd_info(
-			instance, &p_pd_list->devs[i].pd.diskPos,
+			PS3_HOST(instance), i, p_dev->softChan, p_dev->devID,
+			p_dev->phyDiskID,
+#if defined(PS3_DISALLOW_ZERO_ARRAY)
+			devs[i].pd.diskPos.diskMagicNum,
+			getDeviceStateName((enum DeviceState)devs[i].pd.diskState));
+		ret_tmp = ps3_update_single_pd_info(instance, &devs[i].pd.diskPos,
+			&devs[i]);
+#else
+			p_pd_list->devs[i].pd.diskPos.diskMagicNum,
+			getDeviceStateName((enum DeviceState)p_pd_list->devs[i].pd.diskState));
+		ret_tmp = ps3_update_single_pd_info(instance, &p_pd_list->devs[i].pd.diskPos,
 			&p_pd_list->devs[i]);
+#endif
 		if (ret_tmp != PS3_SUCCESS) {
 			LOG_ERROR("hno:%u NOK, %u:%u, ret[%d]\n",
 				  PS3_HOST(instance), p_dev->softChan,
