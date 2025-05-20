@@ -733,9 +733,10 @@ struct vm_area_struct {
 #endif
 	struct vm_userfaultfd_ctx vm_userfaultfd_ctx;
 #ifdef CONFIG_SHARE_POOL
-	struct sp_area *spa;
-#endif
+	KABI_USE(1, struct sp_area *spa)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
@@ -999,9 +1000,6 @@ struct mm_struct {
 #endif
 		} lru_gen;
 #endif /* CONFIG_LRU_GEN */
-#ifdef CONFIG_SHARE_POOL
-		struct sp_group_master *sp_group_master;
-#endif
 #ifdef CONFIG_MEMORY_RELIABLE
 		/* total used reliable pages */
 		atomic_long_t reliable_nr_page;
@@ -1011,7 +1009,11 @@ struct mm_struct {
 #endif
 	} __randomize_layout;
 
+#ifdef CONFIG_SHARE_POOL
+	KABI_USE(1, struct sp_group_master *sp_group_master)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
