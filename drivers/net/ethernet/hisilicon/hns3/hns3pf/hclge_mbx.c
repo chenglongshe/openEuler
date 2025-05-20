@@ -480,6 +480,7 @@ static int hclge_set_vf_vlan_cfg(struct hclge_vport *vport,
 static int hclge_set_vf_alive(struct hclge_vport *vport,
 			      struct hclge_mbx_vf_to_pf_cmd *mbx_req)
 {
+	struct hclge_dev *hdev = vport->back;
 	bool alive = !!mbx_req->msg.data[0];
 	int ret = 0;
 
