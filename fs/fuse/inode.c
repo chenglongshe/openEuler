@@ -655,7 +655,7 @@ static int fuse_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	default:
 		return -EINVAL;
 	}
-
+	pr_info("no_forget:%d, use_fastpath:%d", ctx->no_forget, ctx->use_fastpath);
 	return 0;
 }
 
