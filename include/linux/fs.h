@@ -3776,6 +3776,9 @@ static inline bool cachefiles_ondemand_is_enabled(void)
 #endif
 
 #ifdef CONFIG_FAST_SYSCALL
+DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_hit);
+DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
+
 extern unsigned long *xcall_numa_cpumask_bits0;
 extern unsigned long *xcall_numa_cpumask_bits1;
 extern unsigned long *xcall_numa_cpumask_bits2;

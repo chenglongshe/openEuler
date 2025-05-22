@@ -773,6 +773,9 @@ static void epi_rcu_free(struct rcu_head *head)
 }
 
 #ifdef CONFIG_FAST_SYSCALL
+DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_hit);
+DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
+
 #define PREFETCH_ITEM_HASH_BITS 6
 #define PREFETCH_ITEM_TABLE_SIZE (1 << PREFETCH_ITEM_HASH_BITS)
 static DEFINE_HASHTABLE(xcall_item_table, PREFETCH_ITEM_HASH_BITS);
@@ -1319,6 +1322,7 @@ int xcall_read(struct prefetch_item *pfi, unsigned int fd, char __user *buf,
 	if (pfi->pos >= ((1 << cache_pages_order) * PAGE_SIZE) || pfi->len == 0)
 		pfi->pos = 0;
 hit_return:
+	this_cpu_inc(xcall_cache_hit);
 	if (pfi->len == 0 || copy_len == 0)
 		transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_NONE);
 
@@ -1330,6 +1334,7 @@ hit_return:
 	else
 		return -EBADF;
 reset_pfi_and_retry_vfs_read:
+	this_cpu_inc(xcall_cache_miss);
 	pfi->len = 0;
 	cancel_work(&pfi->work);
 
