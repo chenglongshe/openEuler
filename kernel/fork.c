@@ -483,6 +483,9 @@ void free_task(struct task_struct *tsk)
 #ifdef CONFIG_FAST_SYSCALL
 	if (tsk->xcall_enable)
 		bitmap_free(tsk->xcall_enable);
+
+	if (tsk->xcall_select)
+		bitmap_free(tsk->xcall_select);
 #endif
 
 	free_task_struct(tsk);
@@ -1016,6 +1019,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 
 #ifdef CONFIG_FAST_SYSCALL
 	tsk->xcall_enable = NULL;
+	tsk->xcall_select = NULL;
 #endif
 
 	return tsk;
@@ -2103,6 +2107,14 @@ static __latent_entropy struct task_struct *copy_process(
 
 	if (current->xcall_enable)
 		bitmap_copy(p->xcall_enable, current->xcall_enable, __NR_syscalls);
+
+	if (current->xcall_select) {
+		p->xcall_select = bitmap_zalloc(__NR_syscalls, GFP_KERNEL);
+		if (!p->xcall_select)
+			goto bad_fork_free;
+
+		bitmap_copy(p->xcall_select, current->xcall_select, __NR_syscalls);
+	}
 #endif
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
