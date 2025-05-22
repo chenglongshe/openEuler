@@ -947,6 +947,31 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 		index <  ra->start + ra->size);
 }
 
+enum cache_state {
+	XCALL_CACHE_NONE = 0,
+	XCALL_CACHE_QUEUED,
+	XCALL_CACHE_PREFETCH,
+	XCALL_CACHE_READY,
+	XCALL_CACHE_CANCEL
+};
+
+struct prefetch_item {
+	struct file *file;
+	int fd;
+	struct work_struct work;
+	int cpu;
+	cpumask_t related_cpus;
+	struct page *cache_pages;
+	char *cache;
+	ssize_t len;
+	/* cache state in epoll_wait */
+	atomic_t state;
+	loff_t pos;
+	struct hlist_node node;
+};
+
+extern int cache_pages_order;
+
 struct file {
 	union {
 		struct llist_node	fu_llist;
@@ -3748,6 +3773,24 @@ static inline bool cachefiles_ondemand_is_enabled(void)
 {
 	return false;
 }
+#endif
+
+#ifdef CONFIG_FAST_SYSCALL
+extern unsigned long *xcall_numa_cpumask_bits0;
+extern unsigned long *xcall_numa_cpumask_bits1;
+extern unsigned long *xcall_numa_cpumask_bits2;
+extern unsigned long *xcall_numa_cpumask_bits3;
+
+struct prefetch_item *find_prefetch_item(struct file *file);
+void free_prefetch_item(struct file *file);
+bool transition_state(struct prefetch_item *pfi, enum cache_state old,
+		      enum cache_state new);
+int xcall_read(struct prefetch_item *pfi, unsigned int fd, char __user *buf,
+	       size_t count);
+int proc_xcall_numa_cpumask(struct ctl_table *table, int write,
+			   void *buffer, size_t *lenp, loff_t *ppos);
+#else
+static inline void free_prefetch_item(struct file *file) {}
 #endif
 
 #endif /* _LINUX_FS_H */

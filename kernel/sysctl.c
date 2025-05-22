@@ -2862,6 +2862,42 @@ static struct ctl_table kern_table[] = {
 		.extra2		= &hundred_thousand,
 	},
 #endif
+#ifdef CONFIG_FAST_SYSCALL
+	{
+		.procname	= "xcall_numa0_cpumask",
+		.data		= &xcall_numa_cpumask_bits0,
+		.maxlen		= NR_CPUS,
+		.mode		= 0644,
+		.proc_handler	= proc_xcall_numa_cpumask,
+	},
+	{
+		.procname	= "xcall_numa1_cpumask",
+		.data		= &xcall_numa_cpumask_bits1,
+		.maxlen		= NR_CPUS,
+		.mode		= 0644,
+		.proc_handler	= proc_xcall_numa_cpumask,
+	},
+	{
+		.procname	= "xcall_numa2_cpumask",
+		.data		= &xcall_numa_cpumask_bits2,
+		.maxlen		= NR_CPUS,
+		.mode		= 0644,
+		.proc_handler	= proc_xcall_numa_cpumask,
+	},
+	{
+		.procname	= "xcall_numa3_cpumask",
+		.data		= &xcall_numa_cpumask_bits3,
+		.maxlen		= NR_CPUS,
+		.mode		= 0644,
+		.proc_handler	= proc_xcall_numa_cpumask,
+	},
+	{	.procname	= "xcall_cache_pages_order",
+		.data		= &cache_pages_order,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler   = proc_dointvec_minmax,
+	},
+#endif
 	{ }
 };
 
