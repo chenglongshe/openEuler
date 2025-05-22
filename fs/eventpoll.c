@@ -38,6 +38,7 @@
 #include <linux/compat.h>
 #include <linux/rculist.h>
 #include <net/busy_poll.h>
+#include <trace/events/fs.h>
 
 /*
  * LOCKING:
@@ -1323,6 +1324,7 @@ int xcall_read(struct prefetch_item *pfi, unsigned int fd, char __user *buf,
 		pfi->pos = 0;
 hit_return:
 	this_cpu_inc(xcall_cache_hit);
+	trace_epoll_rc_hit(fd, copy_len);
 	if (pfi->len == 0 || copy_len == 0)
 		transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_NONE);
 
@@ -1335,6 +1337,7 @@ hit_return:
 		return -EBADF;
 reset_pfi_and_retry_vfs_read:
 	this_cpu_inc(xcall_cache_miss);
+	trace_epoll_rc_miss(fd);
 	pfi->len = 0;
 	cancel_work(&pfi->work);
 
@@ -1348,10 +1351,12 @@ static void prefetch_work_fn(struct work_struct *work)
 	if (!transition_state(pfi, XCALL_CACHE_NONE, XCALL_CACHE_PREFETCH))
 		return;
 
+	trace_epoll_rc_prefetch(pfi->fd, smp_processor_id());
 	pfi->len = kernel_read(pfi->file, pfi->cache,
 			       (1UL << cache_pages_order) * PAGE_SIZE,
 			       &pfi->file->f_pos);
 	transition_state(pfi, XCALL_CACHE_PREFETCH, XCALL_CACHE_READY);
+	trace_epoll_rc_ready(pfi->fd, pfi->len);
 }
 
 static int get_nth_cpu_in_cpumask(const struct cpumask *mask, int n)
@@ -1440,6 +1445,7 @@ static void ep_prefetch_item_enqueue(struct eventpoll *ep, struct epitem *epi)
 		t_cpu = pfi->cpu;
 
 	queue_work_on(t_cpu, rc_work, &pfi->work);
+	trace_epoll_rc_queue(epi->ffd.fd, t_cpu);
 }
 #endif
 

@@ -29,5 +29,98 @@ DECLARE_TRACE(fs_file_release,
 
 #endif /* _TRACE_FS_H */
 
+TRACE_EVENT(epoll_rc_queue,
+
+	TP_PROTO(int fd, int cpu),
+
+	TP_ARGS(fd, cpu),
+
+	TP_STRUCT__entry(
+		__field(int, fd)
+		__field(int, cpu)
+	),
+
+	TP_fast_assign(
+		__entry->fd = fd;
+		__entry->cpu = cpu;
+	),
+
+	TP_printk("%d on cpu %d", __entry->fd, __entry->cpu)
+);
+
+TRACE_EVENT(epoll_rc_prefetch,
+
+	TP_PROTO(int fd, int cpu),
+
+	TP_ARGS(fd, cpu),
+
+	TP_STRUCT__entry(
+		__field(int, fd)
+		__field(int, cpu)
+	),
+
+	TP_fast_assign(
+		__entry->fd = fd;
+		__entry->cpu = cpu;
+	),
+
+	TP_printk("%d on cpu %d", __entry->fd, __entry->cpu)
+);
+
+TRACE_EVENT(epoll_rc_ready,
+
+	TP_PROTO(int fd, ssize_t len),
+
+	TP_ARGS(fd, len),
+
+	TP_STRUCT__entry(
+		__field(int, fd)
+		__field(ssize_t, len)
+	),
+
+	TP_fast_assign(
+		__entry->fd = fd;
+		__entry->len = len;
+	),
+
+	TP_printk("%d, len 0x%lx", __entry->fd, __entry->len)
+);
+
+TRACE_EVENT(epoll_rc_hit,
+
+	TP_PROTO(int fd, ssize_t len),
+
+	TP_ARGS(fd, len),
+
+	TP_STRUCT__entry(
+		__field(int, fd)
+		__field(ssize_t, len)
+	),
+
+	TP_fast_assign(
+		__entry->fd = fd;
+		__entry->len = len;
+	),
+
+	TP_printk("%d, len: 0x%lx", __entry->fd, __entry->len)
+);
+
+TRACE_EVENT(epoll_rc_miss,
+
+	TP_PROTO(int fd),
+
+	TP_ARGS(fd),
+
+	TP_STRUCT__entry(
+		__field(int, fd)
+	),
+
+	TP_fast_assign(
+		__entry->fd = fd;
+	),
+
+	TP_printk("%d", __entry->fd)
+);
+
 /* This part must be outside protection */
 #include <trace/define_trace.h>
