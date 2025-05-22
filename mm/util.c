@@ -814,6 +814,7 @@ void folio_copy(struct folio *dst, struct folio *src)
 		cond_resched();
 	}
 }
+EXPORT_SYMBOL(folio_copy);
 
 int folio_mc_copy(struct folio *dst, struct folio *src)
 {
