@@ -4,6 +4,7 @@
 
 #include <linux/list.h>
 #include <linux/sched.h>
+#include <linux/kabi.h>
 
 typedef void (*task_work_func_t)(struct callback_head *);
 
@@ -18,10 +19,10 @@ enum task_work_notify_mode {
 	TWA_RESUME,
 	TWA_SIGNAL,
 	TWA_SIGNAL_NO_IPI,
-	TWA_NMI_CURRENT,
+	KABI_EXTEND_ENUM(TWA_NMI_CURRENT)
 
-	TWA_FLAGS = 0xff00,
-	TWAF_NO_ALLOC = 0x0100,
+	KABI_EXTEND_ENUM(TWA_FLAGS = 0xff00)
+	KABI_EXTEND_ENUM(TWAF_NO_ALLOC = 0x0100)
 };
 
 static inline bool task_work_pending(struct task_struct *task)
