@@ -429,17 +429,14 @@ __sigqueue_alloc(int sig, struct task_struct *t, gfp_t gfp_flags,
 	rcu_read_lock();
 	ucounts = task_ucounts(t);
 	sigpending = inc_rlimit_get_ucounts(ucounts, UCOUNT_RLIMIT_SIGPENDING,
-					    override_rlimit);
+					    override_rlimit,  task_rlimit(t, RLIMIT_SIGPENDING));
 	rcu_read_unlock();
-	if (!sigpending)
-		return NULL;
-
-	if (override_rlimit || likely(sigpending <= task_rlimit(t, RLIMIT_SIGPENDING))) {
-		q = kmem_cache_alloc(sigqueue_cachep, gfp_flags);
-	} else {
+	if (!sigpending) {
 		print_dropped_signal(sig);
+		return NULL;
 	}
 
+	q = kmem_cache_alloc(sigqueue_cachep, gfp_flags);
 	if (unlikely(q == NULL)) {
 		dec_rlimit_put_ucounts(ucounts, UCOUNT_RLIMIT_SIGPENDING);
 	} else {
