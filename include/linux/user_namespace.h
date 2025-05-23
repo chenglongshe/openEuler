@@ -115,14 +115,26 @@ struct user_namespace {
 } __randomize_layout;
 
 struct ucounts {
+#ifdef __GENKSYMS__
+	struct hlist_node node;
+#else
 	struct hlist_nulls_node node;
+#endif
 	struct user_namespace *ns;
 	kuid_t uid;
+#ifdef __GENKSYMS__
+	atomic_t count;
+#else
 	struct rcu_head rcu;
 	rcuref_t count;
 	atomic_long_t freed;
+#endif
 	atomic_long_t ucount[UCOUNT_COUNTS];
+#ifdef __GENKSYMS__
+	atomic_long_t rlimit[UCOUNT_RLIMIT_COUNTS];
+#else
 	struct percpu_counter rlimit[UCOUNT_RLIMIT_COUNTS];
+#endif
 };
 
 extern struct user_namespace init_user_ns;
