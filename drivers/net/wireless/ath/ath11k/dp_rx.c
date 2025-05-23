@@ -4858,7 +4858,7 @@ static void ath11k_dp_rx_mon_dest_process(struct ath11k *ar, int mac_id,
 	struct ath11k_pdev_dp *dp = &ar->dp;
 	struct ath11k_mon_data *pmon = (struct ath11k_mon_data *)&dp->mon_data;
 	void *ring_entry;
-	void *mon_dst_srng;
+	struct hal_srng *mon_dst_srng;
 	u32 ppdu_id;
 	u32 rx_bufs_used;
 	u32 ring_id;
@@ -4881,6 +4881,7 @@ static void ath11k_dp_rx_mon_dest_process(struct ath11k *ar, int mac_id,
 
 	spin_lock_bh(&pmon->mon_lock);
 
+	spin_lock_bh(&mon_dst_srng->lock);
 	ath11k_hal_srng_access_begin(ar->ab, mon_dst_srng);
 
 	ppdu_id = pmon->mon_ppdu_info.ppdu_id;
@@ -4915,6 +4916,7 @@ static void ath11k_dp_rx_mon_dest_process(struct ath11k *ar, int mac_id,
 								mon_dst_srng);
 	}
 	ath11k_hal_srng_access_end(ar->ab, mon_dst_srng);
+	spin_unlock_bh(&mon_dst_srng->lock);
 
 	spin_unlock_bh(&pmon->mon_lock);
 
@@ -4970,8 +4972,82 @@ static int ath11k_dp_mon_process_rx(struct ath11k_base *ab, int mac_id,
 {
 	struct ath11k *ar = ath11k_ab_to_ar(ab, mac_id);
 	struct ath11k_pdev_dp *dp = &ar->dp;
-	struct ath11k_mon_data *pmon = (struct ath11k_mon_data *)&dp->mon_data;
 	int num_buffs_reaped = 0;
+	struct ath11k_mon_data *pmon = &dp->mon_data;
+	struct hal_sw_mon_ring_entries *sw_mon_entries;
+	struct ath11k_pdev_mon_stats *rx_mon_stats;
+	struct sk_buff *head_msdu, *tail_msdu;
+	struct hal_srng *mon_dst_srng;
+	void *ring_entry;
+	u32 rx_bufs_used = 0, mpdu_rx_bufs_used;
+	int quota = 0, ret;
+	bool break_dst_ring = false;
+
+	spin_lock_bh(&pmon->mon_lock);
+
+	sw_mon_entries = &pmon->sw_mon_entries;
+	rx_mon_stats = &pmon->rx_mon_stats;
+
+	if (pmon->hold_mon_dst_ring) {
+		spin_unlock_bh(&pmon->mon_lock);
+		goto reap_status_ring;
+	}
+
+	mon_dst_srng = &ar->ab->hal.srng_list[dp->rxdma_mon_dst_ring.ring_id];
+	spin_lock_bh(&mon_dst_srng->lock);
+
+	ath11k_hal_srng_access_begin(ar->ab, mon_dst_srng);
+	while ((ring_entry = ath11k_hal_srng_dst_peek(ar->ab, mon_dst_srng))) {
+		head_msdu = NULL;
+		tail_msdu = NULL;
+
+		mpdu_rx_bufs_used = ath11k_dp_rx_full_mon_mpdu_pop(ar, ring_entry,
+								   &head_msdu,
+								   &tail_msdu,
+								   sw_mon_entries);
+		rx_bufs_used += mpdu_rx_bufs_used;
+
+		if (!sw_mon_entries->end_of_ppdu) {
+			if (head_msdu) {
+				ret = ath11k_dp_rx_full_mon_prepare_mpdu(&ab->dp,
+									 pmon->mon_mpdu,
+									 head_msdu,
+									 tail_msdu);
+				if (ret)
+					break_dst_ring = true;
+			}
+
+			goto next_entry;
+		} else {
+			if (!sw_mon_entries->ppdu_id &&
+			    !sw_mon_entries->mon_status_paddr) {
+				break_dst_ring = true;
+				goto next_entry;
+			}
+		}
+
+		rx_mon_stats->dest_ppdu_done++;
+		pmon->mon_ppdu_status = DP_PPDU_STATUS_START;
+		pmon->buf_state = DP_MON_STATUS_LAG;
+		pmon->mon_status_paddr = sw_mon_entries->mon_status_paddr;
+		pmon->hold_mon_dst_ring = true;
+next_entry:
+		ring_entry = ath11k_hal_srng_dst_get_next_entry(ar->ab,
+								mon_dst_srng);
+		if (break_dst_ring)
+			break;
+	}
+
+	ath11k_hal_srng_access_end(ar->ab, mon_dst_srng);
+	spin_unlock_bh(&mon_dst_srng->lock);
+	spin_unlock_bh(&pmon->mon_lock);
+
+	if (rx_bufs_used) {
+		ath11k_dp_rxbufs_replenish(ar->ab, dp->mac_id,
+					   &dp->rxdma_mon_buf_ring,
+					   rx_bufs_used,
+					   HAL_RX_BUF_RBM_SW3_BM);
+	}
 
 	num_buffs_reaped = ath11k_dp_rx_reap_mon_status_ring(ar->ab, mac_id, &budget,
 							     &pmon->rx_status_q);
