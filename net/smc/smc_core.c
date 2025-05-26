@@ -2004,8 +2004,10 @@ out:
  */
 static u8 smc_compress_bufsize(struct smc_link_group *lgr, int size, bool is_smcd, bool is_rmb)
 {
-	const unsigned int max_scat = SG_MAX_SINGLE_ALLOC * PAGE_SIZE;
-	u8 compressed, max_phy_compressed;
+	u8 compressed;
+#ifdef CONFIG_ARCH_NO_SG_CHAIN
+	u8 max_phy_compressed;
+#endif
 
 	if (size <= SMC_BUF_MIN_SIZE)
 		return 0;
@@ -2014,8 +2016,9 @@ static u8 smc_compress_bufsize(struct smc_link_group *lgr, int size, bool is_smc
 	compressed = min_t(u8, ilog2(size) + 1,
 			is_smcd ? SMCD_DMBE_SIZES : SMCR_RMBE_SIZES);
 
+#ifdef CONFIG_ARCH_NO_SG_CHAIN
 	if (!is_smcd && is_rmb && lgr->buf_type != SMCR_VIRT_CONT_BUFS) {
-		max_phy_compressed = ilog2(max_scat >> 14);
+		max_phy_compressed = ilog2((SG_MAX_SINGLE_ALLOC * PAGE_SIZE) >> 14);
 		switch (lgr->buf_type) {
 		case SMCR_MIXED_BUFS:
 			if (compressed > max_phy_compressed)
@@ -2029,6 +2032,7 @@ static u8 smc_compress_bufsize(struct smc_link_group *lgr, int size, bool is_smc
 			break;
 		}
 	}
+#endif
 
 	return compressed;
 }
