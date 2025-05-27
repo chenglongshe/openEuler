@@ -27,6 +27,7 @@
 #include <asm/fpsimd.h>
 #include <asm/kvm.h>
 #include <asm/kvm_asm.h>
+#include <asm/kvm_rme.h>
 #ifdef CONFIG_HISI_VIRTCCA_HOST
 #include <asm/kvm_tmm.h>
 #endif
@@ -41,7 +42,7 @@
 
 #define KVM_MAX_VCPUS VGIC_V3_MAX_CPUS
 
-#define KVM_VCPU_MAX_FEATURES 7
+#define KVM_VCPU_MAX_FEATURES 9
 #define KVM_VCPU_VALID_FEATURES	(BIT(KVM_VCPU_MAX_FEATURES) - 1)
 
 #define KVM_REQ_SLEEP \
@@ -77,8 +78,8 @@ enum kvm_mode kvm_get_mode(void);
 static inline enum kvm_mode kvm_get_mode(void) { return KVM_MODE_NONE; };
 #endif
 
-extern unsigned int __ro_after_init kvm_sve_max_vl;
 int __init kvm_arm_init_sve(void);
+unsigned int kvm_sve_get_max_vl(struct kvm *kvm);
 
 u32 __attribute_const__ kvm_target_cpu(void);
 int kvm_reset_vcpu(struct kvm_vcpu *vcpu);
@@ -285,6 +286,8 @@ struct kvm_arch {
 	 */
 	struct kvm_protected_vm pkvm;
 
+	bool is_realm;
+	struct realm realm;
 #ifdef CONFIG_KVM_HISI_VIRT
 	spinlock_t sched_lock;
 	cpumask_var_t sched_cpus;	/* Union of all vcpu's cpus_ptr */
@@ -631,6 +634,9 @@ struct kvm_vcpu_arch {
 
 	/* Per-vcpu CCSIDR override or NULL */
 	u32 *ccsidr;
+
+	/* Realm meta data */
+	struct realm_rec rec;
 
 #ifdef CONFIG_KVM_HISI_VIRT
 	/* pCPUs this vCPU can be scheduled on. Pure copy of current->cpus_ptr */

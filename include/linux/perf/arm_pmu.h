@@ -209,6 +209,7 @@ void kvm_host_pmu_init(struct arm_pmu *pmu);
 #endif
 
 bool arm_pmu_irq_is_nmi(void);
+void arm_pmu_set_phys_irq(bool enable);
 
 /* Internal functions only for core arm_pmu code */
 struct arm_pmu *armpmu_alloc(void);
@@ -219,9 +220,13 @@ void armpmu_free_irq(int irq, int cpu);
 
 #define ARMV8_PMU_PDEV_NAME "armv8-pmu"
 
+#else /* CONFIG_ARM_PMU */
+
+static inline void arm_pmu_set_phys_irq(bool enable) {}
+
 #endif /* CONFIG_ARM_PMU */
 
-#if defined(CONFIG_ARM_PMU) && defined(CONFIG_HISI_VIRTCCA_HOST)
+#if defined(CONFIG_ARM_PMU)
 void arm_pmu_set_phys_irq(bool enable);
 #else
 #define arm_pmu_set_phys_irq(x)	do {} while (0)
