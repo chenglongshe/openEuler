@@ -2493,6 +2493,17 @@ static unsigned long reclaim_high(struct mem_cgroup *memcg,
 }
 
 #ifdef CONFIG_MEMCG_V1_RECLAIM
+static unsigned long async_high_read(struct mem_cgroup *memcg)
+{
+	return READ_ONCE(memcg->memory.high) * READ_ONCE(memcg->high_async_ratio) / HIGH_ASYNC_RATIO_BASE;
+}
+
+static unsigned long async_low_read(struct mem_cgroup *memcg)
+{
+	return async_high_read(memcg) -
+		READ_ONCE(memcg->memory.high) * HIGH_ASYNC_RATIO_GAP / HIGH_ASYNC_RATIO_BASE;
+}
+
 static bool is_high_async_reclaim(struct mem_cgroup *memcg)
 {
 	int ratio = READ_ONCE(memcg->high_async_ratio);
@@ -2501,17 +2512,14 @@ static bool is_high_async_reclaim(struct mem_cgroup *memcg)
 	if (ratio == HIGH_ASYNC_RATIO_BASE || memcg_high == PAGE_COUNTER_MAX)
 		return false;
 
-	return page_counter_read(&memcg->memory) >
-	       memcg_high * ratio / HIGH_ASYNC_RATIO_BASE;
+	return page_counter_read(&memcg->memory) > async_high_read(memcg);
 }
 
 static void async_reclaim_high(struct mem_cgroup *memcg)
 {
 	unsigned long nr_pages, pflags;
-	unsigned long memcg_high = READ_ONCE(memcg->memory.high);
 	unsigned long memcg_usage = page_counter_read(&memcg->memory);
-	int ratio = READ_ONCE(memcg->high_async_ratio) - HIGH_ASYNC_RATIO_GAP;
-	unsigned long safe_pages = memcg_high * ratio / HIGH_ASYNC_RATIO_BASE;
+	unsigned long safe_pages = async_low_read(memcg);
 
 	if (!is_high_async_reclaim(memcg)) {
 		WRITE_ONCE(memcg->high_async_reclaim, false);
