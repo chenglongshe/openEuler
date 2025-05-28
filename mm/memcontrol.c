@@ -2495,19 +2495,19 @@ static unsigned long reclaim_high(struct mem_cgroup *memcg,
 #ifdef CONFIG_MEMCG_V1_RECLAIM
 static unsigned long async_high_read(struct mem_cgroup *memcg)
 {
-	return READ_ONCE(memcg->memory.high) * READ_ONCE(memcg->high_async_ratio) / HIGH_ASYNC_RATIO_BASE;
+	return READ_ONCE(memcg->memory.max) * READ_ONCE(memcg->high_async_ratio) / HIGH_ASYNC_RATIO_BASE;
 }
 
 static unsigned long async_low_read(struct mem_cgroup *memcg)
 {
 	return async_high_read(memcg) -
-		READ_ONCE(memcg->memory.high) * HIGH_ASYNC_RATIO_GAP / HIGH_ASYNC_RATIO_BASE;
+		READ_ONCE(memcg->memory.max) * HIGH_ASYNC_RATIO_GAP / HIGH_ASYNC_RATIO_BASE;
 }
 
 static bool is_high_async_reclaim(struct mem_cgroup *memcg)
 {
 	int ratio = READ_ONCE(memcg->high_async_ratio);
-	unsigned long memcg_high = READ_ONCE(memcg->memory.high);
+	unsigned long memcg_high = READ_ONCE(memcg->memory.max);
 
 	if (ratio == HIGH_ASYNC_RATIO_BASE || memcg_high == PAGE_COUNTER_MAX)
 		return false;
