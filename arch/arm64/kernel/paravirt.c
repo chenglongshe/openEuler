@@ -23,7 +23,11 @@
 #include <asm/paravirt.h>
 #include <asm/pvclock-abi.h>
 #include <asm/pvsched-abi.h>
+#include <asm/qspinlock_paravirt.h>
 #include <asm/smp_plat.h>
+
+#define CREATE_TRACE_POINTS
+#include "trace-paravirt.h"
 
 struct static_key paravirt_steal_enabled;
 struct static_key paravirt_steal_rq_enabled;
@@ -278,7 +282,81 @@ int __init pv_sched_init(void)
 	static_call_update(pv_vcpu_preempted, kvm_vcpu_is_preempted);
 	pr_info("using PV sched preempted\n");
 
+	pv_qspinlock_init();
+
 	return 0;
 }
 early_initcall(pv_sched_init);
 #endif /* CONFIG_PARAVIRT_SCHED */
+
+#ifdef CONFIG_PARAVIRT_SPINLOCKS
+static bool arm_pvspin;
+
+/* Kick a cpu by its cpuid. Used to wake up a halted vcpu */
+static void kvm_kick_cpu(int cpu)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_invoke(ARM_SMCCC_HV_PV_SCHED_KICK_CPU, cpu, &res);
+
+	trace_kvm_kick_cpu("kvm kick cpu", smp_processor_id(), cpu);
+}
+
+static void kvm_wait(u8 *ptr, u8 val)
+{
+	unsigned long flags;
+
+	if (in_nmi())
+		return;
+
+	local_irq_save(flags);
+
+	if (READ_ONCE(*ptr) != val)
+		goto out;
+
+	dsb(sy);
+	wfi();
+	trace_kvm_wait("kvm wait wfi", smp_processor_id());
+
+out:
+	local_irq_restore(flags);
+}
+
+DEFINE_STATIC_CALL(pv_qspinlock_queued_spin_lock_slowpath,
+		   native_queued_spin_lock_slowpath);
+EXPORT_STATIC_CALL(pv_qspinlock_queued_spin_lock_slowpath);
+DEFINE_STATIC_CALL(pv_qspinlock_queued_spin_unlock,
+		   native_queued_spin_unlock);
+EXPORT_STATIC_CALL(pv_qspinlock_queued_spin_unlock);
+DEFINE_STATIC_CALL(pv_qspinlock_wait, kvm_wait);
+DEFINE_STATIC_CALL(pv_qspinlock_kick, kvm_kick_cpu);
+
+void __init pv_qspinlock_init(void)
+{
+	/* Don't use the PV qspinlock code if there is only 1 vCPU. */
+	if (num_possible_cpus() == 1)
+		arm_pvspin = false;
+
+	if (!arm_pvspin) {
+		pr_info("PV qspinlocks disabled\n");
+		return;
+	}
+	pr_info("PV qspinlocks enabled\n");
+
+	__pv_init_lock_hash();
+
+	static_call_update(pv_qspinlock_queued_spin_lock_slowpath,
+			   __pv_queued_spin_lock_slowpath);
+	static_call_update(pv_qspinlock_queued_spin_unlock,
+			   __pv_queued_spin_unlock);
+	static_call_update(pv_qspinlock_wait, kvm_wait);
+	static_call_update(pv_qspinlock_kick, kvm_kick_cpu);
+}
+
+static __init int arm_parse_pvspin(char *arg)
+{
+	arm_pvspin = true;
+	return 0;
+}
+early_param("arm_pvspin", arm_parse_pvspin);
+#endif  /* CONFIG_PARAVIRT_SPINLOCKS */
