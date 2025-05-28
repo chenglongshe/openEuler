@@ -74,6 +74,7 @@
 #define KF_ITER_NEW     (1 << 8) /* kfunc implements BPF iter constructor */
 #define KF_ITER_NEXT    (1 << 9) /* kfunc implements BPF iter next method */
 #define KF_ITER_DESTROY (1 << 10) /* kfunc implements BPF iter destructor */
+#define KF_RCU_PROTECTED (1 << 11) /* kfunc should be protected by rcu cs when they are invoked */
 
 /*
  * Tag marking a kernel function as a kfunc. This is meant to minimize the
@@ -507,6 +508,7 @@ btf_get_prog_ctx_type(struct bpf_verifier_log *log, const struct btf *btf,
 int get_kern_ctx_btf_id(struct bpf_verifier_log *log, enum bpf_prog_type prog_type);
 bool btf_types_are_same(const struct btf *btf1, u32 id1,
 			const struct btf *btf2, u32 id2);
+int btf_check_iter_arg(struct btf *btf, const struct btf_type *func, int arg_idx);
 #else
 static inline const struct btf_type *btf_type_by_id(const struct btf *btf,
 						    u32 type_id)
@@ -558,6 +560,10 @@ static inline bool btf_types_are_same(const struct btf *btf1, u32 id1,
 				      const struct btf *btf2, u32 id2)
 {
 	return false;
+}
+static inline int btf_check_iter_arg(struct btf *btf, const struct btf_type *func, int arg_idx)
+{
+	return -EOPNOTSUPP;
 }
 #endif
 
