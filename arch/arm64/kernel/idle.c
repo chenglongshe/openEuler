@@ -44,3 +44,34 @@ void noinstr arch_cpu_idle(void)
 	cpu_do_idle();
 }
 EXPORT_SYMBOL_GPL(arch_cpu_idle);
+
+#ifdef CONFIG_ACTLR_XCALL_XINT
+DEFINE_PER_CPU_ALIGNED(struct arm_cpuidle_xcall_xint_context, contexts);
+
+void arch_cpu_idle_enter(void)
+{
+	struct arm_cpuidle_xcall_xint_context *context;
+
+	if (!system_uses_xcall_xint())
+		return;
+
+	context = &get_cpu_var(contexts);
+	arm_cpuidle_save_xcall_xint_context(context);
+	put_cpu_var(contexts);
+}
+
+void arch_cpu_idle_exit(void)
+{
+	struct arm_cpuidle_xcall_xint_context *context;
+
+	if (!system_uses_xcall_xint())
+		return;
+
+	context = &get_cpu_var(contexts);
+	arm_cpuidle_restore_xcall_xint_context(context);
+	put_cpu_var(contexts);
+}
+#else
+void arch_cpu_idle_enter(void) {}
+void arch_cpu_idle_exit(void) {}
+#endif
