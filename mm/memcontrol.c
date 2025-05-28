@@ -6134,6 +6134,22 @@ static ssize_t memcg_wmark_scale_factor_write(struct kernfs_open_file *of,
 	return nbytes;
 
 }
+
+static u64 memcg_wmark_high_read(struct cgroup_subsys_state *css,
+				 struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)async_high_read(memcg) * PAGE_SIZE;
+}
+
+static u64 memcg_wmark_low_read(struct cgroup_subsys_state *css,
+				struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)async_low_read(memcg) * PAGE_SIZE;
+}
 #else
 static inline void memcg_wmark_scale_factor_init(struct mem_cgroup *memcg,
 						 struct mem_cgroup *parent)
@@ -6408,6 +6424,16 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memcg_wmark_scale_factor_show,
 		.write = memcg_wmark_scale_factor_write,
+	},
+	{
+		.name = "wmark_high",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memcg_wmark_high_read,
+	},
+	{
+		.name = "wmark_low",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memcg_wmark_low_read,
 	},
 	{
 		.name = "reclaim",
