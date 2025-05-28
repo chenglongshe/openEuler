@@ -420,8 +420,11 @@ struct mem_cgroup {
 #ifdef CONFIG_DYNAMIC_POOL
 	struct dynamic_pool *dpool;
 #endif
-
+#ifdef CONFIG_MEMCG_V1_RECLAIM
+	KABI_USE(1, int wmark_scale_factor)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)

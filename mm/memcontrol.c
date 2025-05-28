@@ -2501,7 +2501,7 @@ static unsigned long async_high_read(struct mem_cgroup *memcg)
 static unsigned long async_low_read(struct mem_cgroup *memcg)
 {
 	return async_high_read(memcg) -
-		READ_ONCE(memcg->memory.max) * HIGH_ASYNC_RATIO_GAP / HIGH_ASYNC_RATIO_BASE;
+		READ_ONCE(memcg->memory.max) * READ_ONCE(memcg->wmark_scale_factor) / 10000;
 }
 
 static bool is_high_async_reclaim(struct mem_cgroup *memcg)
@@ -6094,6 +6094,51 @@ static ssize_t memcg_wmark_ratio_write(struct kernfs_open_file *of,
 
 	return nbytes;
 }
+
+static inline void memcg_wmark_scale_factor_init(struct mem_cgroup *memcg,
+						 struct mem_cgroup *parent)
+{
+	if (!parent)
+		memcg->wmark_scale_factor = 50;
+	else
+		memcg->wmark_scale_factor = parent->wmark_scale_factor;
+}
+
+static int memcg_wmark_scale_factor_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%d\n",
+	   READ_ONCE(mem_cgroup_from_seq(m)->wmark_scale_factor));
+	return 0;
+}
+
+static ssize_t memcg_wmark_scale_factor_write(struct kernfs_open_file *of,
+					      char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	int ret, wmark_scale_factor;
+
+	buf = strstrip(buf);
+	if (!buf)
+		return -EINVAL;
+
+	ret = kstrtoint(buf, 0, &wmark_scale_factor);
+	if (ret)
+		return ret;
+
+	if (wmark_scale_factor >  1000 ||
+	    wmark_scale_factor < 1)
+		return -EINVAL;
+
+	WRITE_ONCE(memcg->wmark_scale_factor, wmark_scale_factor);
+
+	return nbytes;
+
+}
+#else
+static inline void memcg_wmark_scale_factor_init(struct mem_cgroup *memcg,
+						 struct mem_cgroup *parent)
+{
+}
 #endif
 
 #ifdef CONFIG_CGROUP_V1_WRITEBACK
@@ -6357,6 +6402,12 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memcg_wmark_ratio_show,
 		.write = memcg_wmark_ratio_write,
+	},
+	{
+		.name = "wmark_scale_factor",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memcg_wmark_scale_factor_show,
+		.write = memcg_wmark_scale_factor_write,
 	},
 	{
 		.name = "reclaim",
@@ -6679,6 +6730,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		page_counter_init(&memcg->kmem, &parent->kmem);
 		page_counter_init(&memcg->tcpmem, &parent->tcpmem);
 		memcg_swap_device_init(memcg, parent);
+		memcg_wmark_scale_factor_init(memcg, parent);
 	} else {
 		init_memcg_events();
 		page_counter_init(&memcg->memory, NULL);
@@ -6686,6 +6738,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		page_counter_init(&memcg->kmem, NULL);
 		page_counter_init(&memcg->tcpmem, NULL);
 		memcg_swap_device_init(memcg, NULL);
+		memcg_wmark_scale_factor_init(memcg, NULL);
 
 		root_mem_cgroup = memcg;
 		return &memcg->css;
