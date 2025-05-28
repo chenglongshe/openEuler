@@ -625,6 +625,7 @@ struct kvm_vcpu_arch {
 #ifdef CONFIG_PARAVIRT_SCHED
 	/* Guest PV sched state */
 	struct {
+		bool pv_unhalted;
 		gpa_t base;
 	} pvsched;
 #endif
@@ -1120,6 +1121,7 @@ static inline bool kvm_arm_is_pvtime_enabled(struct kvm_vcpu_arch *vcpu_arch)
 #ifdef CONFIG_PARAVIRT_SCHED
 long kvm_hypercall_pvsched_features(struct kvm_vcpu *vcpu);
 void kvm_update_pvsched_preempted(struct kvm_vcpu *vcpu, u32 preempted);
+long kvm_pvsched_kick_vcpu(struct kvm_vcpu *vcpu);
 
 static inline void kvm_arm_pvsched_vcpu_init(struct kvm_vcpu_arch *vcpu_arch)
 {
