@@ -38,4 +38,36 @@ struct arm_cpuidle_irq_context { };
 #define arm_cpuidle_save_irq_context(c)		(void)c
 #define arm_cpuidle_restore_irq_context(c)	(void)c
 #endif
+
+#ifdef CONFIG_ACTLR_XCALL_XINT
+struct arm_cpuidle_xcall_xint_context {
+	unsigned long actlr_el1;
+	unsigned long actlr_el2;
+};
+
+#define arm_cpuidle_save_xcall_xint_context(__c)			\
+	do {								\
+		struct arm_cpuidle_xcall_xint_context *c = __c;		\
+		if (system_uses_xcall_xint()) {				\
+			c->actlr_el1 = read_sysreg(actlr_el1);		\
+			if (read_sysreg(CurrentEL) == CurrentEL_EL2)	\
+				c->actlr_el2 = read_sysreg(actlr_el2);	\
+		}							\
+	} while (0)
+
+#define arm_cpuidle_restore_xcall_xint_context(__c)			\
+	do {								\
+		struct arm_cpuidle_xcall_xint_context *c = __c;		\
+		if (system_uses_xcall_xint()) {				\
+			write_sysreg(c->actlr_el1, actlr_el1);		\
+			if (read_sysreg(CurrentEL) == CurrentEL_EL2)	\
+				write_sysreg(c->actlr_el2, actlr_el2);	\
+		}							\
+	} while (0)
+#else
+struct arm_cpuidle_xcall_xint_context { };
+
+#define arm_cpuidle_save_xcall_xint_context(c)		(void)c
+#define arm_cpuidle_restore_xcall_xint_context(c)	(void)c
+#endif
 #endif
