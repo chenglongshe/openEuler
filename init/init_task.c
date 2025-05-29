@@ -12,6 +12,7 @@
 #include <linux/audit.h>
 #include <linux/numa.h>
 #include <linux/scs.h>
+#include <linux/cgroup.h>
 
 #include <linux/uaccess.h>
 
@@ -60,6 +61,10 @@ unsigned long init_shadow_call_stack[SCS_SIZE / sizeof(long)]
 static struct task_struct_resvd init_task_struct_resvd = {
 	.task = &init_task,
 };
+
+#ifdef CONFIG_CGROUP_IFS
+static struct css_set dummy_css;
+#endif
 
 /*
  * Set up the first task table, touch at your own risk!. Base=0,
@@ -167,6 +172,9 @@ struct task_struct init_task
 #ifdef CONFIG_CPUSETS
 	.mems_allowed_seq = SEQCNT_SPINLOCK_ZERO(init_task.mems_allowed_seq,
 						 &init_task.alloc_lock),
+#endif
+#ifdef CONFIG_CGROUP_IFS
+	.cgroups = &dummy_css,
 #endif
 #ifdef CONFIG_RT_MUTEXES
 	.pi_waiters	= RB_ROOT_CACHED,
