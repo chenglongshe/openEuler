@@ -768,6 +768,63 @@ static void epi_rcu_free(struct rcu_head *head)
 	kmem_cache_free(epi_cache, epi);
 }
 
+#ifdef CONFIG_XCALL_PREFETCH
+#define PREFETCH_ITEM_HASH_BITS 6
+#define PREFETCH_ITEM_TABLE_SIZE (1 << PREFETCH_ITEM_HASH_BITS)
+static DEFINE_HASHTABLE(xcall_item_table, PREFETCH_ITEM_HASH_BITS);
+static DEFINE_RWLOCK(xcall_table_lock);
+static struct workqueue_struct *rc_work;
+
+static struct prefetch_item *find_prefetch_item(struct file *file)
+{
+	struct prefetch_item *found = NULL;
+	unsigned int hash = 0;
+
+	hash = hash_64((u64)file, PREFETCH_ITEM_HASH_BITS);
+	read_lock(&xcall_table_lock);
+	hash_for_each_possible(xcall_item_table, found, node, hash) {
+		if (found->file == file)
+			break;
+	}
+	read_unlock(&xcall_table_lock);
+
+	return found;
+}
+
+void free_prefetch_item(struct file *file)
+{
+	struct prefetch_item *pfi = find_prefetch_item(file);
+
+	if (!pfi)
+		return;
+
+	write_lock(&xcall_table_lock);
+	if (!hlist_unhashed(&pfi->node))
+		hlist_del_init(&pfi->node);
+	write_unlock(&xcall_table_lock);
+	if (pfi->cache_pages) {
+		__free_pages(pfi->cache_pages, 0);
+		pfi->cache = NULL;
+	}
+	kfree(pfi);
+}
+
+static void xcall_cancel_work(struct file *file)
+{
+	struct prefetch_item *pfi;
+
+	if (!current->xcall_select ||
+	    !test_bit(__NR_epoll_pwait, current->xcall_select))
+		return;
+
+	pfi = find_prefetch_item(file);
+	if (pfi)
+		cancel_work_sync(&pfi->work);
+}
+#else
+static inline void xcall_cancel_work(struct file *file) {}
+#endif
+
 /*
  * Removes a "struct epitem" from the eventpoll RB tree and deallocates
  * all the associated resources. Must be called with "mtx" held.
@@ -782,6 +839,7 @@ static int ep_remove(struct eventpoll *ep, struct epitem *epi)
 	 * Removes poll wait queue hooks.
 	 */
 	ep_unregister_pollwait(ep, epi);
+	xcall_cancel_work(file);
 
 	/* Remove the current item from the list of epoll hooks */
 	spin_lock(&file->f_lock);
@@ -1190,6 +1248,193 @@ static inline bool chain_epi_lockless(struct epitem *epi)
 
 	return true;
 }
+
+#ifdef CONFIG_XCALL_PREFETCH
+static inline bool transition_state(struct prefetch_item *pfi,
+				    enum cache_state old, enum cache_state new)
+{
+	return atomic_cmpxchg(&pfi->state, old, new) == old;
+}
+
+static int xcall_read(struct prefetch_item *pfi, unsigned int fd,
+		      char __user *buf, size_t count)
+{
+	ssize_t copy_ret = -1;
+	ssize_t copy_len = 0;
+
+	while (!transition_state(pfi, XCALL_CACHE_READY, XCALL_CACHE_CANCEL)) {
+		if (transition_state(pfi, XCALL_CACHE_NONE, XCALL_CACHE_CANCEL))
+			goto reset_pfi_and_retry_vfs_read;
+	}
+
+	copy_len = pfi->len;
+	if (unlikely(copy_len < 0))
+		goto reset_pfi_and_retry_vfs_read;
+
+	if (copy_len == 0) {
+		copy_ret = 0;
+		transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_NONE);
+		goto hit_return;
+	}
+
+	copy_len = (copy_len >= count) ? count : copy_len;
+	copy_ret = copy_to_user(buf, (void *)(pfi->cache + pfi->pos), copy_len);
+	pfi->len -= copy_len;
+	if (pfi->len <= 0) {
+		pfi->len = 0;
+		pfi->pos = 0;
+		transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_NONE);
+	} else if (pfi->len > 0) {
+		pfi->pos += copy_len;
+		transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_READY);
+	}
+hit_return:
+	if (copy_ret == 0)
+		return copy_len;
+	else
+		return -EBADF;
+
+reset_pfi_and_retry_vfs_read:
+	pfi->len = 0;
+	pfi->pos = 0;
+	cancel_work(&pfi->work);
+
+	return -EAGAIN;
+}
+
+int xcall_read_begin(struct file *file, unsigned int fd, char __user *buf,
+		     size_t count)
+{
+	struct prefetch_item *pfi = NULL;
+
+	if (!current->xcall_select ||
+	    !test_bit(__NR_epoll_pwait, current->xcall_select))
+		return -EAGAIN;
+
+	if (!file)
+		return -EAGAIN;
+
+	pfi = find_prefetch_item(file);
+	if (!pfi)
+		return -EAGAIN;
+
+	return xcall_read(pfi, fd, buf, count);
+}
+
+void xcall_read_end(struct file *file)
+{
+	struct prefetch_item *pfi = NULL;
+
+	if (!current->xcall_select ||
+	    !test_bit(__NR_epoll_pwait, current->xcall_select))
+		return;
+
+	if (!file)
+		return;
+
+	pfi = find_prefetch_item(file);
+	if (!pfi)
+		return;
+
+	transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_NONE);
+}
+
+static void prefetch_work_fn(struct work_struct *work)
+{
+	struct prefetch_item *pfi = container_of(work, struct prefetch_item, work);
+
+	if (!transition_state(pfi, XCALL_CACHE_NONE, XCALL_CACHE_PREFETCH))
+		return;
+
+	pfi->len = kernel_read(pfi->file, pfi->cache,
+			       PAGE_SIZE, &pfi->file->f_pos);
+	transition_state(pfi, XCALL_CACHE_PREFETCH, XCALL_CACHE_READY);
+}
+
+static void set_prefetch_numa_cpu(struct prefetch_item *pfi, int fd)
+{
+	int cpu = smp_processor_id();
+
+	cpumask_and(&pfi->related_cpus, cpu_cpu_mask(cpu), cpu_online_mask);
+	pfi->cpu = cpumask_next(fd % cpumask_weight(&pfi->related_cpus),
+				&pfi->related_cpus);
+}
+
+static int get_async_prefetch_cpu(struct prefetch_item *pfi)
+{
+	int cpu;
+
+	if (pfi->cpu != smp_processor_id())
+		return pfi->cpu;
+
+	cpu = cpumask_next(pfi->cpu, &pfi->related_cpus);
+	if (cpu > cpumask_last(&pfi->related_cpus))
+		cpu = cpumask_first(&pfi->related_cpus);
+	pfi->cpu = cpu;
+	return pfi->cpu;
+}
+
+static struct prefetch_item *alloc_prefetch_item(struct epitem *epi)
+{
+	struct file *tfile = epi->ffd.file;
+	struct prefetch_item *pfi;
+	int fd = epi->ffd.fd;
+
+	pfi = kmalloc(sizeof(struct prefetch_item), GFP_KERNEL);
+	if (!pfi)
+		return NULL;
+
+	pfi->cache_pages = alloc_pages(GFP_KERNEL_ACCOUNT | __GFP_ZERO, 0);
+	if (!pfi->cache_pages) {
+		kfree(pfi);
+		return NULL;
+	}
+
+	pfi->cache = page_address(pfi->cache_pages);
+	atomic_set(&pfi->state, XCALL_CACHE_NONE);
+	INIT_WORK(&pfi->work, prefetch_work_fn);
+	INIT_HLIST_NODE(&pfi->node);
+	pfi->fd = fd;
+	pfi->file = tfile;
+	pfi->len = 0;
+	pfi->pos = 0;
+	set_prefetch_numa_cpu(pfi, fd);
+
+	write_lock(&xcall_table_lock);
+	hash_add(xcall_item_table, &pfi->node, hash_64((u64)tfile, PREFETCH_ITEM_HASH_BITS));
+	write_unlock(&xcall_table_lock);
+
+	return pfi;
+}
+
+static void ep_prefetch_item_enqueue(struct eventpoll *ep, struct epitem *epi)
+{
+	struct prefetch_item *pfi;
+	int cpu;
+
+	if (!current->xcall_select ||
+	    !test_bit(__NR_epoll_pwait, current->xcall_select))
+		return;
+
+	pfi = find_prefetch_item(epi->ffd.file);
+	if (unlikely(!pfi)) {
+		pfi = alloc_prefetch_item(epi);
+		if (unlikely(!pfi))
+			return;
+	}
+
+	if (!pfi->cache || !(epi->event.events & EPOLLIN) ||
+	    atomic_read(&pfi->state) != XCALL_CACHE_NONE)
+		return;
+
+	cpu = get_async_prefetch_cpu(pfi);
+	queue_work_on(cpu, rc_work, &pfi->work);
+}
+#else
+static void ep_prefetch_item_enqueue(struct eventpoll *ep, struct epitem *epi)
+{
+}
+#endif
 
 /*
  * This is the callback that is passed to the wait queue wakeup
@@ -1750,6 +1995,8 @@ static __poll_t ep_send_events_proc(struct eventpoll *ep, struct list_head *head
 		revents = ep_item_poll(epi, &pt, 1);
 		if (!revents)
 			continue;
+
+		ep_prefetch_item_enqueue(ep, epi);
 
 		if (__put_user(revents, &uevent->events) ||
 		    __put_user(epi->event.data, &uevent->data)) {
@@ -2453,6 +2700,14 @@ static int __init eventpoll_init(void)
 	/* Allocates slab cache used to allocate "struct eppoll_entry" */
 	pwq_cache = kmem_cache_create("eventpoll_pwq",
 		sizeof(struct eppoll_entry), 0, SLAB_PANIC|SLAB_ACCOUNT, NULL);
+
+#ifdef CONFIG_XCALL_PREFETCH
+	rc_work = alloc_workqueue("eventpoll_rc", 0, 0);
+	if (!rc_work)
+		return -ENOMEM;
+
+	hash_init(xcall_item_table);
+#endif
 
 	return 0;
 }
