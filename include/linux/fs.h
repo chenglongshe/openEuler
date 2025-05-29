@@ -3774,6 +3774,9 @@ struct prefetch_item {
 	struct hlist_node node;
 };
 
+DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_hit);
+DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
+
 int xcall_read_begin(struct file *file, unsigned int fd, char __user *buf,
 		     size_t count);
 void xcall_read_end(struct file *file);

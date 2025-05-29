@@ -3738,6 +3738,67 @@ static const struct file_operations proc_pid_xcall_operations = {
 };
 #endif
 
+#ifdef CONFIG_XCALL_PREFETCH
+static ssize_t xcall_stats_write(struct file *file, const char __user *buf,
+				 size_t count, loff_t *pos)
+{
+	int cpu;
+
+	for_each_cpu(cpu, cpu_online_mask) {
+		*per_cpu_ptr(&xcall_cache_hit, cpu) = 0;
+		*per_cpu_ptr(&xcall_cache_miss, cpu) = 0;
+	}
+
+	return count;
+}
+
+static int xcall_stats_show(struct seq_file *m, void *v)
+{
+	unsigned long hit = 0, miss = 0;
+	unsigned int cpu;
+	u64 percent;
+
+	for_each_cpu(cpu, cpu_online_mask) {
+		hit = *per_cpu_ptr(&xcall_cache_hit, cpu);
+		miss = *per_cpu_ptr(&xcall_cache_miss, cpu);
+
+		if (hit == 0 && miss == 0)
+			continue;
+
+		percent = (hit * 10000ULL) / (hit + miss);
+		seq_printf(m, "cpu%d epoll cache_{hit,miss}: %ld,%ld, hit ratio: %3llu.%02llu%%\n",
+			   cpu, hit, miss, percent / 100, percent % 100);
+	}
+	return 0;
+}
+
+static int xcall_stats_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xcall_stats_show, NULL);
+}
+
+static const struct proc_ops xcall_stats_fops = {
+	.proc_open = xcall_stats_open,
+	.proc_read = seq_read,
+	.proc_write = xcall_stats_write,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release
+};
+
+static int __init init_xcall_stats_procfs(void)
+{
+	struct proc_dir_entry *xcall_proc_dir;
+
+	if (!fast_syscall_enabled())
+		return 0;
+
+	xcall_proc_dir = proc_mkdir("xcall", NULL);
+	proc_create("stats", 0444, xcall_proc_dir, &xcall_stats_fops);
+	return 0;
+}
+device_initcall(init_xcall_stats_procfs);
+#endif
+
 /*
  * Thread groups
  */
