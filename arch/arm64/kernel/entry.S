@@ -788,10 +788,8 @@ SYM_CODE_END(el\el\ht\()_\regsize\()_\label)
 	entry_handler	0, t, 64, fiq
 	entry_handler	0, t, 64, error
 
-#ifdef CONFIG_ACTLR_XCALL_XINT
 	entry_handler	0, t, 64, xcall
 	entry_handler	0, t, 64, xint
-#endif
 	entry_handler	0, t, 32, sync
 	entry_handler	0, t, 32, irq
 	entry_handler	0, t, 32, fiq

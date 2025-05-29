@@ -1051,7 +1051,6 @@ UNHANDLED(el0t, 32, fiq)
 UNHANDLED(el0t, 32, error)
 #endif /* CONFIG_AARCH32_EL0 */
 
-#ifdef CONFIG_ACTLR_XCALL_XINT
 asmlinkage void noinstr el0t_64_xcall_handler(struct pt_regs *regs)
 {
 	el0_svc(regs);
@@ -1060,7 +1059,6 @@ asmlinkage void noinstr el0t_64_xint_handler(struct pt_regs *regs)
 {
 	el0_interrupt(regs, ISR_EL1_IS, handle_arch_irq, handle_arch_nmi_irq);
 }
-#endif
 
 #ifdef CONFIG_VMAP_STACK
 asmlinkage void noinstr __noreturn handle_bad_stack(struct pt_regs *regs)
