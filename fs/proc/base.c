@@ -3818,6 +3818,115 @@ static const struct proc_ops xcall_stats_fops = {
 	.proc_release = single_release
 };
 
+struct numa_mask_entry *xcall_numa_entries;
+static int nr_numa_nodes;
+
+static ssize_t xcall_numa_masks_write(struct file *file, const char __user *buf,
+				      size_t count, loff_t *ppos)
+{
+	char *input, *token, *tmp;
+	struct cpumask tmp_mask;
+	int node, ret = 0;
+
+	input = kzalloc(count + 1, GFP_KERNEL);
+	if (!input)
+		return -ENOMEM;
+
+	if (copy_from_user(input, buf, count)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	input[count] = '\0';
+	tmp = input;
+
+	for_each_online_node(node) {
+		token = strsep(&tmp, ":");
+		if (!token || node >= nr_numa_nodes) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		if (cpulist_parse(token, &tmp_mask)) {
+			ret = -EINVAL;
+			goto out;
+		}
+		cpumask_and(&tmp_mask, &tmp_mask, cpumask_of_node(node));
+		if (cpumask_empty(&tmp_mask)) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		mutex_lock(&xcall_numa_entries[node].lock);
+		cpumask_copy(xcall_numa_entries[node].mask, &tmp_mask);
+		mutex_unlock(&xcall_numa_entries[node].lock);
+	}
+
+out:
+	kfree(input);
+	return ret ? ret : count;
+}
+
+static ssize_t xcall_numa_masks_read(struct file *file, char __user *buf,
+				     size_t count, loff_t *ppos)
+{
+	char *output, *tmp;
+	int node, ret = 0;
+	size_t len = 0;
+
+	tmp = kzalloc(num_possible_cpus() * 5, GFP_KERNEL);
+	output = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!output)
+		return -ENOMEM;
+
+	for_each_online_node(node) {
+		mutex_lock(&xcall_numa_entries[node].lock);
+		cpumap_print_to_pagebuf(true, tmp, xcall_numa_entries[node].mask);
+		mutex_unlock(&xcall_numa_entries[node].lock);
+
+		len += scnprintf(output + len, PAGE_SIZE - len,
+				 "numa %d: %s", node, tmp);
+		if (len >= PAGE_SIZE)
+			break;
+	}
+
+	ret = simple_read_from_buffer(buf, count, ppos, output, len);
+	kfree(output);
+	kfree(tmp);
+	return ret;
+}
+
+static const struct proc_ops xcall_numa_mask_fops = {
+	.proc_read = xcall_numa_masks_read,
+	.proc_write = xcall_numa_masks_write,
+};
+
+static int __init xcall_numa_masks_init(void)
+{
+	int node;
+
+	nr_numa_nodes = nr_online_nodes;
+	xcall_numa_entries = kcalloc(nr_numa_nodes, sizeof(*xcall_numa_entries),
+				     GFP_KERNEL);
+	if (!xcall_numa_entries)
+		return -ENOMEM;
+
+	for_each_online_node(node) {
+		if (!alloc_cpumask_var(&xcall_numa_entries[node].mask, GFP_KERNEL))
+			goto err_free;
+		cpumask_copy(xcall_numa_entries[node].mask, cpumask_of_node(node));
+		mutex_init(&xcall_numa_entries[node].lock);
+	}
+
+	return 0;
+
+err_free:
+	while (--node >= 0)
+		free_cpumask_var(xcall_numa_entries[node].mask);
+	kfree(xcall_numa_entries);
+	return -ENOMEM;
+}
+
 static int __init init_xcall_stats_procfs(void)
 {
 	struct proc_dir_entry *xcall_proc_dir;
@@ -3827,6 +3936,9 @@ static int __init init_xcall_stats_procfs(void)
 
 	xcall_proc_dir = proc_mkdir("xcall", NULL);
 	proc_create("stats", 0444, xcall_proc_dir, &xcall_stats_fops);
+	proc_create("numa_mask", 0644, xcall_proc_dir, &xcall_numa_mask_fops);
+	xcall_numa_masks_init();
+
 	return 0;
 }
 device_initcall(init_xcall_stats_procfs);

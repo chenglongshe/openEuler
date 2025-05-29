@@ -1361,8 +1361,13 @@ static void prefetch_work_fn(struct work_struct *work)
 static void set_prefetch_numa_cpu(struct prefetch_item *pfi, int fd)
 {
 	int cpu = smp_processor_id();
+	int node = numa_node_id();
 
 	cpumask_and(&pfi->related_cpus, cpu_cpu_mask(cpu), cpu_online_mask);
+	mutex_lock(&xcall_numa_entries[node].lock);
+	cpumask_and(&pfi->related_cpus, &pfi->related_cpus,
+		    xcall_numa_entries[node].mask);
+	mutex_unlock(&xcall_numa_entries[node].lock);
 	pfi->cpu = cpumask_next(fd % cpumask_weight(&pfi->related_cpus),
 				&pfi->related_cpus);
 }
