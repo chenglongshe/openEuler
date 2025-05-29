@@ -3777,13 +3777,20 @@ struct prefetch_item {
 DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_hit);
 DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
 
+extern int cache_pages_order;
 int xcall_read_begin(struct file *file, unsigned int fd, char __user *buf,
 		     size_t count);
 void xcall_read_end(struct file *file);
 void free_prefetch_item(struct file *file);
+int proc_adjust_cache_pages_order(struct ctl_table *table, int write,
+				  void *buffer, size_t *lenp, loff_t *ppos);
+void update_epoll_wait_select_count(struct task_struct *p, unsigned int sc_no,
+				    bool add);
 #else
 static inline void xcall_read_end(struct file *file) {}
 static inline void free_prefetch_item(struct file *file) {}
+static inline void update_epoll_wait_select_count(struct task_struct *p,
+						  unsigned int sc_no, bool add) {}
 #endif
 
 #endif /* _LINUX_FS_H */

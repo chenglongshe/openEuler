@@ -3589,6 +3589,38 @@ static const struct file_operations proc_pid_sg_level_operations = {
 };
 #endif
 
+#ifdef CONFIG_XCALL_PREFETCH
+static atomic_t epoll_wait_select_count = ATOMIC_INIT(0);
+void update_epoll_wait_select_count(struct task_struct *p,
+				    unsigned int sc_no, bool add)
+{
+	if (sc_no != __NR_epoll_pwait)
+		return;
+
+	if (!p->xcall_select || !test_bit(sc_no, p->xcall_select))
+		return;
+
+	if (add) {
+		atomic_inc(&epoll_wait_select_count);
+		pr_info("epoll_wait_select count add: %ld, %s\n",
+			atomic_read(&epoll_wait_select_count), p->comm);
+	} else {
+		atomic_dec(&epoll_wait_select_count);
+		pr_info("epoll_wait_select count sub: %ld, %s\n",
+			atomic_read(&epoll_wait_select_count), p->comm);
+	}
+}
+
+int proc_adjust_cache_pages_order(struct ctl_table *table, int write,
+				  void *buffer, size_t *lenp, loff_t *ppos)
+{
+	if (write && atomic_read(&epoll_wait_select_count) > 0)
+		return -EPERM;
+
+	return proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+}
+#endif
+
 #ifdef CONFIG_FAST_SYSCALL
 bool fast_syscall_enabled(void);
 
@@ -3673,6 +3705,7 @@ static int xcall_select_table(struct task_struct *p, unsigned int sc_no)
 		return -EINVAL;
 
 	bitmap_set(p->xcall_select, sc_no, 1);
+	update_epoll_wait_select_count(p, sc_no, true);
 
 	return 0;
 }

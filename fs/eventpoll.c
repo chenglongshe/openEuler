@@ -777,6 +777,7 @@ DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
 static DEFINE_HASHTABLE(xcall_item_table, PREFETCH_ITEM_HASH_BITS);
 static DEFINE_RWLOCK(xcall_table_lock);
 static struct workqueue_struct *rc_work;
+int cache_pages_order;
 
 static struct prefetch_item *find_prefetch_item(struct file *file)
 {
@@ -806,7 +807,7 @@ void free_prefetch_item(struct file *file)
 		hlist_del_init(&pfi->node);
 	write_unlock(&xcall_table_lock);
 	if (pfi->cache_pages) {
-		__free_pages(pfi->cache_pages, 0);
+		__free_pages(pfi->cache_pages, cache_pages_order);
 		pfi->cache = NULL;
 	}
 	kfree(pfi);
@@ -1352,7 +1353,8 @@ static void prefetch_work_fn(struct work_struct *work)
 		return;
 
 	pfi->len = kernel_read(pfi->file, pfi->cache,
-			       PAGE_SIZE, &pfi->file->f_pos);
+			       (1UL << cache_pages_order) * PAGE_SIZE,
+			       &pfi->file->f_pos);
 	transition_state(pfi, XCALL_CACHE_PREFETCH, XCALL_CACHE_READY);
 }
 
@@ -1389,7 +1391,8 @@ static struct prefetch_item *alloc_prefetch_item(struct epitem *epi)
 	if (!pfi)
 		return NULL;
 
-	pfi->cache_pages = alloc_pages(GFP_KERNEL_ACCOUNT | __GFP_ZERO, 0);
+	pfi->cache_pages = alloc_pages(GFP_KERNEL_ACCOUNT | __GFP_ZERO,
+				       cache_pages_order);
 	if (!pfi->cache_pages) {
 		kfree(pfi);
 		return NULL;

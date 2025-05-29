@@ -487,6 +487,7 @@ void free_task(struct task_struct *tsk)
 	if (tsk->xcall_select)
 		bitmap_free(tsk->xcall_select);
 #endif
+	update_epoll_wait_select_count(tsk, __NR_epoll_pwait, false);
 
 	free_task_struct(tsk);
 }
