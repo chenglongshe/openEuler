@@ -15,6 +15,8 @@
 #include <linux/sched.h>
 #include <asm/cputype.h>
 #include <asm/mmu.h>
+#define __GENKSYMS__
+#include <linux/mmu_notifier.h>
 
 /*
  * Raw TLBI operations.
@@ -251,6 +253,7 @@ static inline void flush_tlb_mm(struct mm_struct *mm)
 	asid = __TLBI_VADDR(0, ASID(mm));
 	__tlbi(aside1is, asid);
 	__tlbi_user(aside1is, asid);
+	mmu_notifier_arch_invalidate_secondary_tlbs(mm, 0, -1UL);
 	dsb(ish);
 }
 
@@ -263,6 +266,8 @@ static inline void __flush_tlb_page_nosync(struct mm_struct *mm,
 	addr = __TLBI_VADDR(uaddr, ASID(mm));
 	__tlbi(vale1is, addr);
 	__tlbi_user(vale1is, addr);
+	mmu_notifier_arch_invalidate_secondary_tlbs(mm, uaddr & PAGE_MASK,
+						(uaddr & PAGE_MASK) + PAGE_SIZE);
 }
 
 static inline void flush_tlb_page_nosync(struct vm_area_struct *vma,
@@ -324,6 +329,10 @@ static inline void __flush_tlb_range(struct vm_area_struct *vma,
 	int num = 0;
 	int scale = 0;
 	unsigned long asid, addr, pages;
+	unsigned long ustart, uend;
+
+	ustart = start;
+	uend = end;
 
 	start = round_down(start, stride);
 	end = round_up(end, stride);
@@ -339,6 +348,13 @@ static inline void __flush_tlb_range(struct vm_area_struct *vma,
 	     (end - start) >= (MAX_TLBI_OPS * stride)) ||
 	    pages >= MAX_TLBI_RANGE_PAGES) {
 		flush_tlb_mm(vma->vm_mm);
+		/*
+		 * We think it is necessary to obtain the accurate address in the callback.
+		 * However, the address of flush_tlb_mm is from 0 to -1, so we have added
+		 * the callback with the accurate address here
+		 */
+		mmu_notifier_arch_invalidate_secondary_tlbs(vma->vm_mm, ustart, uend);
+		dsb(ish);
 		return;
 	}
 
@@ -395,6 +411,7 @@ static inline void __flush_tlb_range(struct vm_area_struct *vma,
 		}
 		scale++;
 	}
+	mmu_notifier_arch_invalidate_secondary_tlbs(vma->vm_mm, ustart, uend);
 	dsb(ish);
 }
 
