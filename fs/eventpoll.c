@@ -769,10 +769,83 @@ static void epi_rcu_free(struct rcu_head *head)
 }
 
 #ifdef CONFIG_XCALL_PREFETCH
+DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_hit);
+DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
+
 #define PREFETCH_ITEM_HASH_BITS 6
 static DEFINE_HASHTABLE(xcall_item_table, PREFETCH_ITEM_HASH_BITS);
 static DEFINE_RWLOCK(xcall_table_lock);
 static struct workqueue_struct *rc_work;
+
+static ssize_t xcall_prefetch_write(struct file *file, const char __user *buf,
+				 size_t count, loff_t *pos)
+{
+	int cpu;
+
+	for_each_cpu(cpu, cpu_online_mask) {
+		*per_cpu_ptr(&xcall_cache_hit, cpu) = 0;
+		*per_cpu_ptr(&xcall_cache_miss, cpu) = 0;
+	}
+
+	return count;
+}
+
+static int xcall_prefetch_show(struct seq_file *m, void *v)
+{
+	unsigned long hit = 0, miss = 0;
+	unsigned int cpu;
+	u64 percent;
+
+	for_each_cpu(cpu, cpu_online_mask) {
+		hit = *per_cpu_ptr(&xcall_cache_hit, cpu);
+		miss = *per_cpu_ptr(&xcall_cache_miss, cpu);
+
+		if (hit == 0 && miss == 0)
+			continue;
+
+		percent = DIV_ROUND_CLOSEST(hit * 100ULL, hit + miss);
+		seq_printf(m, "cpu%d epoll cache_{hit,miss}: %ld,%ld, hit ratio: %llu%%\n",
+			   cpu, hit, miss, percent);
+	}
+	return 0;
+}
+
+static int xcall_prefetch_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xcall_prefetch_show, NULL);
+}
+
+static const struct proc_ops xcall_prefetch_fops = {
+	.proc_open = xcall_prefetch_open,
+	.proc_read = seq_read,
+	.proc_write = xcall_prefetch_write,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release
+};
+
+extern bool fast_syscall_enabled(void);
+static int __init init_xcall_prefetch_procfs(void)
+{
+	struct proc_dir_entry *xcall_proc_dir, *prefetch_dir;
+
+	if (!fast_syscall_enabled())
+		return 0;
+
+	xcall_proc_dir = proc_mkdir("xcall", NULL);
+	if (!xcall_proc_dir)
+		return -ENOMEM;
+	prefetch_dir = proc_create("prefetch", 0444, xcall_proc_dir, &xcall_prefetch_fops);
+	if (!prefetch_dir)
+		goto rm_xcall_proc_dir;
+
+	return 0;
+
+rm_xcall_proc_dir:
+	proc_remove(xcall_proc_dir);
+	return -ENOMEM;
+
+}
+device_initcall(init_xcall_prefetch_procfs);
 
 static inline bool transition_state(struct prefetch_item *pfi,
 				    enum cache_state old, enum cache_state new)
@@ -850,7 +923,6 @@ static struct prefetch_item *alloc_prefetch_item(struct epitem *epi)
 	return pfi;
 }
 
-extern bool fast_syscall_enabled(void);
 void free_prefetch_item(struct file *file)
 {
 	struct prefetch_item *pfi;
@@ -886,6 +958,7 @@ static int xcall_read(struct prefetch_item *pfi, char __user *buf, size_t count)
 		goto slow_read;
 
 	if (copy_len == 0) {
+		this_cpu_inc(xcall_cache_hit);
 		transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_NONE);
 		return 0;
 	}
@@ -902,9 +975,11 @@ static int xcall_read(struct prefetch_item *pfi, char __user *buf, size_t count)
 		transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_READY);
 	}
 
+	this_cpu_inc(xcall_cache_hit);
 	return copy_len - copy_ret;
 
 slow_read:
+	this_cpu_inc(xcall_cache_miss);
 	pfi->len = 0;
 	pfi->pos = 0;
 	cancel_work(&pfi->work);
