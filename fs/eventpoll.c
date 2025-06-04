@@ -776,6 +776,43 @@ DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
 static DEFINE_HASHTABLE(xcall_item_table, PREFETCH_ITEM_HASH_BITS);
 static DEFINE_RWLOCK(xcall_table_lock);
 static struct workqueue_struct *rc_work;
+static struct cpumask xcall_mask;
+
+static ssize_t xcall_mask_proc_write(struct file *file, const char __user *buf,
+				     size_t count, loff_t *ppos)
+{
+	struct cpumask tmp;
+	int err;
+
+	err = cpumask_parselist_user(buf, count, &tmp);
+	if (err)
+		return err;
+
+	if (!cpumask_intersects(&tmp, cpu_online_mask))
+		return -EINVAL;
+
+	cpumask_copy(&xcall_mask, &tmp);
+	return count;
+}
+
+static int xcall_mask_proc_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%*pbl\n", cpumask_pr_args(&xcall_mask));
+	return 0;
+}
+
+static int xcall_mask_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xcall_mask_proc_show, PDE_DATA(inode));
+}
+
+static const struct proc_ops xcall_mask_fops = {
+	.proc_open	= xcall_mask_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+	.proc_write	= xcall_mask_proc_write,
+};
 
 static ssize_t xcall_prefetch_write(struct file *file, const char __user *buf,
 				 size_t count, loff_t *pos)
@@ -826,7 +863,7 @@ static const struct proc_ops xcall_prefetch_fops = {
 extern bool fast_syscall_enabled(void);
 static int __init init_xcall_prefetch_procfs(void)
 {
-	struct proc_dir_entry *xcall_proc_dir, *prefetch_dir;
+	struct proc_dir_entry *xcall_proc_dir, *prefetch_dir, *xcall_mask_dir;
 
 	if (!fast_syscall_enabled())
 		return 0;
@@ -837,13 +874,19 @@ static int __init init_xcall_prefetch_procfs(void)
 	prefetch_dir = proc_create("prefetch", 0444, xcall_proc_dir, &xcall_prefetch_fops);
 	if (!prefetch_dir)
 		goto rm_xcall_proc_dir;
+	xcall_mask_dir = proc_create("mask_list", 0644, xcall_proc_dir,
+				    &xcall_mask_fops);
+	if (!xcall_mask_dir)
+		goto rm_prefetch_dir;
 
+	cpumask_copy(&xcall_mask, cpu_online_mask);
 	return 0;
 
+rm_prefetch_dir:
+	proc_remove(prefetch_dir);
 rm_xcall_proc_dir:
 	proc_remove(xcall_proc_dir);
 	return -ENOMEM;
-
 }
 device_initcall(init_xcall_prefetch_procfs);
 
@@ -883,8 +926,12 @@ static void prefetch_work_fn(struct work_struct *work)
 static void set_prefetch_numa_cpu(struct prefetch_item *pfi, int fd)
 {
 	int cpu = smp_processor_id();
+	struct cpumask tmp;
 
 	cpumask_and(&pfi->related_cpus, cpu_cpu_mask(cpu), cpu_online_mask);
+	cpumask_and(&tmp, cpu_cpu_mask(cpu), &xcall_mask);
+	if (cpumask_intersects(&tmp, cpu_online_mask))
+		cpumask_and(&pfi->related_cpus, &pfi->related_cpus, &xcall_mask);
 	pfi->cpu = cpumask_next(fd % cpumask_weight(&pfi->related_cpus),
 				&pfi->related_cpus);
 }
