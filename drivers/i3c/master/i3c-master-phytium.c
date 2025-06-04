@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Cadence Design Systems Inc.
+ * Copyright (C) 2022 Phytium Technology Co.,Ltd.
  *
- * Author: Boris Brezillon <boris.brezillon@bootlin.com>
  */
 
 #include <linux/bitops.h>
@@ -22,6 +21,10 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
+#include <linux/of_device.h>
+#include <linux/acpi.h>
+#include <linux/pm_runtime.h>
+#include "../i3c_master_acpi.h"
 
 #define DEV_ID				0x0
 #define DEV_ID_I3C_MASTER		0x5034
@@ -76,8 +79,7 @@
 #define PRESCL_CTRL0			0x14
 #define PRESCL_CTRL0_I2C(x)		((x) << 16)
 #define PRESCL_CTRL0_I3C(x)		(x)
-#define PRESCL_CTRL0_I3C_MAX		GENMASK(9, 0)
-#define PRESCL_CTRL0_I2C_MAX		GENMASK(15, 0)
+#define PRESCL_CTRL0_MAX		GENMASK(9, 0)
 
 #define PRESCL_CTRL1			0x18
 #define PRESCL_CTRL1_PP_LOW_MASK	GENMASK(15, 8)
@@ -192,7 +194,7 @@
 #define SLV_STATUS1_HJ_DIS		BIT(18)
 #define SLV_STATUS1_MR_DIS		BIT(17)
 #define SLV_STATUS1_PROT_ERR		BIT(16)
-#define SLV_STATUS1_DA(s)		(((s) & GENMASK(15, 9)) >> 9)
+#define SLV_STATUS1_DA(x)		(((s) & GENMASK(15, 9)) >> 9)
 #define SLV_STATUS1_HAS_DA		BIT(8)
 #define SLV_STATUS1_DDR_RX_FULL		BIT(7)
 #define SLV_STATUS1_DDR_TX_FULL		BIT(6)
@@ -365,7 +367,12 @@
 #define ASF_PROTO_FAULT_MSTDDR_FAIL	BIT(14)
 #define ASF_PROTO_FAULT_M(x)		BIT(x)
 
-struct cdns_i3c_master_caps {
+#define I3C_CONTROL_DEFAULT_I2C_SCL  (1000000)
+#define I3C_CONTROL_DEFAULT_I3C_SCL  (1000000)
+#define PHYTIUM_I3C_DEV_MAX_NUM      (12)
+#define PHYTIUM_I3C_CMDR_MAX_TIMES   (32)
+
+struct phytium_i3c_master_caps {
 	u32 cmdfifodepth;
 	u32 cmdrfifodepth;
 	u32 txfifodepth;
@@ -373,7 +380,7 @@ struct cdns_i3c_master_caps {
 	u32 ibirfifodepth;
 };
 
-struct cdns_i3c_cmd {
+struct phytium_i3c_cmd {
 	u32 cmd0;
 	u32 cmd1;
 	u32 tx_len;
@@ -383,20 +390,25 @@ struct cdns_i3c_cmd {
 	u32 error;
 };
 
-struct cdns_i3c_xfer {
+struct phytium_i3c_xfer {
 	struct list_head node;
 	struct completion comp;
 	int ret;
 	unsigned int ncmds;
-	struct cdns_i3c_cmd cmds[];
+	struct phytium_i3c_cmd cmds[];
 };
 
-struct cdns_i3c_data {
+struct phytium_i3c_data {
 	u8 thd_delay_ns;
-	u8 halt_disable;
 };
 
-struct cdns_i3c_master {
+struct phytium_i3c_slave_dev {
+	u32 dev_rr0;
+	u32 dev_rr1;
+	u32 dev_rr2;
+};
+
+struct phytium_i3c_master {
 	struct work_struct hj_work;
 	struct i3c_master_controller base;
 	u32 free_rr_slots;
@@ -408,24 +420,32 @@ struct cdns_i3c_master {
 	} ibi;
 	struct {
 		struct list_head list;
-		struct cdns_i3c_xfer *cur;
+		struct phytium_i3c_xfer *cur;
 		spinlock_t lock;
 	} xferqueue;
 	void __iomem *regs;
 	struct clk *sysclk;
 	struct clk *pclk;
-	struct cdns_i3c_master_caps caps;
+	u32 sysclk_rate;
+	u32 prescl0;
+	u32 prescl1;
+	u32 ctrl_thd_del;
+	u32 ctrl_info;
+	u32 dev_valid;
+	struct device		*dev;
+	struct phytium_i3c_master_caps caps;
 	unsigned long i3c_scl_lim;
-	const struct cdns_i3c_data *devdata;
+	const struct phytium_i3c_data *devdata;
+	struct phytium_i3c_slave_dev devinfo[PHYTIUM_I3C_DEV_MAX_NUM];
 };
 
-static inline struct cdns_i3c_master *
-to_cdns_i3c_master(struct i3c_master_controller *master)
+static inline struct phytium_i3c_master *
+to_phytium_i3c_master(struct i3c_master_controller *master)
 {
-	return container_of(master, struct cdns_i3c_master, base);
+	return container_of(master, struct phytium_i3c_master, base);
 }
 
-static void cdns_i3c_master_wr_to_tx_fifo(struct cdns_i3c_master *master,
+static void phytium_i3c_master_wr_to_tx_fifo(struct phytium_i3c_master *master,
 					  const u8 *bytes, int nbytes)
 {
 	writesl(master->regs + TX_FIFO, bytes, nbytes / 4);
@@ -437,7 +457,7 @@ static void cdns_i3c_master_wr_to_tx_fifo(struct cdns_i3c_master *master,
 	}
 }
 
-static void cdns_i3c_master_rd_from_rx_fifo(struct cdns_i3c_master *master,
+static void phytium_i3c_master_rd_from_rx_fifo(struct phytium_i3c_master *master,
 					    u8 *bytes, int nbytes)
 {
 	readsl(master->regs + RX_FIFO, bytes, nbytes / 4);
@@ -449,7 +469,7 @@ static void cdns_i3c_master_rd_from_rx_fifo(struct cdns_i3c_master *master,
 	}
 }
 
-static bool cdns_i3c_master_supports_ccc_cmd(struct i3c_master_controller *m,
+static bool phytium_i3c_master_supports_ccc_cmd(struct i3c_master_controller *m,
 					     const struct i3c_ccc_cmd *cmd)
 {
 	if (cmd->ndests > 1)
@@ -490,7 +510,7 @@ static bool cdns_i3c_master_supports_ccc_cmd(struct i3c_master_controller *m,
 	return false;
 }
 
-static int cdns_i3c_master_disable(struct cdns_i3c_master *master)
+static int phytium_i3c_master_disable(struct phytium_i3c_master *master)
 {
 	u32 status;
 
@@ -500,15 +520,15 @@ static int cdns_i3c_master_disable(struct cdns_i3c_master *master)
 				  status & MST_STATUS0_IDLE, 10, 1000000);
 }
 
-static void cdns_i3c_master_enable(struct cdns_i3c_master *master)
+static void phytium_i3c_master_enable(struct phytium_i3c_master *master)
 {
 	writel(readl(master->regs + CTRL) | CTRL_DEV_EN, master->regs + CTRL);
 }
 
-static struct cdns_i3c_xfer *
-cdns_i3c_master_alloc_xfer(struct cdns_i3c_master *master, unsigned int ncmds)
+static struct phytium_i3c_xfer *
+phytium_i3c_master_alloc_xfer(struct phytium_i3c_master *master, unsigned int ncmds)
 {
-	struct cdns_i3c_xfer *xfer;
+	struct phytium_i3c_xfer *xfer;
 
 	xfer = kzalloc(struct_size(xfer, cmds, ncmds), GFP_KERNEL);
 	if (!xfer)
@@ -521,29 +541,30 @@ cdns_i3c_master_alloc_xfer(struct cdns_i3c_master *master, unsigned int ncmds)
 	return xfer;
 }
 
-static void cdns_i3c_master_free_xfer(struct cdns_i3c_xfer *xfer)
+static void phytium_i3c_master_free_xfer(struct phytium_i3c_xfer *xfer)
 {
 	kfree(xfer);
 }
 
-static void cdns_i3c_master_start_xfer_locked(struct cdns_i3c_master *master)
+static void phytium_i3c_master_start_xfer_locked(struct phytium_i3c_master *master)
 {
-	struct cdns_i3c_xfer *xfer = master->xferqueue.cur;
+	struct phytium_i3c_xfer *xfer = master->xferqueue.cur;
 	unsigned int i;
 
 	if (!xfer)
 		return;
 
+	phytium_i3c_master_enable(master);
+
 	writel(MST_INT_CMDD_EMP, master->regs + MST_ICR);
 	for (i = 0; i < xfer->ncmds; i++) {
-		struct cdns_i3c_cmd *cmd = &xfer->cmds[i];
+		struct phytium_i3c_cmd *cmd = &xfer->cmds[i];
 
-		cdns_i3c_master_wr_to_tx_fifo(master, cmd->tx_buf,
+		phytium_i3c_master_wr_to_tx_fifo(master, cmd->tx_buf,
 					      cmd->tx_len);
 	}
-
 	for (i = 0; i < xfer->ncmds; i++) {
-		struct cdns_i3c_cmd *cmd = &xfer->cmds[i];
+		struct phytium_i3c_cmd *cmd = &xfer->cmds[i];
 
 		writel(cmd->cmd1 | CMD1_FIFO_CMDID(i),
 		       master->regs + CMD1_FIFO);
@@ -555,10 +576,10 @@ static void cdns_i3c_master_start_xfer_locked(struct cdns_i3c_master *master)
 	writel(MST_INT_CMDD_EMP, master->regs + MST_IER);
 }
 
-static void cdns_i3c_master_end_xfer_locked(struct cdns_i3c_master *master,
+static void phytium_i3c_master_end_xfer_locked(struct phytium_i3c_master *master,
 					    u32 isr)
 {
-	struct cdns_i3c_xfer *xfer = master->xferqueue.cur;
+	struct phytium_i3c_xfer *xfer = master->xferqueue.cur;
 	int i, ret = 0;
 	u32 status0;
 
@@ -573,7 +594,7 @@ static void cdns_i3c_master_end_xfer_locked(struct cdns_i3c_master *master,
 	for (status0 = readl(master->regs + MST_STATUS0);
 	     !(status0 & MST_STATUS0_CMDR_EMP);
 	     status0 = readl(master->regs + MST_STATUS0)) {
-		struct cdns_i3c_cmd *cmd;
+		struct phytium_i3c_cmd *cmd;
 		u32 cmdr, rx_len, id;
 
 		cmdr = readl(master->regs + CMDR);
@@ -585,7 +606,7 @@ static void cdns_i3c_master_end_xfer_locked(struct cdns_i3c_master *master,
 
 		cmd = &xfer->cmds[CMDR_CMDID(cmdr)];
 		rx_len = min_t(u32, CMDR_XFER_BYTES(cmdr), cmd->rx_len);
-		cdns_i3c_master_rd_from_rx_fifo(master, cmd->rx_buf, rx_len);
+		phytium_i3c_master_rd_from_rx_fifo(master, cmd->rx_buf, rx_len);
 		cmd->error = CMDR_ERROR(cmdr);
 	}
 
@@ -621,16 +642,16 @@ static void cdns_i3c_master_end_xfer_locked(struct cdns_i3c_master *master,
 	complete(&xfer->comp);
 
 	xfer = list_first_entry_or_null(&master->xferqueue.list,
-					struct cdns_i3c_xfer, node);
+					struct phytium_i3c_xfer, node);
 	if (xfer)
 		list_del_init(&xfer->node);
 
 	master->xferqueue.cur = xfer;
-	cdns_i3c_master_start_xfer_locked(master);
+	phytium_i3c_master_start_xfer_locked(master);
 }
 
-static void cdns_i3c_master_queue_xfer(struct cdns_i3c_master *master,
-				       struct cdns_i3c_xfer *xfer)
+static void phytium_i3c_master_queue_xfer(struct phytium_i3c_master *master,
+				       struct phytium_i3c_xfer *xfer)
 {
 	unsigned long flags;
 
@@ -640,13 +661,13 @@ static void cdns_i3c_master_queue_xfer(struct cdns_i3c_master *master,
 		list_add_tail(&xfer->node, &master->xferqueue.list);
 	} else {
 		master->xferqueue.cur = xfer;
-		cdns_i3c_master_start_xfer_locked(master);
+		phytium_i3c_master_start_xfer_locked(master);
 	}
 	spin_unlock_irqrestore(&master->xferqueue.lock, flags);
 }
 
-static void cdns_i3c_master_unqueue_xfer(struct cdns_i3c_master *master,
-					 struct cdns_i3c_xfer *xfer)
+static void phytium_i3c_master_unqueue_xfer(struct phytium_i3c_master *master,
+					 struct phytium_i3c_xfer *xfer)
 {
 	unsigned long flags;
 
@@ -672,7 +693,7 @@ static void cdns_i3c_master_unqueue_xfer(struct cdns_i3c_master *master,
 	spin_unlock_irqrestore(&master->xferqueue.lock, flags);
 }
 
-static enum i3c_error_code cdns_i3c_cmd_get_err(struct cdns_i3c_cmd *cmd)
+static enum i3c_error_code phytium_i3c_cmd_get_err(struct phytium_i3c_cmd *cmd)
 {
 	switch (cmd->error) {
 	case CMDR_M0_ERROR:
@@ -692,15 +713,15 @@ static enum i3c_error_code cdns_i3c_cmd_get_err(struct cdns_i3c_cmd *cmd)
 	return I3C_ERROR_UNKNOWN;
 }
 
-static int cdns_i3c_master_send_ccc_cmd(struct i3c_master_controller *m,
+static int phytium_i3c_master_send_ccc_cmd(struct i3c_master_controller *m,
 					struct i3c_ccc_cmd *cmd)
 {
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_xfer *xfer;
-	struct cdns_i3c_cmd *ccmd;
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_xfer *xfer;
+	struct phytium_i3c_cmd *ccmd;
 	int ret;
 
-	xfer = cdns_i3c_master_alloc_xfer(master, 1);
+	xfer = phytium_i3c_master_alloc_xfer(master, 1);
 	if (!xfer)
 		return -ENOMEM;
 
@@ -721,9 +742,9 @@ static int cdns_i3c_master_send_ccc_cmd(struct i3c_master_controller *m,
 		ccmd->tx_len = cmd->dests[0].payload.len;
 	}
 
-	cdns_i3c_master_queue_xfer(master, xfer);
+	phytium_i3c_master_queue_xfer(master, xfer);
 	if (!wait_for_completion_timeout(&xfer->comp, msecs_to_jiffies(1000)))
-		cdns_i3c_master_unqueue_xfer(master, xfer);
+		phytium_i3c_master_unqueue_xfer(master, xfer);
 
 	/*GETMXDS format 1 need retransmission*/
 	if ((xfer->ret) && (cmd->id == I3C_CCC_GETMXDS)) {
@@ -732,31 +753,30 @@ static int cdns_i3c_master_send_ccc_cmd(struct i3c_master_controller *m,
 			ccmd->rx_len = cmd->dests[0].payload.len;
 			ccmd->cmd0 &= 0xfff000fff;
 			ccmd->cmd0 |= CMD0_FIFO_PL_LEN(cmd->dests[0].payload.len);
-			cdns_i3c_master_queue_xfer(master, xfer);
+			phytium_i3c_master_queue_xfer(master, xfer);
 			if (!wait_for_completion_timeout(&xfer->comp, msecs_to_jiffies(1000)))
-				cdns_i3c_master_unqueue_xfer(master, xfer);
+				phytium_i3c_master_unqueue_xfer(master, xfer);
 		}
 	}
-
 	ret = xfer->ret;
-	cmd->err = cdns_i3c_cmd_get_err(&xfer->cmds[0]);
-	cdns_i3c_master_free_xfer(xfer);
+	cmd->err = phytium_i3c_cmd_get_err(&xfer->cmds[0]);
+	phytium_i3c_master_free_xfer(xfer);
 
 	return ret;
 }
 
-static int cdns_i3c_master_priv_xfers(struct i3c_dev_desc *dev,
+static int phytium_i3c_master_priv_xfers(struct i3c_dev_desc *dev,
 				      struct i3c_priv_xfer *xfers,
 				      int nxfers)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
 	int txslots = 0, rxslots = 0, i, ret;
-	struct cdns_i3c_xfer *cdns_xfer;
+	struct phytium_i3c_xfer *phytium_xfer;
 
 	for (i = 0; i < nxfers; i++) {
 		if (xfers[i].len > CMD0_FIFO_PL_LEN_MAX)
-			return -ENOTSUPP;
+			return -EOPNOTSUPP;
 	}
 
 	if (!nxfers)
@@ -764,7 +784,7 @@ static int cdns_i3c_master_priv_xfers(struct i3c_dev_desc *dev,
 
 	if (nxfers > master->caps.cmdfifodepth ||
 	    nxfers > master->caps.cmdrfifodepth)
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	/*
 	 * First make sure that all transactions (block of transfers separated
@@ -779,14 +799,14 @@ static int cdns_i3c_master_priv_xfers(struct i3c_dev_desc *dev,
 
 	if (rxslots > master->caps.rxfifodepth ||
 	    txslots > master->caps.txfifodepth)
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
-	cdns_xfer = cdns_i3c_master_alloc_xfer(master, nxfers);
-	if (!cdns_xfer)
+	phytium_xfer = phytium_i3c_master_alloc_xfer(master, nxfers);
+	if (!phytium_xfer)
 		return -ENOMEM;
 
 	for (i = 0; i < nxfers; i++) {
-		struct cdns_i3c_cmd *ccmd = &cdns_xfer->cmds[i];
+		struct phytium_i3c_cmd *ccmd = &phytium_xfer->cmds[i];
 		u32 pl_len = xfers[i].len;
 
 		ccmd->cmd0 = CMD0_FIFO_DEV_ADDR(dev->info.dyn_addr) |
@@ -811,36 +831,36 @@ static int cdns_i3c_master_priv_xfers(struct i3c_dev_desc *dev,
 			ccmd->cmd0 |= CMD0_FIFO_BCH;
 	}
 
-	cdns_i3c_master_queue_xfer(master, cdns_xfer);
-	if (!wait_for_completion_timeout(&cdns_xfer->comp,
+	phytium_i3c_master_queue_xfer(master, phytium_xfer);
+	if (!wait_for_completion_timeout(&phytium_xfer->comp,
 					 msecs_to_jiffies(1000)))
-		cdns_i3c_master_unqueue_xfer(master, cdns_xfer);
+		phytium_i3c_master_unqueue_xfer(master, phytium_xfer);
 
-	ret = cdns_xfer->ret;
+	ret = phytium_xfer->ret;
 
 	for (i = 0; i < nxfers; i++)
-		xfers[i].err = cdns_i3c_cmd_get_err(&cdns_xfer->cmds[i]);
+		xfers[i].err = phytium_i3c_cmd_get_err(&phytium_xfer->cmds[i]);
 
-	cdns_i3c_master_free_xfer(cdns_xfer);
+	phytium_i3c_master_free_xfer(phytium_xfer);
 
 	return ret;
 }
 
-static int cdns_i3c_master_i2c_xfers(struct i2c_dev_desc *dev,
+static int phytium_i3c_master_i2c_xfers(struct i2c_dev_desc *dev,
 				     const struct i2c_msg *xfers, int nxfers)
 {
 	struct i3c_master_controller *m = i2c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
 	unsigned int nrxwords = 0, ntxwords = 0;
-	struct cdns_i3c_xfer *xfer;
+	struct phytium_i3c_xfer *xfer;
 	int i, ret = 0;
 
 	if (nxfers > master->caps.cmdfifodepth)
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	for (i = 0; i < nxfers; i++) {
 		if (xfers[i].len > CMD0_FIFO_PL_LEN_MAX)
-			return -ENOTSUPP;
+			return -EOPNOTSUPP;
 
 		if (xfers[i].flags & I2C_M_RD)
 			nrxwords += DIV_ROUND_UP(xfers[i].len, 4);
@@ -850,14 +870,14 @@ static int cdns_i3c_master_i2c_xfers(struct i2c_dev_desc *dev,
 
 	if (ntxwords > master->caps.txfifodepth ||
 	    nrxwords > master->caps.rxfifodepth)
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
-	xfer = cdns_i3c_master_alloc_xfer(master, nxfers);
+	xfer = phytium_i3c_master_alloc_xfer(master, nxfers);
 	if (!xfer)
 		return -ENOMEM;
 
 	for (i = 0; i < nxfers; i++) {
-		struct cdns_i3c_cmd *ccmd = &xfer->cmds[i];
+		struct phytium_i3c_cmd *ccmd = &xfer->cmds[i];
 
 		ccmd->cmd0 = CMD0_FIFO_DEV_ADDR(xfers[i].addr) |
 			CMD0_FIFO_PL_LEN(xfers[i].len) |
@@ -876,17 +896,17 @@ static int cdns_i3c_master_i2c_xfers(struct i2c_dev_desc *dev,
 		}
 	}
 
-	cdns_i3c_master_queue_xfer(master, xfer);
+	phytium_i3c_master_queue_xfer(master, xfer);
 	if (!wait_for_completion_timeout(&xfer->comp, msecs_to_jiffies(1000)))
-		cdns_i3c_master_unqueue_xfer(master, xfer);
+		phytium_i3c_master_unqueue_xfer(master, xfer);
 
 	ret = xfer->ret;
-	cdns_i3c_master_free_xfer(xfer);
+	phytium_i3c_master_free_xfer(xfer);
 
 	return ret;
 }
 
-struct cdns_i3c_i2c_dev_data {
+struct phytium_i3c_i2c_dev_data {
 	u16 id;
 	s16 ibi;
 	struct i3c_generic_ibi_pool *ibi_pool;
@@ -909,11 +929,11 @@ static u32 prepare_rr0_dev_address(u32 addr)
 	return ret;
 }
 
-static void cdns_i3c_master_upd_i3c_addr(struct i3c_dev_desc *dev)
+static void phytium_i3c_master_upd_i3c_addr(struct i3c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
 	u32 rr;
 
 	rr = prepare_rr0_dev_address(dev->info.dyn_addr ?
@@ -922,7 +942,7 @@ static void cdns_i3c_master_upd_i3c_addr(struct i3c_dev_desc *dev)
 	writel(DEV_ID_RR0_IS_I3C | rr, master->regs + DEV_ID_RR0(data->id));
 }
 
-static int cdns_i3c_master_get_rr_slot(struct cdns_i3c_master *master,
+static int phytium_i3c_master_get_rr_slot(struct phytium_i3c_master *master,
 				       u8 dyn_addr)
 {
 	unsigned long activedevs;
@@ -951,26 +971,26 @@ static int cdns_i3c_master_get_rr_slot(struct cdns_i3c_master *master,
 	return -EINVAL;
 }
 
-static int cdns_i3c_master_reattach_i3c_dev(struct i3c_dev_desc *dev,
+static int phytium_i3c_master_reattach_i3c_dev(struct i3c_dev_desc *dev,
 					    u8 old_dyn_addr)
 {
-	cdns_i3c_master_upd_i3c_addr(dev);
+	phytium_i3c_master_upd_i3c_addr(dev);
 
 	return 0;
 }
 
-static int cdns_i3c_master_attach_i3c_dev(struct i3c_dev_desc *dev)
+static int phytium_i3c_master_attach_i3c_dev(struct i3c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data;
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data;
 	int slot;
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
-	slot = cdns_i3c_master_get_rr_slot(master, dev->info.dyn_addr);
+	slot = phytium_i3c_master_get_rr_slot(master, dev->info.dyn_addr);
 	if (slot < 0) {
 		kfree(data);
 		return slot;
@@ -982,7 +1002,7 @@ static int cdns_i3c_master_attach_i3c_dev(struct i3c_dev_desc *dev)
 	master->free_rr_slots &= ~BIT(slot);
 
 	if (!dev->info.dyn_addr) {
-		cdns_i3c_master_upd_i3c_addr(dev);
+		phytium_i3c_master_upd_i3c_addr(dev);
 		writel(readl(master->regs + DEVS_CTRL) |
 		       DEVS_CTRL_DEV_ACTIVE(data->id),
 		       master->regs + DEVS_CTRL);
@@ -991,11 +1011,11 @@ static int cdns_i3c_master_attach_i3c_dev(struct i3c_dev_desc *dev)
 	return 0;
 }
 
-static void cdns_i3c_master_detach_i3c_dev(struct i3c_dev_desc *dev)
+static void phytium_i3c_master_detach_i3c_dev(struct i3c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
 
 	writel(readl(master->regs + DEVS_CTRL) |
 	       DEVS_CTRL_DEV_CLR(data->id),
@@ -1006,14 +1026,14 @@ static void cdns_i3c_master_detach_i3c_dev(struct i3c_dev_desc *dev)
 	kfree(data);
 }
 
-static int cdns_i3c_master_attach_i2c_dev(struct i2c_dev_desc *dev)
+static int phytium_i3c_master_attach_i2c_dev(struct i2c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i2c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data;
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data;
 	int slot;
 
-	slot = cdns_i3c_master_get_rr_slot(master, 0);
+	slot = phytium_i3c_master_get_rr_slot(master, 0);
 	if (slot < 0)
 		return slot;
 
@@ -1035,11 +1055,11 @@ static int cdns_i3c_master_attach_i2c_dev(struct i2c_dev_desc *dev)
 	return 0;
 }
 
-static void cdns_i3c_master_detach_i2c_dev(struct i2c_dev_desc *dev)
+static void phytium_i3c_master_detach_i2c_dev(struct i2c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i2c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data = i2c_dev_get_master_data(dev);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data = i2c_dev_get_master_data(dev);
 
 	writel(readl(master->regs + DEVS_CTRL) |
 	       DEVS_CTRL_DEV_CLR(data->id),
@@ -1050,14 +1070,14 @@ static void cdns_i3c_master_detach_i2c_dev(struct i2c_dev_desc *dev)
 	kfree(data);
 }
 
-static void cdns_i3c_master_bus_cleanup(struct i3c_master_controller *m)
+static void phytium_i3c_master_bus_cleanup(struct i3c_master_controller *m)
 {
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
 
-	cdns_i3c_master_disable(master);
+	phytium_i3c_master_disable(master);
 }
 
-static void cdns_i3c_master_dev_rr_to_info(struct cdns_i3c_master *master,
+static void phytium_i3c_master_dev_rr_to_info(struct phytium_i3c_master *master,
 					   unsigned int slot,
 					   struct i3c_device_info *info)
 {
@@ -1073,7 +1093,7 @@ static void cdns_i3c_master_dev_rr_to_info(struct cdns_i3c_master *master,
 	info->pid |= (u64)readl(master->regs + DEV_ID_RR1(slot)) << 16;
 }
 
-static void cdns_i3c_master_upd_i3c_scl_lim(struct cdns_i3c_master *master)
+static void phytium_i3c_master_upd_i3c_scl_lim(struct phytium_i3c_master *master)
 {
 	struct i3c_master_controller *m = &master->base;
 	unsigned long i3c_lim_period, pres_step, ncycles;
@@ -1135,17 +1155,17 @@ static void cdns_i3c_master_upd_i3c_scl_lim(struct cdns_i3c_master *master)
 
 	/* Disable I3C master before updating PRESCL_CTRL1. */
 	if (ctrl & CTRL_DEV_EN)
-		cdns_i3c_master_disable(master);
+		phytium_i3c_master_disable(master);
 
 	writel(prescl1, master->regs + PRESCL_CTRL1);
 
 	if (ctrl & CTRL_DEV_EN)
-		cdns_i3c_master_enable(master);
+		phytium_i3c_master_enable(master);
 }
 
-static int cdns_i3c_master_do_daa(struct i3c_master_controller *m)
+static int phytium_i3c_master_do_daa(struct i3c_master_controller *m)
 {
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
 	unsigned long olddevs, newdevs;
 	int ret, slot;
 	u8 addrs[MAX_DEVS] = { };
@@ -1191,10 +1211,9 @@ static int cdns_i3c_master_do_daa(struct i3c_master_controller *m)
 	writel(readl(master->regs + DEVS_CTRL) |
 	       master->free_rr_slots << DEVS_CTRL_DEV_CLR_SHIFT,
 	       master->regs + DEVS_CTRL);
-
 	i3c_master_defslvs_locked(&master->base);
 
-	cdns_i3c_master_upd_i3c_scl_lim(master);
+	phytium_i3c_master_upd_i3c_scl_lim(master);
 
 	/* Unmask Hot-Join and Mastership request interrupts. */
 	i3c_master_enec_locked(m, I3C_BROADCAST_ADDR,
@@ -1203,7 +1222,7 @@ static int cdns_i3c_master_do_daa(struct i3c_master_controller *m)
 	return 0;
 }
 
-static u8 cdns_i3c_master_calculate_thd_delay(struct cdns_i3c_master *master)
+static u8 phytium_i3c_master_calculate_thd_delay(struct phytium_i3c_master *master)
 {
 	unsigned long sysclk_rate = clk_get_rate(master->sysclk);
 	u8 thd_delay = DIV_ROUND_UP(master->devdata->thd_delay_ns,
@@ -1217,9 +1236,9 @@ static u8 cdns_i3c_master_calculate_thd_delay(struct cdns_i3c_master *master)
 	return (THD_DELAY_MAX - thd_delay);
 }
 
-static int cdns_i3c_master_bus_init(struct i3c_master_controller *m)
+static int phytium_i3c_master_bus_init(struct i3c_master_controller *m)
 {
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
 	unsigned long pres_step, sysclk_rate, max_i2cfreq;
 	struct i3c_bus *bus = i3c_master_get_bus(m);
 	u32 ctrl, prescl0, prescl1, pres, low;
@@ -1243,40 +1262,47 @@ static int cdns_i3c_master_bus_init(struct i3c_master_controller *m)
 		return -EINVAL;
 	}
 
-	sysclk_rate = clk_get_rate(master->sysclk);
-	if (!sysclk_rate)
-		return -EINVAL;
+	if (has_acpi_companion(master->dev)) {
+		writel(master->prescl0, master->regs + PRESCL_CTRL0);
+		writel(master->prescl1, master->regs + PRESCL_CTRL1);
+	} else {
+		sysclk_rate = clk_get_rate(master->sysclk);
 
-	pres = DIV_ROUND_UP(sysclk_rate, (bus->scl_rate.i3c * 4)) - 1;
-	if (pres > PRESCL_CTRL0_I3C_MAX)
-		return -ERANGE;
+		if (!sysclk_rate)
+			return -EINVAL;
 
-	bus->scl_rate.i3c = sysclk_rate / ((pres + 1) * 4);
+		pres = DIV_ROUND_UP(sysclk_rate, (bus->scl_rate.i3c * 4)) - 1;
+		if (pres > PRESCL_CTRL0_MAX)
+			return -ERANGE;
 
-	prescl0 = PRESCL_CTRL0_I3C(pres);
+		bus->scl_rate.i3c = sysclk_rate / ((pres + 1) * 4);
 
-	low = ((I3C_BUS_TLOW_OD_MIN_NS * sysclk_rate) / (pres + 1)) - 2;
-	prescl1 = PRESCL_CTRL1_OD_LOW(low);
+		prescl0 = PRESCL_CTRL0_I3C(pres);
 
-	max_i2cfreq = bus->scl_rate.i2c;
+		low = ((I3C_BUS_TLOW_OD_MIN_NS * sysclk_rate) / (pres + 1)) - 2;
+		prescl1 = PRESCL_CTRL1_OD_LOW(low);
 
-	pres = (sysclk_rate / (max_i2cfreq * 5)) - 1;
-	if (pres > PRESCL_CTRL0_I2C_MAX)
-		return -ERANGE;
+		max_i2cfreq = bus->scl_rate.i2c;
 
-	bus->scl_rate.i2c = sysclk_rate / ((pres + 1) * 5);
+		pres = (sysclk_rate / (max_i2cfreq * 5)) - 1;
+		if (pres > PRESCL_CTRL0_MAX)
+			return -ERANGE;
 
-	prescl0 |= PRESCL_CTRL0_I2C(pres);
-	writel(prescl0, master->regs + PRESCL_CTRL0);
+		bus->scl_rate.i2c = sysclk_rate / ((pres + 1) * 5);
 
-	/* Calculate OD and PP low. */
-	pres_step = 1000000000 / (bus->scl_rate.i3c * 4);
-	ncycles = DIV_ROUND_UP(I3C_BUS_TLOW_OD_MIN_NS, pres_step) - 2;
-	if (ncycles < 0)
-		ncycles = 0;
-	prescl1 = PRESCL_CTRL1_OD_LOW(ncycles);
-	writel(prescl1, master->regs + PRESCL_CTRL1);
+		prescl0 |= PRESCL_CTRL0_I2C(pres);
+		writel(prescl0, master->regs + PRESCL_CTRL0);
+		master->prescl0 = prescl0;
 
+		/* Calculate OD and PP low. */
+		pres_step = 1000000000 / (bus->scl_rate.i3c * 4);
+		ncycles = DIV_ROUND_UP(I3C_BUS_TLOW_OD_MIN_NS, pres_step) - 2;
+		if (ncycles < 0)
+			ncycles = 0;
+		prescl1 = PRESCL_CTRL1_OD_LOW(ncycles);
+		writel(prescl1, master->regs + PRESCL_CTRL1);
+		master->prescl1 = prescl1;
+	}
 	/* Get an address for the master. */
 	ret = i3c_master_get_free_addr(m, 0);
 	if (ret < 0)
@@ -1285,7 +1311,7 @@ static int cdns_i3c_master_bus_init(struct i3c_master_controller *m)
 	writel(prepare_rr0_dev_address(ret) | DEV_ID_RR0_IS_I3C,
 	       master->regs + DEV_ID_RR0(0));
 
-	cdns_i3c_master_dev_rr_to_info(master, 0, &info);
+	phytium_i3c_master_dev_rr_to_info(master, 0, &info);
 	if (info.bcr & I3C_BCR_HDR_CAP)
 		info.hdr_cap = I3C_CCC_HDR_MODE(I3C_HDR_DDR);
 
@@ -1299,11 +1325,8 @@ static int cdns_i3c_master_bus_init(struct i3c_master_controller *m)
 	 *
 	 * We will issue ENTDAA afterwards from the threaded IRQ handler.
 	 */
-	if (master->devdata->halt_disable)
-		ctrl |= CTRL_HJ_DISEC | CTRL_MCS_EN;
-	else
-		ctrl |= CTRL_HJ_ACK | CTRL_HJ_DISEC | CTRL_HALT_EN | CTRL_MCS_EN;
 
+	ctrl |=  CTRL_HJ_DISEC | CTRL_MCS_EN;
 	/*
 	 * Configure data hold delay based on device-specific data.
 	 *
@@ -1311,18 +1334,22 @@ static int cdns_i3c_master_bus_init(struct i3c_master_controller *m)
 	 * master output. This setting allows to meet this timing on master's
 	 * SoC outputs, regardless of PCB balancing.
 	 */
-	ctrl |= CTRL_THD_DELAY(cdns_i3c_master_calculate_thd_delay(master));
+	if (has_acpi_companion(master->dev))
+		ctrl |= CTRL_THD_DELAY(master->ctrl_thd_del);
+	else
+		ctrl |= CTRL_THD_DELAY(phytium_i3c_master_calculate_thd_delay(master));
+
 	writel(ctrl, master->regs + CTRL);
 
-	cdns_i3c_master_enable(master);
+	phytium_i3c_master_enable(master);
 
 	return 0;
 }
 
-static void cdns_i3c_master_handle_ibi(struct cdns_i3c_master *master,
+static void phytium_i3c_master_handle_ibi(struct phytium_i3c_master *master,
 				       u32 ibir)
 {
-	struct cdns_i3c_i2c_dev_data *data;
+	struct phytium_i3c_i2c_dev_data *data;
 	bool data_consumed = false;
 	struct i3c_ibi_slot *slot;
 	u32 id = IBIR_SLVID(ibir);
@@ -1373,7 +1400,7 @@ out:
 	}
 }
 
-static void cnds_i3c_master_demux_ibis(struct cdns_i3c_master *master)
+static void phytium_i3c_master_demux_ibis(struct phytium_i3c_master *master)
 {
 	u32 status0;
 
@@ -1386,7 +1413,7 @@ static void cnds_i3c_master_demux_ibis(struct cdns_i3c_master *master)
 
 		switch (IBIR_TYPE(ibir)) {
 		case IBIR_TYPE_IBI:
-			cdns_i3c_master_handle_ibi(master, ibir);
+			phytium_i3c_master_handle_ibi(master, ibir);
 			break;
 
 		case IBIR_TYPE_HJ:
@@ -1397,16 +1424,15 @@ static void cnds_i3c_master_demux_ibis(struct cdns_i3c_master *master)
 		case IBIR_TYPE_MR:
 			WARN_ON(IBIR_XFER_BYTES(ibir) || (ibir & IBIR_ERROR));
 			break;
-
 		default:
 			break;
 		}
 	}
 }
 
-static irqreturn_t cdns_i3c_master_interrupt(int irq, void *data)
+static irqreturn_t phytium_i3c_master_interrupt(int irq, void *data)
 {
-	struct cdns_i3c_master *master = data;
+	struct phytium_i3c_master *master = data;
 	u32 status;
 
 	status = readl(master->regs + MST_ISR);
@@ -1414,20 +1440,20 @@ static irqreturn_t cdns_i3c_master_interrupt(int irq, void *data)
 		return IRQ_NONE;
 
 	spin_lock(&master->xferqueue.lock);
-	cdns_i3c_master_end_xfer_locked(master, status);
+	phytium_i3c_master_end_xfer_locked(master, status);
 	spin_unlock(&master->xferqueue.lock);
 
 	if (status & MST_INT_IBIR_THR)
-		cnds_i3c_master_demux_ibis(master);
+		phytium_i3c_master_demux_ibis(master);
 
 	return IRQ_HANDLED;
 }
 
-static int cdns_i3c_master_disable_ibi(struct i3c_dev_desc *dev)
+static int phytium_i3c_master_disable_ibi(struct i3c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
 	unsigned long flags;
 	u32 sirmap;
 	int ret;
@@ -1448,11 +1474,11 @@ static int cdns_i3c_master_disable_ibi(struct i3c_dev_desc *dev)
 	return ret;
 }
 
-static int cdns_i3c_master_enable_ibi(struct i3c_dev_desc *dev)
+static int phytium_i3c_master_enable_ibi(struct i3c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
 	unsigned long flags;
 	u32 sircfg, sirmap;
 	int ret;
@@ -1487,12 +1513,12 @@ static int cdns_i3c_master_enable_ibi(struct i3c_dev_desc *dev)
 	return ret;
 }
 
-static int cdns_i3c_master_request_ibi(struct i3c_dev_desc *dev,
+static int phytium_i3c_master_request_ibi(struct i3c_dev_desc *dev,
 				       const struct i3c_ibi_setup *req)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
 	unsigned long flags;
 	unsigned int i;
 
@@ -1519,11 +1545,11 @@ static int cdns_i3c_master_request_ibi(struct i3c_dev_desc *dev,
 	return -ENOSPC;
 }
 
-static void cdns_i3c_master_free_ibi(struct i3c_dev_desc *dev)
+static void phytium_i3c_master_free_ibi(struct i3c_dev_desc *dev)
 {
 	struct i3c_master_controller *m = i3c_dev_get_master(dev);
-	struct cdns_i3c_master *master = to_cdns_i3c_master(m);
-	struct cdns_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
+	struct phytium_i3c_master *master = to_phytium_i3c_master(m);
+	struct phytium_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
 	unsigned long flags;
 
 	spin_lock_irqsave(&master->ibi.lock, flags);
@@ -1534,62 +1560,112 @@ static void cdns_i3c_master_free_ibi(struct i3c_dev_desc *dev)
 	i3c_generic_ibi_free_pool(data->ibi_pool);
 }
 
-static void cdns_i3c_master_recycle_ibi_slot(struct i3c_dev_desc *dev,
+static void phytium_i3c_master_recycle_ibi_slot(struct i3c_dev_desc *dev,
 					     struct i3c_ibi_slot *slot)
 {
-	struct cdns_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
+	struct phytium_i3c_i2c_dev_data *data = i3c_dev_get_master_data(dev);
 
 	i3c_generic_ibi_recycle_slot(data->ibi_pool, slot);
 }
 
-static const struct i3c_master_controller_ops cdns_i3c_master_ops = {
-	.bus_init = cdns_i3c_master_bus_init,
-	.bus_cleanup = cdns_i3c_master_bus_cleanup,
-	.do_daa = cdns_i3c_master_do_daa,
-	.attach_i3c_dev = cdns_i3c_master_attach_i3c_dev,
-	.reattach_i3c_dev = cdns_i3c_master_reattach_i3c_dev,
-	.detach_i3c_dev = cdns_i3c_master_detach_i3c_dev,
-	.attach_i2c_dev = cdns_i3c_master_attach_i2c_dev,
-	.detach_i2c_dev = cdns_i3c_master_detach_i2c_dev,
-	.supports_ccc_cmd = cdns_i3c_master_supports_ccc_cmd,
-	.send_ccc_cmd = cdns_i3c_master_send_ccc_cmd,
-	.priv_xfers = cdns_i3c_master_priv_xfers,
-	.i2c_xfers = cdns_i3c_master_i2c_xfers,
-	.enable_ibi = cdns_i3c_master_enable_ibi,
-	.disable_ibi = cdns_i3c_master_disable_ibi,
-	.request_ibi = cdns_i3c_master_request_ibi,
-	.free_ibi = cdns_i3c_master_free_ibi,
-	.recycle_ibi_slot = cdns_i3c_master_recycle_ibi_slot,
+static const struct i3c_master_controller_ops phytium_i3c_master_ops = {
+	.bus_init = phytium_i3c_master_bus_init,
+	.bus_cleanup = phytium_i3c_master_bus_cleanup,
+	.do_daa = phytium_i3c_master_do_daa,
+	.attach_i3c_dev = phytium_i3c_master_attach_i3c_dev,
+	.reattach_i3c_dev = phytium_i3c_master_reattach_i3c_dev,
+	.detach_i3c_dev = phytium_i3c_master_detach_i3c_dev,
+	.attach_i2c_dev = phytium_i3c_master_attach_i2c_dev,
+	.detach_i2c_dev = phytium_i3c_master_detach_i2c_dev,
+	.supports_ccc_cmd = phytium_i3c_master_supports_ccc_cmd,
+	.send_ccc_cmd = phytium_i3c_master_send_ccc_cmd,
+	.priv_xfers = phytium_i3c_master_priv_xfers,
+	.i2c_xfers = phytium_i3c_master_i2c_xfers,
+	.enable_ibi = phytium_i3c_master_enable_ibi,
+	.disable_ibi = phytium_i3c_master_disable_ibi,
+	.request_ibi = phytium_i3c_master_request_ibi,
+	.free_ibi = phytium_i3c_master_free_ibi,
+	.recycle_ibi_slot = phytium_i3c_master_recycle_ibi_slot,
 };
 
-static void cdns_i3c_master_hj(struct work_struct *work)
+static void phytium_i3c_master_hj(struct work_struct *work)
 {
-	struct cdns_i3c_master *master = container_of(work,
-						      struct cdns_i3c_master,
+	struct phytium_i3c_master *master = container_of(work,
+						      struct phytium_i3c_master,
 						      hj_work);
 
 	i3c_master_do_daa(&master->base);
 }
 
-static struct cdns_i3c_data cdns_i3c_devdata = {
+static struct phytium_i3c_data phytium_i3c_devdata = {
 	.thd_delay_ns = 10,
-	.halt_disable = 0,
 };
 
-static struct cdns_i3c_data phytium_i3c_devdata = {
-	.thd_delay_ns = 10,
-	.halt_disable = 1,
-};
-
-static const struct of_device_id cdns_i3c_master_of_ids[] = {
-	{ .compatible = "cdns,i3c-master", .data = &cdns_i3c_devdata },
-	{ .compatible = "phytium,cdns-i3c-master", .data = &phytium_i3c_devdata},
+static const struct of_device_id phytium_i3c_master_of_ids[] = {
+	{ .compatible = "phytium,cdns-i3c-master", .data = &phytium_i3c_devdata },
 	{ /* sentinel */ },
 };
 
-static int cdns_i3c_master_probe(struct platform_device *pdev)
+#ifdef CONFIG_ACPI
+static const struct acpi_device_id phytium_i3c_master_acpi_ids[] = {
+	{ "PHYT0035", 0 },
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, phytium_i3c_master_acpi_ids);
+#endif
+
+static void phytium_i3c_master_controller_init(struct phytium_i3c_master *master)
 {
-	struct cdns_i3c_master *master;
+	int i;
+
+	phytium_i3c_master_disable(master);
+
+	writel(FLUSH_RX_FIFO | FLUSH_TX_FIFO | FLUSH_CMD_FIFO |
+		       FLUSH_CMD_RESP,
+		       master->regs + FLUSH_CTRL);
+
+	writel(0xffffffff, master->regs + MST_IDR);
+	writel(0xffffffff, master->regs + SLV_IDR);
+
+	writel(master->prescl0, master->regs + PRESCL_CTRL0);
+	writel(master->prescl1, master->regs + PRESCL_CTRL1);
+
+	writel(IBIR_THR(1), master->regs + CMD_IBI_THR_CTRL);
+	writel(MST_INT_IBIR_THR, master->regs + MST_IER);
+	writel(master->dev_valid, master->regs + DEVS_CTRL);
+
+	for (i = 0; i < PHYTIUM_I3C_DEV_MAX_NUM; i++) {
+		writel(master->devinfo[i].dev_rr0, master->regs + DEV_ID_RR0(i));
+		writel(master->devinfo[i].dev_rr1, master->regs + DEV_ID_RR1(i));
+		writel(master->devinfo[i].dev_rr2, master->regs + DEV_ID_RR2(i));
+	}
+
+	for (i = 0; i < PHYTIUM_I3C_CMDR_MAX_TIMES; i++)
+		readl(master->regs + CMDR);
+
+	writel(master->ctrl_info, master->regs + CTRL);
+
+	phytium_i3c_master_enable(master);
+}
+
+static void phytium_i3c_master_store_dev(struct phytium_i3c_master *master)
+{
+	int i;
+
+	master->ctrl_info = readl(master->regs + CTRL);
+	master->dev_valid = readl(master->regs + DEVS_CTRL);
+
+	for (i = 0; i < PHYTIUM_I3C_DEV_MAX_NUM; i++) {
+		master->devinfo[i].dev_rr0 = readl(master->regs + DEV_ID_RR0(i));
+		master->devinfo[i].dev_rr1 = readl(master->regs + DEV_ID_RR1(i));
+		master->devinfo[i].dev_rr2 = readl(master->regs + DEV_ID_RR2(i));
+	}
+}
+
+static int phytium_i3c_master_probe(struct platform_device *pdev)
+{
+	struct phytium_i3c_master *master;
+	struct resource *res;
 	int ret, irq;
 	u32 val;
 
@@ -1597,33 +1673,52 @@ static int cdns_i3c_master_probe(struct platform_device *pdev)
 	if (!master)
 		return -ENOMEM;
 
-	master->devdata = of_device_get_match_data(&pdev->dev);
-	if (!master->devdata)
-		return -EINVAL;
+	master->dev = &pdev->dev;
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	master->regs = devm_ioremap_resource(&pdev->dev, res);
 
-	master->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(master->regs))
 		return PTR_ERR(master->regs);
 
-	master->pclk = devm_clk_get(&pdev->dev, "pclk");
-	if (IS_ERR(master->pclk))
-		return PTR_ERR(master->pclk);
+	if (pdev->dev.of_node) {
+		master->devdata = of_device_get_match_data(&pdev->dev);
 
-	master->sysclk = devm_clk_get(&pdev->dev, "sysclk");
-	if (IS_ERR(master->sysclk))
-		return PTR_ERR(master->sysclk);
+		if (!master->devdata)
+			return -EINVAL;
+
+
+		master->pclk = devm_clk_get(&pdev->dev, "pclk");
+		if (IS_ERR(master->pclk))
+			return PTR_ERR(master->pclk);
+
+		master->sysclk = devm_clk_get(&pdev->dev, "sysclk");
+		if (IS_ERR(master->sysclk))
+			return PTR_ERR(master->sysclk);
+
+		ret = clk_prepare_enable(master->pclk);
+		if (ret)
+			return ret;
+
+		ret = clk_prepare_enable(master->sysclk);
+		if (ret)
+			goto err_disable_pclk;
+#ifdef CONFIG_ACPI
+	}	else if (has_acpi_companion(&pdev->dev)) {
+		i3c_master_acpi_clk_params(ACPI_HANDLE(&pdev->dev), "SCLK", &master->prescl0,
+							&master->prescl1, &master->ctrl_thd_del);
+
+		if (!master->prescl0)
+			goto err_disable_sysclk;
+
+		master->base.bus.scl_rate.i2c = I3C_CONTROL_DEFAULT_I2C_SCL;
+		master->base.bus.scl_rate.i3c = I3C_BUS_MAX_I3C_SCL_RATE;
+		ACPI_COMPANION_SET(master->dev, ACPI_COMPANION(&pdev->dev));
+#endif
+	}
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return irq;
-
-	ret = clk_prepare_enable(master->pclk);
-	if (ret)
-		return ret;
-
-	ret = clk_prepare_enable(master->sysclk);
-	if (ret)
-		goto err_disable_pclk;
 
 	if (readl(master->regs + DEV_ID) != DEV_ID_I3C_MASTER) {
 		ret = -EINVAL;
@@ -1633,10 +1728,15 @@ static int cdns_i3c_master_probe(struct platform_device *pdev)
 	spin_lock_init(&master->xferqueue.lock);
 	INIT_LIST_HEAD(&master->xferqueue.list);
 
-	INIT_WORK(&master->hj_work, cdns_i3c_master_hj);
+	INIT_WORK(&master->hj_work, phytium_i3c_master_hj);
+	phytium_i3c_master_disable(master);
+
+	writel(FLUSH_RX_FIFO | FLUSH_TX_FIFO | FLUSH_CMD_FIFO |
+		       FLUSH_CMD_RESP,
+		       master->regs + FLUSH_CTRL);
 	writel(0xffffffff, master->regs + MST_IDR);
 	writel(0xffffffff, master->regs + SLV_IDR);
-	ret = devm_request_irq(&pdev->dev, irq, cdns_i3c_master_interrupt, 0,
+	ret = devm_request_irq(&pdev->dev, irq, phytium_i3c_master_interrupt, 0,
 			       dev_name(&pdev->dev), master);
 	if (ret)
 		goto err_disable_sysclk;
@@ -1648,13 +1748,13 @@ static int cdns_i3c_master_probe(struct platform_device *pdev)
 	/* Device ID0 is reserved to describe this master. */
 	master->maxdevs = CONF_STATUS0_DEVS_NUM(val);
 	master->free_rr_slots = GENMASK(master->maxdevs, 1);
-	master->caps.ibirfifodepth = CONF_STATUS0_IBIR_DEPTH(val);
-	master->caps.cmdrfifodepth = CONF_STATUS0_CMDR_DEPTH(val);
 
 	val = readl(master->regs + CONF_STATUS1);
 	master->caps.cmdfifodepth = CONF_STATUS1_CMD_DEPTH(val);
 	master->caps.rxfifodepth = CONF_STATUS1_RX_DEPTH(val);
 	master->caps.txfifodepth = CONF_STATUS1_TX_DEPTH(val);
+	master->caps.ibirfifodepth = CONF_STATUS0_IBIR_DEPTH(val);
+	master->caps.cmdrfifodepth = CONF_STATUS0_CMDR_DEPTH(val);
 
 	spin_lock_init(&master->ibi.lock);
 	master->ibi.num_slots = CONF_STATUS1_IBI_HW_RES(val);
@@ -1671,11 +1771,11 @@ static int cdns_i3c_master_probe(struct platform_device *pdev)
 	writel(DEVS_CTRL_DEV_CLR_ALL, master->regs + DEVS_CTRL);
 
 	ret = i3c_master_register(&master->base, &pdev->dev,
-				  &cdns_i3c_master_ops, false);
+				  &phytium_i3c_master_ops, false);
 	if (ret)
 		goto err_disable_sysclk;
-
 	writel(readl(master->regs + CTRL) | CTRL_HJ_ACK, master->regs + CTRL);
+	phytium_i3c_master_store_dev(master);
 
 	return 0;
 
@@ -1688,28 +1788,61 @@ err_disable_pclk:
 	return ret;
 }
 
-static void cdns_i3c_master_remove(struct platform_device *pdev)
+static int phytium_i3c_master_remove(struct platform_device *pdev)
 {
-	struct cdns_i3c_master *master = platform_get_drvdata(pdev);
+	struct phytium_i3c_master *master = platform_get_drvdata(pdev);
 
-	cancel_work_sync(&master->hj_work);
 	i3c_master_unregister(&master->base);
 
 	clk_disable_unprepare(master->sysclk);
 	clk_disable_unprepare(master->pclk);
+
+	return 0;
 }
 
-static struct platform_driver cdns_i3c_master = {
-	.probe = cdns_i3c_master_probe,
-	.remove_new = cdns_i3c_master_remove,
+static int __maybe_unused phytium_i3c_plat_suspend(struct device *dev)
+{
+	struct phytium_i3c_master *master = dev_get_drvdata(dev);
+
+
+	phytium_i3c_master_disable(master);
+
+	clk_disable_unprepare(master->sysclk);
+	clk_disable_unprepare(master->pclk);
+
+	return 0;
+}
+
+static int __maybe_unused phytium_i3c_plat_resume(struct device *dev)
+{
+	struct phytium_i3c_master *master = dev_get_drvdata(dev);
+
+	phytium_i3c_master_controller_init(master);
+
+	clk_prepare_enable(master->sysclk);
+	clk_prepare_enable(master->pclk);
+
+	return 0;
+}
+
+static const struct dev_pm_ops phytium_i3c_dev_pm_ops = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(phytium_i3c_plat_suspend,
+				     phytium_i3c_plat_resume)
+};
+
+static struct platform_driver phytium_i3c_master = {
+	.probe = phytium_i3c_master_probe,
+	.remove = phytium_i3c_master_remove,
 	.driver = {
-		.name = "cdns-i3c-master",
-		.of_match_table = cdns_i3c_master_of_ids,
+		.name = "phytium-i3c-master",
+		.of_match_table = phytium_i3c_master_of_ids,
+		.acpi_match_table = ACPI_PTR(phytium_i3c_master_acpi_ids),
+		.pm = &phytium_i3c_dev_pm_ops,
 	},
 };
-module_platform_driver(cdns_i3c_master);
+module_platform_driver(phytium_i3c_master);
 
-MODULE_AUTHOR("Boris Brezillon <boris.brezillon@bootlin.com>");
-MODULE_DESCRIPTION("Cadence I3C master driver");
-MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:cdns-i3c-master");
+MODULE_AUTHOR("Feng Jun <fengjun@phytium.com.cn>");
+MODULE_DESCRIPTION("Phytium I3C master driver");
+MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:phytium-i3c-master");
