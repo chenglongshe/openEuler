@@ -817,6 +817,13 @@ static int parse_elf_properties(struct file *f, const struct elf_phdr *phdr,
 	return ret == -ENOENT ? 0 : ret;
 }
 
+#if !defined CONFIG_COMPAT_BINFMT_ELF && !defined CONFIG_AARCH32_EL0
+unsigned long brk_offset;
+EXPORT_SYMBOL(brk_offset);
+#endif
+
+extern struct static_key_false phytium_duptext_static_key;
+
 static int load_elf_binary(struct linux_binprm *bprm)
 {
 	struct file *interpreter = NULL; /* to shut gcc up */
@@ -1289,7 +1296,11 @@ out_free_interp:
 			mm->brk = mm->start_brk = ELF_ET_DYN_BASE;
 		}
 
-		mm->brk = mm->start_brk = arch_randomize_brk(mm);
+		if (static_branch_unlikely(&phytium_duptext_static_key)) {
+			mm->brk = mm->start_brk = arch_randomize_brk(mm) + brk_offset;
+		} else {
+			mm->brk = mm->start_brk = arch_randomize_brk(mm);
+		}
 #ifdef compat_brk_randomized
 		current->brk_randomized = 1;
 #endif

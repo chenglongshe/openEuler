@@ -2735,6 +2735,9 @@ static void remove_vma_list(struct mm_struct *mm, struct vm_area_struct *vma)
 	validate_mm(mm);
 }
 
+DEFINE_STATIC_KEY_FALSE(phytium_duptext_static_key);
+EXPORT_SYMBOL(phytium_duptext_static_key);
+
 /*
  * Get rid of page table information in the indicated region.
  *
@@ -2744,6 +2747,7 @@ static void unmap_region(struct mm_struct *mm,
 		struct vm_area_struct *vma, struct vm_area_struct *prev,
 		unsigned long start, unsigned long end)
 {
+	struct mmu_notifier_range range;
 	struct vm_area_struct *next = vma_next(mm, prev);
 	struct mmu_gather tlb;
 	struct vm_area_struct *cur_vma;
@@ -2770,6 +2774,13 @@ static void unmap_region(struct mm_struct *mm,
 
 	free_pgtables(&tlb, vma, prev ? prev->vm_end : FIRST_USER_ADDRESS,
 				 next ? next->vm_start : USER_PGTABLES_CEILING);
+	if (static_branch_unlikely(&phytium_duptext_static_key)) {
+               mmu_notifier_range_init(&range, MMU_NOTIFY_UNMAP, 0, vma, vma->vm_mm,
+                               start, end);
+               mmu_notifier_invalidate_range_start(&range);
+               mmu_notifier_invalidate_range_end(&range);
+       }
+
 	tlb_finish_mmu(&tlb, start, end);
 }
 

@@ -134,4 +134,9 @@
 /*
  * We share all the actual code with the native (64-bit) version.
  */
+#if defined CONFIG_COMPAT_BINFMT_ELF
+unsigned long brk_offset;
+EXPORT_SYMBOL(brk_offset);
+#endif
+
 #include "binfmt_elf.c"

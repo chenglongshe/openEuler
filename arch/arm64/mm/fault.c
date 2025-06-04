@@ -50,7 +50,8 @@ struct fault_info {
 	const char *name;
 };
 
-static const struct fault_info fault_info[];
+struct fault_info fault_info[];
+EXPORT_SYMBOL_GPL(fault_info);
 static struct fault_info debug_fault_info[];
 
 static inline const struct fault_info *esr_to_fault_info(unsigned int esr)
@@ -481,7 +482,7 @@ static void set_thread_esr(unsigned long address, unsigned int esr)
 	current->thread.fault_code = esr;
 }
 
-static void do_bad_area(unsigned long addr, unsigned int esr, struct pt_regs *regs)
+void do_bad_area(unsigned long addr, unsigned int esr, struct pt_regs *regs)
 {
 	/*
 	 * If we are in kernel mode at this point, we have no context to
@@ -497,6 +498,7 @@ static void do_bad_area(unsigned long addr, unsigned int esr, struct pt_regs *re
 		__do_kernel_fault(addr, esr, regs);
 	}
 }
+EXPORT_SYMBOL_GPL(do_bad_area);
 
 #define VM_FAULT_BADMAP		((__force vm_fault_t)0x010000)
 #define VM_FAULT_BADACCESS	((__force vm_fault_t)0x020000)
@@ -799,7 +801,7 @@ static int do_tag_check_fault(unsigned long addr, unsigned int esr,
 	return 0;
 }
 
-static const struct fault_info fault_info[] = {
+struct fault_info fault_info[] = {
 	{ do_bad,		SIGKILL, SI_KERNEL,	"ttbr address size fault"	},
 	{ do_bad,		SIGKILL, SI_KERNEL,	"level 1 address size fault"	},
 	{ do_bad,		SIGKILL, SI_KERNEL,	"level 2 address size fault"	},

@@ -31,4 +31,9 @@
 					 ((x)->e_machine == EM_ARM) && \
 					 ((x)->e_flags & EF_ARM_EABI_MASK))
 
+#ifndef CONFIG_COMPAT_BINFMT_ELF
+#include <linux/fs.h>
+unsigned long brk_offset;
+EXPORT_SYMBOL(brk_offset);
+#endif
 #include "../../../fs/compat_binfmt_elf.c"
