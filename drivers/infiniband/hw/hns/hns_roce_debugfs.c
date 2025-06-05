@@ -573,7 +573,7 @@ static void init_poe_ch_debugfs(struct hns_roce_dev *hr_dev, uint8_t index,
 	struct hns_roce_poe_ch *poe_ch = &hr_dev->poe_ctx.poe_ch[index];
 	char name[POE_CH_NAME_LEN];
 
-	snprintf(name, sizeof(name), "poe_%u", index);
+	snprintf(name, sizeof(name), "poe_%hhu", index);
 	dbgfs->root = debugfs_create_dir(name, parent);
 
 	init_debugfs_seqfile(&dbgfs->en, "en", dbgfs->root,
