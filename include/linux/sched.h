@@ -1479,10 +1479,11 @@ struct task_struct {
 #endif
 #if defined(CONFIG_FAST_SYSCALL)
 	KABI_USE(15, unsigned long *xcall_enable)
+	KABI_USE(16, unsigned long *xcall_select)
 #else
 	KABI_RESERVE(15)
-#endif
 	KABI_RESERVE(16)
+#endif
 	KABI_AUX_PTR(task_struct)
 
 	/* CPU-specific state of this task: */

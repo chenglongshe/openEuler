@@ -3596,7 +3596,7 @@ static int xcall_show(struct seq_file *m, void *v)
 {
 	struct inode *inode = m->private;
 	struct task_struct *p;
-	unsigned int rs, re;
+	unsigned int rs, re, sc_no;
 
 	if (!fast_syscall_enabled())
 		return -EACCES;
@@ -3617,7 +3617,16 @@ static int xcall_show(struct seq_file *m, void *v)
 		rs == (re - 1) ? seq_printf(m, "%d,", rs) :
 					seq_printf(m, "%d-%d,", rs, re - 1);
 	}
-	seq_puts(m, "\n");
+	seq_puts(m, "\nAvailable:\n");
+
+	for (sc_no = 0; sc_no < __NR_syscalls; sc_no++) {
+		if (p->xcall_select && test_bit(sc_no, p->xcall_select)) {
+			seq_printf(m, "NR_syscall: %3d: enabled: %d ",
+				   sc_no, test_bit(sc_no, p->xcall_enable));
+			seq_printf(m, "xcall_select: %d\n",
+				   test_bit(sc_no, p->xcall_select));
+		}
+	}
 out:
 	put_task_struct(p);
 
@@ -3631,13 +3640,40 @@ static int xcall_open(struct inode *inode, struct file *filp)
 
 static int xcall_enable_one(struct task_struct *p, unsigned int sc_no)
 {
+	if (p->xcall_select && test_bit(sc_no, p->xcall_select))
+		return -EINVAL;
+
+	if (!bitmap_weight(p->xcall_enable, __NR_syscalls)) {
+		p->xcall_select = bitmap_zalloc(__NR_syscalls, GFP_KERNEL);
+		if (!p->xcall_select)
+			return -ENOMEM;
+	}
+
 	bitmap_set(p->xcall_enable, sc_no, 1);
 	return 0;
 }
 
 static int xcall_disable_one(struct task_struct *p, unsigned int sc_no)
 {
+	if (p->xcall_select && test_bit(sc_no, p->xcall_select))
+		return -EINVAL;
+
 	bitmap_clear(p->xcall_enable, sc_no, 1);
+	return 0;
+}
+
+static int xcall_select_table(struct task_struct *p, unsigned int sc_no)
+{
+	if (!p->xcall_select || !test_bit(sc_no, p->xcall_enable)) {
+		pr_err("Please enable NR_syscall: %d to xcall first.\n", sc_no);
+		return -EINVAL;
+	}
+
+	if (test_bit(sc_no, p->xcall_select))
+		return -EINVAL;
+
+	bitmap_set(p->xcall_select, sc_no, 1);
+
 	return 0;
 }
 
@@ -3650,7 +3686,7 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 	const size_t maxlen = sizeof(buffer) - 1;
 	unsigned int sc_no = __NR_syscalls;
 	int ret = 0;
-	int is_clear = 0;
+	int is_clear = 0, is_switch = 0;
 
 	if (!fast_syscall_enabled())
 		return -EACCES;
@@ -3665,8 +3701,10 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 
 	if (buffer[0] == '!')
 		is_clear = 1;
+	else if ((buffer[0] == '@'))
+		is_switch = 1;
 
-	if (kstrtouint(buffer + is_clear, 10, &sc_no)) {
+	if (kstrtouint(buffer + is_clear + is_switch, 10, &sc_no)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -3676,9 +3714,11 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
-	if (!is_clear && !test_bit(sc_no, p->xcall_enable))
+	if (is_switch && test_bit(sc_no, p->xcall_enable))
+		ret = xcall_select_table(p, sc_no);
+	else if (!is_switch && !is_clear && !test_bit(sc_no, p->xcall_enable))
 		ret = xcall_enable_one(p, sc_no);
-	else if (is_clear && test_bit(sc_no, p->xcall_enable))
+	else if (!is_switch && is_clear && test_bit(sc_no, p->xcall_enable))
 		ret = xcall_disable_one(p, sc_no);
 	else
 		ret = -EINVAL;
