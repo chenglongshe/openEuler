@@ -2156,6 +2156,8 @@ static bool can_clearpage_use_stnp(const struct arm64_cpu_capabilities *entry,
 }
 
 #ifdef CONFIG_FAST_SYSCALL
+#include <linux/xcall.h>
+
 static bool is_xcall_support;
 static int __init xcall_setup(char *str)
 {

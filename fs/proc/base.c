@@ -3592,8 +3592,6 @@ static const struct file_operations proc_pid_sg_level_operations = {
 #ifdef CONFIG_FAST_SYSCALL
 #include <linux/xcall.h>
 
-bool fast_syscall_enabled(void);
-
 static int xcall_show(struct seq_file *m, void *v)
 {
 	struct inode *inode = m->private;
