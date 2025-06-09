@@ -102,6 +102,9 @@
 #include <linux/sched/grid_qos.h>
 #endif
 #include <linux/share_pool.h>
+#ifdef CONFIG_FAST_SYSCALL
+#include <linux/xcall.h>
+#endif
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
 #include <asm/mmu_context.h>
@@ -481,8 +484,7 @@ void free_task(struct task_struct *tsk)
 		sched_relationship_free(tsk);
 
 #ifdef CONFIG_FAST_SYSCALL
-	if (tsk->xcall_enable)
-		bitmap_free(tsk->xcall_enable);
+	kfree(tsk->xinfo);
 #endif
 
 	free_task_struct(tsk);
@@ -1015,7 +1017,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 #endif
 
 #ifdef CONFIG_FAST_SYSCALL
-	tsk->xcall_enable = NULL;
+	tsk->xinfo = NULL;
 #endif
 
 	return tsk;
@@ -2097,12 +2099,15 @@ static __latent_entropy struct task_struct *copy_process(
 	rt_mutex_init_task(p);
 
 #ifdef CONFIG_FAST_SYSCALL
-	p->xcall_enable = bitmap_zalloc(__NR_syscalls, GFP_KERNEL);
-	if (!p->xcall_enable)
+	p->xinfo = kzalloc(sizeof(struct xcall_info), GFP_KERNEL);
+	if (!p->xinfo)
 		goto bad_fork_free;
-
-	if (current->xcall_enable)
-		bitmap_copy(p->xcall_enable, current->xcall_enable, __NR_syscalls);
+	if (current->xinfo) {
+		bitmap_copy(p->xinfo->xcall_enable, current->xinfo->xcall_enable,
+			    __NR_syscalls);
+		bitmap_copy(p->xinfo->xcall_select, current->xinfo->xcall_select,
+			    __NR_syscalls);
+	}
 #endif
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
