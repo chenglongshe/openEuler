@@ -3590,6 +3590,8 @@ static const struct file_operations proc_pid_sg_level_operations = {
 #endif
 
 #ifdef CONFIG_FAST_SYSCALL
+#include <linux/xcall.h>
+
 bool fast_syscall_enabled(void);
 
 static int xcall_show(struct seq_file *m, void *v)
@@ -3597,6 +3599,7 @@ static int xcall_show(struct seq_file *m, void *v)
 	struct inode *inode = m->private;
 	struct task_struct *p;
 	unsigned int rs, re;
+	struct xcall_info *xinfo;
 
 	if (!fast_syscall_enabled())
 		return -EACCES;
@@ -3605,15 +3608,16 @@ static int xcall_show(struct seq_file *m, void *v)
 	if (!p)
 		return -ESRCH;
 
-	if (!p->xcall_enable)
+	xinfo = p->xinfo;
+	if (!xinfo)
 		goto out;
 
-	seq_printf(m, "Enabled Total[%d/%d]:", bitmap_weight(p->xcall_enable, __NR_syscalls),
+	seq_printf(m, "Enabled Total[%d/%d]:", bitmap_weight(xinfo->xcall_enable, __NR_syscalls),
 			__NR_syscalls);
 
-	for (rs = 0, bitmap_next_set_region(p->xcall_enable, &rs, &re, __NR_syscalls);
+	for (rs = 0, bitmap_next_set_region(xinfo->xcall_enable, &rs, &re, __NR_syscalls);
 	     rs < re; rs = re + 1,
-	     bitmap_next_set_region(p->xcall_enable, &rs, &re, __NR_syscalls)) {
+	     bitmap_next_set_region(xinfo->xcall_enable, &rs, &re, __NR_syscalls)) {
 		rs == (re - 1) ? seq_printf(m, "%d,", rs) :
 					seq_printf(m, "%d-%d,", rs, re - 1);
 	}
@@ -3629,15 +3633,15 @@ static int xcall_open(struct inode *inode, struct file *filp)
 	return single_open(filp, xcall_show, inode);
 }
 
-static int xcall_enable_one(struct task_struct *p, unsigned int sc_no)
+static int xcall_enable_one(struct xcall_info *xinfo, unsigned int sc_no)
 {
-	bitmap_set(p->xcall_enable, sc_no, 1);
+	test_and_set_bit(sc_no, xinfo->xcall_enable);
 	return 0;
 }
 
-static int xcall_disable_one(struct task_struct *p, unsigned int sc_no)
+static int xcall_disable_one(struct xcall_info *xinfo, unsigned int sc_no)
 {
-	bitmap_clear(p->xcall_enable, sc_no, 1);
+	test_and_clear_bit(sc_no, xinfo->xcall_enable);
 	return 0;
 }
 
@@ -3651,6 +3655,7 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 	unsigned int sc_no = __NR_syscalls;
 	int ret = 0;
 	int is_clear = 0;
+	struct xcall_info *xinfo;
 
 	if (!fast_syscall_enabled())
 		return -EACCES;
@@ -3660,9 +3665,10 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 		return -EFAULT;
 
 	p = get_proc_task(inode);
-	if (!p || !p->xcall_enable)
+	if (!p || !p->xinfo)
 		return -ESRCH;
 
+	xinfo = p->xinfo;
 	if (buffer[0] == '!')
 		is_clear = 1;
 
@@ -3676,10 +3682,10 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
-	if (!is_clear && !test_bit(sc_no, p->xcall_enable))
-		ret = xcall_enable_one(p, sc_no);
-	else if (is_clear && test_bit(sc_no, p->xcall_enable))
-		ret = xcall_disable_one(p, sc_no);
+	if (!is_clear && !test_bit(sc_no, xinfo->xcall_enable))
+		ret = xcall_enable_one(xinfo, sc_no);
+	else if (is_clear && test_bit(sc_no, xinfo->xcall_enable))
+		ret = xcall_disable_one(xinfo, sc_no);
 	else
 		ret = -EINVAL;
 
