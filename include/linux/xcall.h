@@ -5,5 +5,6 @@
 struct xcall_info {
 	/* Must be first! */
 	DECLARE_BITMAP(xcall_enable, __NR_syscalls);
+	bool prefetch;
 };
 #endif
