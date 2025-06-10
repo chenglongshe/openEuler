@@ -102,6 +102,9 @@
 #include <linux/sched/grid_qos.h>
 #endif
 #include <linux/share_pool.h>
+#ifdef CONFIG_FAST_SYSCALL
+#include <linux/xcall.h>
+#endif
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
 #include <asm/mmu_context.h>
@@ -479,6 +482,11 @@ void free_task(struct task_struct *tsk)
 #endif
 	if (task_relationship_used())
 		sched_relationship_free(tsk);
+
+#ifdef CONFIG_FAST_SYSCALL
+	kfree(tsk->xinfo);
+#endif
+
 	free_task_struct(tsk);
 }
 EXPORT_SYMBOL(free_task);
@@ -1007,6 +1015,11 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 #ifdef CONFIG_MEMCG
 	tsk->active_memcg = NULL;
 #endif
+
+#ifdef CONFIG_FAST_SYSCALL
+	tsk->xinfo = NULL;
+#endif
+
 	return tsk;
 
 free_stack:
@@ -2084,6 +2097,15 @@ static __latent_entropy struct task_struct *copy_process(
 	ftrace_graph_init_task(p);
 
 	rt_mutex_init_task(p);
+
+#ifdef CONFIG_FAST_SYSCALL
+	p->xinfo = kzalloc(sizeof(struct xcall_info), GFP_KERNEL);
+	if (!p->xinfo)
+		goto bad_fork_free;
+	if (current->xinfo)
+		bitmap_copy(p->xinfo->xcall_enable, current->xinfo->xcall_enable,
+			    __NR_syscalls);
+#endif
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
 	retval = sched_prefer_cpus_fork(p, current->prefer_cpus);
