@@ -2102,9 +2102,11 @@ static __latent_entropy struct task_struct *copy_process(
 	p->xinfo = kzalloc(sizeof(struct xcall_info), GFP_KERNEL);
 	if (!p->xinfo)
 		goto bad_fork_free;
-	if (current->xinfo)
+	if (current->xinfo) {
 		bitmap_copy(p->xinfo->xcall_enable, current->xinfo->xcall_enable,
 			    __NR_syscalls);
+		p->xinfo->prefetch = current->xinfo->prefetch;
+	}
 #endif
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
