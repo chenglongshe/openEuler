@@ -7,4 +7,11 @@ struct xcall_info {
 	DECLARE_BITMAP(xcall_enable, __NR_syscalls);
 	bool prefetch;
 };
+
+bool fast_syscall_enabled(void);
+
+static inline bool current_prefetch_enabled(void)
+{
+	return current->xinfo && current->xinfo->prefetch;
+}
 #endif
