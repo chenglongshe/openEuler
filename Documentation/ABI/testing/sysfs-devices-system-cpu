@@ -268,8 +268,23 @@ Description:	Discover CPUs in the same CPU frequency coordination domain
 		This file is only present if the acpi-cpufreq or the cppc-cpufreq
 		drivers are in use.
 
+What:		/sys/devices/system/cpu/cpuX/cpufreq/auto_select
+Date:		May 2025
+Contact:	linux-pm@vger.kernel.org
+Description:	Autonomous selection enable
+
+		Read/write interface to control autonomous selection enable
+			Read returns autonomous selection status:
+				0: autonomous selection is disabled
+				1: autonomous selection is enabled
+
+			Write 'y' or '1' or 'on' to enable autonomous selection.
+			Write 'n' or '0' or 'off' to disable autonomous selection.
+
+		This file is only present if the cppc-cpufreq driver is in use.
+
 What:		/sys/devices/system/cpu/cpuX/cpufreq/auto_act_window
-Date:		October 2024
+Date:		May 2025
 Contact:	linux-pm@vger.kernel.org
 Description:	Autonomous activity window
 
@@ -289,10 +304,10 @@ Description:	Autonomous activity window
 		Writing to this file only has meaning when Autonomous Selection is
 		enabled.
 
-		This file only presents if the cppc-cpufreq driver is in use.
+		This file is only present if the cppc-cpufreq driver is in use.
 
-What:		/sys/devices/system/cpu/cpuX/cpufreq/energy_perf
-Date:		October 2024
+What:		/sys/devices/system/cpu/cpuX/cpufreq/energy_performance_preference_val
+Date:		May 2025
 Contact:	linux-pm@vger.kernel.org
 Description:	Energy performance preference
 
@@ -305,7 +320,7 @@ Description:	Energy performance preference
 		Writing to this file only has meaning when Autonomous Selection is
 		enabled.
 
-		This file only presents if the cppc-cpufreq driver is in use.
+		This file is only present if the cppc-cpufreq driver is in use.
 
 
 What:		/sys/devices/system/cpu/cpu*/cache/index3/cache_disable_{0,1}
