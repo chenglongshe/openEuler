@@ -18,9 +18,13 @@ int xcall_init_task(struct task_struct *p, struct task_struct *orig)
 	if (!p->xinfo)
 		return -ENOMEM;
 
-	if (orig->xinfo)
+	if (orig->xinfo) {
 		bitmap_copy(p->xinfo->xcall_enable, orig->xinfo->xcall_enable,
 			    __NR_syscalls);
+#ifdef CONFIG_XCALL_PREFETCH
+		p->xinfo->prefetch = orig->xinfo->prefetch;
+#endif
+	}
 
 	return 0;
 }

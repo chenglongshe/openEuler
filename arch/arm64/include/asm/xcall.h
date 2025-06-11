@@ -8,6 +8,9 @@
 struct xcall_info {
 	/* Must be first! */
 	DECLARE_BITMAP(xcall_enable, __NR_syscalls);
+#ifdef CONFIG_XCALL_PREFETCH
+	bool prefetch;
+#endif
 };
 
 int xcall_init_task(struct task_struct *p, struct task_struct *orig);
