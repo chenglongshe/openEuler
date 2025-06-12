@@ -1886,6 +1886,7 @@ static int nbd_genl_connect(struct sk_buff *skb, struct genl_info *info)
 	int index = -1;
 	int ret;
 	bool put_dev = false;
+	bool device_started = false;
 
 	if (!netlink_capable(skb, CAP_SYS_ADMIN))
 		return -EPERM;
@@ -2067,6 +2068,10 @@ again:
 	ret = nbd_start_device(nbd);
 out:
 	mutex_unlock(&nbd->config_lock);
+	if (ret && device_started) {
+		nbd_disconnect_and_put(nbd);
+		return ret;
+	}
 	if (!ret) {
 		set_bit(NBD_RT_HAS_CONFIG_REF, &config->runtime_flags);
 		refcount_inc(&nbd->config_refs);
