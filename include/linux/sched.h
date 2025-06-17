@@ -67,6 +67,7 @@ struct signal_struct;
 struct task_delay_info;
 struct task_group;
 struct io_uring_task;
+struct xcall_info;
 
 /*
  * Task state bitmask. NOTE! These bits are also
@@ -1477,7 +1478,11 @@ struct task_struct {
 #else
 	KABI_RESERVE(14)
 #endif
+#if defined(CONFIG_FAST_SYSCALL)
+	KABI_USE(15, struct xcall_info *xinfo)
+#else
 	KABI_RESERVE(15)
+#endif
 	KABI_RESERVE(16)
 	KABI_AUX_PTR(task_struct)
 
