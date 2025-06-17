@@ -10,6 +10,14 @@
 #include <linux/sched.h>
 #include <linux/uaccess.h>
 
+struct read_cache_entry {
+	unsigned long sync_mode;
+	unsigned long cache_hit;
+	unsigned long cache_miss;
+	unsigned long cache_queued;
+	unsigned long cache_wait;
+};
+
 struct task_struct;
 struct rusage;
 union thread_union;

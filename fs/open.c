@@ -1287,6 +1287,10 @@ int filp_close(struct file *filp, fl_owner_t id)
 		return 0;
 	}
 
+#ifdef CONFIG_FAST_SYSCALL
+	free_pfi(filp);
+#endif
+
 	if (filp->f_op->flush)
 		retval = filp->f_op->flush(filp, id);
 

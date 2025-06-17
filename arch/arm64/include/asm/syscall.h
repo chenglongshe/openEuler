@@ -12,6 +12,9 @@
 typedef long (*syscall_fn_t)(const struct pt_regs *regs);
 
 extern const syscall_fn_t sys_call_table[];
+#ifdef CONFIG_FAST_SYSCALL
+extern const syscall_fn_t x_call_table[];
+#endif
 
 #ifdef CONFIG_AARCH32_EL0
 extern const syscall_fn_t a32_sys_call_table[];
@@ -98,5 +101,16 @@ static inline int syscall_get_arch(struct task_struct *task)
 
 	return AUDIT_ARCH_AARCH64;
 }
+
+#ifdef CONFIG_FAST_SYSCALL
+asmlinkage long __arm64_sys_ni_syscall(const struct pt_regs *__unused);
+
+static inline int syscall_is_xcall_register(unsigned int sc_no)
+{
+	if (x_call_table[sc_no] == __arm64_sys_ni_syscall)
+		return 0;
+	return 1;
+}
+#endif
 
 #endif	/* __ASM_SYSCALL_H */

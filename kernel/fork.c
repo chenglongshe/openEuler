@@ -438,6 +438,8 @@ static void release_task_stack(struct task_struct *tsk)
 #endif
 }
 
+void rc_prefetch_free(struct read_cache_entry *rc, bool force);
+
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 void put_task_stack(struct task_struct *tsk)
 {
@@ -479,6 +481,20 @@ void free_task(struct task_struct *tsk)
 #endif
 	if (task_relationship_used())
 		sched_relationship_free(tsk);
+
+#ifdef CONFIG_FAST_SYSCALL
+	if (tsk->xcall_enable)
+		bitmap_free(tsk->xcall_enable);
+
+	if (tsk->xcall_select)
+		bitmap_free(tsk->xcall_select);
+
+	if (tsk->rc) {
+		rc_prefetch_free(tsk->rc, true);
+		tsk->rc = NULL;
+	}
+#endif
+
 	free_task_struct(tsk);
 }
 EXPORT_SYMBOL(free_task);
@@ -1007,6 +1023,13 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 #ifdef CONFIG_MEMCG
 	tsk->active_memcg = NULL;
 #endif
+
+#ifdef CONFIG_FAST_SYSCALL
+	tsk->xcall_enable = NULL;
+	tsk->xcall_select = NULL;
+	tsk->rc = NULL;
+#endif
+
 	return tsk;
 
 free_stack:
@@ -1953,6 +1976,8 @@ static void copy_oom_score_adj(u64 clone_flags, struct task_struct *tsk)
 	mutex_unlock(&oom_adj_mutex);
 }
 
+struct read_cache_entry* rc_prefetch_alloc(struct task_struct *tsk);
+
 /*
  * This creates a new process as a copy of the old one,
  * but does not actually start it yet.
@@ -2084,6 +2109,26 @@ static __latent_entropy struct task_struct *copy_process(
 	ftrace_graph_init_task(p);
 
 	rt_mutex_init_task(p);
+
+#ifdef CONFIG_FAST_SYSCALL
+	p->xcall_enable = bitmap_zalloc(__NR_syscalls, GFP_KERNEL);
+	if (!p->xcall_enable)
+		goto bad_fork_free;
+
+	if (current->xcall_enable)
+		bitmap_copy(p->xcall_enable, current->xcall_enable, __NR_syscalls);
+
+	if (current->xcall_select) {
+		p->xcall_select = bitmap_zalloc(__NR_syscalls, GFP_KERNEL);
+		if (!p->xcall_select)
+			goto bad_fork_free;
+
+		bitmap_copy(p->xcall_select, current->xcall_select, __NR_syscalls);
+	}
+
+	if (current->rc)
+		p->rc = rc_prefetch_alloc(p);
+#endif
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
 	retval = sched_prefer_cpus_fork(p, current->prefer_cpus);
