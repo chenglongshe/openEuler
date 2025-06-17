@@ -41,7 +41,7 @@ void eventpoll_release_file(struct file *file);
  */
 static inline void eventpoll_release(struct file *file)
 {
-
+	free_prefetch_item(file);
 	/*
 	 * Fast check to avoid the get/release of the semaphore. Since
 	 * we're doing this outside the semaphore lock, it might return
