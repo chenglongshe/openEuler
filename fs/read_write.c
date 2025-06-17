@@ -622,6 +622,13 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 	struct fd f = fdget_pos(fd);
 	ssize_t ret = -EBADF;
 
+#ifdef CONFIG_XCALL_PREFETCH
+	ret = xcall_read_begin(f.file, fd, buf, count);
+	if (ret != -EAGAIN) {
+		fdput_pos(f);
+		return ret;
+	}
+#endif
 	if (f.file) {
 		loff_t pos, *ppos = file_ppos(f.file);
 		if (ppos) {
@@ -632,6 +639,7 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 		if (ret >= 0 && ppos)
 			f.file->f_pos = pos;
 		fdput_pos(f);
+		xcall_read_end(f.file);
 	}
 	return ret;
 }

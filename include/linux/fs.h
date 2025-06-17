@@ -3750,4 +3750,53 @@ static inline bool cachefiles_ondemand_is_enabled(void)
 }
 #endif
 
+#ifdef CONFIG_XCALL_PREFETCH
+enum cache_state {
+	XCALL_CACHE_NONE = 0,
+	XCALL_CACHE_QUEUED,
+	XCALL_CACHE_PREFETCH,
+	XCALL_CACHE_READY,
+	XCALL_CACHE_CANCEL
+};
+
+struct prefetch_item {
+	struct file *file;
+	int fd;
+	struct work_struct work;
+	int cpu;
+	cpumask_t related_cpus;
+	struct page *cache_pages;
+	char *cache;
+	ssize_t len;
+	/* cache state in epoll_wait */
+	atomic_t state;
+	loff_t pos;
+	struct hlist_node node;
+};
+
+struct numa_mask_entry {
+	cpumask_var_t mask;
+	struct mutex lock;
+};
+
+DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_hit);
+DECLARE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
+
+extern int cache_pages_order;
+extern struct numa_mask_entry *xcall_numa_entries;
+int xcall_read_begin(struct file *file, unsigned int fd, char __user *buf,
+		     size_t count);
+void xcall_read_end(struct file *file);
+void free_prefetch_item(struct file *file);
+int proc_adjust_cache_pages_order(struct ctl_table *table, int write,
+				  void *buffer, size_t *lenp, loff_t *ppos);
+void update_epoll_wait_select_count(struct task_struct *p, unsigned int sc_no,
+				    bool add);
+#else
+static inline void xcall_read_end(struct file *file) {}
+static inline void free_prefetch_item(struct file *file) {}
+static inline void update_epoll_wait_select_count(struct task_struct *p,
+						  unsigned int sc_no, bool add) {}
+#endif
+
 #endif /* _LINUX_FS_H */

@@ -2862,6 +2862,16 @@ static struct ctl_table kern_table[] = {
 		.extra2		= &hundred_thousand,
 	},
 #endif
+#ifdef CONFIG_XCALL_PREFETCH
+	{	.procname	= "xcall_cache_pages_order",
+		.data		= &cache_pages_order,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler   = proc_adjust_cache_pages_order,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= &four,
+	},
+#endif
 	{ }
 };
 

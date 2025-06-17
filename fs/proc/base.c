@@ -3589,6 +3589,361 @@ static const struct file_operations proc_pid_sg_level_operations = {
 };
 #endif
 
+#ifdef CONFIG_XCALL_PREFETCH
+static atomic_t epoll_wait_select_count = ATOMIC_INIT(0);
+void update_epoll_wait_select_count(struct task_struct *p,
+				    unsigned int sc_no, bool add)
+{
+	if (sc_no != __NR_epoll_pwait)
+		return;
+
+	if (!p->xcall_select || !test_bit(sc_no, p->xcall_select))
+		return;
+
+	if (add) {
+		atomic_inc(&epoll_wait_select_count);
+		pr_info("epoll_wait_select count add: %ld, %s\n",
+			atomic_read(&epoll_wait_select_count), p->comm);
+	} else {
+		atomic_dec(&epoll_wait_select_count);
+		pr_info("epoll_wait_select count sub: %ld, %s\n",
+			atomic_read(&epoll_wait_select_count), p->comm);
+	}
+}
+
+int proc_adjust_cache_pages_order(struct ctl_table *table, int write,
+				  void *buffer, size_t *lenp, loff_t *ppos)
+{
+	if (write && atomic_read(&epoll_wait_select_count) > 0)
+		return -EPERM;
+
+	return proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+}
+#endif
+
+#ifdef CONFIG_FAST_SYSCALL
+bool fast_syscall_enabled(void);
+
+static int xcall_show(struct seq_file *m, void *v)
+{
+	struct inode *inode = m->private;
+	struct task_struct *p;
+	unsigned int rs, re, sc_no;
+
+	if (!fast_syscall_enabled())
+		return -EACCES;
+
+	p = get_proc_task(inode);
+	if (!p)
+		return -ESRCH;
+
+	if (!p->xcall_enable)
+		goto out;
+
+	seq_printf(m, "Enabled Total[%d/%d]:", bitmap_weight(p->xcall_enable, __NR_syscalls),
+			__NR_syscalls);
+
+	for (rs = 0, bitmap_next_set_region(p->xcall_enable, &rs, &re, __NR_syscalls);
+	     rs < re; rs = re + 1,
+	     bitmap_next_set_region(p->xcall_enable, &rs, &re, __NR_syscalls)) {
+		rs == (re - 1) ? seq_printf(m, "%d,", rs) :
+					seq_printf(m, "%d-%d,", rs, re - 1);
+	}
+	seq_puts(m, "\nAvailable:\n");
+
+	for (sc_no = 0; sc_no < __NR_syscalls; sc_no++) {
+		if (p->xcall_select && test_bit(sc_no, p->xcall_select)) {
+			seq_printf(m, "NR_syscall: %3d: enabled: %d ",
+				   sc_no, test_bit(sc_no, p->xcall_enable));
+			seq_printf(m, "xcall_select: %d\n",
+				   test_bit(sc_no, p->xcall_select));
+		}
+	}
+out:
+	put_task_struct(p);
+
+	return 0;
+}
+
+static int xcall_open(struct inode *inode, struct file *filp)
+{
+	return single_open(filp, xcall_show, inode);
+}
+
+static int xcall_enable_one(struct task_struct *p, unsigned int sc_no)
+{
+	if (p->xcall_select && test_bit(sc_no, p->xcall_select))
+		return -EINVAL;
+
+	if (!bitmap_weight(p->xcall_enable, __NR_syscalls)) {
+		p->xcall_select = bitmap_zalloc(__NR_syscalls, GFP_KERNEL);
+		if (!p->xcall_select)
+			return -ENOMEM;
+	}
+
+	bitmap_set(p->xcall_enable, sc_no, 1);
+	return 0;
+}
+
+static int xcall_disable_one(struct task_struct *p, unsigned int sc_no)
+{
+	if (p->xcall_select && test_bit(sc_no, p->xcall_select))
+		return -EINVAL;
+
+	bitmap_clear(p->xcall_enable, sc_no, 1);
+	return 0;
+}
+
+static int xcall_select_table(struct task_struct *p, unsigned int sc_no)
+{
+	if (!p->xcall_select || !test_bit(sc_no, p->xcall_enable)) {
+		pr_err("Please enable NR_syscall: %d to xcall first.\n", sc_no);
+		return -EINVAL;
+	}
+
+	if (p->xcall_select && test_bit(sc_no, p->xcall_select))
+		return -EINVAL;
+
+	bitmap_set(p->xcall_select, sc_no, 1);
+	update_epoll_wait_select_count(p, sc_no, true);
+
+	return 0;
+}
+
+static ssize_t xcall_write(struct file *file, const char __user *buf,
+				      size_t count, loff_t *offset)
+{
+	struct inode *inode = file_inode(file);
+	struct task_struct *p;
+	char buffer[TASK_COMM_LEN];
+	const size_t maxlen = sizeof(buffer) - 1;
+	unsigned int sc_no = __NR_syscalls;
+	int ret = 0;
+	int is_clear = 0, is_switch = 0;
+
+	if (!fast_syscall_enabled())
+		return -EACCES;
+
+	memset(buffer, 0, sizeof(buffer));
+	if (!count || copy_from_user(buffer, buf, count > maxlen ? maxlen : count))
+		return -EFAULT;
+
+	p = get_proc_task(inode);
+	if (!p || !p->xcall_enable)
+		return -ESRCH;
+
+	if (buffer[0] == '!')
+		is_clear = 1;
+	else if ((buffer[0] == '@'))
+		is_switch = 1;
+
+	if (kstrtouint(buffer + is_clear + is_switch, 10, &sc_no)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (sc_no >= __NR_syscalls) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (is_switch && test_bit(sc_no, p->xcall_enable))
+		ret = xcall_select_table(p, sc_no);
+	else if (!is_switch && !is_clear && !test_bit(sc_no, p->xcall_enable))
+		ret = xcall_enable_one(p, sc_no);
+	else if (!is_switch && is_clear && test_bit(sc_no, p->xcall_enable))
+		ret = xcall_disable_one(p, sc_no);
+	else
+		ret = -EINVAL;
+
+out:
+	put_task_struct(p);
+
+	return ret ? ret : count;
+}
+
+static const struct file_operations proc_pid_xcall_operations = {
+	.open		= xcall_open,
+	.read		= seq_read,
+	.write		= xcall_write,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+#endif
+
+#ifdef CONFIG_XCALL_PREFETCH
+static ssize_t xcall_stats_write(struct file *file, const char __user *buf,
+				 size_t count, loff_t *pos)
+{
+	int cpu;
+
+	for_each_cpu(cpu, cpu_online_mask) {
+		*per_cpu_ptr(&xcall_cache_hit, cpu) = 0;
+		*per_cpu_ptr(&xcall_cache_miss, cpu) = 0;
+	}
+
+	return count;
+}
+
+static int xcall_stats_show(struct seq_file *m, void *v)
+{
+	unsigned long hit = 0, miss = 0;
+	unsigned int cpu;
+	u64 percent;
+
+	for_each_cpu(cpu, cpu_online_mask) {
+		hit = *per_cpu_ptr(&xcall_cache_hit, cpu);
+		miss = *per_cpu_ptr(&xcall_cache_miss, cpu);
+
+		if (hit == 0 && miss == 0)
+			continue;
+
+		percent = (hit * 10000ULL) / (hit + miss);
+		seq_printf(m, "cpu%d epoll cache_{hit,miss}: %ld,%ld, hit ratio: %3llu.%02llu%%\n",
+			   cpu, hit, miss, percent / 100, percent % 100);
+	}
+	return 0;
+}
+
+static int xcall_stats_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xcall_stats_show, NULL);
+}
+
+static const struct proc_ops xcall_stats_fops = {
+	.proc_open = xcall_stats_open,
+	.proc_read = seq_read,
+	.proc_write = xcall_stats_write,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release
+};
+
+struct numa_mask_entry *xcall_numa_entries;
+static int nr_numa_nodes;
+
+static ssize_t xcall_numa_masks_write(struct file *file, const char __user *buf,
+				      size_t count, loff_t *ppos)
+{
+	char *input, *token, *tmp;
+	struct cpumask tmp_mask;
+	int node, ret = 0;
+
+	input = kzalloc(count + 1, GFP_KERNEL);
+	if (!input)
+		return -ENOMEM;
+
+	if (copy_from_user(input, buf, count)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	input[count] = '\0';
+	tmp = input;
+
+	for_each_online_node(node) {
+		token = strsep(&tmp, ":");
+		if (!token || node >= nr_numa_nodes) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		if (cpulist_parse(token, &tmp_mask)) {
+			ret = -EINVAL;
+			goto out;
+		}
+		cpumask_and(&tmp_mask, &tmp_mask, cpumask_of_node(node));
+		if (cpumask_empty(&tmp_mask)) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		mutex_lock(&xcall_numa_entries[node].lock);
+		cpumask_copy(xcall_numa_entries[node].mask, &tmp_mask);
+		mutex_unlock(&xcall_numa_entries[node].lock);
+	}
+
+out:
+	kfree(input);
+	return ret ? ret : count;
+}
+
+static ssize_t xcall_numa_masks_read(struct file *file, char __user *buf,
+				     size_t count, loff_t *ppos)
+{
+	char *output, *tmp;
+	int node, ret = 0;
+	size_t len = 0;
+
+	tmp = kzalloc(num_possible_cpus() * 5, GFP_KERNEL);
+	output = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!output)
+		return -ENOMEM;
+
+	for_each_online_node(node) {
+		mutex_lock(&xcall_numa_entries[node].lock);
+		cpumap_print_to_pagebuf(true, tmp, xcall_numa_entries[node].mask);
+		mutex_unlock(&xcall_numa_entries[node].lock);
+
+		len += scnprintf(output + len, PAGE_SIZE - len,
+				 "numa %d: %s", node, tmp);
+		if (len >= PAGE_SIZE)
+			break;
+	}
+
+	ret = simple_read_from_buffer(buf, count, ppos, output, len);
+	kfree(output);
+	kfree(tmp);
+	return ret;
+}
+
+static const struct proc_ops xcall_numa_mask_fops = {
+	.proc_read = xcall_numa_masks_read,
+	.proc_write = xcall_numa_masks_write,
+};
+
+static int __init xcall_numa_masks_init(void)
+{
+	int node;
+
+	nr_numa_nodes = nr_online_nodes;
+	xcall_numa_entries = kcalloc(nr_numa_nodes, sizeof(*xcall_numa_entries),
+				     GFP_KERNEL);
+	if (!xcall_numa_entries)
+		return -ENOMEM;
+
+	for_each_online_node(node) {
+		if (!alloc_cpumask_var(&xcall_numa_entries[node].mask, GFP_KERNEL))
+			goto err_free;
+		cpumask_copy(xcall_numa_entries[node].mask, cpumask_of_node(node));
+		mutex_init(&xcall_numa_entries[node].lock);
+	}
+
+	return 0;
+
+err_free:
+	while (--node >= 0)
+		free_cpumask_var(xcall_numa_entries[node].mask);
+	kfree(xcall_numa_entries);
+	return -ENOMEM;
+}
+
+static int __init init_xcall_stats_procfs(void)
+{
+	struct proc_dir_entry *xcall_proc_dir;
+
+	if (!fast_syscall_enabled())
+		return 0;
+
+	xcall_proc_dir = proc_mkdir("xcall", NULL);
+	proc_create("stats", 0444, xcall_proc_dir, &xcall_stats_fops);
+	proc_create("numa_mask", 0644, xcall_proc_dir, &xcall_numa_mask_fops);
+	xcall_numa_masks_init();
+
+	return 0;
+}
+device_initcall(init_xcall_stats_procfs);
+#endif
+
 /*
  * Thread groups
  */
@@ -3614,6 +3969,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 #endif
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 	REG("smart_grid_level", 0644, proc_pid_sg_level_operations),
+#endif
+#ifdef CONFIG_FAST_SYSCALL
+	REG("xcall", 0644, proc_pid_xcall_operations),
 #endif
 #ifdef CONFIG_SCHED_AUTOGROUP
 	REG("autogroup",  S_IRUGO|S_IWUSR, proc_pid_sched_autogroup_operations),
