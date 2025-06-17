@@ -3589,6 +3589,153 @@ static const struct file_operations proc_pid_sg_level_operations = {
 };
 #endif
 
+#ifdef CONFIG_FAST_SYSCALL
+#include <linux/xcall.h>
+
+static int xcall_show(struct seq_file *m, void *v)
+{
+	struct inode *inode = m->private;
+	struct task_struct *p;
+	unsigned int rs, re, sc_no;
+	struct xcall_info *xinfo;
+
+	if (!fast_syscall_enabled())
+		return -EACCES;
+
+	p = get_proc_task(inode);
+	if (!p)
+		return -ESRCH;
+
+	if (!p->xinfo)
+		goto out;
+
+	xinfo = p->xinfo;
+	seq_printf(m, "Enabled Total[%d/%d]:", bitmap_weight(xinfo->xcall_enable, __NR_syscalls),
+			__NR_syscalls);
+
+	for (rs = 0, bitmap_next_set_region(xinfo->xcall_enable, &rs, &re, __NR_syscalls);
+	     rs < re; rs = re + 1,
+	     bitmap_next_set_region(xinfo->xcall_enable, &rs, &re, __NR_syscalls)) {
+		rs == (re - 1) ? seq_printf(m, "%d,", rs) :
+					seq_printf(m, "%d-%d,", rs, re - 1);
+	}
+	seq_puts(m, "\nAvailable:\n");
+
+	for (sc_no = 0; sc_no < __NR_syscalls; sc_no++) {
+		if (test_bit(sc_no, xinfo->xcall_select)) {
+			seq_printf(m, "NR_syscall: %3d: enabled: %d ",
+				   sc_no, test_bit(sc_no, xinfo->xcall_enable));
+			seq_printf(m, "xcall_select: %d\n",
+				   test_bit(sc_no, xinfo->xcall_select));
+		}
+	}
+out:
+	put_task_struct(p);
+
+	return 0;
+}
+
+static int xcall_open(struct inode *inode, struct file *filp)
+{
+	return single_open(filp, xcall_show, inode);
+}
+
+static int xcall_enable_one(struct xcall_info *xinfo, unsigned int sc_no)
+{
+	if (test_bit(sc_no, xinfo->xcall_select))
+		return -EINVAL;
+
+	bitmap_set(xinfo->xcall_enable, sc_no, 1);
+	return 0;
+}
+
+static int xcall_disable_one(struct xcall_info *xinfo, unsigned int sc_no)
+{
+	if (test_bit(sc_no, xinfo->xcall_select))
+		return -EINVAL;
+
+	bitmap_clear(xinfo->xcall_enable, sc_no, 1);
+	return 0;
+}
+
+static int xcall_select_table(struct xcall_info *xinfo, unsigned int sc_no)
+{
+	if (!test_bit(sc_no, xinfo->xcall_enable)) {
+		pr_err("Please enable NR_syscall: %d to xcall first.\n", sc_no);
+		return -EINVAL;
+	}
+
+	if (test_bit(sc_no, xinfo->xcall_select))
+		return -EINVAL;
+
+	bitmap_set(xinfo->xcall_select, sc_no, 1);
+
+	return 0;
+}
+
+static ssize_t xcall_write(struct file *file, const char __user *buf,
+				      size_t count, loff_t *offset)
+{
+	struct inode *inode = file_inode(file);
+	struct task_struct *p;
+	char buffer[TASK_COMM_LEN];
+	const size_t maxlen = sizeof(buffer) - 1;
+	unsigned int sc_no = __NR_syscalls;
+	int ret = 0;
+	int is_clear = 0, is_switch = 0;
+	struct xcall_info *xinfo;
+
+	if (!fast_syscall_enabled())
+		return -EACCES;
+
+	memset(buffer, 0, sizeof(buffer));
+	if (!count || copy_from_user(buffer, buf, count > maxlen ? maxlen : count))
+		return -EFAULT;
+
+	p = get_proc_task(inode);
+	if (!p || !p->xinfo)
+		return -ESRCH;
+
+	xinfo = p->xinfo;
+	if (buffer[0] == '!')
+		is_clear = 1;
+	else if ((buffer[0] == '@'))
+		is_switch = 1;
+
+	if (kstrtouint(buffer + is_clear + is_switch, 10, &sc_no)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (sc_no >= __NR_syscalls) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (is_switch && test_bit(sc_no, xinfo->xcall_enable))
+		ret = xcall_select_table(xinfo, sc_no);
+	else if (!is_switch && !is_clear && !test_bit(sc_no, xinfo->xcall_enable))
+		ret = xcall_enable_one(xinfo, sc_no);
+	else if (!is_switch && is_clear && test_bit(sc_no, xinfo->xcall_enable))
+		ret = xcall_disable_one(xinfo, sc_no);
+	else
+		ret = -EINVAL;
+
+out:
+	put_task_struct(p);
+
+	return ret ? ret : count;
+}
+
+static const struct file_operations proc_pid_xcall_operations = {
+	.open		= xcall_open,
+	.read		= seq_read,
+	.write		= xcall_write,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+#endif
+
 /*
  * Thread groups
  */
@@ -3614,6 +3761,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 #endif
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 	REG("smart_grid_level", 0644, proc_pid_sg_level_operations),
+#endif
+#ifdef CONFIG_FAST_SYSCALL
+	REG("xcall", 0644, proc_pid_xcall_operations),
 #endif
 #ifdef CONFIG_SCHED_AUTOGROUP
 	REG("autogroup",  S_IRUGO|S_IWUSR, proc_pid_sched_autogroup_operations),
