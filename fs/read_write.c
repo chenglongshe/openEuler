@@ -622,6 +622,30 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 	struct fd f = fdget_pos(fd);
 	ssize_t ret = -EBADF;
 
+#ifdef CONFIG_FAST_SYSCALL
+	struct prefetch_item *pfi = NULL;
+
+	if (!current->xcall_select ||
+	    !test_bit(__NR_epoll_pwait, current->xcall_select))
+		goto vfs_read;
+
+	if (!f.file)
+		goto vfs_read;
+
+	pfi = find_prefetch_item(f.file);
+	if (!pfi)
+		goto vfs_read;
+
+	ret = xcall_read(pfi, fd, buf, count);
+	if (ret != -EAGAIN) {
+		fdput_pos(f);
+		return ret;
+	}
+vfs_read:
+	if (pfi && atomic_read(&pfi->state) != XCALL_CACHE_CANCEL)
+		pr_err("pfi 0x%px vfs_read() with %d state unexpected!\n",
+		       pfi, atomic_read(&pfi->state));
+#endif
 	if (f.file) {
 		loff_t pos, *ppos = file_ppos(f.file);
 		if (ppos) {
@@ -632,6 +656,11 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 		if (ret >= 0 && ppos)
 			f.file->f_pos = pos;
 		fdput_pos(f);
+#ifdef CONFIG_FAST_SYSCALL
+		if (current->xcall_select &&
+		    test_bit(__NR_epoll_pwait, current->xcall_select) && pfi)
+			transition_state(pfi, XCALL_CACHE_CANCEL, XCALL_CACHE_NONE);
+#endif
 	}
 	return ret;
 }
