@@ -48,6 +48,10 @@ asmlinkage long __arm64_sys_ni_syscall(const struct pt_regs *__unused)
  */
 #define __arm64_sys_personality		__arm64_sys_arm64_personality
 
+#ifdef CONFIG_FAST_SYSCALL
+#undef __XCALL
+#endif
+
 #undef __SYSCALL
 #define __SYSCALL(nr, sym)	asmlinkage long __arm64_##sym(const struct pt_regs *);
 #include <asm/unistd.h>
@@ -59,3 +63,19 @@ const syscall_fn_t sys_call_table[__NR_syscalls] = {
 	[0 ... __NR_syscalls - 1] = __arm64_sys_ni_syscall,
 #include <asm/unistd.h>
 };
+
+#ifdef CONFIG_FAST_SYSCALL
+#undef __SYSCALL
+
+#undef __XCALL
+#define __XCALL(nr, sym)	asmlinkage long __arm64_xcall_##sym(const struct pt_regs *);
+#include <asm/unistd.h>
+
+#undef __XCALL
+#define __XCALL(nr, sym)	[nr] = __arm64_xcall_##sym,
+
+const syscall_fn_t x_call_table[__NR_syscalls] = {
+	[0 ... __NR_syscalls - 1] = __arm64_sys_ni_syscall,
+#include <asm/unistd.h>
+};
+#endif

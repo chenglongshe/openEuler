@@ -48,6 +48,31 @@
 
 #endif /* CONFIG_COMPAT */
 
+#ifdef CONFIG_FAST_SYSCALL
+#define __XCALL_DEFINEx(x, name, ...)							\
+	asmlinkage long __arm64_xcall_sys##name(const struct pt_regs *regs);		\
+	ALLOW_ERROR_INJECTION(__arm64_xcall_sys##name, ERRNO);				\
+	static long __se_xcall_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));		\
+	static inline long __do_xcall_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));	\
+	asmlinkage long __arm64_xcall_sys##name(const struct pt_regs *regs)		\
+	{										\
+		return __se_xcall_sys##name(SC_ARM64_REGS_TO_ARGS(x,__VA_ARGS__));	\
+	}										\
+	static long __se_xcall_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))		\
+	{										\
+		long ret = __do_xcall_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));	\
+		__MAP(x,__SC_TEST,__VA_ARGS__);						\
+		__PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));			\
+		return ret;								\
+	}										\
+	static inline long __do_xcall_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+
+#define XCALL_DEFINE0(sname)								\
+	asmlinkage long __arm64_xcall_sys_##sname(const struct pt_regs *__unused);	\
+	ALLOW_ERROR_INJECTION(__arm64_xcall_sys_##sname, ERRNO);			\
+	asmlinkage long __arm64_xcall_sys_##sname(const struct pt_regs *__unused)
+#endif
+
 #define __SYSCALL_DEFINEx(x, name, ...)						\
 	asmlinkage long __arm64_sys##name(const struct pt_regs *regs);		\
 	ALLOW_ERROR_INJECTION(__arm64_sys##name, ERRNO);			\
