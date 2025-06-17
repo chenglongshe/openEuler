@@ -79,6 +79,7 @@ static void file_free_rcu(struct rcu_head *head)
 
 	put_cred(f->f_cred);
 	kmem_cache_free(filp_cachep, GET_FILE_WRAP(f));
+	free_prefetch_item(f);
 }
 
 static inline void file_free(struct file *f)
