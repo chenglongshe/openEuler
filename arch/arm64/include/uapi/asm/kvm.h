@@ -437,6 +437,7 @@ enum {
 
 #define ARM_RME_CONFIG_RPV_SIZE 64
 
+#define KVM_CAP_ARM_RME_CFG_DBG			3
 #define KVM_CAP_ARM_RME_CFG_PMU			4
 
 struct arm_rme_config {
@@ -450,6 +451,12 @@ struct arm_rme_config {
 		/* cfg == ARM_RME_CONFIG_HASH_ALGO */
 		struct {
 			__u32	hash_algo;
+		};
+
+		/* cfg == KVM_CAP_ARM_RME_CFG_DBG */
+		struct {
+			__u32	num_brps;
+			__u32	num_wrps;
 		};
 
 		/* cfg == KVM_CAP_ARM_RME_CFG_PMU */
