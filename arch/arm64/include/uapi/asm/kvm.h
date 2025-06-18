@@ -437,6 +437,8 @@ enum {
 
 #define ARM_RME_CONFIG_RPV_SIZE 64
 
+#define KVM_CAP_ARM_RME_CFG_PMU			4
+
 struct arm_rme_config {
 	__u32 cfg;
 	union {
@@ -448,6 +450,11 @@ struct arm_rme_config {
 		/* cfg == ARM_RME_CONFIG_HASH_ALGO */
 		struct {
 			__u32	hash_algo;
+		};
+
+		/* cfg == KVM_CAP_ARM_RME_CFG_PMU */
+		struct {
+			__u32	num_pmu_cntrs;
 		};
 
 		/* Fix the size of the union */
