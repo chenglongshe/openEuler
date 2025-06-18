@@ -8,6 +8,8 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 
+unsigned long shm_align_mask = PAGE_SIZE - 1;  /* Sane caches */
+EXPPORT_SYMBOL(shm_align_mask);
 #define SHM_ALIGN_MASK	(SHMLBA - 1)
 
 #define COLOUR_ALIGN(addr, pgoff)			\
