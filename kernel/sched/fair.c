@@ -7109,6 +7109,55 @@ static int wake_affine(struct sched_domain *sd, struct task_struct *p,
 static struct sched_group *
 find_idlest_group(struct sched_domain *sd, struct task_struct *p, int this_cpu);
 
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+static inline bool sched_group_sf_preferred(struct task_struct *p, struct sched_group *group)
+{
+	struct soft_domain_ctx *ctx = NULL;
+
+	if (!sched_feat(SOFT_DOMAIN))
+		return true;
+
+	ctx = task_group(p)->sf_ctx;
+	if (!ctx || ctx->policy == 0)
+		return true;
+
+	if (!cpumask_intersects(sched_group_span(group), to_cpumask(ctx->span)))
+		return false;
+
+	return true;
+}
+
+static inline bool cpu_is_sf_preferred(struct task_struct *p, int cpu)
+{
+	struct soft_domain_ctx *ctx = NULL;
+
+	if (!sched_feat(SOFT_DOMAIN))
+		return true;
+
+	ctx = task_group(p)->sf_ctx;
+	if (!ctx || ctx->policy == 0)
+		return true;
+
+	if (!cpumask_test_cpu(cpu, to_cpumask(ctx->span)))
+		return false;
+
+	return true;
+}
+#else
+
+static inline bool sched_group_sf_preferred(struct task_struct *p, struct sched_group *group)
+{
+	return true;
+}
+
+static inline bool cpu_is_sf_preferred(struct task_struct *p, int cpu)
+{
+	return true;
+}
+
+#endif
+
+
 /*
  * find_idlest_group_cpu - find the idlest CPU among the CPUs in the group.
  */
@@ -7135,6 +7184,9 @@ find_idlest_group_cpu(struct sched_group *group, struct task_struct *p, int this
 		struct rq *rq = cpu_rq(i);
 
 		if (!sched_core_cookie_match(rq, p))
+			continue;
+
+		if (!cpu_is_sf_preferred(p, i))
 			continue;
 
 		if (sched_idle_cpu(i))
@@ -8240,7 +8292,7 @@ static void set_task_select_cpus(struct task_struct *p, int *idlest_cpu,
 #endif
 
 #ifdef CONFIG_SCHED_SOFT_DOMAIN
-static int wake_soft_domain(struct task_struct *p, int target)
+static int wake_soft_domain(struct task_struct *p, int target, int *cpu, int sd_flags)
 {
 	struct cpumask *mask = this_cpu_cpumask_var_ptr(select_idle_mask);
 	struct soft_domain_ctx *ctx = NULL;
@@ -8256,10 +8308,13 @@ static int wake_soft_domain(struct task_struct *p, int target)
 #endif
 	cpumask_and(mask, mask, cpu_active_mask);
 	if (cpumask_empty(mask) || cpumask_test_cpu(target, mask))
-		goto out;
+		goto prefer;
 	else
 		target = cpumask_any_and_distribute(mask, mask);
 
+prefer:
+	if (sd_flags & SD_BALANCE_FORK)
+		*cpu = target;
 out:
 
 	return target;
@@ -8331,7 +8386,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 
 #ifdef CONFIG_SCHED_SOFT_DOMAIN
 	if (sched_feat(SOFT_DOMAIN))
-		new_cpu = prev_cpu = wake_soft_domain(p, prev_cpu);
+		new_cpu = prev_cpu = wake_soft_domain(p, prev_cpu, &cpu, sd_flag);
 #endif
 #ifdef CONFIG_BPF_SCHED
 	if (bpf_sched_enabled()) {
@@ -11319,6 +11374,10 @@ find_idlest_group(struct sched_domain *sd, struct task_struct *p, int this_cpu)
 
 		/* Skip over this group if no cookie matched */
 		if (!sched_group_cookie_match(cpu_rq(this_cpu), p, group))
+			continue;
+
+		/* Skip over this group if not in soft domain */
+		if (!sched_group_sf_preferred(p, group))
 			continue;
 
 		local_group = cpumask_test_cpu(this_cpu,
