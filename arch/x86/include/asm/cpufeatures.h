@@ -13,7 +13,7 @@
 /*
  * Defines x86 CPU feature bits
  */
-#define NCAPINTS			19	   /* N 32-bit words worth of info */
+#define NCAPINTS			22	   /* N 32-bit words worth of info */
 #define NBUGINTS			1	   /* N 32-bit bug flags */
 #define NEXTBUGINTS			1	   /* N 32-bit extended bug flags */
 /*
@@ -255,6 +255,7 @@
 #define X86_FEATURE_EPT_AD		( 8*32+17) /* Intel Extended Page Table access-dirty bit */
 #define X86_FEATURE_VMCALL		( 8*32+18) /* "" Hypervisor supports the VMCALL instruction */
 #define X86_FEATURE_VMW_VMMCALL		( 8*32+19) /* "" VMware prefers VMMCALL hypercall instruction */
+#define X86_FEATURE_CSV3		(8*32+20) /* HYGON 3rd-generation CSV */
 
 /* Intel-defined CPU features, CPUID level 0x00000007:0 (EBX), word 9 */
 #define X86_FEATURE_FSGSBASE		( 9*32+ 0) /* RDFSBASE, WRFSBASE, RDGSBASE, WRGSBASE instructions*/
@@ -460,6 +461,10 @@
 
 /* AMD-defined Extended Feature 2 EAX, CPUID level 0x80000021 (EAX), word 20 */
 #define X86_FEATURE_AUTOIBRS		(20*32+ 8) /* "" Automatic IBRS */
+
+/* HYGON-defined CPU features, CPUID level 0x8c860000:0 (EDX), word 21 */
+#define X86_FEATURE_HYGON_SM3		(21*32 + 1) /* "sm3" SM3 instructions */
+#define X86_FEATURE_HYGON_SM4		(21*32 + 2) /* "sm4" SM4 instructions */
 
 /*
  * BUG word(s)
