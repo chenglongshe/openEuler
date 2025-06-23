@@ -643,21 +643,43 @@ static __always_inline void kvm_reset_cptr_el2(struct kvm_vcpu *vcpu)
 	kvm_write_cptr_el2(val);
 }
 
-#ifdef CONFIG_HISI_VIRTCCA_HOST
-static inline bool kvm_is_virtcca_cvm(struct kvm *kvm)
+static inline bool kvm_is_realm(struct kvm *kvm)
 {
-	if (static_branch_unlikely(&virtcca_cvm_is_available))
-		return kvm->arch.is_virtcca_cvm;
+	if (static_branch_unlikely(&kvm_rme_is_available) && kvm)
+		return kvm->arch.is_realm;
 	return false;
 }
 
-static inline enum virtcca_cvm_state virtcca_cvm_state(struct kvm *kvm)
+static inline enum realm_state kvm_realm_state(struct kvm *kvm)
 {
-	struct virtcca_cvm *virtcca_cvm = kvm->arch.virtcca_cvm;
-
-	if (!virtcca_cvm)
-		return 0;
-	return READ_ONCE(virtcca_cvm->state);
+	return READ_ONCE(kvm->arch.realm.state);
 }
-#endif
+
+static inline bool kvm_realm_is_created(struct kvm *kvm)
+{
+	return kvm_is_realm(kvm) && kvm_realm_state(kvm) != REALM_STATE_NONE;
+}
+
+static inline gpa_t kvm_gpa_from_fault(struct kvm *kvm, phys_addr_t ipa)
+{
+	if (kvm_is_realm(kvm)) {
+		struct realm *realm = &kvm->arch.realm;
+
+		return ipa & ~BIT(realm->ia_bits - 1);
+	}
+	return ipa;
+}
+
+static inline bool vcpu_is_rec(struct kvm_vcpu *vcpu)
+{
+	if (static_branch_unlikely(&kvm_rme_is_available))
+		return vcpu_has_feature(vcpu, KVM_ARM_VCPU_REC);
+	return false;
+}
+
+static inline bool kvm_arm_rec_finalized(struct kvm_vcpu *vcpu)
+{
+	return vcpu->arch.rec.mpidr != INVALID_HWID;
+}
+
 #endif /* __ARM64_KVM_EMULATE_H__ */
