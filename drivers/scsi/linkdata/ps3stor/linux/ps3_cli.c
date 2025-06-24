@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) LD. */
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/errno.h>
@@ -15,38 +13,44 @@
 #include <linux/version.h>
 #include "ps3_cli.h"
 #include "ps3_instance_manager.h"
-#include "ps3_kernel_version.h"
 
 #define PS3_CLI_STATIC_MINOR 26
 #define PS3_CLI_DYNAMIC_MINOR MISC_DYNAMIC_MINOR
-#define PS3_CLI_HASH_LEN 256
+#define PS3_CLI_HASH_LEN	256
 
 struct ps3_cli_cmd_s {
 	struct ps3_cli_cmd_s *next;
 	char cmd[PS3_CLI_CMD_MAXLEN];
 	char help[PS3_CLI_HELP_LEN];
-	void (*func)(int argc, char *argv[]);
+	ps3_cli_func_t func;
 };
 
 static int misc_registered;
-static atomic_t dev_opened;
+static ps3_atomic32 dev_opened;
 static int cmd_ready;
 static char ps3_cli_input[PS3_CLI_INPUT_LEN];
 static char ps3_cli_output[PS3_CLI_OUTLINE_LEN];
 static char __user *read_buf;
-static int read_buf_len;
-static int read_buf_ptr;
+static int  read_buf_len;
+static int  read_buf_ptr;
 
 static struct ps3_cli_cmd_s *ps3_cli_cmd_head[PS3_CLI_HASH_LEN];
 static struct mutex ps3_cli_mutex;
 
+#if 0
+#define __pl()	printk("func = %s, line = %d\n", __FUNCTION__, __LINE__)
+#else
 #define __pl()
+#endif
 
-static inline int ps3_cli_minor_get(void)
+static inline S32 ps3_cli_minor_get(void)
 {
 	if (strstr(ps3_host_release_get(), "5.10.134-16.2.an8"))
 		return PS3_CLI_DYNAMIC_MINOR;
-#if defined(PS3_STATIC_MINOR)
+
+#if ((defined(RHEL_MAJOR) && \
+	((RHEL_MAJOR < 9) || (RHEL_MAJOR == 9 && RHEL_MINOR < 3))) || \
+	(!defined(RHEL_MAJOR) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)))
 	return PS3_CLI_STATIC_MINOR;
 #else
 	return PS3_CLI_DYNAMIC_MINOR;
@@ -54,12 +58,12 @@ static inline int ps3_cli_minor_get(void)
 }
 
 static ssize_t ps3_cli_write(struct file *fp, const char __user *buffer,
-			     size_t nbytes, loff_t *ppos)
+                  size_t nbytes, loff_t *ppos)
 {
 	__pl();
 	(void)fp;
 	(void)ppos;
-	if (nbytes > PS3_CLI_INPUT_LEN - 1)
+	if (nbytes>PS3_CLI_INPUT_LEN-1)
 		return -EINVAL;
 
 	if (copy_from_user(ps3_cli_input, buffer, nbytes))
@@ -73,10 +77,10 @@ static ssize_t ps3_cli_write(struct file *fp, const char __user *buffer,
 static u32 str_hash(const char *name)
 {
 	u32 hash, hash0 = 0x12a3fe2d, hash1 = 0x37abe8f9;
-	const signed char *scp = (const signed char *)name;
+	const signed char *scp = (const signed char*)name;
 
 	while (*scp) {
-		hash = hash1 + (hash0 ^ (((int)*scp++) * 7152373));
+		hash = hash1 + (hash0 ^ (((int) *scp++) * 7152373));
 
 		if (hash & 0x80000000)
 			hash -= 0x7fffffff;
@@ -88,10 +92,10 @@ static u32 str_hash(const char *name)
 
 static struct ps3_cli_cmd_s *ps3_cli_find_cmd(const char *cmd)
 {
-	u32 idx = str_hash(cmd) & (PS3_CLI_HASH_LEN - 1);
+	u32 idx = str_hash(cmd) & (PS3_CLI_HASH_LEN-1);
 	struct ps3_cli_cmd_s *p;
 
-	for (p = ps3_cli_cmd_head[idx]; p; p = p->next)
+	for (p=ps3_cli_cmd_head[idx]; p; p=p->next)
 		if (!strcmp(p->cmd, cmd))
 			return p;
 	return NULL;
@@ -108,15 +112,16 @@ int ps3stor_cli_printf(const char *fmt, ...)
 	len = vsnprintf(ps3_cli_output, PS3_CLI_OUTLINE_LEN, fmt, args);
 	va_end(args);
 
-	if (read_buf_ptr >= read_buf_len)
+	if (read_buf_ptr>=read_buf_len) {
 		return read_buf_ptr;
+	}
 
-	n = read_buf_len - read_buf_ptr;
-	if (n > len)
+	n = read_buf_len-read_buf_ptr;
+	if (n>len)
 		n = len;
 
-	ret = copy_to_user(read_buf + read_buf_ptr, ps3_cli_output, n);
-	if (ret < 0) {
+	ret = copy_to_user(read_buf+read_buf_ptr, ps3_cli_output, n);
+	if (ret<0) {
 		pr_err("copy_to_user err=%d\n", ret);
 		return -1;
 	}
@@ -129,19 +134,17 @@ int ps3stor_cli_printf(const char *fmt, ...)
 }
 EXPORT_SYMBOL(ps3stor_cli_printf);
 
-int ps3stor_cli_register(void (*func)(int argc, char *argv[]), const char *cmd_str,
-			 const char *help)
+int ps3stor_cli_register(ps3_cli_func_t func, const char *cmd_str, const char *help)
 {
-	u32 idx = str_hash(cmd_str) & (PS3_CLI_HASH_LEN - 1);
+	u32 idx = str_hash(cmd_str) & (PS3_CLI_HASH_LEN-1);
 	struct ps3_cli_cmd_s *cmd;
 	int ret;
 
 	__pl();
 
 	ret = mutex_lock_killable(&ps3_cli_mutex);
-	if (ret != 0) {
-		pr_err("%s(): mutex_lock_killable return err = %d\n",
-		       __func__, ret);
+	if (ret!=0) {
+		pr_err("ps3stor_cli_register(): mutex_lock_killable return err = %d\n", ret);
 		return ret;
 	}
 	cmd = ps3_cli_find_cmd(cmd_str);
@@ -151,8 +154,9 @@ int ps3stor_cli_register(void (*func)(int argc, char *argv[]), const char *cmd_s
 		return -EEXIST;
 	}
 
-	cmd = kmalloc(sizeof(struct ps3_cli_cmd_s), GFP_KERNEL);
-	if (cmd == NULL) {
+	cmd = (struct ps3_cli_cmd_s *)kmalloc(sizeof(struct ps3_cli_cmd_s), GFP_KERNEL);
+	if (cmd==NULL) {
+		pr_err("out of memory\n");
 		mutex_unlock(&ps3_cli_mutex);
 		return -ENOMEM;
 	}
@@ -176,11 +180,10 @@ EXPORT_SYMBOL(ps3stor_cli_register);
 static void ps3_parse_cmd(char *cmdline, int *argc, char *argv[])
 {
 	char *p = cmdline;
-	int i = 0, spc = 1;
-
-	while (*p) {
+	int i=0, spc=1;
+	while(*p) {
 		if (spc) {
-			if (*p != ' ') {
+			if (*p!=' ') {
 				spc = 0;
 				argv[i] = p;
 				i++;
@@ -188,7 +191,7 @@ static void ps3_parse_cmd(char *cmdline, int *argc, char *argv[])
 				*p = '\0';
 			}
 		} else {
-			if (*p == ' ') {
+			if (*p==' ') {
 				spc = 1;
 				*p = '\0';
 			} else {
@@ -199,8 +202,8 @@ static void ps3_parse_cmd(char *cmdline, int *argc, char *argv[])
 	*argc = i;
 }
 
-static ssize_t ps3_cli_read(struct file *fp, char __user *buf, size_t nbytes,
-			    loff_t *ppos)
+static ssize_t ps3_cli_read(struct file *fp, char __user *buf,
+                 size_t nbytes, loff_t *ppos)
 {
 	struct ps3_cli_cmd_s *cmd;
 	int argc;
@@ -222,14 +225,14 @@ static ssize_t ps3_cli_read(struct file *fp, char __user *buf, size_t nbytes,
 	ps3_parse_cmd(ps3_cli_input, &argc, argv);
 
 	ret = mutex_lock_killable(&ps3_cli_mutex);
-	if (ret != 0) {
-		pr_err("ps3stor_cli_register(): mutex_lock_killable return err = %d\n",
-		       ret);
+	if (ret!=0) {
+		pr_err("ps3stor_cli_register(): mutex_lock_killable return err = %d\n", ret);
 		return ret;
 	}
-	cmd = ps3_cli_find_cmd((const char *)argv[0]);
-	if (cmd != NULL)
+	cmd = ps3_cli_find_cmd((const char*)argv[0]);
+	if (cmd!=NULL) {
 		cmd->func(argc, argv);
+	}
 	mutex_unlock(&ps3_cli_mutex);
 
 	__pl();
@@ -256,19 +259,21 @@ static int ps3_cli_release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
-static const struct file_operations ps3_cli_fops = { .owner = NULL,
-						     .unlocked_ioctl = NULL,
-						     .open = ps3_cli_open,
-						     .release = ps3_cli_release,
-						     .llseek = NULL,
-						     .read = ps3_cli_read,
-						     .write = ps3_cli_write,
-						     .fasync = NULL };
+static const struct file_operations ps3_cli_fops = {
+	.owner = NULL,
+	.unlocked_ioctl = NULL,
+	.open = ps3_cli_open,
+	.release = ps3_cli_release,
+	.llseek = NULL,
+	.read = ps3_cli_read,
+	.write = ps3_cli_write,
+    .fasync = NULL
+};
 
 static struct miscdevice ps3_cli_device = {
 	.minor = PS3_CLI_STATIC_MINOR,
-	.name = "ps3stor_cli",
-	.fops = &ps3_cli_fops,
+    .name = "ps3stor_cli",
+    .fops = &ps3_cli_fops,
 };
 
 static void ps3_cli_help(int argc, char *argv[])
@@ -278,10 +283,9 @@ static void ps3_cli_help(int argc, char *argv[])
 	(void)argc;
 	(void)argv;
 	__pl();
-	for (i = 0; i < PS3_CLI_HASH_LEN; i++) {
-		for (cmd = ps3_cli_cmd_head[i]; cmd != NULL; cmd = cmd->next) {
-			ps3stor_cli_printf("%20s -- %s\n", cmd->cmd,
-					   (const char *)cmd->help);
+	for (i=0; i<PS3_CLI_HASH_LEN; i++) {
+		for (cmd=ps3_cli_cmd_head[i]; cmd!=NULL; cmd=cmd->next) {
+			ps3stor_cli_printf("%20s -- %s\n", cmd->cmd, (const char*)cmd->help);
 		}
 	}
 	__pl();
@@ -291,8 +295,7 @@ static void ps3_free_cmds(void)
 {
 	int i;
 	struct ps3_cli_cmd_s *cmd;
-
-	for (i = 0; i < PS3_CLI_HASH_LEN; i++) {
+	for (i=0; i<PS3_CLI_HASH_LEN; i++) {
 		while (ps3_cli_cmd_head[i]) {
 			cmd = ps3_cli_cmd_head[i];
 			ps3_cli_cmd_head[i] = cmd->next;
@@ -318,8 +321,7 @@ int ps3cmd_init(void)
 		return err;
 	}
 	misc_registered = 1;
-	ps3stor_cli_register(ps3_cli_help, "help",
-			     "show this help information");
+	ps3stor_cli_register(ps3_cli_help, "help", "show this help information");
 	return 0;
 }
 
@@ -332,3 +334,4 @@ void ps3cmd_exit(void)
 	misc_registered = 0;
 	mutex_destroy(&ps3_cli_mutex);
 }
+

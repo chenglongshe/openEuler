@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) LD. */
+
 #ifndef _PS3_PCIE_ERR_HANDLE_H_
 #define _PS3_PCIE_ERR_HANDLE_H_
 
@@ -8,7 +7,7 @@
 
 #include "ps3_instance_manager.h"
 #ifdef __cplusplus
-extern "C" {
+extern "C"{
 #endif
 
 void ps3_pci_err_handler_init(struct pci_driver *drv);
