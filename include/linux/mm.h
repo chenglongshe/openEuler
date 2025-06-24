@@ -342,6 +342,12 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_HIGH_ARCH_3	BIT(VM_HIGH_ARCH_BIT_3)
 #define VM_HIGH_ARCH_4	BIT(VM_HIGH_ARCH_BIT_4)
 #define VM_HIGH_ARCH_5	BIT(VM_HIGH_ARCH_BIT_5)
+
+#ifdef CONFIG_GMEM
+#define VM_PEER_SHARED	BIT(56)
+#else
+#define VM_PEER_SHARED	VM_NONE
+#endif
 #endif /* CONFIG_ARCH_USES_HIGH_VMA_FLAGS */
 
 #ifdef CONFIG_ARCH_HAS_PKEYS
@@ -574,6 +580,13 @@ struct vm_fault {
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
+};
+
+/* page entry size for vm->huge_fault() */
+enum page_entry_size {
+	PE_SIZE_PTE = 0,
+	PE_SIZE_PMD,
+	PE_SIZE_PUD,
 };
 
 /*
@@ -3404,6 +3417,10 @@ unsigned long randomize_page(unsigned long start, unsigned long range);
 
 extern unsigned long get_unmapped_area(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);
 
+extern unsigned long get_unmapped_area_aligned(struct file *file,
+	unsigned long addr, unsigned long len, unsigned long pgoff,
+	unsigned long flags, unsigned long align);
+
 extern unsigned long mmap_region(struct file *file, unsigned long addr,
 	unsigned long len, vm_flags_t vm_flags, unsigned long pgoff,
 	struct list_head *uf);
@@ -4297,4 +4314,28 @@ int set_linear_mapping_invalid(unsigned long start_pfn, unsigned long end_pfn,
 	return -EINVAL;
 }
 #endif
+
+#ifdef CONFIG_GMEM
+DECLARE_STATIC_KEY_FALSE(gmem_status);
+
+static inline bool gmem_is_enabled(void)
+{
+	return static_branch_likely(&gmem_status);
+}
+
+static inline bool vma_is_peer_shared(struct vm_area_struct *vma)
+{
+	if (!gmem_is_enabled())
+		return false;
+
+	return !!(vma->vm_flags & VM_PEER_SHARED);
+}
+#else
+static inline bool gmem_is_enabled(void) { return false; }
+static inline bool vma_is_peer_shared(struct vm_area_struct *vma)
+{
+	return false;
+}
+#endif
+
 #endif /* _LINUX_MM_H */
