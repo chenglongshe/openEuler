@@ -8203,6 +8203,13 @@ CONFIG_INTEL_TH_PTI=m
 #
 # CONFIG_CPU_INSPECT is not set
 # end of CPU Inspect
+
+#
+# remote pager device
+#
+CONFIG_REMOTE_PAGER=m
+CONFIG_REMOTE_PAGER_MASTER=m
+# end of remote pager device
 # end of Device Drivers
 
 #

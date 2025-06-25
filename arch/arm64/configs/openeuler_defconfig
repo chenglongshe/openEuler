@@ -7009,6 +7009,13 @@ CONFIG_CPU_INSPECTOR_ATF=m
 CONFIG_ROH=m
 CONFIG_ROH_HNS=m
 CONFIG_ARM_SPE_MEM_SAMPLING=y
+
+#
+# remote pager device
+#
+CONFIG_REMOTE_PAGER=m
+CONFIG_REMOTE_PAGER_MASTER=m
+# end of remote pager device
 # end of Device Drivers
 
 #
