@@ -439,9 +439,22 @@ static struct task_struct *pick_task_idle(struct rq *rq)
 }
 #endif
 
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+int __weak is_sibling_idle(void)
+{
+	return 0;
+}
+#endif
+
 struct task_struct *pick_next_task_idle(struct rq *rq)
 {
 	struct task_struct *next = rq->idle;
+
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	if (unthrottle_cfs_rq_soft_quota(rq) && rq->cfs.nr_running &&
+		is_sibling_idle())
+		return pick_next_task_fair(rq, NULL, NULL);
+#endif
 
 	set_next_task_idle(rq, next, true);
 
