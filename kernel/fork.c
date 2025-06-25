@@ -99,6 +99,11 @@
 #include <linux/stackprotector.h>
 #include <linux/user_events.h>
 #include <linux/iommu.h>
+
+#ifdef CONFIG_GMEM
+#include <linux/vm_object.h>
+#endif
+
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 #include <linux/sched/grid_qos.h>
 #endif
@@ -525,6 +530,13 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 	INIT_LIST_HEAD(&new->anon_vma_chain);
 	vma_numab_state_init(new);
 	dup_anon_vma_name(orig, new);
+
+#ifdef CONFIG_GMEM
+	if (vma_is_peer_shared(orig)) {
+		pr_debug("gmem: peer-shared vma should not be dup\n");
+		new->vm_obj = vm_object_create(new);
+	}
+#endif
 
 	return new;
 }

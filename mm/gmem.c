@@ -231,7 +231,7 @@ gm_ret_t gm_dev_fault(struct mm_struct *mm, unsigned long addr, struct gm_dev *d
 	struct gm_mmu *mmu = dev->mmu;
 	struct device *dma_dev = dev->dma_dev;
 	struct vm_area_struct *vma;
-	vm_object_t *obj;
+	struct vm_object *obj;
 	struct gm_mapping *gm_mapping;
 	unsigned long size = HPAGE_SIZE;
 	struct gm_fault_t gmf = { .mm = mm,
@@ -334,7 +334,7 @@ vm_fault_t gm_host_fault_locked(struct vm_fault *vmf,
 	vm_fault_t ret = 0;
 	struct vm_area_struct *vma = vmf->vma;
 	unsigned long addr = vmf->address & pe_mask(order);
-	vm_object_t *obj = vma->vm_obj;
+	struct vm_object *obj = vma->vm_obj;
 	struct gm_mapping *gm_mapping;
 	unsigned long size = HPAGE_SIZE;
 	struct gm_dev *dev;
@@ -697,7 +697,7 @@ static int gmem_unmap_vma_pages(struct vm_area_struct *vma, unsigned long start,
 		.copy = false,
 	};
 	struct gm_mapping *gm_mapping;
-	vm_object_t *obj;
+	struct vm_object *obj;
 	int ret;
 
 	obj = vma->vm_obj;

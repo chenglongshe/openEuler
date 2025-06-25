@@ -38,6 +38,10 @@
 #include <linux/page_owner.h>
 #include <linux/sched/sysctl.h>
 #include <linux/memory-tiers.h>
+#ifdef CONFIG_GMEM
+#include <linux/vm_object.h>
+#endif
+
 #include <linux/compat.h>
 
 #include <asm/tlb.h>
@@ -1344,6 +1348,12 @@ static struct folio *vma_alloc_anon_folio_pmd(struct vm_area_struct *vma,
 	const int order = HPAGE_PMD_ORDER;
 	struct folio *folio;
 
+#ifdef CONFIG_GMEM
+	/* always try to compact hugepage for peer shared vma */
+	if (vma_is_peer_shared(vma))
+		gfp = GFP_TRANSHUGE;
+#endif
+
 	folio = vma_alloc_folio(gfp, order, vma, addr & HPAGE_PMD_MASK, true);
 
 	if (unlikely(!folio)) {
@@ -1391,6 +1401,99 @@ static void map_anon_folio_pmd(struct folio *folio, pmd_t *pmd,
 	count_memcg_event_mm(vma->vm_mm, THP_FAULT_ALLOC);
 }
 
+#ifdef CONFIG_GMEM
+
+struct gm_mapping *vma_prepare_gm_mapping(struct vm_area_struct *vma, unsigned long haddr)
+{
+	struct gm_mapping *gm_mapping;
+
+	xa_lock(vma->vm_obj->logical_page_table);
+	gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
+	if (!gm_mapping) {
+		vm_object_mapping_create(vma->vm_obj, haddr);
+		gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
+	}
+	xa_unlock(vma->vm_obj->logical_page_table);
+
+	return gm_mapping;
+}
+
+static vm_fault_t __do_peer_shared_anonymous_page(struct vm_fault *vmf)
+{
+	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
+	struct vm_area_struct *vma = vmf->vma;
+	struct folio *folio = NULL;
+	bool is_new_folio = false;
+	pgtable_t pgtable = NULL;
+	struct gm_mapping *gm_mapping;
+	vm_fault_t ret = 0;
+
+	gm_mapping = vma_prepare_gm_mapping(vma, haddr);
+	if (!gm_mapping)
+		return VM_FAULT_OOM;
+
+	mutex_lock(&gm_mapping->lock);
+
+	if (gm_mapping_cpu(gm_mapping))
+		folio = page_folio(gm_mapping->page);
+	if (!folio) {
+		folio = vma_alloc_anon_folio_pmd(vma, haddr);
+		is_new_folio = true;
+	}
+
+	if (unlikely(!folio)) {
+		ret = VM_FAULT_FALLBACK;
+		goto release;
+	}
+
+	pgtable = pte_alloc_one(vma->vm_mm);
+	if (unlikely(!pgtable)) {
+		ret = VM_FAULT_OOM;
+		goto release;
+	}
+
+	/**
+	 * if page is mapped in device, release device mapping and
+	 * deliver the page content to host.
+	 */
+	if (gm_mapping_device(gm_mapping)) {
+		vmf->page = &folio->page;
+		ret = gm_host_fault_locked(vmf, PMD_ORDER);
+		if (ret)
+			goto release;
+	}
+
+	/* map page in pgtable */
+	vmf->ptl = pmd_lock(vma->vm_mm, vmf->pmd);
+
+	BUG_ON(!pmd_none(*vmf->pmd));
+	ret = check_stable_address_space(vma->vm_mm);
+	if (ret)
+		goto unlock_release;
+	pgtable_trans_huge_deposit(vma->vm_mm, vmf->pmd, pgtable);
+	map_anon_folio_pmd(folio, vmf->pmd, vma, haddr);
+	mm_inc_nr_ptes(vma->vm_mm);
+	spin_unlock(vmf->ptl);
+
+	/* finally setup cpu mapping */
+	gm_mapping_flags_set(gm_mapping, GM_MAPPING_CPU);
+	gm_mapping->page = &folio->page;
+	mutex_unlock(&gm_mapping->lock);
+
+	return 0;
+unlock_release:
+	spin_unlock(vmf->ptl);
+release:
+	if (pgtable)
+		pte_free(vma->vm_mm, pgtable);
+	if (is_new_folio)
+		folio_put(folio);
+	mutex_unlock(&gm_mapping->lock);
+	return ret;
+}
+
+#endif
+
 static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 {
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
@@ -1424,7 +1527,7 @@ static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 			pte_free(vma->vm_mm, pgtable);
 			ret = handle_userfault(vmf, VM_UFFD_MISSING);
 			VM_BUG_ON(ret & VM_FAULT_FALLBACK);
-			return ret;
+			goto gm_mapping_release;
 		}
 		pgtable_trans_huge_deposit(vma->vm_mm, vmf->pmd, pgtable);
 		map_anon_folio_pmd(folio, vmf->pmd, vma, haddr);
@@ -1496,15 +1599,18 @@ static void set_huge_zero_page(pgtable_t pgtable, struct mm_struct *mm,
 vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
-	vm_fault_t ret;
-
 	if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER))
 		return VM_FAULT_FALLBACK;
 	ret = vmf_anon_prepare(vmf);
 	if (ret)
 		return ret;
+
 	khugepaged_enter_vma(vma, vma->vm_flags);
+
+#ifdef CONFIG_GMEM
+	if (vma_is_peer_shared(vma))
+		return __do_peer_shared_anonymous_page(vmf);
+#endif
 
 	if (!(vmf->flags & FAULT_FLAG_WRITE) &&
 			!mm_forbids_zeropage(vma->vm_mm) &&
