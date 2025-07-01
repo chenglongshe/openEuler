@@ -233,7 +233,7 @@ out_err:
 }
 
 const struct xsched_class rt_xsched_class = {
-	.next = NULL,
+	.next = &fair_xsched_class,
 	.dequeue_ctx = dequeue_ctx_rt,
 	.enqueue_ctx = enqueue_ctx_rt,
 	.pick_next_ctx = pick_next_ctx_rt,

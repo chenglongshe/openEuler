@@ -55,6 +55,8 @@
 
 #define XCU_HASH_ORDER 6
 
+#define XSCHED_CFS_MIN_TIMESLICE (10 * NSEC_PER_MSEC)
+
 #define __GET_VS_TASK_TYPE(t) ((t)&0xFF)
 
 #define __GET_VS_TASK_PRIO_RT(t) (((t) >> 8) & 0xFF)
@@ -72,6 +74,7 @@
 enum xcu_sched_type {
 	XSCHED_TYPE_RT,
 	XSCHED_TYPE_DFLT = XSCHED_TYPE_RT,
+	XSCHED_TYPE_CFS,
 	XSCHED_TYPE_NUM,
 };
 
@@ -105,6 +108,7 @@ enum xse_flag {
 
 
 extern const struct xsched_class rt_xsched_class;
+extern const struct xsched_class fair_xsched_class;
 
 #define xsched_first_class (&rt_xsched_class)
 
@@ -117,6 +121,12 @@ extern const struct xsched_class rt_xsched_class;
 #define for_each_vstream_in_ctx(vs, ctx)	\
 	list_for_each_entry((vs), &((ctx)->vstream_list), ctx_node)
 
+/* Manages xsched CFS-like class rbtree based runqueue. */
+struct xsched_rq_cfs {
+	unsigned int load;
+	u64 min_xruntime;
+	struct rb_root_cached ctx_timeline;
+};
 
 /* Manages xsched RT-like class linked list based runqueue.
  *
@@ -144,6 +154,8 @@ struct xsched_rq {
 
 	/* RT class run queue.*/
 	struct xsched_rq_rt rt;
+	/* CFS class run queue.*/
+	struct xsched_rq_cfs cfs;
 };
 
 enum xcu_state {
@@ -176,6 +188,8 @@ struct xsched_cu {
 
 	/* RT class kick counter. */
 	atomic_t pending_kicks_rt;
+	/* CFS class kick counter. */
+	atomic_t pending_kicks_cfs;
 
 	struct task_struct *worker;
 
@@ -201,6 +215,22 @@ struct xsched_entity_rt {
 
 	ktime_t timeslice;
 	s64 kick_slice;
+};
+
+struct xsched_entity_cfs {
+	struct rb_node run_node;
+
+	/* Rq on which this entity is (to be) queued. */
+	struct xsched_rq_cfs *cfs_rq;
+
+	/* Value of "virtual" runtime to sort entities in rbtree */
+	u64 xruntime;
+	u32 weight;
+
+	/* Clean execution time of scheduling entity */
+	u64 exec_start;
+	u64 last_exec_runtime;
+	u64 sum_exec_runtime;
 };
 
 struct xsched_entity {
@@ -231,6 +261,8 @@ struct xsched_entity {
 
 	/* RT class entity. */
 	struct xsched_entity_rt rt;
+	/* CFS class entity. */
+	struct xsched_entity_cfs cfs;
 
 	/* Pointer to context object. */
 	struct xsched_context *ctx;
@@ -250,6 +282,11 @@ struct xsched_entity {
 static inline bool xse_is_rt(const struct xsched_entity *xse)
 {
 	return xse && xse->class == &rt_xsched_class;
+}
+
+static inline bool xse_is_cfs(const struct xsched_entity *xse)
+{
+	return xse && xse->class == &fair_xsched_class;
 }
 
 /* Returns a pointer to an atomic_t variable representing a counter
@@ -273,6 +310,8 @@ xsched_get_pending_kicks_class(const struct xsched_class *class,
 
 	if (class == &rt_xsched_class)
 		return &xcu->pending_kicks_rt;
+	if (class == &fair_xsched_class)
+		return &xcu->pending_kicks_cfs;
 
 	XSCHED_ERR("Xsched entity has an invalid class @ %s\n", __func__);
 	return NULL;
@@ -384,13 +423,15 @@ static inline int xsched_dec_pending_kicks_xse(struct xsched_entity *xse)
 static inline bool xsched_check_pending_kicks_xcu(struct xsched_cu *xcu)
 {
 	atomic_t *kicks_rt;
+	atomic_t *kicks_cfs;
 
 	kicks_rt = xsched_get_pending_kicks_class(&rt_xsched_class, xcu);
+	kicks_cfs = xsched_get_pending_kicks_class(&fair_xsched_class, xcu);
 
-	if (!kicks_rt)
+	if (!kicks_rt || !kicks_cfs)
 		return 0;
 
-	return !!atomic_read(kicks_rt);
+	return (!!atomic_read(kicks_rt) || !!atomic_read(kicks_cfs));
 }
 
 static inline int xse_integrity_check(const struct xsched_entity *xse)

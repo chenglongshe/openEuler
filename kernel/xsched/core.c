@@ -93,7 +93,7 @@ static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
 				not_empty++;
 			}
 		}
-	} while (not_empty);
+	} while ((sum_exec_time < XSCHED_CFS_MIN_TIMESLICE) && (not_empty));
 
 	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
 	XSCHED_INFO("After decrement XSE kick_count=%u @ %s\n",
@@ -408,6 +408,10 @@ int xsched_xse_set_class(struct xsched_entity *xse)
 		xse->class = &rt_xsched_class;
 		XSCHED_INFO("Context is in RT class %s\n", __func__);
 		break;
+	case XSCHED_TYPE_CFS:
+		xse->class = &fair_xsched_class;
+		XSCHED_INFO("Context is in CFS class %s\n", __func__);
+		break;
 	default:
 		XSCHED_ERR("Xse has incorrect class @ %s\n", __func__);
 		return -EINVAL;
@@ -658,6 +662,14 @@ static inline void xsched_rt_rq_init(struct xsched_cu *xcu)
 	}
 }
 
+/* Initialize xsched cfs runqueue during kernel init.
+ * Should only be called from xsched_init function.
+ */
+static inline void xsched_cfs_rq_init(struct xsched_cu *xcu)
+{
+	xcu->xrq.cfs.ctx_timeline = RB_ROOT_CACHED;
+}
+
 /* Initialize xsched classes' runqueues. */
 static inline void xsched_rq_init(struct xsched_cu *xcu)
 {
@@ -666,6 +678,7 @@ static inline void xsched_rq_init(struct xsched_cu *xcu)
 	xcu->xrq.class = &rt_xsched_class;
 	xcu->xrq.state = XRQ_STATE_IDLE;
 	xsched_rt_rq_init(xcu);
+	xsched_cfs_rq_init(xcu);
 }
 
 /* Initializes all xsched XCU objects.
@@ -682,6 +695,7 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 	xcu->group = group;
 
 	atomic_set(&xcu->pending_kicks_rt, 0);
+	atomic_set(&xcu->pending_kicks_cfs, 0);
 	atomic_set(&xcu->has_active, 0);
 
 	INIT_LIST_HEAD(&xcu->vsm_list);
