@@ -468,7 +468,7 @@ struct sock *__udp4_lib_lookup(struct net *net, __be32 saddr,
 {
 	struct sock *sk, *result;
 	unsigned short hnum = ntohs(dport);
-	unsigned int hash2, slot2, slot = udp_hashfn(net, hnum, udptable->mask);
+	unsigned int hash2, slot = udp_hashfn(net, hnum, udptable->mask);
 	struct udp_hslot *hslot2, *hslot = &udptable->hash[slot];
 	bool exact_dif = udp_lib_exact_dif_match(net, skb);
 	int score, badness;
@@ -476,8 +476,7 @@ struct sock *__udp4_lib_lookup(struct net *net, __be32 saddr,
 
 	if (hslot->count > 10) {
 		hash2 = ipv4_portaddr_hash(net, daddr, hnum);
-		slot2 = hash2 & udptable->mask;
-		hslot2 = &udptable->hash2[slot2];
+		hslot2 = udp_hashslot2(udptable, hash2);
 		if (hslot->count < hslot2->count)
 			goto begin;
 
@@ -485,14 +484,13 @@ struct sock *__udp4_lib_lookup(struct net *net, __be32 saddr,
 					  daddr, hnum, dif, sdif,
 					  exact_dif, hslot2, skb);
 		if (!result) {
-			unsigned int old_slot2 = slot2;
+			void *old_hslot2 = hslot2;
 			hash2 = ipv4_portaddr_hash(net, htonl(INADDR_ANY), hnum);
-			slot2 = hash2 & udptable->mask;
+			hslot2 = udp_hashslot2(udptable, hash2);
 			/* avoid searching the same slot again. */
-			if (unlikely(slot2 == old_slot2))
+			if (unlikely(hslot2 == old_hslot2))
 				return result;
 
-			hslot2 = &udptable->hash2[slot2];
 			if (hslot->count < hslot2->count)
 				goto begin;
 
@@ -2083,7 +2081,7 @@ static int __udp4_lib_mcast_deliver(struct net *net, struct sk_buff *skb,
 			    udptable->mask;
 		hash2 = ipv4_portaddr_hash(net, daddr, hnum) & udptable->mask;
 start_lookup:
-		hslot = &udptable->hash2[hash2];
+		hslot = &udptable->hash2[hash2].hslot;
 		offset = offsetof(typeof(*sk), __sk_common.skc_portaddr_node);
 	}
 
@@ -2338,8 +2336,7 @@ static struct sock *__udp4_lib_demux_lookup(struct net *net,
 {
 	unsigned short hnum = ntohs(loc_port);
 	unsigned int hash2 = ipv4_portaddr_hash(net, loc_addr, hnum);
-	unsigned int slot2 = hash2 & udp_table.mask;
-	struct udp_hslot *hslot2 = &udp_table.hash2[slot2];
+	struct udp_hslot *hslot2 = udp_hashslot2(&udp_table, hash2);
 	INET_ADDR_COOKIE(acookie, rmt_addr, loc_addr);
 	const __portpair ports = INET_COMBINED_PORTS(rmt_port, hnum);
 	struct sock *sk;
@@ -2918,10 +2915,11 @@ __setup("uhash_entries=", set_uhash_entries);
 
 void __init udp_table_init(struct udp_table *table, const char *name)
 {
-	unsigned int i;
+	unsigned int i, slot_size;
 
+	slot_size = sizeof(struct udp_hslot) + sizeof(struct udp_hslot_main);
 	table->hash = alloc_large_system_hash(name,
-					      2 * sizeof(struct udp_hslot),
+					      slot_size,
 					      uhash_entries,
 					      21, /* one slot per 2 MB */
 					      0,
@@ -2930,17 +2928,18 @@ void __init udp_table_init(struct udp_table *table, const char *name)
 					      UDP_HTABLE_SIZE_MIN,
 					      64 * 1024);
 
-	table->hash2 = table->hash + (table->mask + 1);
+	table->hash2 = (void *)(table->hash + (table->mask + 1));
 	for (i = 0; i <= table->mask; i++) {
 		INIT_HLIST_HEAD(&table->hash[i].head);
 		table->hash[i].count = 0;
 		spin_lock_init(&table->hash[i].lock);
 	}
 	for (i = 0; i <= table->mask; i++) {
-		INIT_HLIST_HEAD(&table->hash2[i].head);
-		table->hash2[i].count = 0;
-		spin_lock_init(&table->hash2[i].lock);
+		INIT_HLIST_HEAD(&table->hash2[i].hslot.head);
+		table->hash2[i].hslot.count = 0;
+		spin_lock_init(&table->hash2[i].hslot.lock);
 	}
+	udp_table_hash4_init(table);
 }
 
 u32 udp_flow_hashrnd(void)
