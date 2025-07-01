@@ -48,6 +48,7 @@ static void put_prev_ctx(struct xsched_entity *xse)
 
 	lockdep_assert_held(&xcu->xcu_lock);
 
+	xsched_quota_account(xse->parent_grp, xse->last_process_time);
 	xse->class->put_prev_ctx(xse);
 	XSCHED_INFO("Put current xse %d sum_exec_runtime %llu @ %s\n",
 		xse->tgid, xse->cfs.sum_exec_runtime, __func__);
@@ -617,7 +618,17 @@ static int xsched_schedule(void *input_xcu)
 				XSCHED_INFO(
 					"%s: Dequeue xse %d due to zero kicks on xcu %u\n",
 					__func__, curr_xse->tgid, xcu->id);
-				curr_xse = xcu->xrq.curr_xse = NULL;
+				xcu->xrq.curr_xse = NULL;
+			}
+			if (xsched_quota_exceed(curr_xse->parent_grp)) {
+				dequeue_ctx(&curr_xse->parent_grp
+						     ->perxcu_priv[xcu->id]
+						     .xse,
+					    xcu);
+				XSCHED_INFO(
+					"%s: Dequeue group of xse %d due to quota exceed on xcu %u\n",
+					__func__, curr_xse->tgid, xcu->id);
+				xcu->xrq.curr_xse = NULL;
 			}
 		}
 	}
