@@ -25,3 +25,14 @@ config XCU_VSTREAM
 
         Requires XCU_SCHEDULER to be enabled. May increase kernel memory usage.
         Recommended for high-throughput XPU workloads. If unsure, say N.
+
+config XSCHED_DEBUG_PRINTS
+	bool "Enable info and debug prints in XSched mechanism for analysis and debugging purposes"
+	default n
+	depends on XCU_SCHEDULER
+      help
+        This option enables verbose logging (info and debug levels) for the XSched
+        scheduling mechanism. It is primarily used for debugging performance issues,
+        analyzing task scheduling behavior, and tracking internal state changes.
+        Enabling this may impact performance due to increased log output.
+        If unsure, say N.
