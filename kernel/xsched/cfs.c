@@ -24,6 +24,72 @@
 /* For test xsched_cfs_grp_test.c */
 atomic64_t virtual_sched_clock = ATOMIC_INIT(0);
 
+void xs_rq_add(struct xsched_entity_cfs *xse)
+{
+	struct xsched_rq_cfs *cfs_rq = xse->cfs_rq;
+	struct rb_node **link = &cfs_rq->ctx_timeline.rb_root.rb_node;
+	struct rb_node *parent = NULL;
+	struct xsched_entity_cfs *entry;
+	bool leftmost = true;
+
+	while (*link) {
+		parent = *link;
+		entry = rb_entry(parent, struct xsched_entity_cfs, run_node);
+		if (xse->xruntime <= entry->xruntime) {
+			link = &parent->rb_left;
+		} else {
+			link = &parent->rb_right;
+			leftmost = false;
+		}
+	}
+
+	rb_link_node(&xse->run_node, parent, link);
+	rb_insert_color_cached(&xse->run_node, &cfs_rq->ctx_timeline, leftmost);
+}
+
+void xs_rq_remove(struct xsched_entity_cfs *xse)
+{
+	struct xsched_rq_cfs *cfs_rq = xse->cfs_rq;
+
+	rb_erase_cached(&xse->run_node, &cfs_rq->ctx_timeline);
+}
+
+/**
+ * xs_cfs_rq_update() - Update entity's runqueue position with new xruntime
+ */
+static void xs_cfs_rq_update(struct xsched_entity_cfs *xse_cfs, u64 new_xrt)
+{
+	xs_rq_remove(xse_cfs);
+	xse_cfs->xruntime = new_xrt;
+	xs_rq_add(xse_cfs);
+}
+
+static inline struct xsched_entity_cfs *
+xs_pick_first(struct xsched_rq_cfs *cfs_rq)
+{
+	struct xsched_entity_cfs *xse_cfs;
+	struct rb_node *left = rb_first_cached(&cfs_rq->ctx_timeline);
+
+	if (!left)
+		return NULL;
+
+	xse_cfs = rb_entry(left, struct xsched_entity_cfs, run_node);
+	return xse_cfs;
+}
+
+/**
+ * xs_update() - Account xruntime and runtime metrics.
+ * @xse_cfs: Point to CFS scheduling entity.
+ * @delta: Execution time in last period
+ */
+static void xs_update(struct xsched_entity_cfs *xse_cfs, u64 delta)
+{
+	u64 new_xrt = xse_cfs->xruntime + delta * xse_cfs->weight;
+
+	xs_cfs_rq_update(xse_cfs, new_xrt);
+	xse_cfs->sum_exec_runtime += delta;
+}
+
 /*
  * Xsched Fair class methods
  * For rq manipulation we rely on root runqueue lock already acquired in core.
@@ -31,6 +97,19 @@ atomic64_t virtual_sched_clock = ATOMIC_INIT(0);
  */
 static void dequeue_ctx_fair(struct xsched_entity *xse)
 {
+	struct xsched_cu *xcu = xse->xcu;
+	struct xsched_entity_cfs *first;
+	struct xsched_entity_cfs *xse_cfs = &xse->cfs;
+
+	xs_rq_remove(xse_cfs);
+
+	first = xs_pick_first(&xcu->xrq.cfs);
+	xcu->xrq.cfs.min_xruntime = (first) ? first->xruntime : XSCHED_TIME_INF;
+
+	if (xcu->xrq.cfs.min_xruntime == XSCHED_TIME_INF) {
+		atomic_set(&xcu->has_active, 0);
+		XSCHED_INFO("%s: set has_active to 0\n", __func__);
+	}
 }
 
 /**
@@ -44,20 +123,54 @@ static void dequeue_ctx_fair(struct xsched_entity *xse)
  */
 static void enqueue_ctx_fair(struct xsched_entity *xse, struct xsched_cu *xcu)
 {
+	struct xsched_entity_cfs *first;
+	struct xsched_rq_cfs *rq;
+	struct xsched_entity_cfs *xse_cfs = &xse->cfs;
+
+	xse_cfs->weight = XSCHED_CFS_ENTITY_WEIGHT_DFLT;
+	rq = xse_cfs->cfs_rq = &xcu->xrq.cfs;
+
+	/* If no XSE of only empty groups */
+	if (xs_pick_first(rq) == NULL || rq->min_xruntime == XSCHED_TIME_INF)
+		rq->min_xruntime = xse_cfs->xruntime;
+	else
+		xse_cfs->xruntime = max(xse_cfs->xruntime, rq->min_xruntime);
+
+	xs_rq_add(xse_cfs);
+
+	first = xs_pick_first(&xcu->xrq.cfs);
+	xcu->xrq.cfs.min_xruntime = (first) ? first->xruntime : XSCHED_TIME_INF;
+
+	if (xcu->xrq.cfs.min_xruntime != XSCHED_TIME_INF) {
+		atomic_set(&xcu->has_active, 1);
+		XSCHED_INFO("%s: set has_active to 1\n", __func__);
+	}
 }
 
 static struct xsched_entity *pick_next_ctx_fair(struct xsched_cu *xcu)
 {
-	return NULL;
+	struct xsched_entity_cfs *xse;
+	struct xsched_rq_cfs *rq = &xcu->xrq.cfs;
+
+	xse = xs_pick_first(rq);
+	if (!xse)
+		return NULL;
+
+	return container_of(xse, struct xsched_entity, cfs);
 }
 
 static inline bool xs_should_preempt_fair(struct xsched_entity *xse)
 {
-	return 0;
+	bool ret = (xse->last_process_time >= XSCHED_CFS_MIN_TIMESLICE);
+	return ret;
 }
 
 static void put_prev_ctx_fair(struct xsched_entity *xse)
 {
+	struct xsched_entity_cfs *prev = &xse->cfs;
+
+	xs_update(prev, xse->last_process_time);
+	xse->last_process_time = 0;
 }
 
 int submit_prepare_ctx_fair(struct xsched_entity *xse, struct xsched_cu *xcu)
