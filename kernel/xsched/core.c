@@ -16,6 +16,7 @@
  * more details.
  *
  */
+#include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/slab.h>
 #include <linux/spinlock_types.h>
@@ -39,6 +40,70 @@ DEFINE_MUTEX(xsched_ctx_list_mutex);
 static DEFINE_MUTEX(revmap_mutex);
 static DEFINE_HASHTABLE(ctx_revmap, XCU_HASH_ORDER);
 
+static void put_prev_ctx(struct xsched_entity *xse)
+{
+}
+
+static struct xsched_entity *__raw_pick_next_ctx(struct xsched_cu *xcu)
+{
+	return NULL;
+}
+
+void enqueue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu)
+{
+}
+
+void dequeue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu)
+{
+}
+
+static int delete_ctx(struct xsched_context *ctx)
+{
+	struct xsched_cu *xcu = ctx->xse.xcu;
+	struct xsched_entity *curr_xse = xcu->xrq.curr_xse;
+	struct xsched_entity *xse = &ctx->xse;
+
+	XSCHED_CALL_STUB();
+
+	if (!xse_integrity_check(xse)) {
+		XSCHED_ERR("Failed xse integrity check! %s\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!xse->xcu) {
+		XSCHED_ERR("Trying to delete ctx that is not attached to an XCU @ %s\n", __func__);
+		return -EINVAL;
+	}
+
+	/* Wait till context has been submitted. */
+	while (atomic_read(&xse->kicks_pending_ctx_cnt)) {
+		XSCHED_INFO(
+			"Deleting ctx %d, xse->kicks_pending_ctx_cnt=%d @ %s\n",
+			xse->tgid, atomic_read(&xse->kicks_pending_ctx_cnt),
+			__func__);
+	}
+
+	if (atomic_read(&xse->kicks_pending_ctx_cnt)) {
+		XSCHED_ERR("Deleting ctx %d that has pending kicks left @ %s\n",
+			   xse->tgid, __func__);
+		return -EINVAL;
+	}
+
+	mutex_lock(&xcu->xcu_lock);
+	if (curr_xse == xse)
+		xcu->xrq.curr_xse = NULL;
+
+	dequeue_ctx(xse, xcu);
+	mutex_unlock(&xcu->xcu_lock);
+
+	XSCHED_INFO("Deleting ctx %d, pending kicks left=%d @ %s\n", xse->tgid,
+		    atomic_read(&xse->kicks_pending_ctx_cnt), __func__);
+
+	XSCHED_EXIT_STUB();
+
+	return 0;
+}
+
 /* Frees a given vstream and also frees and dequeues it's context
  * if a given vstream is the last and only vstream attached to it's
  * corresponding context object.
@@ -52,6 +117,9 @@ void xsched_free_task(struct kref *kref)
 
 	ctx = container_of(kref, struct xsched_context, kref);
 
+	while (READ_ONCE(ctx->xse.on_rq))
+		usleep_range(100, 200);
+
 	mutex_lock(&xsched_ctx_list_mutex);
 	list_for_each_entry_safe(vs, tmp, &ctx->vstream_list, ctx_node) {
 		list_del(&vs->ctx_node);
@@ -59,6 +127,7 @@ void xsched_free_task(struct kref *kref)
 		kfree(vs);
 	}
 
+	delete_ctx(ctx);
 	list_del(&ctx->ctx_node);
 
 	mutex_unlock(&xsched_ctx_list_mutex);
@@ -264,9 +333,80 @@ out_err:
 	return err;
 }
 
-static int xsched_schedule(void *input_xcu)
+static int __xsched_submit(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
 	return 0;
+}
+
+static int xsched_schedule(void *input_xcu)
+{
+	struct xsched_cu *xcu = input_xcu;
+	int err = 0;
+	struct xsched_entity *curr_xse = NULL;
+	struct xsched_entity *next_xse = NULL;
+
+	XSCHED_CALL_STUB();
+
+	while (!kthread_should_stop()) {
+		XSCHED_INFO("%s: Xcu lock released\n", __func__);
+		mutex_unlock(&xcu->xcu_lock);
+
+		wait_event_interruptible(xcu->wq_xcu_idle,
+					 atomic_read(&xcu->has_active) || xcu->xrq.nr_running);
+
+		XSCHED_INFO("%s: rt_nr_running = %d, has_active = %d\n",
+			__func__, xcu->xrq.nr_running, atomic_read(&xcu->has_active));
+
+		mutex_lock(&xcu->xcu_lock);
+		XSCHED_INFO("%s: Xcu lock taken\n", __func__);
+
+		if (!xsched_check_pending_kicks_xcu(xcu)) {
+			XSCHED_ERR("%s: No pending kicks for xcu %u\n", __func__, xcu->id);
+			continue;
+		}
+
+		next_xse = __raw_pick_next_ctx(xcu);
+
+		if (!next_xse) {
+			XSCHED_ERR("%s: Couldn't find next xse for xcu %u\n", __func__, xcu->id);
+			continue;
+		}
+
+		xcu->xrq.curr_xse = next_xse;
+		__XSCHED_TRACE("%s: Pick next ctx returned xse %d\n", __func__, next_xse->tgid);
+
+		if (__xsched_submit(xcu, next_xse)) {
+			XSCHED_ERR("%s: Xse %d on XCU %u tried to submit with zero kicks\n",
+			__func__, next_xse->tgid, xcu->id);
+			continue;
+		}
+
+		curr_xse = xcu->xrq.curr_xse;
+		if (curr_xse) { /* if not deleted yet */
+			put_prev_ctx(curr_xse);
+			if (!atomic_read(&curr_xse->kicks_pending_ctx_cnt)) {
+				dequeue_ctx(curr_xse, xcu);
+				XSCHED_INFO(
+					"%s: Dequeue xse %d due to zero kicks on xcu %u\n",
+					__func__, curr_xse->tgid, xcu->id);
+				curr_xse = xcu->xrq.curr_xse = NULL;
+			}
+		}
+	}
+
+	XSCHED_INFO("Xsched_schedule finished for xcu %u\n", xcu->id);
+
+	XSCHED_EXIT_STUB();
+
+	return err;
+}
+
+/* Initialize xsched classes' runqueues. */
+static inline void xsched_rq_init(struct xsched_cu *xcu)
+{
+	xcu->xrq.nr_running = 0;
+	xcu->xrq.curr_xse = NULL;
+	xcu->xrq.state = XRQ_STATE_IDLE;
 }
 
 /* Initializes all xsched XCU objects.
@@ -280,6 +420,12 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 	xcu->id = xcu_id;
 	xcu->state = XSCHED_XCU_NONE;
 	xcu->group = group;
+
+	atomic_set(&xcu->has_active, 0);
+
+	INIT_LIST_HEAD(&xcu->vsm_list);
+
+	init_waitqueue_head(&xcu->wq_xcu_idle);
 
 	mutex_init(&xcu->xcu_lock);
 
@@ -342,6 +488,38 @@ int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg)
 
 out_err:
 	return err;
+}
+
+/* Fetch the first vstream metadata from vstream metadata list
+ * and removes it from that list. Returned vstream metadata pointer
+ * to be freed after.
+ */
+struct vstream_metadata *xsched_vsm_fetch_first(struct vstream_info *vs)
+{
+	struct vstream_metadata *vsm;
+
+	if (list_empty(&vs->metadata_list)) {
+		XSCHED_INFO("No metadata to fetch from vs %u @ %s\n", vs->id,
+			    __func__);
+		goto out_null;
+	}
+
+	vsm = list_first_entry(&vs->metadata_list, struct vstream_metadata, node);
+
+	if (!vsm) {
+		XSCHED_ERR(
+			"Tried to delete metadata from empty list in vs %u @ %s\n",
+			vs->id, __func__);
+		goto out_null;
+	}
+
+	list_del(&vsm->node);
+	vs->kicks_count -= 1;
+
+	return vsm;
+
+out_null:
+	return NULL;
 }
 
 /*

@@ -515,9 +515,17 @@ repeat_kick:
 		goto out_err;
 	}
 
+	enqueue_ctx(xse, xcu);
+
+	/* Increasing a total amount of kicks on an CU to which this
+	 * context is attached to based on sched_class.
+	 */
+	xsched_inc_pending_kicks_xse(&vstream->ctx->xse);
+
 	spin_unlock(&vstream->stream_lock);
 	XSCHED_INFO("vstream lock released @ %s\n", __func__);
 	mutex_unlock(&xcu->xcu_lock);
+	wake_up_interruptible(&xcu->wq_xcu_idle);
 
 out_err:
 	XSCHED_EXIT_STUB();
