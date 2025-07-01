@@ -42,19 +42,134 @@ static DEFINE_HASHTABLE(ctx_revmap, XCU_HASH_ORDER);
 
 static void put_prev_ctx(struct xsched_entity *xse)
 {
+	struct xsched_cu *xcu = xse->xcu;
+
+	XSCHED_CALL_STUB();
+
+	lockdep_assert_held(&xcu->xcu_lock);
+
+	xse->class->put_prev_ctx(xse);
+
+	xse->last_process_time = 0;
+
+	XSCHED_EXIT_STUB();
+}
+
+static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
+{
+	uint32_t kick_count;
+	struct vstream_info *vs;
+	unsigned int sum_exec_time = 0;
+	size_t kicks_submitted = 0;
+	struct vstream_metadata *vsm;
+	size_t not_empty;
+
+	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
+	XSCHED_INFO("Before decrement XSE kick_count=%u @ %s\n",
+			    kick_count, __func__);
+
+	if (kick_count == 0) {
+		XSCHED_ERR("Tried to submit xse that has 0 kicks @ %s\n",
+			   __func__);
+		goto out_err;
+	}
+
+	do {
+		not_empty = 0;
+		for_each_vstream_in_ctx(vs, xse->ctx) {
+			spin_lock(&vs->stream_lock);
+			vsm = xsched_vsm_fetch_first(vs);
+			spin_unlock(&vs->stream_lock);
+			if (vsm) {
+				list_add_tail(&vsm->node, &xcu->vsm_list);
+
+				sum_exec_time += vsm->exec_time;
+				kicks_submitted++;
+				xsched_dec_pending_kicks_xse(xse);
+				XSCHED_INFO(
+					"vs id = %d Kick submit exec_time %u sq_tail %u sqe_num %u sq_id %u @ %s\n",
+					vs->id, vsm->exec_time, vsm->sq_tail,
+					vsm->sqe_num, vsm->sq_id, __func__);
+				not_empty++;
+			}
+		}
+	} while (not_empty);
+
+	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
+	XSCHED_INFO("After decrement XSE kick_count=%u @ %s\n",
+		    kick_count, __func__);
+
+	xse->kicks_submitted += kicks_submitted;
+
+	XSCHED_INFO("xse %d kicks_submitted = %lu @ %s\n",
+			    xse->tgid, xse->kicks_submitted, __func__);
+
+out_err:
+	return kicks_submitted;
 }
 
 static struct xsched_entity *__raw_pick_next_ctx(struct xsched_cu *xcu)
 {
-	return NULL;
+	const struct xsched_class *class;
+	struct xsched_entity *next = NULL;
+
+	XSCHED_CALL_STUB();
+
+	lockdep_assert_held(&xcu->xcu_lock);
+
+	for_each_xsched_class(class) {
+		next = class->pick_next_ctx(xcu);
+		if (next) {
+			if (class->select_work)
+				class->select_work(xcu, next);
+			else
+				select_work_def(xcu, next);
+			break;
+		}
+	}
+
+	XSCHED_EXIT_STUB();
+	return next;
 }
 
 void enqueue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu)
 {
+	XSCHED_CALL_STUB();
+
+	lockdep_assert_held(&xcu->xcu_lock);
+
+	if (!xse_integrity_check(xse)) {
+		XSCHED_ERR("Failed xse integrity check @ %s\n", __func__);
+		return;
+	}
+
+	if (!xse->on_rq) {
+		xse->on_rq = true;
+		xse->class->enqueue_ctx(xse, xcu);
+		__XSCHED_TRACE("Enqueue xse %d @ %s\n", xse->tgid, __func__);
+	}
+
+	XSCHED_EXIT_STUB();
 }
 
 void dequeue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu)
 {
+	XSCHED_CALL_STUB();
+
+	lockdep_assert_held(&xcu->xcu_lock);
+
+	if (!xse_integrity_check(xse)) {
+		XSCHED_ERR("Failed xse integrity check @ %s\n", __func__);
+		return;
+	}
+
+	if (xse->on_rq) {
+		xse->class->dequeue_ctx(xse);
+		xse->on_rq = false;
+		__XSCHED_TRACE("Dequeue xse %d @ %s\n", xse->tgid, __func__);
+	}
+
+	XSCHED_EXIT_STUB();
 }
 
 static int delete_ctx(struct xsched_context *ctx)
@@ -288,6 +403,15 @@ struct xsched_cu *xcu_find(__u32 *type, __u32 devId, __u32 channel_id)
 
 int xsched_xse_set_class(struct xsched_entity *xse)
 {
+	switch (xse->task_type) {
+	case XSCHED_TYPE_RT:
+		xse->class = &rt_xsched_class;
+		XSCHED_INFO("Context is in RT class %s\n", __func__);
+		break;
+	default:
+		XSCHED_ERR("Xse has incorrect class @ %s\n", __func__);
+		return -EINVAL;
+	}
 	return 0;
 }
 
@@ -326,6 +450,25 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 		goto out_err;
 	}
 
+	if (xse_is_rt(xse)) {
+		xse->rt.state = XSE_PREPARE;
+		xse->rt.flag = XSE_TIF_NONE;
+		xse->rt.prio = GET_VS_TASK_PRIO_RT(vs);
+		xse->rt.kick_slice = XSCHED_RT_KICK_SLICE;
+
+		/* XSE priority is being decreased by 1 here because
+		 * in libucc priority counter starts from 1 while in the
+		 * kernel counter starts with 0.
+		 *
+		 * This inconsistency has to be solve in libucc in the
+		 * future rather that having this confusing decrement to
+		 * priority inside the kernel.
+		 */
+		if (xse->rt.prio > 0)
+			xse->rt.prio -= 1;
+
+		INIT_LIST_HEAD(&xse->rt.list_node);
+	}
 	WRITE_ONCE(xse->on_rq, false);
 
 	spin_lock_init(&xse->xse_lock);
@@ -338,6 +481,11 @@ out_err:
 static int __xsched_submit(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
 	return 0;
+}
+
+static inline bool should_preempt(struct xsched_entity *xse)
+{
+	return xse->class->check_preempt(xse);
 }
 
 static int xsched_schedule(void *input_xcu)

@@ -217,6 +217,9 @@ struct xsched_entity {
 	/* Amount of submitted kicks context, used for resched decision. */
 	atomic_t kicks_submited;
 
+	size_t kicks_submitted;
+	size_t kicks_processed;
+
 	/* File descriptor coming from an associated context
 	 * used for identifying a given xsched entity in
 	 * info and error prints.
