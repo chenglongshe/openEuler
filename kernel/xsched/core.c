@@ -300,6 +300,8 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 
 	atomic_set(&xse->kicks_pending_ctx_cnt, 0);
 	atomic_set(&xse->kicks_submited, 0);
+	xse->task_type = XSCHED_TYPE_RT;
+	xse->last_process_time = 0;
 
 	xse->fd = ctx->fd;
 	xse->tgid = ctx->tgid;
@@ -401,12 +403,28 @@ static int xsched_schedule(void *input_xcu)
 	return err;
 }
 
+/* Initialize xsched rt runqueue during kernel init.
+ * Should only be called from xsched_init function.
+ */
+static inline void xsched_rt_rq_init(struct xsched_cu *xcu)
+{
+	int prio = 0;
+
+	for_each_xse_prio(prio) {
+		INIT_LIST_HEAD(&xcu->xrq.rt.rq[prio]);
+		xcu->xrq.rt.prio_nr_running[prio] = 0;
+		atomic_set(&xcu->xrq.rt.prio_nr_kicks[prio], 0);
+	}
+}
+
 /* Initialize xsched classes' runqueues. */
 static inline void xsched_rq_init(struct xsched_cu *xcu)
 {
 	xcu->xrq.nr_running = 0;
 	xcu->xrq.curr_xse = NULL;
+	xcu->xrq.class = &rt_xsched_class;
 	xcu->xrq.state = XRQ_STATE_IDLE;
+	xsched_rt_rq_init(xcu);
 }
 
 /* Initializes all xsched XCU objects.
@@ -418,9 +436,11 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 	bitmap_clear(xcu_group_root->xcu_mask, 0, XSCHED_NR_CUS);
 
 	xcu->id = xcu_id;
+	xcu->xrq.curr_xse = NULL;
 	xcu->state = XSCHED_XCU_NONE;
 	xcu->group = group;
 
+	atomic_set(&xcu->pending_kicks_rt, 0);
 	atomic_set(&xcu->has_active, 0);
 
 	INIT_LIST_HEAD(&xcu->vsm_list);
@@ -431,6 +451,10 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 
 	/* Mark current XCU in a mask inside XCU root group. */
 	set_bit(xcu->id, xcu_group_root->xcu_mask);
+
+	/* Initialize current XCU's runqueue. */
+	xsched_rq_init(xcu);
+
 
 	/* This worker should set XCU to XSCHED_XCU_WAIT_IDLE.
 	 * If after initialization XCU still has XSCHED_XCU_NONE
