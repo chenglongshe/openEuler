@@ -176,6 +176,38 @@ out_unlock:
 	return xcu_id;
 }
 
+/* Adds vstream_metadata object to a specified vstream. */
+int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg)
+{
+	int err = 0;
+	struct vstream_metadata *new_vsm;
+
+	new_vsm = kmalloc(sizeof(struct vstream_metadata), GFP_KERNEL);
+	if (!new_vsm) {
+		XSCHED_ERR("Failed to allocate kick metadata for vs %u @ %s\n",
+			   vs->id, __func__);
+		err = -ENOMEM;
+		goto out_err;
+	}
+
+	xsched_init_vsm(new_vsm, vs, arg);
+
+	if (vs->kicks_count > MAX_VSTREAM_SIZE) {
+		err = -EBUSY;
+		kfree(new_vsm);
+		goto out_err;
+	}
+
+	list_add_tail(&new_vsm->node, &vs->metadata_list);
+	vs->kicks_count += 1;
+
+	XSCHED_INFO("Vstream_id %u Add vsm: sq_tail %u, sqe_num %u, kicks_count %u\n",
+			vs->id, new_vsm->sq_tail, new_vsm->sqe_num, vs->kicks_count);
+
+out_err:
+	return err;
+}
+
 /*
  * Initialize and register xcu in xcu_manager array.
  */

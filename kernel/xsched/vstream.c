@@ -468,7 +468,61 @@ out_err:
 
 int vstream_kick(struct vstream_args *arg)
 {
-	return 0;
+	vstream_info_t *vstream;
+	int vstreamId = arg->sq_id;
+	struct xsched_entity *xse;
+	int err = 0;
+
+	struct xsched_cu *xcu = NULL;
+
+	XSCHED_CALL_STUB();
+
+	/* Get vstream. */
+	vstream = vstream_get(vstreamId);
+	if (!vstream || !vstream->ctx) {
+		XSCHED_ERR(
+			"Vstream NULL or doesn't have a context.\n");
+		err = -EINVAL;
+		goto out_err;
+	}
+
+	xse = &vstream->ctx->xse;
+	xcu = vstream->xcu;
+	XSCHED_INFO("New kick on xse %d @ %s\n", xse->tgid, __func__);
+
+repeat_kick:
+	mutex_lock(&xcu->xcu_lock);
+	XSCHED_INFO("xcu lock taken @ %s\n", __func__);
+	spin_lock(&vstream->stream_lock);
+	XSCHED_INFO("vstream lock taken @ %s\n", __func__);
+
+	/* Adding kick metadata. */
+	err = xsched_vsm_add_tail(vstream, arg);
+	if (err) {
+		if (err == -EBUSY) {
+			spin_unlock(&vstream->stream_lock);
+			XSCHED_INFO("no space: vstream lock released @ %s\n", __func__);
+			mutex_unlock(&xcu->xcu_lock);
+			goto repeat_kick;
+		}
+		XSCHED_ERR("Failed to add kick metadata to vs %u @ %s\n",
+			   vstream->id, __func__);
+
+		spin_unlock(&vstream->stream_lock);
+		XSCHED_INFO("vstream lock released @ %s\n", __func__);
+		mutex_unlock(&xcu->xcu_lock);
+		XSCHED_INFO("Xcu lock released @ %s\n", __func__);
+		goto out_err;
+	}
+
+	spin_unlock(&vstream->stream_lock);
+	XSCHED_INFO("vstream lock released @ %s\n", __func__);
+	mutex_unlock(&xcu->xcu_lock);
+
+out_err:
+	XSCHED_EXIT_STUB();
+
+	return err;
 }
 
 /*

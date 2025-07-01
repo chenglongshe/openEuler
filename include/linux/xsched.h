@@ -156,10 +156,26 @@ static inline struct xsched_context *find_ctx_by_tgid(pid_t tgid)
 	return ret;
 }
 
+
+static inline void xsched_init_vsm(struct vstream_metadata *vsm,
+				   struct vstream_info *vs,
+				   vstream_args_t *arg)
+{
+	vsm->sq_id = arg->sq_id;
+	vsm->sqe_num = arg->vk_args.sqe_num;
+	vsm->timeout = arg->vk_args.timeout;
+	memcpy(vsm->sqe, arg->vk_args.sqe, XCU_SQE_SIZE_MAX);
+	vsm->parent = vs;
+	INIT_LIST_HEAD(&vsm->node);
+}
+
 int xsched_register_xcu(struct xcu_group *group);
 void xsched_free_task(struct kref *kref);
 int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs);
 int bind_ctx_to_xcu(vstream_info_t *vstream_info, struct xsched_context *ctx);
 int bind_vstream_to_xcu(vstream_info_t *vstream_info);
 struct xsched_cu *xcu_find(__u32 *type, __u32 devId, __u32 channel_id);
+
+/* Vstream metadata proccesing functions.*/
+int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg);
 #endif /* !__LINUX_XSCHED_H__ */
