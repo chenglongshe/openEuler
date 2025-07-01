@@ -3,6 +3,8 @@
 #define __LINUX_XSCHED_H__
 
 #include <linux/xcu_group.h>
+#include <linux/kref.h>
+#include <linux/vstream.h>
 #ifndef pr_fmt
 #define pr_fmt(fmt) fmt
 #endif
@@ -88,5 +90,75 @@ struct xsched_cu {
 	wait_queue_head_t wq_xcore_running;
 };
 
+struct xsched_entity {
+	uint32_t task_type;
+
+	bool on_rq;
+
+	pid_t owner_pid;
+	pid_t tgid;
+
+	/* File descriptor coming from an associated context
+	 * used for identifying a given xsched entity in
+	 * info and error prints.
+	 */
+	uint32_t fd;
+
+	/* Xsched class for this xse. */
+	const struct xsched_class *class;
+
+	/* Pointer to context object. */
+	struct xsched_context *ctx;
+
+	/* Pointer to an XCU object that represents an XCU
+	 * on which this xse is to be processed or is being
+	 * processed currently.
+	 */
+	struct xsched_cu *xcu;
+
+	/* General purpose xse lock. */
+	spinlock_t xse_lock;
+};
+
+struct xsched_context {
+	uint32_t fd;
+	uint32_t devId;
+	pid_t tgid;
+
+	struct list_head vstream_list;
+	struct list_head ctx_node;
+
+	struct xsched_entity xse;
+
+	spinlock_t ctx_lock;
+	struct mutex ctx_mutex;
+	struct kref kref;
+};
+
+extern struct list_head xsched_ctx_list;
+extern struct mutex xsched_ctx_list_mutex;
+
+/* Returns a pointer to xsched_context object corresponding to a given
+ * device file descriptor provided by fd argument.
+ */
+static inline struct xsched_context *find_ctx_by_tgid(pid_t tgid)
+{
+	struct xsched_context *ctx;
+	struct xsched_context *ret = NULL;
+
+	list_for_each_entry(ctx, &xsched_ctx_list, ctx_node) {
+		if (ctx->tgid == tgid) {
+			ret = ctx;
+			break;
+		}
+	}
+
+	return ret;
+}
+
 int xsched_register_xcu(struct xcu_group *group);
+int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs);
+int bind_ctx_to_xcu(vstream_info_t *vstream_info, struct xsched_context *ctx);
+int bind_vstream_to_xcu(vstream_info_t *vstream_info);
+struct xsched_cu *xcu_find(__u32 *type, __u32 devId, __u32 channel_id);
 #endif /* !__LINUX_XSCHED_H__ */

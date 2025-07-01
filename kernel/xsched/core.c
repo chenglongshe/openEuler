@@ -32,6 +32,73 @@ spinlock_t xcu_mgr_lock;
 DECLARE_BITMAP(xcu_online_mask, XSCHED_NR_CUS);
 struct xsched_cu *xsched_cu_mgr[XSCHED_NR_CUS];
 
+/* Storage list for contexts. */
+struct list_head xsched_ctx_list;
+DEFINE_MUTEX(xsched_ctx_list_mutex);
+
+int bind_vstream_to_xcu(vstream_info_t *vstream_info)
+{
+	struct xsched_cu *xcu_found = NULL;
+	__u32 type = XCU_TYPE_NPU;
+
+	xcu_found = xcu_find(&type, vstream_info->devId, vstream_info->channel_id);
+
+	if (!xcu_found)
+		return -1;
+
+	/* Bind vstream to a xcu. */
+	vstream_info->xcu = xcu_found;
+
+	XSCHED_INFO("XCU bound to a vstream: type=%u, dev_id=%u, chan_id=%u.\n",
+		    type, vstream_info->devId, vstream_info->channel_id);
+
+	return 0;
+}
+
+struct xsched_cu *xcu_find(__u32 *type, __u32 devId, __u32 channel_id)
+{
+	struct xcu_group *group = NULL;
+	__u32 local_type = *type;
+
+	/* Find xcu by type. */
+	group = xcu_group_find_noalloc(xcu_group_root, local_type);
+	if (group == NULL) {
+		XSCHED_INFO("Find XCU group with real device is failed.\n");
+
+		local_type = XCU_TYPE_NPU;
+		group = xcu_group_find_noalloc(xcu_group_root, local_type);
+		if (group == NULL) {
+			XSCHED_ERR("Find XCU with qemu device is failed.\n");
+			return NULL;
+		}
+	}
+
+	/* Find by device id group. */
+	group = xcu_group_find_noalloc(group, devId);
+	if (group == NULL) {
+		XSCHED_ERR("Find device group is failed.\n");
+		return NULL;
+	}
+	/* Find channel id group. */
+	group = xcu_group_find_noalloc(group, channel_id);
+	if (group == NULL) {
+		XSCHED_ERR("Find channel group is failed.\n");
+		return NULL;
+	}
+
+	*type = local_type;
+
+	XSCHED_INFO("XCU found: type=%u, dev_id=%u, chan_id=%u.\n", local_type,
+		    devId, channel_id);
+
+	return group->xcu;
+}
+
+int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
+{
+	return 0;
+}
+
 static int xsched_schedule(void *input_xcu)
 {
 	return 0;
@@ -109,3 +176,13 @@ int xsched_register_xcu(struct xcu_group *group)
 	return 0;
 }
 EXPORT_SYMBOL(xsched_register_xcu);
+
+int __init xsched_init(void)
+{
+	/* Initializing global Xsched context list. */
+	INIT_LIST_HEAD(&xsched_ctx_list);
+
+	return 0;
+}
+
+late_initcall(xsched_init);
