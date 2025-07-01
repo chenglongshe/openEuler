@@ -16,7 +16,134 @@
  * more details.
  *
  */
+#include <linux/rwsem.h>
+#include <linux/slab.h>
 #include <linux/xcu_group.h>
+#include <linux/xsched.h>
+
+static DECLARE_RWSEM(xcu_group_rwsem);
+
+struct xcu_group *xcu_group_alloc(void)
+{
+	struct xcu_group *node = kzalloc(sizeof(*node), GFP_KERNEL);
+
+	if (!node)
+		return node;
+
+	node->type = XCU_TYPE_NPU;
+	idr_init(&node->next_layer);
+
+	return node;
+}
+EXPORT_SYMBOL(xcu_group_alloc);
+
+int __xcu_group_attach(struct xcu_group *new_group,
+		       struct xcu_group *previous_group)
+{
+	int id = new_group->id;
+
+	if (id == -1)
+		id = idr_alloc(&previous_group->next_layer, new_group, 0,
+			       INT_MAX, GFP_KERNEL);
+	else
+		id = idr_alloc(&previous_group->next_layer, new_group, id,
+			       id + 1, GFP_KERNEL);
+	if (id < 0) {
+		XSCHED_ERR("Attach xcu_group failed: id confilict @ %s\n",
+			   __func__);
+		return -EEXIST;
+	}
+
+	new_group->id = id;
+	new_group->previous_layer = previous_group;
+
+	return 0;
+}
+
+int xcu_group_attach(struct xcu_group *new_group,
+		     struct xcu_group *previous_group)
+{
+	int ret;
+
+	down_write(&xcu_group_rwsem);
+	ret = __xcu_group_attach(new_group, previous_group);
+	up_write(&xcu_group_rwsem);
+
+	return ret;
+}
+EXPORT_SYMBOL(xcu_group_attach);
+
+struct xcu_group *xcu_group_alloc_and_attach(struct xcu_group *previous_group,
+					     int id)
+{
+	struct xcu_group *new = xcu_group_alloc();
+
+	if (!new) {
+		XSCHED_ERR("Alloc xcu_group failed @ %s\n", __func__);
+		return NULL;
+	}
+	new->id = id;
+
+	if (!xcu_group_attach(new, previous_group))
+		return NULL;
+
+	return new;
+}
+EXPORT_SYMBOL(xcu_group_alloc_and_attach);
+
+static inline int __xcu_group_detach(struct xcu_group *group)
+{
+	idr_remove(&group->previous_layer->next_layer, group->id);
+	return 0;
+}
+
+int xcu_group_detach(struct xcu_group *group)
+{
+	int ret;
+
+	down_write(&xcu_group_rwsem);
+	ret = __xcu_group_detach(group);
+	up_write(&xcu_group_rwsem);
+
+	return ret;
+}
+EXPORT_SYMBOL(xcu_group_detach);
+
+static struct xcu_group *__xcu_group_find_nolock(struct xcu_group *group,
+						 int id)
+{
+	return idr_find(&group->next_layer, id);
+}
+
+struct xcu_group *xcu_group_find_noalloc(struct xcu_group *group, int id)
+{
+	struct xcu_group *result;
+
+	down_read(&xcu_group_rwsem);
+	result = __xcu_group_find_nolock(group, id);
+	up_read(&xcu_group_rwsem);
+
+	return result;
+}
+EXPORT_SYMBOL(xcu_group_find_noalloc);
+
+struct xcu_group *xcu_group_find(struct xcu_group *group, int id)
+{
+	struct xcu_group *target_group;
+
+	down_read(&xcu_group_rwsem);
+	target_group = __xcu_group_find_nolock(group, id);
+	up_read(&xcu_group_rwsem);
+
+	if (!target_group) {
+		target_group = xcu_group_alloc();
+		target_group->type = id;
+		target_group->id = id;
+	}
+
+	return target_group;
+}
+EXPORT_SYMBOL(xcu_group_find);
 
 /* This function runs "run" callback for a given xcu_group
  * and a given vstream that are passed within

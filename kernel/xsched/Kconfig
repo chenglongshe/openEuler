@@ -36,3 +36,8 @@ config XSCHED_DEBUG_PRINTS
         analyzing task scheduling behavior, and tracking internal state changes.
         Enabling this may impact performance due to increased log output.
         If unsure, say N.
+
+config XSCHED_NR_CUS
+	int "Number of CUs (a.k.a. XCUs) available to XSched mechanism"
+	default 8
+	depends on XCU_SCHEDULER
