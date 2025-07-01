@@ -151,7 +151,14 @@ EXPORT_SYMBOL(xcu_group_find);
  */
 int xcu_run(struct xcu_op_handler_params *params)
 {
-	return 0;
+	int ret = 0;
+
+	if (params->group->opt && params->group->opt->run)
+		ret = params->group->opt->run(params);
+	else
+		XSCHED_DEBUG("No function [run] called.\n");
+
+	return ret;
 }
 
 /* This function runs "wait" callback for a given xcu_group
