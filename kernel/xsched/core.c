@@ -627,10 +627,10 @@ static int xsched_schedule(void *input_xcu)
 		mutex_unlock(&xcu->xcu_lock);
 
 		wait_event_interruptible(xcu->wq_xcu_idle,
-					 atomic_read(&xcu->has_active) || xcu->xrq.nr_running);
+					 xcu->xrq.cfs.nr_running || xcu->xrq.rt.nr_running);
 
-		XSCHED_INFO("%s: rt_nr_running = %d, has_active = %d\n",
-			__func__, xcu->xrq.nr_running, atomic_read(&xcu->has_active));
+		XSCHED_INFO("%s: rt nr_running = %u, cfs nr_running = %u\n",
+			__func__, xcu->xrq.rt.nr_running, xcu->xrq.cfs.nr_running);
 
 		mutex_lock(&xcu->xcu_lock);
 		XSCHED_INFO("%s: Xcu lock taken\n", __func__);
@@ -692,6 +692,7 @@ static int xsched_schedule(void *input_xcu)
 static inline void xsched_rt_rq_init(struct xsched_cu *xcu)
 {
 	int prio = 0;
+	xcu->xrq.rt.nr_running = 0;
 
 	for_each_xse_prio(prio) {
 		INIT_LIST_HEAD(&xcu->xrq.rt.rq[prio]);
@@ -711,7 +712,6 @@ static inline void xsched_cfs_rq_init(struct xsched_cu *xcu)
 /* Initialize xsched classes' runqueues. */
 static inline void xsched_rq_init(struct xsched_cu *xcu)
 {
-	xcu->xrq.nr_running = 0;
 	xcu->xrq.curr_xse = NULL;
 	xcu->xrq.class = &rt_xsched_class;
 	xcu->xrq.state = XRQ_STATE_IDLE;
@@ -734,7 +734,6 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 
 	atomic_set(&xcu->pending_kicks_rt, 0);
 	atomic_set(&xcu->pending_kicks_cfs, 0);
-	atomic_set(&xcu->has_active, 0);
 
 	INIT_LIST_HEAD(&xcu->vsm_list);
 

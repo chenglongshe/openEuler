@@ -57,7 +57,7 @@ static inline void xse_rt_move_tail(struct xsched_entity *xse)
 static inline void xrq_inc_nr_running(struct xsched_entity *xse,
 				      struct xsched_cu *xcu)
 {
-	xcu->xrq.nr_running++;
+	xcu->xrq.rt.nr_running++;
 	xcu->xrq.rt.prio_nr_running[xse->rt.prio]++;
 	set_bit(xse->rt.prio, xcu->xrq.rt.curr_prios);
 }
@@ -69,7 +69,7 @@ static inline void xrq_dec_nr_running(struct xsched_entity *xse)
 {
 	struct xsched_cu *xcu = xse->xcu;
 
-	xcu->xrq.nr_running--;
+	xcu->xrq.rt.nr_running--;
 	xcu->xrq.rt.prio_nr_running[xse->rt.prio]--;
 
 	if (!xcu->xrq.rt.prio_nr_running[xse->rt.prio])

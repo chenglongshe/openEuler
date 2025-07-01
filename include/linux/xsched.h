@@ -132,6 +132,7 @@ extern struct xsched_group *root_xcg;
 
 /* Manages xsched CFS-like class rbtree based runqueue. */
 struct xsched_rq_cfs {
+	unsigned int nr_running;
 	unsigned int load;
 	u64 min_xruntime;
 	struct rb_root_cached ctx_timeline;
@@ -145,7 +146,7 @@ struct xsched_rq_cfs {
  */
 struct xsched_rq_rt {
 	struct list_head rq[NR_XSE_PRIO];
-
+	unsigned int nr_running;
 	int prio_nr_running[NR_XSE_PRIO];
 	atomic_t prio_nr_kicks[NR_XSE_PRIO];
 	DECLARE_BITMAP(curr_prios, NR_XSE_PRIO);
@@ -159,7 +160,6 @@ struct xsched_rq {
 	const struct xsched_class *class;
 
 	int state;
-	int nr_running;
 
 	/* RT class run queue.*/
 	struct xsched_rq_rt rt;
@@ -208,8 +208,6 @@ struct xsched_cu {
 	struct xcu_group *group;
 
 	struct mutex xcu_lock;
-
-	atomic_t has_active;
 
 	wait_queue_head_t wq_xcu_idle;
 	wait_queue_head_t wq_xcu_running;
