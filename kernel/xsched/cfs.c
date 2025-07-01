@@ -84,10 +84,45 @@ xs_pick_first(struct xsched_rq_cfs *cfs_rq)
  */
 static void xs_update(struct xsched_entity_cfs *xse_cfs, u64 delta)
 {
-	u64 new_xrt = xse_cfs->xruntime + delta * xse_cfs->weight;
+	struct xsched_group_xcu_priv *xg = xse_parent_grp_xcu(xse_cfs);
 
-	xs_cfs_rq_update(xse_cfs, new_xrt);
-	xse_cfs->sum_exec_runtime += delta;
+	for (; xg; xse_cfs = &xg->xse.cfs, xg = &xcg_parent_grp_xcu(xg)) {
+		u64 new_xrt = xse_cfs->xruntime + delta * xse_cfs->weight;
+
+		xs_cfs_rq_update(xse_cfs, new_xrt);
+		xse_cfs->sum_exec_runtime += delta;
+
+		if (xg->self->parent == NULL)
+			break;
+	}
+}
+
+/**
+ * xg_update() - Update container group's xruntime
+ * @gxcu: Descendant xsched group's private xcu control structure
+ *
+ * No locks required to access xsched_group_xcu_priv members,
+ * because only one worker thread works for one XCU.
+ */
+static void xg_update(struct xsched_group_xcu_priv *xg)
+{
+	u64 new_xrt;
+	struct xsched_entity_cfs *entry;
+
+	for (; xg; xg = &xcg_parent_grp_xcu(xg)) {
+		entry = xs_pick_first(xg->rq);
+		if (entry)
+			new_xrt = entry->xruntime * xg->xse.cfs.weight;
+		else
+			new_xrt = XSCHED_TIME_INF;
+
+		xg->rq->min_xruntime = new_xrt;
+
+		if (xg->self->parent)
+			xs_cfs_rq_update(&xg->xse.cfs, new_xrt);
+		else
+			break;
+	}
 }
 
 /*
@@ -102,6 +137,7 @@ static void dequeue_ctx_fair(struct xsched_entity *xse)
 	struct xsched_entity_cfs *xse_cfs = &xse->cfs;
 
 	xs_rq_remove(xse_cfs);
+	xg_update(xse_parent_grp_xcu(xse_cfs));
 
 	first = xs_pick_first(&xcu->xrq.cfs);
 	xcu->xrq.cfs.min_xruntime = (first) ? first->xruntime : XSCHED_TIME_INF;
@@ -128,7 +164,7 @@ static void enqueue_ctx_fair(struct xsched_entity *xse, struct xsched_cu *xcu)
 	struct xsched_entity_cfs *xse_cfs = &xse->cfs;
 
 	xse_cfs->weight = XSCHED_CFS_ENTITY_WEIGHT_DFLT;
-	rq = xse_cfs->cfs_rq = &xcu->xrq.cfs;
+	rq = xse_cfs->cfs_rq = xse_parent_grp_xcu(xse_cfs)->rq;
 
 	/* If no XSE of only empty groups */
 	if (xs_pick_first(rq) == NULL || rq->min_xruntime == XSCHED_TIME_INF)
@@ -137,6 +173,7 @@ static void enqueue_ctx_fair(struct xsched_entity *xse, struct xsched_cu *xcu)
 		xse_cfs->xruntime = max(xse_cfs->xruntime, rq->min_xruntime);
 
 	xs_rq_add(xse_cfs);
+	xg_update(xse_parent_grp_xcu(xse_cfs));
 
 	first = xs_pick_first(&xcu->xrq.cfs);
 	xcu->xrq.cfs.min_xruntime = (first) ? first->xruntime : XSCHED_TIME_INF;
@@ -155,6 +192,11 @@ static struct xsched_entity *pick_next_ctx_fair(struct xsched_cu *xcu)
 	xse = xs_pick_first(rq);
 	if (!xse)
 		return NULL;
+	for (; XSCHED_SE_OF(xse)->is_group; xse = xs_pick_first(rq)) {
+		if (!xse || CFS_INNER_RQ_EMPTY(xse))
+			return NULL;
+		rq = xse_this_grp_xcu(xse)->rq;
+	}
 
 	return container_of(xse, struct xsched_entity, cfs);
 }
