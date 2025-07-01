@@ -463,11 +463,9 @@ static inline int xsched_inc_pending_kicks_xse(struct xsched_entity *xse)
 	/* Incrementing prio based pending kicks counter for RT class */
 	if (xse_is_rt(xse)) {
 		atomic_inc(&xse->xcu->xrq.rt.prio_nr_kicks[xse->rt.prio]);
-		XSCHED_INFO("xcu increased pending kicks @ %s\n", __func__);
-	} else {
-		XSCHED_INFO("xse %u isn't rt class @ %s\n", xse->tgid,
-			    __func__);
 	}
+
+	XSCHED_INFO("xcu increased pending kicks @ %s\n", __func__);
 
 	return 0;
 }
@@ -511,11 +509,9 @@ static inline int xsched_dec_pending_kicks_xse(struct xsched_entity *xse)
 		}
 
 		atomic_dec(kicks_prio_rt);
-		XSCHED_INFO("xcu decreased pending kicks @ %s\n", __func__);
-	} else {
-		XSCHED_INFO("xse %u isn't rt class @ %s\n", xse->tgid,
-			    __func__);
 	}
+
+	XSCHED_INFO("xcu decreased pending kicks @ %s\n", __func__);
 
 	return 0;
 }
@@ -623,7 +619,6 @@ static inline void xsched_init_vsm(struct vstream_metadata *vsm,
 				   vstream_args_t *arg)
 {
 	vsm->sq_id = arg->sq_id;
-	vsm->exec_time = arg->vk_args.exec_time;
 	vsm->sqe_num = arg->vk_args.sqe_num;
 	vsm->timeout = arg->vk_args.timeout;
 	memcpy(vsm->sqe, arg->vk_args.sqe, XCU_SQE_SIZE_MAX);
@@ -641,8 +636,6 @@ struct xsched_cu *xcu_find(__u32 *type, __u32 devId, __u32 channel_id);
 /* Vstream metadata proccesing functions.*/
 int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg);
 struct vstream_metadata *xsched_vsm_fetch_first(struct vstream_info *vs);
-void submit_kick(struct vstream_info *vs, struct xcu_op_handler_params *params,
-		 struct vstream_metadata *vsm);
 /* Xsched group manage functions */
 int xsched_group_inherit(struct task_struct *tsk, struct xsched_entity *xse);
 void xcu_cg_init_common(struct xsched_group *xcg);

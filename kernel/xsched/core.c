@@ -62,8 +62,7 @@ static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
 	uint32_t kick_count;
 	struct vstream_info *vs;
-	unsigned int sum_exec_time = 0;
-	size_t kicks_submitted = 0;
+	size_t kicks_scheduled = 0;
 	struct vstream_metadata *vsm;
 	size_t not_empty;
 
@@ -85,30 +84,46 @@ static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
 			spin_unlock(&vs->stream_lock);
 			if (vsm) {
 				list_add_tail(&vsm->node, &xcu->vsm_list);
-
-				sum_exec_time += vsm->exec_time;
-				kicks_submitted++;
+				kicks_scheduled++;
 				xsched_dec_pending_kicks_xse(xse);
 				XSCHED_INFO(
-					"vs id = %d Kick submit exec_time %u sq_tail %u sqe_num %u sq_id %u @ %s\n",
-					vs->id, vsm->exec_time, vsm->sq_tail,
-					vsm->sqe_num, vsm->sq_id, __func__);
+					"vs id = %u sq_tail %u @ %s\n",
+					vs->id, vsm->sq_tail, __func__);
 				not_empty++;
 			}
 		}
-	} while ((sum_exec_time < XSCHED_CFS_MIN_TIMESLICE) && (not_empty));
+	} while ((kicks_scheduled < 10) && (not_empty));
+
+	/*
+	 * Iterate over all vstreams in context:
+	 * Set wr_cqe bit in last computing task in vsm_list
+	 */
+	for_each_vstream_in_ctx(vs, xse->ctx) {
+		list_for_each_entry_reverse(vsm, &xcu->vsm_list, node) {
+			if (vsm->parent == vs) {
+				struct xcu_op_handler_params params;
+				int op_type = SQE_SET_NOTIFY;
+
+				params.group = vsm->parent->xcu->group;
+				params.param_1 = &op_type;
+				params.param_2 = &vsm->sqe;
+				xcu_sqe_op(&params);
+				break;
+			}
+		}
+	}
 
 	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
 	XSCHED_INFO("After decrement XSE kick_count=%u @ %s\n",
 		    kick_count, __func__);
 
-	xse->kicks_submitted += kicks_submitted;
+	xse->kicks_submitted += kicks_scheduled;
 
-	XSCHED_INFO("xse %d kicks_submitted = %lu @ %s\n",
+	XSCHED_INFO("xse %d kicks_scheduled = %lu @ %s\n",
 			    xse->tgid, xse->kicks_submitted, __func__);
 
 out_err:
-	return kicks_submitted;
+	return kicks_scheduled;
 }
 
 static struct xsched_entity *__raw_pick_next_ctx(struct xsched_cu *xcu)
@@ -208,10 +223,13 @@ static int delete_ctx(struct xsched_context *ctx)
 	}
 
 	mutex_lock(&xcu->xcu_lock);
+	XSCHED_INFO("%s: Xcu lock taken\n", __func__);
 	if (curr_xse == xse)
 		xcu->xrq.curr_xse = NULL;
 
 	dequeue_ctx(xse, xcu);
+
+	XSCHED_INFO("%s: Xcu lock released\n", __func__);
 	mutex_unlock(&xcu->xcu_lock);
 
 	XSCHED_INFO("Deleting ctx %d, pending kicks left=%d @ %s\n", xse->tgid,
@@ -491,71 +509,99 @@ out_err:
 	return err;
 }
 
-/*
- * A function for submitting stream's commands (sending commands to a XCU).
- */
-static int xsched_proc(struct xsched_cu *xcu, struct vstream_info *vs,
-		       struct vstream_metadata *vsm)
+static void submit_kick(struct vstream_metadata *vsm)
 {
+	struct vstream_info *vs = vsm->parent;
 	struct xcu_op_handler_params params;
-	struct xsched_entity *xse;
+	params.group = vs->xcu->group;
+	params.fd = vs->fd;
+	params.param_1 = &vs->id;
+	params.param_2 = &vs->channel_id;
+	params.param_3 = vsm->sqe;
+	params.param_4 = &vsm->sqe_num;
+	params.param_5 = &vsm->timeout;
+	params.param_6 = &vs->sqcq_type;
+	params.param_7 = vs->drv_ctx;
+	params.param_8 = &vs->logic_vcqId;
 
-	XSCHED_CALL_STUB();
+	/* Send vstream on a device for processing. */
+	if (xcu_run(&params) != 0) {
+		XSCHED_ERR(
+			"Failed to send vstream tasks vstreamId=%u to a device for processing.\n",
+			vs->id);
+	}
 
-	xse = &vs->ctx->xse;
+	XSCHED_INFO("Vstream_id %u submit vsm: sq_tail %u\n", vs->id, vsm->sq_tail);
+}
 
-	/* Init input parameters for xcu_run and xcu_wait callbacks. */
-	params.group = xcu->group;
+static void submit_wait(struct vstream_metadata *vsm)
+{
+	struct vstream_info *vs = vsm->parent;
+	struct xcu_op_handler_params params;
+	/* Wait timeout in ms. */
+	int32_t timeout = 500;
 
-	/* Increase process time by abstract kick handling time. */
-	xse->last_process_time += vsm->exec_time;
+	params.group = vs->xcu->group;
+	params.param_1 = &vs->channel_id;
+	params.param_2 = &vs->logic_vcqId;
+	params.param_3 = &vs->user_streamId;
+	params.param_4 = &vsm->sqe;
+	params.param_5 = vsm->cqe;
+	params.param_6 = vs->drv_ctx;
+	params.param_7 = &timeout;
 
-	XSCHED_INFO("Process vsm sq_tail %d exec_time %u sqe_num %d sq_id %d@ %s\n",
-		    vsm->sq_tail, vsm->exec_time, vsm->sqe_num, vsm->sq_id, __func__);
-	submit_kick(vs, &params, vsm);
+	/* Wait for a device to complete processing. */
+	if (xcu_wait(&params) != 0) {
+		XSCHED_ERR(
+			"Failed to wait vstream tasks vstreamId=%u, cq_logic=%u.\n",
+			vs->id, vs->logic_vcqId);
+	}
 
-	xse->kicks_processed++;
-
-	XSCHED_INFO("xse %d kicks_processed = %lu @ %s\n",
-		    xse->tgid, xse->kicks_processed, __func__);
-
-	XSCHED_EXIT_STUB();
-	return 0;
+	XSCHED_INFO("Vstream_id %u wait finish, cq_logic %u\n", vs->id, vs->logic_vcqId);
 }
 
 static int __xsched_submit(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
 	int err = 0;
 	struct vstream_metadata *vsm, *tmp;
-	unsigned int submit_exec_time = 0;
 	size_t kicks_submitted = 0;
-	unsigned long wait_us;
+	ktime_t submit_exec_time = 0;
+	ktime_t t_start = 0;
 
 	XSCHED_CALL_STUB();
-
 	XSCHED_INFO("%s called for xse %d on xcu %u\n", __func__, xse->tgid,
 		    xcu->id);
 
 	list_for_each_entry_safe(vsm, tmp, &xcu->vsm_list, node) {
-		xsched_proc(xcu, vsm->parent, vsm);
-		submit_exec_time += vsm->exec_time;
+		struct xcu_op_handler_params params;
+		int op_type = SQE_IS_NOTIFY;
+
+		submit_kick(vsm);
+
+		params.group = vsm->parent->xcu->group;
+		params.param_1 = &op_type;
+		params.param_2 = &vsm->sqe;
+		if (xcu_sqe_op(&params)) {
+			XSCHED_INFO("%s: Xcu lock released\n", __func__);
+			mutex_unlock(&xcu->xcu_lock);
+			t_start = ktime_get();
+			submit_wait(vsm);
+			submit_exec_time += ktime_get() - t_start;
+			mutex_lock(&xcu->xcu_lock);
+			XSCHED_INFO("%s: Xcu lock taken\n", __func__);
+		}
 		kicks_submitted++;
+		list_del(&vsm->node);
+		kfree(vsm);
 	}
+
+	xse->last_process_time += submit_exec_time;
+	xse->kicks_processed += kicks_submitted;
+	XSCHED_INFO("XCU kicks submitted=%lu total=%lu exec_time = %lld @ %s\n",
+		    kicks_submitted, xse->kicks_processed, submit_exec_time,
+		    __func__);
 
 	INIT_LIST_HEAD(&xcu->vsm_list);
-
-	mutex_unlock(&xcu->xcu_lock);
-
-	wait_us = div_u64(submit_exec_time, NSEC_PER_USEC);
-	XSCHED_INFO("XCU kicks_submitted=%lu wait_us=%lu @ %s\n",
-		    kicks_submitted, wait_us, __func__);
-
-	if (wait_us > 0) {
-		/* Sleep shift not larger than 12.5% */
-		usleep_range(wait_us, wait_us + (wait_us >> 3));
-	}
-
-	mutex_lock(&xcu->xcu_lock);
 
 	XSCHED_EXIT_STUB();
 
@@ -638,33 +684,6 @@ static int xsched_schedule(void *input_xcu)
 	XSCHED_EXIT_STUB();
 
 	return err;
-}
-
-void submit_kick(struct vstream_info *vs,
-			struct xcu_op_handler_params *params,
-			struct vstream_metadata *vsm)
-{
-	int ret;
-
-	params->fd = vs->fd;
-	params->param_1 = &vs->id;
-	params->param_2 = &vs->channel_id;
-	params->param_3 = vsm->sqe;
-	params->param_4 = &vsm->sqe_num;
-	params->param_5 = &vsm->timeout;
-	params->param_6 = &vs->sqcq_type;
-	params->param_7 = vs->drv_ctx;
-	/* Send vstream on a device for processing. */
-	ret = xcu_run(params);
-	if (ret) {
-		XSCHED_ERR(
-			"Failed to send vstream tasks vstreamId=%d to a device for processing.\n",
-			vs->id);
-	}
-
-	XSCHED_INFO("Vstream_id %d submit vsm: sq_tail %d\n", vs->id, vsm->sq_tail);
-
-	kfree(vsm);
 }
 
 /* Initialize xsched rt runqueue during kernel init.

@@ -167,7 +167,11 @@ int xcu_run(struct xcu_op_handler_params *params)
  */
 int xcu_wait(struct xcu_op_handler_params *params)
 {
-	return 0;
+	if (!params->group->opt || !params->group->opt->wait) {
+		XSCHED_DEBUG("No function [wait] called.\n");
+		return 0;
+	}
+	return params->group->opt->wait(params);
 }
 
 /* This function runs "complete" callback for a given xcu_group
@@ -248,6 +252,24 @@ int xcu_logic_free(struct xcu_op_handler_params *params)
 		ret = params->group->opt->logic_free(params);
 	else
 		XSCHED_DEBUG("No function [logic_free] called.\n");
+
+	return ret;
+}
+
+/* This function runs a "sqe_op" callback for a given xcu_group
+ * and a given vstream that are passed within
+ * xcu_op_handler_params object.
+ *
+ * This handler provides an interface to set or get sqe info.
+ */
+int xcu_sqe_op(struct xcu_op_handler_params *params)
+{
+	int ret = 0;
+
+	if (params->group->opt && params->group->opt->sqe_op)
+		ret = params->group->opt->sqe_op(params);
+	else
+		XSCHED_DEBUG("No function [sqe_op] called.\n");
 
 	return ret;
 }

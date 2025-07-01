@@ -208,13 +208,11 @@ static size_t select_work_rt(struct xsched_cu *xcu, struct xsched_entity *xse)
 		spin_lock(&vs->stream_lock);
 		while ((vsm = xsched_vsm_fetch_first(vs))) {
 			list_add_tail(&vsm->node, &xcu->vsm_list);
-			vsm->exec_time = 0;
 			kicks_submitted++;
 			xsched_dec_pending_kicks_xse(xse);
 			XSCHED_INFO(
-				"vs id = %d Kick submit exec_time %u sq_tail %u sqe_num %u sq_id %u @ %s\n",
-				vs->id, vsm->exec_time, vsm->sq_tail,
-				vsm->sqe_num, vsm->sq_id, __func__);
+				"vs id = %u Kick submit sq_tail %u sqe_num %u sq_id %u @ %s\n",
+				vs->id, vsm->sq_tail, vsm->sqe_num, vsm->sq_id, __func__);
 		}
 		spin_unlock(&vs->stream_lock);
 	}
