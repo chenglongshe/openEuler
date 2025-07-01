@@ -178,6 +178,44 @@ static int vstream_add(vstream_info_t *vstream, uint32_t id)
 	return 0;
 }
 
+static int vstream_del(uint32_t vstreamid)
+{
+	XSCHED_INFO("Deleting vstream %u @ %s\n", vstreamid, __func__);
+
+	if (vstreamid >= MAX_VSTREAM_NUM) {
+		XSCHED_ERR("VstreamId=%u out of range.\n", vstreamid);
+		return -EINVAL;
+	}
+
+	mutex_lock(&vs_mutex);
+	if (vstream_array[vstreamid] != NULL) {
+		vstream_array[vstreamid] = NULL;
+		mutex_unlock(&vs_mutex);
+		return 0;
+	}
+	mutex_unlock(&vs_mutex);
+
+	XSCHED_ERR("vstream_array[%u] is already empty.\n", vstreamid);
+
+	return 0;
+}
+
+static vstream_info_t *vstream_get(uint32_t vstreamid)
+{
+	vstream_info_t *vstream = NULL;
+
+	if (vstreamid >= MAX_VSTREAM_NUM) {
+		XSCHED_ERR("VstreamId=%u out of range.\n", vstreamid);
+		return NULL;
+	}
+
+	mutex_lock(&vs_mutex);
+	vstream = vstream_array[vstreamid];
+	mutex_unlock(&vs_mutex);
+
+	return vstream;
+}
+
 static vstream_info_t *
 vstream_get_by_user_stream_id(uint32_t user_streamId)
 {
@@ -385,7 +423,47 @@ int vstream_alloc(struct vstream_args *arg)
 
 int vstream_free(struct vstream_args *arg)
 {
-	return 0;
+	struct xcu_op_handler_params params;
+	uint32_t vstreamId = arg->sq_id;
+	struct xsched_context *ctx = NULL;
+	struct xsched_entity *xse = NULL;
+	vstream_info_t *vstream = NULL;
+	int err = 0;
+
+	XSCHED_CALL_STUB();
+
+	vstream = vstream_get(vstreamId);
+	if (!vstream) {
+		XSCHED_ERR("Vstream get failed, vstreamId=%u.\n",
+			   vstreamId);
+		err = -ENOMEM;
+		goto out_err;
+	}
+
+	err = vstream_del(vstream->id);
+	if (err)
+		goto out_err;
+
+	params.group = vstream->xcu->group;
+	params.fd = arg->fd;
+	params.payload = arg->payload;
+	err = xcu_finish(&params);
+
+	if (err) {
+		XSCHED_ERR(
+			"Failed to free vstream's SQ/CQ queues on the device sqId=%u, cqId=%u.\n",
+			arg->sq_id, arg->cq_id);
+		goto out_err;
+	}
+
+	xse = &vstream->ctx->xse;
+	ctx = vstream->ctx;
+	kref_put(&ctx->kref, xsched_free_task);
+
+out_err:
+	XSCHED_EXIT_STUB();
+
+	return err;
 }
 
 int vstream_kick(struct vstream_args *arg)

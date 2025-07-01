@@ -181,7 +181,11 @@ int xcu_complete(struct xcu_op_handler_params *params)
  */
 int xcu_finish(struct xcu_op_handler_params *params)
 {
-	return 0;
+	if (!params->group->opt || !params->group->opt->finish) {
+		XSCHED_DEBUG("No function [finish] called.\n");
+		return 0;
+	}
+	return params->group->opt->finish(params);
 }
 
 /* This function runs a "alloc" callback for a given xcu_group

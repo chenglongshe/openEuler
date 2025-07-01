@@ -36,6 +36,35 @@ struct xsched_cu *xsched_cu_mgr[XSCHED_NR_CUS];
 struct list_head xsched_ctx_list;
 DEFINE_MUTEX(xsched_ctx_list_mutex);
 
+/* Frees a given vstream and also frees and dequeues it's context
+ * if a given vstream is the last and only vstream attached to it's
+ * corresponding context object.
+ */
+void xsched_free_task(struct kref *kref)
+{
+	struct xsched_context *ctx;
+	vstream_info_t *vs, *tmp;
+
+	XSCHED_CALL_STUB();
+
+	ctx = container_of(kref, struct xsched_context, kref);
+
+	mutex_lock(&xsched_ctx_list_mutex);
+	list_for_each_entry_safe(vs, tmp, &ctx->vstream_list, ctx_node) {
+		list_del(&vs->ctx_node);
+		kfree(vs->data);
+		kfree(vs);
+	}
+
+	list_del(&ctx->ctx_node);
+
+	mutex_unlock(&xsched_ctx_list_mutex);
+	XSCHED_INFO("Ctx list mutex released @ %s\n", __func__);
+
+	kfree(ctx);
+}
+
+
 int bind_vstream_to_xcu(vstream_info_t *vstream_info)
 {
 	struct xsched_cu *xcu_found = NULL;

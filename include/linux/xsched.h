@@ -157,6 +157,7 @@ static inline struct xsched_context *find_ctx_by_tgid(pid_t tgid)
 }
 
 int xsched_register_xcu(struct xcu_group *group);
+void xsched_free_task(struct kref *kref);
 int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs);
 int bind_ctx_to_xcu(vstream_info_t *vstream_info, struct xsched_context *ctx);
 int bind_vstream_to_xcu(vstream_info_t *vstream_info);
