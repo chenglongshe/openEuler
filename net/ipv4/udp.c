@@ -400,7 +400,7 @@ static int compute_score(struct sock *sk, struct net *net,
 	return score;
 }
 
-static u32 udp_ehashfn(const struct net *net, const __be32 laddr,
+u32 udp_ehashfn(const struct net *net, const __be32 laddr,
 		       const __u16 lport, const __be32 faddr,
 		       const __be16 fport)
 {
@@ -411,6 +411,7 @@ static u32 udp_ehashfn(const struct net *net, const __be32 laddr,
 	return __inet_ehashfn(laddr, lport, faddr, fport,
 			      udp_ehash_secret + net_hash_mix(net));
 }
+EXPORT_SYMBOL(udp_ehashfn);
 
 static struct sock *lookup_reuseport(struct net *net, struct sock *sk,
 				     struct sk_buff *skb,
