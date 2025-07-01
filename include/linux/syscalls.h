@@ -948,6 +948,7 @@ asmlinkage long sys_cachestat(unsigned int fd,
 		struct cachestat __user *cstat, unsigned int flags);
 asmlinkage long sys_map_shadow_stack(unsigned long addr, unsigned long size, unsigned int flags);
 
+asmlinkage long sys_vstream_manage(struct vstream_args __user *arg, int cmd);
 /*
  * Architecture-specific system calls
  */
@@ -1059,6 +1060,8 @@ asmlinkage long sys_uselib(const char __user *library);
 asmlinkage long sys_sysfs(int option,
 				unsigned long arg1, unsigned long arg2);
 asmlinkage long sys_fork(void);
+
+asmlinkage long sys_vstream_manage(struct vstream_args *arg, int cmd);
 
 /* obsolete */
 asmlinkage long sys_stime(__kernel_old_time_t __user *tptr);
