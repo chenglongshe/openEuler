@@ -36,6 +36,9 @@ struct xsched_cu *xsched_cu_mgr[XSCHED_NR_CUS];
 struct list_head xsched_ctx_list;
 DEFINE_MUTEX(xsched_ctx_list_mutex);
 
+static DEFINE_MUTEX(revmap_mutex);
+static DEFINE_HASHTABLE(ctx_revmap, XCU_HASH_ORDER);
+
 /* Frees a given vstream and also frees and dequeues it's context
  * if a given vstream is the last and only vstream attached to it's
  * corresponding context object.
@@ -64,6 +67,97 @@ void xsched_free_task(struct kref *kref)
 	kfree(ctx);
 }
 
+int bind_ctx_to_xcu(vstream_info_t *vstream_info, struct xsched_context *ctx)
+{
+	struct ctx_devid_revmap_data *revmap_data;
+	int target_chan_id = 0;
+
+	/* Find XCU history. */
+	hash_for_each_possible(ctx_revmap, revmap_data, hash_node,
+				(unsigned long)ctx->devId) {
+		if (revmap_data && revmap_data->group) {
+			/* Bind ctx to group xcu.*/
+			ctx->xse.xcu = revmap_data->group->xcu;
+			return 0;
+		}
+	}
+
+	revmap_data = kzalloc(sizeof(struct ctx_devid_revmap_data), GFP_KERNEL);
+
+	if (revmap_data == NULL) {
+		XSCHED_ERR("Revmap_data is NULL @ %s\n", __func__);
+		return -1;
+	}
+
+	/* Find a real XCU group and if it doesn't exist then try
+	 * to find or allocate a XCU_TYPE_NPU group.
+	 */
+	revmap_data->group =
+		xcu_group_find_noalloc(xcu_group_root, XCU_TYPE_NPU);
+	target_chan_id = vstream_info->channel_id;
+
+	if (revmap_data->group == NULL) {
+		target_chan_id = 0;
+
+		XSCHED_INFO(
+			"Failed to find an XCU group for a real device @ %s\n",
+			__func__);
+		XSCHED_INFO("Creating a test QEMU XCU group");
+
+		revmap_data->group =
+			xcu_group_find_noalloc(xcu_group_root, XCU_TYPE_NPU);
+
+		/* If XCU_TYPE_NPU device creation failed then something
+		 * went very wrong and we need to return an error.
+		 */
+		if (revmap_data->group == NULL) {
+			XSCHED_ERR(
+				"Failed to find or create a QEMU test XCU group @ %s\n",
+				__func__);
+			return -1;
+		}
+	}
+
+	/* Find a device group. */
+	revmap_data->group =
+		xcu_group_find_noalloc(revmap_data->group, ctx->devId);
+	if (revmap_data->group == NULL) {
+		XSCHED_ERR(
+			"Failed to find a device group for dev_id 0x%X @ %s\n",
+			ctx->devId, __func__);
+		return -1;
+	}
+
+	XSCHED_INFO("Found a dev group 0x%X @ %s\n", revmap_data->group->id,
+		    __func__);
+
+	/* Find a channel group. */
+	revmap_data->group =
+		xcu_group_find_noalloc(revmap_data->group, target_chan_id);
+	if (revmap_data->group == NULL) {
+		XSCHED_ERR(
+			"Failed to find a channel group for dev_id 0x%X and chan_id %d @ %s\n",
+			ctx->devId, target_chan_id, __func__);
+		return -1;
+	}
+
+	XSCHED_INFO("Found a channel group 0x%X with XCU %p @ %s\n",
+		    revmap_data->group->id, revmap_data->group->xcu, __func__);
+
+	revmap_data->devId = vstream_info->devId;
+
+	/* Bind ctx to an XCU from channel group. */
+	ctx->xse.xcu = revmap_data->group->xcu;
+	vstream_info->xcu = ctx->xse.xcu;
+
+	XSCHED_INFO("Bound an XCU %p @ %s\n", ctx->xse.xcu, __func__);
+
+	revmap_data->devId = vstream_info->devId;
+	hash_add(ctx_revmap, &revmap_data->hash_node,
+		 (unsigned long)ctx->devId);
+
+	return 0;
+}
 
 int bind_vstream_to_xcu(vstream_info_t *vstream_info)
 {
@@ -123,9 +217,51 @@ struct xsched_cu *xcu_find(__u32 *type, __u32 devId, __u32 channel_id)
 	return group->xcu;
 }
 
-int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
+int xsched_xse_set_class(struct xsched_entity *xse)
 {
 	return 0;
+}
+
+int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
+{
+	int err = 0;
+	struct xsched_entity *xse = &ctx->xse;
+
+	XSCHED_CALL_STUB();
+
+	atomic_set(&xse->kicks_pending_ctx_cnt, 0);
+	atomic_set(&xse->kicks_submited, 0);
+
+	xse->fd = ctx->fd;
+	xse->tgid = ctx->tgid;
+
+	err = bind_ctx_to_xcu(vs, ctx);
+	if (err) {
+		XSCHED_ERR(
+			"Couldn't find valid xcu for vstream %u dev_id %u @ %s\n",
+			vs->id, vs->devId, __func__);
+		err = -EINVAL;
+		goto out_err;
+	}
+
+	xse->ctx = ctx;
+
+	if (vs->xcu != NULL)
+		xse->xcu = vs->xcu;
+
+	err = xsched_xse_set_class(xse);
+	if (err) {
+		XSCHED_ERR("Failed to set xse class @ %s\n", __func__);
+		goto out_err;
+	}
+
+	WRITE_ONCE(xse->on_rq, false);
+
+	spin_lock_init(&xse->xse_lock);
+out_err:
+	XSCHED_EXIT_STUB();
+
+	return err;
 }
 
 static int xsched_schedule(void *input_xcu)
