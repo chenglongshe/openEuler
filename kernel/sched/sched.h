@@ -560,19 +560,11 @@ extern void sched_release_group(struct task_group *tg);
 
 extern void sched_move_task(struct task_struct *tsk);
 
-#if defined(CONFIG_SCHED_CORE) || defined(CONFIG_CGROUP_IFS)
-extern int sched_task_is_throttled(struct task_struct *p, int cpu);
-#else
-static inline int sched_task_is_throttled(struct task_struct *p, int cpu)
-{
-	return 0;
-}
-#endif
-
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 extern void start_auto_affinity(struct auto_affinity *auto_affi);
 extern void stop_auto_affinity(struct auto_affinity *auto_affi);
 extern int init_auto_affinity(struct task_group *tg);
+void offline_auto_affinity(struct task_group *tg);
 extern void tg_update_affinity_domains(int cpu, int online);
 extern int tg_rebuild_affinity_domains(int cpu, struct auto_affinity *auto_affi);
 
@@ -583,6 +575,7 @@ static inline int init_auto_affinity(struct task_group *tg)
 }
 
 static inline void tg_update_affinity_domains(int cpu, int online) {}
+static inline void offline_auto_affinity(struct task_group *tg) { }
 #endif
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -605,6 +598,15 @@ struct cfs_bandwidth { };
 static inline bool cfs_task_bw_constrained(struct task_struct *p) { return false; }
 
 #endif	/* CONFIG_CGROUP_SCHED */
+
+#if defined(CONFIG_SCHED_CORE) || defined(CONFIG_CGROUP_IFS)
+extern int sched_task_is_throttled(struct task_struct *p, int cpu);
+#else
+static inline int sched_task_is_throttled(struct task_struct *p, int cpu)
+{
+	return 0;
+}
+#endif
 
 extern void unregister_rt_sched_group(struct task_group *tg);
 extern void free_rt_sched_group(struct task_group *tg);
@@ -3759,9 +3761,11 @@ bool bpf_sched_is_cpu_allowed(struct task_struct *p, int cpu);
 
 #ifdef CONFIG_SCHED_SOFT_DOMAIN
 void build_soft_domain(void);
-int init_soft_domain(struct task_group *tg);
-
+int init_soft_domain(struct task_group *tg, struct task_group *parent);
+int destroy_soft_domain(struct task_group *tg);
+void offline_soft_domain(struct task_group *tg);
 int sched_group_set_soft_domain(struct task_group *tg, long val);
+int sched_group_set_soft_domain_quota(struct task_group *tg, long val);
 
 static inline struct cpumask *soft_domain_span(unsigned long span[])
 {
@@ -3770,7 +3774,14 @@ static inline struct cpumask *soft_domain_span(unsigned long span[])
 #else
 
 static inline void build_soft_domain(void) { }
-static inline int init_soft_domain(struct task_group *tg)
+static inline int init_soft_domain(struct task_group *tg, struct task_group *parent)
+{
+	return 0;
+}
+
+static inline void offline_soft_domain(struct task_group *tg) { }
+
+static inline int destroy_soft_domain(struct task_group *tg)
 {
 	return 0;
 }

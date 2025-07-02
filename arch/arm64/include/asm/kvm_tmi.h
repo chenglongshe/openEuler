@@ -249,6 +249,7 @@ struct tmi_tec_run {
 #define TMI_FNUM_INF_TEST               U(0x270)
 #define TMI_FNUM_KAE_INIT               U(0x273)
 #define TMI_FNUM_KAE_ENABLE             U(0x274)
+#define TMI_FNUM_INFO_SHOW              U(0x275)
 
 #define TMI_FNUM_SMMU_QUEUE_CREATE      U(0x277)
 #define TMI_FNUM_SMMU_QUEUE_WRITE       U(0x278)
@@ -288,6 +289,7 @@ struct tmi_tec_run {
 #define TMI_TMM_INF_TEST                TMI_FID(SMC_64, TMI_FNUM_INF_TEST)
 #define TMI_TMM_KAE_INIT                TMI_FID(SMC_64, TMI_FNUM_KAE_INIT)
 #define TMI_TMM_KAE_ENABLE              TMI_FID(SMC_64, TMI_FNUM_KAE_ENABLE)
+#define TMI_TMM_INFO_SHOW               TMI_FID(SMC_64, TMI_FNUM_INFO_SHOW)
 
 #define TMI_TMM_SMMU_QUEUE_CREATE       TMI_FID(SMC_64, TMI_FNUM_SMMU_QUEUE_CREATE)
 #define TMI_TMM_SMMU_QUEUE_WRITE        TMI_FID(SMC_64, TMI_FNUM_SMMU_QUEUE_WRITE)
@@ -433,6 +435,7 @@ u64 tmi_smmu_write(u64 smmu_base, u64 reg_offset, u64 val, u64 bits);
 u64 tmi_smmu_read(u64 smmu_base, u64 reg_offset, u64 bits);
 u64 tmi_kae_init(void);
 u64 tmi_kae_enable(u64 rd, u64 numa_set, u64 is_enable);
+u64 tmi_tmm_info_show(u64 option, u64 tmm_info_addr);
 
 u64 tmi_dev_create(u64 params);
 u64 tmi_dev_destroy(u64 dev_num, u64 clean);
@@ -449,5 +452,6 @@ int kvm_enable_virtcca_cvm(struct kvm *kvm);
 int kvm_cvm_map_ipa(struct kvm *kvm, phys_addr_t ipa, kvm_pfn_t pfn,
 	unsigned long map_size, enum kvm_pgtable_prot prot, int ret);
 void virtcca_cvm_set_secure_flag(void *vdev, void *info);
+bool is_virtcca_available(void);
 #endif
 #endif

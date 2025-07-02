@@ -393,3 +393,12 @@ u64 tmi_dev_destroy(u64 dev_num, u64 clean)
 	arm_smccc_1_1_smc(TMI_TMM_DEV_DESTROY, dev_num, clean, &res);
 	return res.a1;
 }
+u64 tmi_tmm_info_show(u64 option, u64 tmm_info_addr)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_INFO_SHOW, option, tmm_info_addr, &res);
+	return res.a1;
+}
+EXPORT_SYMBOL_GPL(tmi_tmm_info_show);
+
