@@ -271,7 +271,7 @@ void kvm_flush_remote_tlbs_range(struct kvm *kvm, gfn_t start_gfn,
 	range.pages = nr_pages;
 
 	if (kvm_x86_ops.tlb_remote_flush_with_range)
-		ret = kvm_x86_ops.tlb_remote_flush_with_range(kvm, &range);
+		ret = static_call(kvm_x86_tlb_remote_flush_with_range)(kvm, &range);
 
 	if (ret)
 		kvm_flush_remote_tlbs(kvm);
@@ -4178,6 +4178,16 @@ static int __kvm_faultin_pfn(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault
 			fault->map_writable = false;
 			return RET_PF_CONTINUE;
 		}
+		/*
+		 * If the APIC access page exists but is disabled, go directly
+		 * to emulation without caching the MMIO access or creating a
+		 * MMIO SPTE.  That way the cache doesn't need to be purged
+		 * when the AVIC is re-enabled.
+		 */
+		if (slot && slot->id == APIC_ACCESS_PAGE_PRIVATE_MEMSLOT &&
+		    !kvm_apicv_activated(vcpu->kvm)) {
+			return RET_PF_EMULATE;
+		}
 	}
 
 	async = false;
@@ -5360,7 +5370,7 @@ int kvm_mmu_load(struct kvm_vcpu *vcpu)
 	 * stale entries.  Flushing on alloc also allows KVM to skip the TLB
 	 * flush when freeing a root (see kvm_tdp_mmu_put_root()).
 	 */
-	kvm_x86_ops.tlb_flush_current(vcpu);
+	static_call(kvm_x86_tlb_flush_current)(vcpu);
 out:
 	return r;
 }
@@ -5666,7 +5676,7 @@ void kvm_mmu_invalidate_gva(struct kvm_vcpu *vcpu, struct kvm_mmu *mmu,
 		if (is_noncanonical_address(gva, vcpu))
 			return;
 
-		kvm_x86_ops.tlb_flush_gva(vcpu, gva);
+		static_call(kvm_x86_tlb_flush_gva)(vcpu, gva);
 	}
 
 	if (!mmu->invlpg)
@@ -5724,7 +5734,7 @@ void kvm_mmu_invpcid_gva(struct kvm_vcpu *vcpu, gva_t gva, unsigned long pcid)
 	}
 
 	if (tlb_flush)
-		kvm_x86_ops.tlb_flush_gva(vcpu, gva);
+		static_call(kvm_x86_tlb_flush_gva)(vcpu, gva);
 
 	++vcpu->stat.invlpg;
 

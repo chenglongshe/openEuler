@@ -97,6 +97,8 @@ int kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq,
 		     struct dest_map *dest_map);
 int kvm_apic_local_deliver(struct kvm_lapic *apic, int lvt_type);
 void kvm_apic_update_apicv(struct kvm_vcpu *vcpu);
+int kvm_alloc_apic_access_page(struct kvm *kvm);
+void kvm_inhibit_apic_access_page(struct kvm_vcpu *vcpu);
 
 bool kvm_irq_delivery_to_apic_fast(struct kvm *kvm, struct kvm_lapic *src,
 		struct kvm_lapic_irq *irq, int *r, struct dest_map *dest_map);
@@ -119,6 +121,7 @@ int kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, gpa_t vapic_addr);
 void kvm_lapic_sync_from_vapic(struct kvm_vcpu *vcpu);
 void kvm_lapic_sync_to_vapic(struct kvm_vcpu *vcpu);
 
+int kvm_x2apic_icr_write(struct kvm_lapic *apic, u64 data);
 int kvm_x2apic_msr_write(struct kvm_vcpu *vcpu, u32 msr, u64 data);
 int kvm_x2apic_msr_read(struct kvm_vcpu *vcpu, u32 msr, u64 *data);
 
@@ -157,24 +160,14 @@ static inline void kvm_lapic_set_irr(int vec, struct kvm_lapic *apic)
 	apic->irr_pending = true;
 }
 
+static inline u32 __kvm_lapic_get_reg(char *regs, int reg_off)
+{
+	return *((u32 *) (regs + reg_off));
+}
+
 static inline u32 kvm_lapic_get_reg(struct kvm_lapic *apic, int reg_off)
 {
-	return *((u32 *) (apic->regs + reg_off));
-}
-
-static inline u64 kvm_lapic_get_reg64(struct kvm_lapic *apic, int reg_off)
-{
-	return *((u64 *) (apic->regs + reg_off));
-}
-
-static inline void __kvm_lapic_set_reg(char *regs, int reg_off, u32 val)
-{
-	*((u32 *) (regs + reg_off)) = val;
-}
-
-static inline void kvm_lapic_set_reg(struct kvm_lapic *apic, int reg_off, u32 val)
-{
-	__kvm_lapic_set_reg(apic->regs, reg_off, val);
+	return __kvm_lapic_get_reg(apic->regs, reg_off);
 }
 
 extern struct static_key kvm_no_apic_vcpu;

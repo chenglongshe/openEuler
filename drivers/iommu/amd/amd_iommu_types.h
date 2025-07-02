@@ -161,6 +161,7 @@
 #define CONTROL_GAINT_EN        0x1DULL
 #define CONTROL_XT_EN           0x32ULL
 #define CONTROL_INTCAPXT_EN     0x33ULL
+#define CONTROL_IRTCACHEDIS	59
 
 #define CTRL_INV_TO_MASK	(7 << CONTROL_INV_TIMEOUT)
 #define CTRL_INV_TO_NONE	0
@@ -256,10 +257,18 @@
 /* Bit value definition for dte irq remapping fields*/
 #define DTE_IRQ_PHYS_ADDR_MASK	(((1ULL << 45)-1) << 6)
 #define DTE_IRQ_REMAP_INTCTL_MASK	(0x3ULL << 60)
-#define DTE_IRQ_TABLE_LEN_MASK	(0xfULL << 1)
 #define DTE_IRQ_REMAP_INTCTL    (2ULL << 60)
-#define DTE_IRQ_TABLE_LEN       (9ULL << 1)
 #define DTE_IRQ_REMAP_ENABLE    1ULL
+
+/*
+ * AMD IOMMU hardware only support 512 IRTEs despite
+ * the architectural limitation of 2048 entries.
+ */
+#define DTE_INTTAB_ALIGNMENT    128
+#define DTE_INTTABLEN_VALUE     9ULL
+#define DTE_INTTABLEN           (DTE_INTTABLEN_VALUE << 1)
+#define DTE_INTTABLEN_MASK      (0xfULL << 1)
+#define MAX_IRQS_PER_TABLE      (1 << DTE_INTTABLEN_VALUE)
 
 #define PAGE_MODE_NONE    0x00
 #define PAGE_MODE_1_LEVEL 0x01
@@ -413,13 +422,6 @@ extern bool amd_iommu_dump;
 extern bool amd_iommu_np_cache;
 /* Only true if all IOMMUs support device IOTLBs */
 extern bool amd_iommu_iotlb_sup;
-
-/*
- * AMD IOMMU hardware only support 512 IRTEs despite
- * the architectural limitation of 2048 entries.
- */
-#define MAX_IRQS_PER_TABLE	512
-#define IRQ_TABLE_ALIGNMENT	128
 
 struct irq_remap_table {
 	raw_spinlock_t lock;
@@ -575,6 +577,9 @@ struct amd_iommu {
 	/* if one, we need to send a completion wait command */
 	bool need_sync;
 
+	/* true if disable irte caching */
+	bool irtcachedis_enabled;
+
 	/* Handle for IOMMU core code */
 	struct iommu_device iommu;
 
@@ -608,7 +613,7 @@ struct amd_iommu {
 
 	u32 flags;
 	volatile u64 *cmd_sem;
-	u64 cmd_sem_val;
+	atomic64_t cmd_sem_val;
 
 #ifdef CONFIG_AMD_IOMMU_DEBUGFS
 	/* DebugFS Info */
@@ -887,7 +892,6 @@ struct amd_ir_data {
 	struct irq_2_irte irq_2_irte;
 	struct msi_msg msi_entry;
 	void *entry;    /* Pointer to union irte or struct irte_ga */
-	void *ref;      /* Pointer to the actual irte */
 
 	/**
 	 * Store information for activate/de-activate
@@ -901,9 +905,9 @@ struct amd_ir_data {
 
 struct amd_irte_ops {
 	void (*prepare)(void *, u32, bool, u8, u32, int);
-	void (*activate)(void *, u16, u16);
-	void (*deactivate)(void *, u16, u16);
-	void (*set_affinity)(void *, u16, u16, u8, u32);
+	void (*activate)(struct amd_iommu *iommu, void *, u16, u16);
+	void (*deactivate)(struct amd_iommu *iommu, void *, u16, u16);
+	void (*set_affinity)(struct amd_iommu *iommu, void *, u16, u16, u8, u32);
 	void *(*get)(struct irq_remap_table *, int);
 	void (*set_allocated)(struct irq_remap_table *, int);
 	bool (*is_allocated)(struct irq_remap_table *, int);

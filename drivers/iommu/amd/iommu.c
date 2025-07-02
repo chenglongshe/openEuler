@@ -815,6 +815,7 @@ amd_iommu_set_pci_msi_domain(struct device *dev, struct amd_iommu *iommu) { }
 	(MMIO_STATUS_EVT_OVERFLOW_INT_MASK | \
 	 MMIO_STATUS_EVT_INT_MASK | \
 	 MMIO_STATUS_PPR_INT_MASK | \
+	 MMIO_STATUS_GALOG_OVERFLOW_MASK | \
 	 MMIO_STATUS_GALOG_INT_MASK)
 
 irqreturn_t amd_iommu_int_thread(int irq, void *data)
@@ -838,9 +839,15 @@ irqreturn_t amd_iommu_int_thread(int irq, void *data)
 		}
 
 #ifdef CONFIG_IRQ_REMAP
-		if (status & MMIO_STATUS_GALOG_INT_MASK) {
+		if (status & (MMIO_STATUS_GALOG_INT_MASK |
+			      MMIO_STATUS_GALOG_OVERFLOW_MASK)) {
 			pr_devel("Processing IOMMU GA Log\n");
 			iommu_poll_ga_log(iommu);
+		}
+
+		if (status & MMIO_STATUS_GALOG_OVERFLOW_MASK) {
+			pr_info_ratelimited("IOMMU GA Log overflow\n");
+			amd_iommu_restart_ga_log(iommu);
 		}
 #endif
 
@@ -1137,10 +1144,10 @@ static int iommu_completion_wait(struct amd_iommu *iommu)
 	if (!iommu->need_sync)
 		return 0;
 
-	raw_spin_lock_irqsave(&iommu->lock, flags);
-
-	data = ++iommu->cmd_sem_val;
+	data = atomic64_add_return(1, &iommu->cmd_sem_val);
 	build_completion_wait(&cmd, iommu, data);
+
+	raw_spin_lock_irqsave(&iommu->lock, flags);
 
 	ret = __iommu_queue_command_sync(iommu, &cmd, false);
 	if (ret)
@@ -1224,6 +1231,9 @@ static void iommu_flush_irt(struct amd_iommu *iommu, u16 devid)
 static void amd_iommu_flush_irt_all(struct amd_iommu *iommu)
 {
 	u32 devid;
+
+	if (iommu->irtcachedis_enabled)
+		return;
 
 	for (devid = 0; devid <= MAX_DEV_TABLE_ENTRIES; devid++)
 		iommu_flush_irt(iommu, devid);
@@ -3191,6 +3201,32 @@ EXPORT_SYMBOL(amd_iommu_device_info);
 static struct irq_chip amd_ir_chip;
 static DEFINE_SPINLOCK(iommu_table_lock);
 
+static void iommu_flush_irt_and_complete(struct amd_iommu *iommu, u16 devid)
+{
+	int ret;
+	u64 data;
+	unsigned long flags;
+	struct iommu_cmd cmd, cmd2;
+
+	if (iommu->irtcachedis_enabled)
+		return;
+
+	build_inv_irt(&cmd, devid);
+	data = atomic64_add_return(1, &iommu->cmd_sem_val);
+	build_completion_wait(&cmd2, iommu, data);
+
+	raw_spin_lock_irqsave(&iommu->lock, flags);
+	ret = __iommu_queue_command_sync(iommu, &cmd, true);
+	if (ret)
+		goto out;
+	ret = __iommu_queue_command_sync(iommu, &cmd2, false);
+	if (ret)
+		goto out;
+	wait_on_sem(iommu, data);
+out:
+	raw_spin_unlock_irqrestore(&iommu->lock, flags);
+}
+
 static void set_dte_irq_entry(u16 devid, struct irq_remap_table *table)
 {
 	u64 dte;
@@ -3199,7 +3235,7 @@ static void set_dte_irq_entry(u16 devid, struct irq_remap_table *table)
 	dte	&= ~DTE_IRQ_PHYS_ADDR_MASK;
 	dte	|= iommu_virt_to_phys(table->table);
 	dte	|= DTE_IRQ_REMAP_INTCTL;
-	dte	|= DTE_IRQ_TABLE_LEN;
+	dte	|= DTE_INTTABLEN;
 	dte	|= DTE_IRQ_REMAP_ENABLE;
 
 	amd_iommu_dev_table[devid].data[2] = dte;
@@ -3383,18 +3419,13 @@ out:
 	return index;
 }
 
-static int modify_irte_ga(u16 devid, int index, struct irte_ga *irte,
-			  struct amd_ir_data *data)
+static int __modify_irte_ga(struct amd_iommu *iommu, u16 devid, int index,
+			    struct irte_ga *irte)
 {
 	bool ret;
 	struct irq_remap_table *table;
-	struct amd_iommu *iommu;
 	unsigned long flags;
 	struct irte_ga *entry;
-
-	iommu = amd_iommu_rlookup_table[devid];
-	if (iommu == NULL)
-		return -EINVAL;
 
 	table = get_irq_table(devid);
 	if (!table)
@@ -3416,26 +3447,30 @@ static int modify_irte_ga(u16 devid, int index, struct irte_ga *irte,
 	 */
 	WARN_ON(!ret);
 
-	if (data)
-		data->ref = entry;
-
 	raw_spin_unlock_irqrestore(&table->lock, flags);
-
-	iommu_flush_irt(iommu, devid);
-	iommu_completion_wait(iommu);
 
 	return 0;
 }
 
-static int modify_irte(u16 devid, int index, union irte *irte)
+static int modify_irte_ga(struct amd_iommu *iommu, u16 devid, int index,
+			  struct irte_ga *irte)
+{
+	bool ret;
+
+	ret = __modify_irte_ga(iommu, devid, index, irte);
+	if (ret)
+		return ret;
+
+	iommu_flush_irt_and_complete(iommu, devid);
+
+	return 0;
+}
+
+static int modify_irte(struct amd_iommu *iommu,
+		       u16 devid, int index, union irte *irte)
 {
 	struct irq_remap_table *table;
-	struct amd_iommu *iommu;
 	unsigned long flags;
-
-	iommu = amd_iommu_rlookup_table[devid];
-	if (iommu == NULL)
-		return -EINVAL;
 
 	table = get_irq_table(devid);
 	if (!table)
@@ -3445,8 +3480,7 @@ static int modify_irte(u16 devid, int index, union irte *irte)
 	table->table[index] = irte->val;
 	raw_spin_unlock_irqrestore(&table->lock, flags);
 
-	iommu_flush_irt(iommu, devid);
-	iommu_completion_wait(iommu);
+	iommu_flush_irt_and_complete(iommu, devid);
 
 	return 0;
 }
@@ -3469,8 +3503,7 @@ static void free_irte(u16 devid, int index)
 	iommu->irte_ops->clear_allocated(table, index);
 	raw_spin_unlock_irqrestore(&table->lock, flags);
 
-	iommu_flush_irt(iommu, devid);
-	iommu_completion_wait(iommu);
+	iommu_flush_irt_and_complete(iommu, devid);
 }
 
 static void irte_prepare(void *entry,
@@ -3503,49 +3536,49 @@ static void irte_ga_prepare(void *entry,
 	irte->lo.fields_remap.valid       = 1;
 }
 
-static void irte_activate(void *entry, u16 devid, u16 index)
+static void irte_activate(struct amd_iommu *iommu, void *entry, u16 devid, u16 index)
 {
 	union irte *irte = (union irte *) entry;
 
 	irte->fields.valid = 1;
-	modify_irte(devid, index, irte);
+	modify_irte(iommu, devid, index, irte);
 }
 
-static void irte_ga_activate(void *entry, u16 devid, u16 index)
+static void irte_ga_activate(struct amd_iommu *iommu, void *entry, u16 devid, u16 index)
 {
 	struct irte_ga *irte = (struct irte_ga *) entry;
 
 	irte->lo.fields_remap.valid = 1;
-	modify_irte_ga(devid, index, irte, NULL);
+	modify_irte_ga(iommu, devid, index, irte);
 }
 
-static void irte_deactivate(void *entry, u16 devid, u16 index)
+static void irte_deactivate(struct amd_iommu *iommu, void *entry, u16 devid, u16 index)
 {
 	union irte *irte = (union irte *) entry;
 
 	irte->fields.valid = 0;
-	modify_irte(devid, index, irte);
+	modify_irte(iommu, devid, index, irte);
 }
 
-static void irte_ga_deactivate(void *entry, u16 devid, u16 index)
+static void irte_ga_deactivate(struct amd_iommu *iommu, void *entry, u16 devid, u16 index)
 {
 	struct irte_ga *irte = (struct irte_ga *) entry;
 
 	irte->lo.fields_remap.valid = 0;
-	modify_irte_ga(devid, index, irte, NULL);
+	modify_irte_ga(iommu, devid, index, irte);
 }
 
-static void irte_set_affinity(void *entry, u16 devid, u16 index,
+static void irte_set_affinity(struct amd_iommu *iommu, void *entry, u16 devid, u16 index,
 			      u8 vector, u32 dest_apicid)
 {
 	union irte *irte = (union irte *) entry;
 
 	irte->fields.vector = vector;
 	irte->fields.destination = dest_apicid;
-	modify_irte(devid, index, irte);
+	modify_irte(iommu, devid, index, irte);
 }
 
-static void irte_ga_set_affinity(void *entry, u16 devid, u16 index,
+static void irte_ga_set_affinity(struct amd_iommu *iommu, void *entry, u16 devid, u16 index,
 				 u8 vector, u32 dest_apicid)
 {
 	struct irte_ga *irte = (struct irte_ga *) entry;
@@ -3556,7 +3589,7 @@ static void irte_ga_set_affinity(void *entry, u16 devid, u16 index,
 					APICID_TO_IRTE_DEST_LO(dest_apicid);
 		irte->hi.fields.destination =
 					APICID_TO_IRTE_DEST_HI(dest_apicid);
-		modify_irte_ga(devid, index, irte, NULL);
+		modify_irte_ga(iommu, devid, index, irte);
 	}
 }
 
@@ -3887,7 +3920,7 @@ static int irq_remapping_activate(struct irq_domain *domain,
 	if (!iommu)
 		return 0;
 
-	iommu->irte_ops->activate(data->entry, irte_info->devid,
+	iommu->irte_ops->activate(iommu, data->entry, irte_info->devid,
 				  irte_info->index);
 	amd_ir_update_irte(irq_data, iommu, data, irte_info, cfg);
 	return 0;
@@ -3901,7 +3934,7 @@ static void irq_remapping_deactivate(struct irq_domain *domain,
 	struct amd_iommu *iommu = amd_iommu_rlookup_table[irte_info->devid];
 
 	if (iommu)
-		iommu->irte_ops->deactivate(data->entry, irte_info->devid,
+		iommu->irte_ops->deactivate(iommu, data->entry, irte_info->devid,
 					    irte_info->index);
 }
 
@@ -3916,6 +3949,8 @@ int amd_iommu_activate_guest_mode(void *data)
 {
 	struct amd_ir_data *ir_data = (struct amd_ir_data *)data;
 	struct irte_ga *entry = (struct irte_ga *) ir_data->entry;
+	struct irq_2_irte *irte_info = &ir_data->irq_2_irte;
+	struct amd_iommu *iommu = amd_iommu_rlookup_table[irte_info->devid];
 	u64 valid;
 
 	if (!AMD_IOMMU_GUEST_IR_VAPIC(amd_iommu_guest_ir) || !entry)
@@ -3933,8 +3968,8 @@ int amd_iommu_activate_guest_mode(void *data)
 	entry->hi.fields.vector            = ir_data->ga_vector;
 	entry->lo.fields_vapic.ga_tag      = ir_data->ga_tag;
 
-	return modify_irte_ga(ir_data->irq_2_irte.devid,
-			      ir_data->irq_2_irte.index, entry, ir_data);
+	return modify_irte_ga(iommu, ir_data->irq_2_irte.devid,
+			      ir_data->irq_2_irte.index, entry);
 }
 EXPORT_SYMBOL(amd_iommu_activate_guest_mode);
 
@@ -3943,6 +3978,8 @@ int amd_iommu_deactivate_guest_mode(void *data)
 	struct amd_ir_data *ir_data = (struct amd_ir_data *)data;
 	struct irte_ga *entry = (struct irte_ga *) ir_data->entry;
 	struct irq_cfg *cfg = ir_data->cfg;
+	struct irq_2_irte *irte_info = &ir_data->irq_2_irte;
+	struct amd_iommu *iommu = amd_iommu_rlookup_table[irte_info->devid];
 	u64 valid;
 
 	if (!AMD_IOMMU_GUEST_IR_VAPIC(amd_iommu_guest_ir) ||
@@ -3963,8 +4000,8 @@ int amd_iommu_deactivate_guest_mode(void *data)
 	entry->hi.fields.destination =
 				APICID_TO_IRTE_DEST_HI(cfg->dest_apicid);
 
-	return modify_irte_ga(ir_data->irq_2_irte.devid,
-			      ir_data->irq_2_irte.index, entry, ir_data);
+	return modify_irte_ga(iommu, ir_data->irq_2_irte.devid,
+			      ir_data->irq_2_irte.index, entry);
 }
 EXPORT_SYMBOL(amd_iommu_deactivate_guest_mode);
 
@@ -4035,7 +4072,7 @@ static void amd_ir_update_irte(struct irq_data *irqd, struct amd_iommu *iommu,
 	 * Atomically updates the IRTE with the new destination, vector
 	 * and flushes the interrupt entry cache.
 	 */
-	iommu->irte_ops->set_affinity(ir_data->entry, irte_info->devid,
+	iommu->irte_ops->set_affinity(iommu, ir_data->entry, irte_info->devid,
 				      irte_info->index, cfg->vector,
 				      cfg->dest_apicid);
 }
@@ -4105,44 +4142,28 @@ int amd_iommu_create_irq_domain(struct amd_iommu *iommu)
 
 int amd_iommu_update_ga(int cpu, bool is_run, void *data)
 {
-	unsigned long flags;
-	struct amd_iommu *iommu;
-	struct irq_remap_table *table;
 	struct amd_ir_data *ir_data = (struct amd_ir_data *)data;
-	int devid = ir_data->irq_2_irte.devid;
 	struct irte_ga *entry = (struct irte_ga *) ir_data->entry;
-	struct irte_ga *ref = (struct irte_ga *) ir_data->ref;
+	struct irq_2_irte *irte_info = &ir_data->irq_2_irte;
+	struct amd_iommu *iommu = amd_iommu_rlookup_table[irte_info->devid];
 
 	if (!AMD_IOMMU_GUEST_IR_VAPIC(amd_iommu_guest_ir) ||
-	    !ref || !entry || !entry->lo.fields_vapic.guest_mode)
+	    !entry || !entry->lo.fields_vapic.guest_mode)
 		return 0;
 
-	iommu = amd_iommu_rlookup_table[devid];
 	if (!iommu)
 		return -ENODEV;
 
-	table = get_irq_table(devid);
-	if (!table)
-		return -ENODEV;
-
-	raw_spin_lock_irqsave(&table->lock, flags);
-
-	if (ref->lo.fields_vapic.guest_mode) {
-		if (cpu >= 0) {
-			ref->lo.fields_vapic.destination =
-						APICID_TO_IRTE_DEST_LO(cpu);
-			ref->hi.fields.destination =
-						APICID_TO_IRTE_DEST_HI(cpu);
-		}
-		ref->lo.fields_vapic.is_run = is_run;
-		barrier();
+	if (cpu >= 0) {
+		entry->lo.fields_vapic.destination =
+					APICID_TO_IRTE_DEST_LO(cpu);
+		entry->hi.fields.destination =
+					APICID_TO_IRTE_DEST_HI(cpu);
 	}
+	entry->lo.fields_vapic.is_run = is_run;
 
-	raw_spin_unlock_irqrestore(&table->lock, flags);
-
-	iommu_flush_irt(iommu, devid);
-	iommu_completion_wait(iommu);
-	return 0;
+	return __modify_irte_ga(iommu, ir_data->irq_2_irte.devid,
+				ir_data->irq_2_irte.index, entry);
 }
 EXPORT_SYMBOL(amd_iommu_update_ga);
 #endif

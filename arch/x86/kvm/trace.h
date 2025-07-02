@@ -200,13 +200,13 @@ TRACE_EVENT(kvm_cpuid,
  * Tracepoint for apic access.
  */
 TRACE_EVENT(kvm_apic,
-	TP_PROTO(unsigned int rw, unsigned int reg, unsigned int val),
+	TP_PROTO(unsigned int rw, unsigned int reg, u64 val),
 	TP_ARGS(rw, reg, val),
 
 	TP_STRUCT__entry(
 		__field(	unsigned int,	rw		)
 		__field(	unsigned int,	reg		)
-		__field(	unsigned int,	val		)
+		__field(	u64,		val		)
 	),
 
 	TP_fast_assign(
@@ -215,7 +215,7 @@ TRACE_EVENT(kvm_apic,
 		__entry->val		= val;
 	),
 
-	TP_printk("apic_%s %s = 0x%x",
+	TP_printk("apic_%s %s = 0x%llx",
 		  __entry->rw ? "write" : "read",
 		  __print_symbolic(__entry->reg, kvm_trace_symbol_apic),
 		  __entry->val)
@@ -256,7 +256,7 @@ TRACE_EVENT(name,							     \
 		__entry->guest_rip	= kvm_rip_read(vcpu);		     \
 		__entry->isa            = isa;				     \
 		__entry->vcpu_id        = vcpu->vcpu_id;		     \
-		kvm_x86_ops.get_exit_info(vcpu, &__entry->info1,	     \
+		static_call(kvm_x86_get_exit_info)(vcpu, &__entry->info1,    \
 					  &__entry->info2,		     \
 					  &__entry->intr_info,		     \
 					  &__entry->error_code);	     \
@@ -742,7 +742,7 @@ TRACE_EVENT(kvm_emulate_insn,
 		),
 
 	TP_fast_assign(
-		__entry->csbase = kvm_x86_ops.get_segment_base(vcpu, VCPU_SREG_CS);
+		__entry->csbase = static_call(kvm_x86_get_segment_base)(vcpu, VCPU_SREG_CS);
 		__entry->len = vcpu->arch.emulate_ctxt->fetch.ptr
 			       - vcpu->arch.emulate_ctxt->fetch.data;
 		__entry->rip = vcpu->arch.emulate_ctxt->_eip - __entry->len;
@@ -1290,22 +1290,46 @@ TRACE_EVENT(kvm_hv_stimer_cleanup,
 );
 
 TRACE_EVENT(kvm_apicv_update_request,
-	    TP_PROTO(bool activate, unsigned long bit),
-	    TP_ARGS(activate, bit),
+	    TP_PROTO(int reason, bool activate),
+	    TP_ARGS(reason, activate),
 
 	TP_STRUCT__entry(
+		__field(int, reason)
 		__field(bool, activate)
-		__field(unsigned long, bit)
 	),
 
 	TP_fast_assign(
+		__entry->reason = reason;
 		__entry->activate = activate;
-		__entry->bit = bit;
 	),
 
-	TP_printk("%s bit=%lu",
+	TP_printk("%s reason=%u",
 		  __entry->activate ? "activate" : "deactivate",
-		  __entry->bit)
+		  __entry->reason)
+);
+
+TRACE_EVENT(kvm_apicv_accept_irq,
+	    TP_PROTO(__u32 apicid, __u16 dm, __u16 tm, __u8 vec),
+	    TP_ARGS(apicid, dm, tm, vec),
+
+	TP_STRUCT__entry(
+		__field(	__u32,		apicid		)
+		__field(	__u16,		dm		)
+		__field(	__u16,		tm		)
+		__field(	__u8,		vec		)
+	),
+
+	TP_fast_assign(
+		__entry->apicid		= apicid;
+		__entry->dm		= dm;
+		__entry->tm		= tm;
+		__entry->vec		= vec;
+	),
+
+	TP_printk("apicid %x vec %u (%s|%s)",
+		  __entry->apicid, __entry->vec,
+		  __print_symbolic((__entry->dm >> 8 & 0x7), kvm_deliver_mode),
+		  __entry->tm ? "level" : "edge")
 );
 
 /*
@@ -1381,6 +1405,24 @@ TRACE_EVENT(kvm_avic_ga_log,
 
 	TP_printk("vmid=%u, vcpuid=%u",
 		  __entry->vmid, __entry->vcpuid)
+);
+
+TRACE_EVENT(kvm_avic_doorbell,
+	    TP_PROTO(u32 vcpuid, u32 apicid),
+	    TP_ARGS(vcpuid, apicid),
+
+	TP_STRUCT__entry(
+		__field(u32, vcpuid)
+		__field(u32, apicid)
+	),
+
+	TP_fast_assign(
+		__entry->vcpuid = vcpuid;
+		__entry->apicid = apicid;
+	),
+
+	TP_printk("vcpuid=%u, apicid=%u",
+		  __entry->vcpuid, __entry->apicid)
 );
 
 TRACE_EVENT(kvm_hv_timer_state,

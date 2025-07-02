@@ -50,6 +50,11 @@
 /* Hyper-V HV_X64_MSR_SYNDBG_OPTIONS bits */
 #define HV_X64_SYNDBG_OPTION_USE_HCALLS		BIT(2)
 
+static inline struct kvm_hv *to_kvm_hv(struct kvm *kvm)
+{
+	return &kvm->arch.hyperv;
+}
+
 static inline struct kvm_vcpu_hv *vcpu_to_hv_vcpu(struct kvm_vcpu *vcpu)
 {
 	return &vcpu->arch.hyperv;
@@ -63,12 +68,12 @@ static inline struct kvm_vcpu *hv_vcpu_to_vcpu(struct kvm_vcpu_hv *hv_vcpu)
 	return container_of(arch, struct kvm_vcpu, arch);
 }
 
-static inline struct kvm_vcpu_hv_synic *vcpu_to_synic(struct kvm_vcpu *vcpu)
+static inline struct kvm_vcpu_hv_synic *to_hv_synic(struct kvm_vcpu *vcpu)
 {
 	return &vcpu->arch.hyperv.synic;
 }
 
-static inline struct kvm_vcpu *synic_to_vcpu(struct kvm_vcpu_hv_synic *synic)
+static inline struct kvm_vcpu *hv_synic_to_vcpu(struct kvm_vcpu_hv_synic *synic)
 {
 	return hv_vcpu_to_vcpu(container_of(synic, struct kvm_vcpu_hv, synic));
 }

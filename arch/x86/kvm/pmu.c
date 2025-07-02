@@ -378,7 +378,7 @@ int kvm_pmu_rdpmc(struct kvm_vcpu *vcpu, unsigned idx, u64 *data)
 		return 1;
 
 	if (!(kvm_read_cr4_bits(vcpu, X86_CR4_PCE)) &&
-	    (kvm_x86_ops.get_cpl(vcpu) != 0) &&
+	    (static_call(kvm_x86_get_cpl)(vcpu) != 0) &&
 	    (kvm_read_cr0_bits(vcpu, X86_CR0_PE)))
 		return 1;
 
