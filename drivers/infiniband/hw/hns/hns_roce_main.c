@@ -1299,9 +1299,7 @@ static int hns_roce_setup_hca(struct hns_roce_dev *hr_dev)
 
 err_uar_table_free:
 	ida_destroy(&hr_dev->uar_ida.ida);
-	if (hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_CQ_RECORD_DB ||
-	    hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_QP_RECORD_DB)
-		mutex_destroy(&hr_dev->pgdir_mutex);
+	mutex_destroy(&hr_dev->pgdir_mutex);
 	mutex_destroy(&hr_dev->db_unfree_list_mutex);
 	mutex_destroy(&hr_dev->mtr_unfree_list_mutex);
 	mutex_destroy(&hr_dev->uctx_list_mutex);
