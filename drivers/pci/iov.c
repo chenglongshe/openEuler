@@ -360,6 +360,16 @@ failed:
 	return rc;
 }
 
+int pci_iov_add_virtfn_locked(struct pci_dev *dev, int id)
+{
+	int rc;
+
+	mutex_lock(&pci_sriov_numvfs_lock);
+	rc = pci_iov_add_virtfn(dev, id);
+	mutex_unlock(&pci_sriov_numvfs_lock);
+	return rc;
+}
+
 void pci_iov_remove_virtfn(struct pci_dev *dev, int id)
 {
 	char buf[VIRTFN_ID_LEN];
@@ -390,6 +400,13 @@ void pci_iov_remove_virtfn(struct pci_dev *dev, int id)
 	if (is_virtcca_cc_dev(pci_dev_id(virtfn))) {
 		virtcca_dev_destroy(pci_dev_id(virtfn), true);
 	}
+}
+
+void pci_iov_remove_virtfn_locked(struct pci_dev *dev, int id)
+{
+	mutex_lock(&pci_sriov_numvfs_lock);
+	pci_iov_remove_virtfn(dev, id);
+	mutex_unlock(&pci_sriov_numvfs_lock);
 }
 
 static ssize_t sriov_totalvfs_show(struct device *dev,
@@ -437,7 +454,6 @@ static ssize_t sriov_numvfs_store(struct device *dev,
 	if (num_vfs > pci_sriov_get_totalvfs(pdev))
 		return -ERANGE;
 
-	mutex_lock(&pci_sriov_numvfs_lock);
 	device_lock(&pdev->dev);
 
 	if (num_vfs == pdev->sriov->num_VFs)
@@ -481,7 +497,6 @@ static ssize_t sriov_numvfs_store(struct device *dev,
 
 exit:
 	device_unlock(&pdev->dev);
-	mutex_unlock(&pci_sriov_numvfs_lock);
 
 	if (ret < 0)
 		return ret;
@@ -595,14 +610,21 @@ static int sriov_add_vfs(struct pci_dev *dev, u16 num_vfs)
 		return 0;
 
 	for (i = 0; i < num_vfs; i++) {
-		rc = pci_iov_add_virtfn(dev, i);
+		if (dev->bus->number != pci_iov_virtfn_bus(dev, i))
+			rc = pci_iov_add_virtfn_locked(dev, i);
+		else
+			rc = pci_iov_add_virtfn(dev, i);
 		if (rc)
 			goto failed;
 	}
 	return 0;
 failed:
-	while (i--)
-		pci_iov_remove_virtfn(dev, i);
+	while (i--) {
+		if (dev->bus->number != pci_iov_virtfn_bus(dev, i))
+			pci_iov_remove_virtfn_locked(dev, i);
+		else
+			pci_iov_remove_virtfn(dev, i);
+	}
 
 	return rc;
 }
@@ -722,8 +744,12 @@ static void sriov_del_vfs(struct pci_dev *dev)
 	struct pci_sriov *iov = dev->sriov;
 	int i;
 
-	for (i = 0; i < iov->num_VFs; i++)
-		pci_iov_remove_virtfn(dev, i);
+	for (i = 0; i < iov->num_VFs; i++) {
+		if (dev->bus->number != pci_iov_virtfn_bus(dev, i))
+			pci_iov_remove_virtfn_locked(dev, i);
+		else
+			pci_iov_remove_virtfn(dev, i);
+	}
 }
 
 static void sriov_disable(struct pci_dev *dev)
