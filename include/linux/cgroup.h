@@ -950,4 +950,5 @@ static inline void cgroup_bpf_put(struct cgroup *cgrp) {}
 void cgroup_move_task_to_root(struct task_struct *tsk);
 #endif
 
+void cgroup_attach_task_cpuset(struct task_struct *target_tsk, struct task_struct *tsk);
 #endif /* _LINUX_CGROUP_H */
