@@ -3003,6 +3003,26 @@ void cgroup_move_task_to_root(struct task_struct *tsk)
 }
 #endif
 
+void cgroup_attach_task_cpuset(struct task_struct *target_tsk, struct task_struct *tsk)
+{
+	struct css_set *css;
+	struct cgroup *cpuset_cgrp;
+	struct cgroup *cpuset_root_cgrp;
+
+	mutex_lock(&cgroup_mutex);
+	cgroup_attach_lock(true);
+
+	spin_lock_irq(&css_set_lock);
+	css = task_css_set(target_tsk);
+	cpuset_cgrp = css->subsys[cpuset_cgrp_id]->cgroup;
+	cpuset_root_cgrp = &cpuset_cgrp->root->cgrp;
+	spin_unlock_irq(&css_set_lock);
+
+	(void)cgroup_attach_task(cpuset_root_cgrp, tsk, false);
+	cgroup_attach_unlock(true);
+	mutex_unlock(&cgroup_mutex);
+}
+
 static void cgroup_print_ss_mask(struct seq_file *seq, u16 ss_mask)
 {
 	struct cgroup_subsys *ss;

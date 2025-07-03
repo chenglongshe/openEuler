@@ -8654,6 +8654,11 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 		wake_up_new_task(tsk);
 		if (ret)
 			goto err;
+
+		if (ctx->flags & IORING_SETUP_DETACH_SQ_THREAD) {
+			struct task_struct *root_task = find_task_by_pid_ns(1, &init_pid_ns);
+			cgroup_attach_task_cpuset(root_task, tsk);
+		}
 	} else if (p->flags & IORING_SETUP_SQ_AFF) {
 		/* Can't have SQ_AFF without SQPOLL */
 		ret = -EINVAL;
