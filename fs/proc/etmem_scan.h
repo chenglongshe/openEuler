@@ -55,8 +55,10 @@ enum ProcIdlePageType {
 
 #ifdef CONFIG_ARM64
 #define _PAGE_MM_BIT_ACCESSED 10
-#else
+#elif defined(CONFIG_X86)
 #define _PAGE_MM_BIT_ACCESSED _PAGE_BIT_ACCESSED
+#elif defined(CONFIG_RISCV)
+#define _PAGE_MM_BIT_ACCESSED 6
 #endif
 
 #ifdef CONFIG_X86_64
