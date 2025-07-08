@@ -8710,6 +8710,12 @@ static int io_sq_offload_create(struct io_ring_ctx *ctx,
 		if (ret)
 			goto err;
 
+		if (ctx->ext_flags & IORING_SETUP_DETACH_SQ_THREAD) {
+			const struct cpumask *cpumask = cpumask_of_node(numa_node_id());
+			cgroup_detach_task(tsk);
+			set_cpus_allowed_ptr(tsk, cpumask);
+		}
+
 		if (ctx->ext_flags & IORING_SETUP_SQ_THREAD_FORCE_IDLE) {
 			sqd->timer.function = sq_thread_hrtimer_fn;
 			hrtimer_start(&sqd->timer, READ_ONCE(sqd->sq_thread_wakeup_period),
@@ -10444,7 +10450,8 @@ static long io_uring_setup(u32 entries, struct io_uring_params __user *params)
 				return -EINVAL;
 		}
 
-		if (ext_p.flags & ~(IORING_SETUP_SQ_THREAD_FORCE_IDLE))
+		if (ext_p.flags & ~(IORING_SETUP_SQ_THREAD_FORCE_IDLE |
+				    IORING_SETUP_DETACH_SQ_THREAD))
 			return -EINVAL;
 	}
 

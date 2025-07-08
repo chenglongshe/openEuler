@@ -106,6 +106,9 @@ enum {
 /* Force SQ thread to be idle, waiting for periodic wake-up */
 #define IORING_SETUP_SQ_THREAD_FORCE_IDLE (1U << 0)
 
+/* Detach cgroup of SQ thread from it's parent */
+#define IORING_SETUP_DETACH_SQ_THREAD     (1U << 1)
+
 enum {
 	IORING_OP_NOP,
 	IORING_OP_READV,
