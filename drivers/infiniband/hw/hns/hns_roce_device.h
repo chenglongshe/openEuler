@@ -34,6 +34,7 @@
 #define _HNS_ROCE_DEVICE_H
 
 #include <linux/pci.h>
+#include <linux/siphash.h>
 #include <rdma/ib_verbs.h>
 #include <rdma/hns-abi.h>
 #include "hns_roce_bond.h"
@@ -405,16 +406,6 @@ struct hns_roce_dca_cfg {
 	u32			sq_idx;
 	bool			aging_enable;
 	struct list_head	aging_node;
-};
-
-struct hns_roce_mw {
-	struct ib_mw		ibmw;
-	u32			pdn;
-	u32			rkey;
-	int			enabled; /* MW's active status */
-	u32			pbl_hop_num;
-	u32			pbl_ba_pg_sz;
-	u32			pbl_buf_pg_sz;
 };
 
 struct hns_roce_mr {
@@ -1074,7 +1065,6 @@ struct hns_roce_hw {
 				struct hns_roce_mr *mr, int flags,
 				void *mb_buf);
 	int (*frmr_write_mtpt)(void *mb_buf, struct hns_roce_mr *mr);
-	int (*mw_write_mtpt)(void *mb_buf, struct hns_roce_mw *mw);
 	void (*write_cqc)(struct hns_roce_dev *hr_dev,
 			  struct hns_roce_cq *hr_cq, void *mb_buf, u64 *mtts,
 			  dma_addr_t dma_handle);
@@ -1233,7 +1223,28 @@ struct hns_roce_dev {
 
 	void *dca_safe_buf;
 	dma_addr_t dca_safe_page;
+	siphash_key_t dca_safe_hash_key;
 };
+
+enum hns_roce_trace_type {
+	TRACE_SQ,
+	TRACE_RQ,
+	TRACE_SRQ,
+};
+
+static inline const char *trace_type_to_str(enum hns_roce_trace_type type)
+{
+	switch (type) {
+	case TRACE_SQ:
+		return "SQ";
+	case TRACE_RQ:
+		return "RQ";
+	case TRACE_SRQ:
+		return "SRQ";
+	default:
+		return "UNKNOWN";
+	}
+}
 
 static inline struct hns_roce_dev *to_hr_dev(struct ib_device *ib_dev)
 {
@@ -1264,11 +1275,6 @@ static inline struct hns_roce_ah *to_hr_ah(struct ib_ah *ibah)
 static inline struct hns_roce_mr *to_hr_mr(struct ib_mr *ibmr)
 {
 	return container_of(ibmr, struct hns_roce_mr, ibmr);
-}
-
-static inline struct hns_roce_mw *to_hr_mw(struct ib_mw *ibmw)
-{
-	return container_of(ibmw, struct hns_roce_mw, ibmw);
 }
 
 static inline struct hns_roce_qp *to_hr_qp(struct ib_qp *ibqp)
@@ -1465,9 +1471,6 @@ int hns_roce_map_mr_sg(struct ib_mr *ibmr, struct scatterlist *sg, int sg_nents,
 		       unsigned int *sg_offset);
 int hns_roce_dereg_mr(struct ib_mr *ibmr, struct ib_udata *udata);
 unsigned long key_to_hw_index(u32 key);
-
-int hns_roce_alloc_mw(struct ib_mw *mw, struct ib_udata *udata);
-int hns_roce_dealloc_mw(struct ib_mw *ibmw);
 
 void hns_roce_buf_free(struct hns_roce_dev *hr_dev, struct hns_roce_buf *buf);
 struct hns_roce_buf *hns_roce_buf_alloc(struct hns_roce_dev *hr_dev, u32 size,

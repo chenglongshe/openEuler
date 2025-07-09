@@ -900,6 +900,8 @@ static int alloc_dca_safe_page(struct hns_roce_dev *hr_dev)
 		return -ENOMEM;
 	}
 
+	get_random_bytes(&hr_dev->dca_safe_hash_key, sizeof(siphash_key_t));
+
 	return 0;
 }
 
@@ -1544,7 +1546,7 @@ struct ib_qp *hns_roce_create_qp(struct ib_pd *pd,
 
 	ret = hns_roce_create_qp_common(hr_dev, init_attr, udata, hr_qp);
 	if (ret) {
-		ibdev_err(ibdev, "Create QP type 0x%x failed(%d)\n",
+		ibdev_err(ibdev, "create QP type %d failed(%d)\n",
 			  init_attr->qp_type, ret);
 
 		kfree(hr_qp);
