@@ -773,13 +773,14 @@ struct vm_area_struct {
 	struct vma_numab_state *numab_state;	/* NUMA Balancing state */
 #endif
 	struct vm_userfaultfd_ctx vm_userfaultfd_ctx;
-#ifdef CONFIG_GMEM
-	struct vm_object *vm_obj;
-#endif
 #ifdef CONFIG_SHARE_POOL
 	struct sp_area *spa;
 #endif
+#ifdef CONFIG_GMEM
+	KABI_USE(1, struct vm_object *vm_obj)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
@@ -1061,7 +1062,7 @@ struct mm_struct {
 	KABI_RESERVE(1)
 #endif
 #ifdef CONFIG_GMEM
-	KABI_USE(2, gm_as_t *gm_as)
+	KABI_USE(2, struct gm_as *gm_as)
 #else
 	KABI_RESERVE(2)
 #endif

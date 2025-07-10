@@ -106,7 +106,7 @@ struct gm_evict_page_msg_rq {
 int gmem_register_pair_remote_task(int origin_nid, int origin_pid, int remote_nid, int remote_pid);
 
 #ifdef WITH_GMEM
-gm_dev_t *gmem_id_to_device(unsigned int id);
+struct gm_dev *gmem_id_to_device(unsigned int id);
 #endif
 
 

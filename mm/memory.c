@@ -1719,7 +1719,7 @@ static inline void zap_logic_pmd_range(struct vm_area_struct *vma,
 					unsigned long addr,
 					unsigned long end)
 {
-	gm_mapping_t *gm_mapping = NULL;
+	struct gm_mapping *gm_mapping = NULL;
 	struct page *page = NULL;
 
 	xa_lock(vma->vm_obj->logical_page_table);
@@ -1769,8 +1769,10 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 		if (is_swap_pmd(*pmd) || pmd_trans_huge(*pmd) || pmd_devmap(*pmd)) {
 			if (next - addr != HPAGE_PMD_SIZE)
 				__split_huge_pmd(vma, pmd, addr, false, NULL);
-			else if (zap_huge_pmd(tlb, vma, pmd, addr))
-				goto next;
+			else if (zap_huge_pmd(tlb, vma, pmd, addr)) {
+				addr = next;
+				continue;
+			}
 			/* fall through */
 		} else if (details && details->single_folio &&
 			   folio_test_pmd_mappable(details->single_folio) &&
@@ -1783,7 +1785,7 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 			 */
 			spin_unlock(ptl);
 		}
-
+#ifdef CONFIG_GMEM
 		/*
 		 * Here there can be other concurrent MADV_DONTNEED or
 		 * trans huge page faults running, and if the pmd is
@@ -1791,21 +1793,22 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 		 * because MADV_DONTNEED holds the mmap_lock in read
 		 * mode.
 		 */
-		if (pmd_none_or_trans_huge_or_clear_bad(pmd)) {
+		if (pmd_none_or_clear_bad(pmd) || pmd_trans_huge(*pmd)) {
 			if (vma_is_peer_shared(vma))
 				zap_logic_pmd_range(vma, addr, next);
-			goto next;
 		}
-
-		next = zap_pte_range(tlb, vma, pmd, addr, next, details);
-next:
-		cond_resched();
-	} while (pmd++, addr = next, addr != end);
+#endif
+		if (pmd_none(*pmd)) {
+			addr = next;
+			continue;
+		}
+		addr = zap_pte_range(tlb, vma, pmd, addr, next, details);
+		if (addr != next)
+			pmd--;
+	} while (pmd++, cond_resched(), addr != end);
 
 	return addr;
 }
-
-
 
 static inline unsigned long zap_pud_range(struct mmu_gather *tlb,
 				struct vm_area_struct *vma, p4d_t *p4d,
@@ -1869,8 +1872,10 @@ void unmap_page_range(struct mmu_gather *tlb,
 	do {
 		next = pgd_addr_end(addr, end);
 		if (pgd_none_or_clear_bad(pgd)) {
+#ifdef CONFIG_GMEM
 			if (vma_is_peer_shared(vma))
 				zap_logic_pud_range(vma, addr, next);
+#endif
 			continue;
 		}
 		next = zap_p4d_range(tlb, vma, pgd, addr, next, details);

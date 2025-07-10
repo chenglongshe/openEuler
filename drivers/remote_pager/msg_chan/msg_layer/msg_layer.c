@@ -119,7 +119,7 @@ static int recv_handler(void *arg)
 
 		/* compose body */
 		data = kmalloc(msg_len, GFP_KERNEL);
-		if WARN_ON_ONCE(!data && "Unable to alloc a message")
+		if (WARN_ON_ONCE(!data && "Unable to alloc a message"))
 			return -1;
 		memcpy(data, &header, sizeof(header));
 

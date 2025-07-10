@@ -30,15 +30,15 @@
 
 #define MAX_RETRY_TIME 10
 
-static inline vm_fault_t get_page_size(enum page_entry_size pe_size,
-			unsigned int *page_size,
-			unsigned long *addr)
+static inline vm_fault_t get_page_size(unsigned int order,
+				       unsigned int *page_size,
+				       unsigned long *addr)
 {
-	switch (pe_size) {
-	case PE_SIZE_PTE:
+	switch (order) {
+	case 0:
 		*page_size = PAGE_SIZE;
 		break;
-	case PE_SIZE_PMD:
+	case PMD_ORDER:
 		*page_size = HPAGE_SIZE;
 		*addr = round_down(*addr, HPAGE_SIZE);
 		break;
@@ -49,12 +49,12 @@ static inline vm_fault_t get_page_size(enum page_entry_size pe_size,
 }
 
 static inline bool addr_is_mapped(unsigned long addr, pmd_t *pmd,
-		enum page_entry_size pe_size)
+				  unsigned int order)
 {
 	pte_t *pte;
 	bool ret;
 
-	if (pe_size == PE_SIZE_PMD)
+	if (order == PMD_ORDER)
 		return !pmd_none(*pmd);
 	if (pmd_none(*pmd))
 		return false;
@@ -65,7 +65,7 @@ static inline bool addr_is_mapped(unsigned long addr, pmd_t *pmd,
 }
 
 static vm_fault_t __gmem_fault(struct vm_fault *vmf,
-		enum page_entry_size pe_size)
+			       unsigned int order)
 {
 	vm_fault_t ret = VM_FAULT_SIGBUS;
 	int msg_ret = GM_RET_FAILURE_UNKNOWN;
@@ -78,7 +78,7 @@ static vm_fault_t __gmem_fault(struct vm_fault *vmf,
 	struct mm_struct *mm;
 	struct svm_proc *proc;
 
-	ret = get_page_size(pe_size, &page_size, &addr);
+	ret = get_page_size(order, &page_size, &addr);
 	if (ret)
 		return ret;
 
@@ -96,7 +96,7 @@ static vm_fault_t __gmem_fault(struct vm_fault *vmf,
 	}
 	mutex_lock(&page_info->lock);
 
-	if (addr_is_mapped(addr, vmf->pmd, pe_size))
+	if (addr_is_mapped(addr, vmf->pmd, order))
 		goto unlock;
 
 	req.va = addr;
@@ -130,15 +130,15 @@ unlock:
 
 static vm_fault_t gmem_fault(struct vm_fault *vmf)
 {
-	return __gmem_fault(vmf, PE_SIZE_PTE);
+	return __gmem_fault(vmf, 0);
 }
 
 static vm_fault_t gmem_huge_fault(struct vm_fault *vmf,
-		enum page_entry_size pe_size)
+				  unsigned int order)
 {
 	int ret = 0;
 
-	ret = __gmem_fault(vmf, pe_size);
+	ret = __gmem_fault(vmf, order);
 
 	return ret;
 }

@@ -22,9 +22,9 @@
 #define MAX_NR_NPU 16
 #define GMEM_DEBUG 0
 
-static gm_dev_t *gm_devs[MAX_NR_NPU];
+static struct gm_dev *gm_devs[MAX_NR_NPU];
 
-gm_dev_t *gmem_id_to_device(unsigned int id)
+struct gm_dev *gmem_id_to_device(unsigned int id)
 {
 	if (id >= MAX_NR_NPU) {
 		pr_err("device id is invalid. (dev_id = %u)\n", id);
@@ -78,7 +78,7 @@ int gmem_handle_dev_fault(struct rpg_kmsg_message *msg)
 	unsigned int nid = recv->header.to_nid;
 	unsigned int peer_nid = recv->header.from_nid;
 	unsigned int peer_ws = recv->my_ws;
-	gm_dev_t *dev = gm_devs[peer_nid];
+	struct gm_dev *dev = gm_devs[peer_nid];
 	struct task_struct *tsk;
 	struct mm_struct *mm;
 
@@ -119,7 +119,7 @@ out:
 	return ret;
 }
 
-gm_ret_t gmem_map(struct gm_fault_t *gmf)
+enum gm_ret gmem_map(struct gm_fault_t *gmf)
 {
 	int ret = 0;
 	struct wait_station *ws;
@@ -164,7 +164,7 @@ gm_ret_t gmem_map(struct gm_fault_t *gmf)
 	return GM_RET_SUCCESS;
 }
 
-gm_ret_t gmem_unmap(struct gm_fault_t *gmf)
+enum gm_ret gmem_unmap(struct gm_fault_t *gmf)
 {
 	int ret;
 	struct wait_station *ws;
@@ -205,7 +205,7 @@ gm_ret_t gmem_unmap(struct gm_fault_t *gmf)
 	return GM_RET_SUCCESS;
 }
 
-gm_ret_t gmem_alloc(struct mm_struct *mm, unsigned long va, unsigned long size,
+enum gm_ret gmem_alloc(struct mm_struct *mm, unsigned long va, unsigned long size,
 		    unsigned long prot)
 {
 	int ret = 0;
@@ -241,7 +241,7 @@ gm_ret_t gmem_alloc(struct mm_struct *mm, unsigned long va, unsigned long size,
 	return GM_RET_SUCCESS;
 }
 
-gm_ret_t gmem_free(struct mm_struct *mm, unsigned long va, unsigned long size)
+enum gm_ret gmem_free(struct mm_struct *mm, unsigned long va, unsigned long size)
 {
 	int ret = 0;
 	struct wait_station *ws;
@@ -287,7 +287,7 @@ int gmem_handle_evict_page(struct rpg_kmsg_message *msg)
 	struct vm_area_struct *vma;
 	struct page *page;
 	dma_addr_t dma_addr;
-	gm_mapping_t *gm_mapping;
+	struct gm_mapping *gm_mapping;
 	struct device *dma_dev;
 	struct gm_fault_t gmf;
 	struct svm_proc *proc;
@@ -398,12 +398,12 @@ response:
 	return ret;
 }
 
-gm_ret_t gmem_create(gm_dev_t *dev, void **pmap)
+enum gm_ret gmem_create(struct gm_dev *dev, void **pmap)
 {
 	return GM_RET_SUCCESS;
 }
 
-gm_mmu_t gm_mmu = {
+struct gm_mmu gm_mmu = {
 	.peer_va_alloc_fixed = gmem_alloc,
 	.pmap_create = gmem_create,
 	.peer_va_free = gmem_free,
@@ -414,11 +414,12 @@ gm_mmu_t gm_mmu = {
 #define ASCEND910_HBM_START 0x0000000800000000
 #define ASCEND910_HBM_END   0x0000000fffffffff
 
-gm_ret_t mmu_dev_create(struct device *dev, int devid)
+enum gm_ret mmu_dev_create(struct device *dev, int devid)
 {
-	gm_ret_t ret;
+	enum gm_ret ret;
 
-	ret = gm_dev_create(&gm_mmu, NULL, GM_DEV_CAP_REPLAYABLE | GM_DEV_CAP_PEER, &dev->gm_dev);
+	ret = gm_dev_create(&gm_mmu, NULL, GM_DEV_CAP_REPLAYABLE | GM_DEV_CAP_PEER,
+		(struct gm_dev **)&dev->gm_dev);
 	if (ret != GM_RET_SUCCESS) {
 		pr_err("NPU gmem device create failed\n");
 		return ret;
@@ -430,8 +431,8 @@ gm_ret_t mmu_dev_create(struct device *dev, int devid)
 		goto free_gm_dev;
 	}
 
-	dev->gm_dev->dma_dev = dev;
-	gm_devs[devid] = dev->gm_dev;
+	((struct gm_dev *)dev->gm_dev)->dma_dev = dev;
+	gm_devs[devid] = (struct gm_dev *)dev->gm_dev;
 
 	pr_info("Create NPU gmem device and register HBM\n");
 	return ret;
@@ -442,11 +443,11 @@ free_gm_dev:
 }
 EXPORT_SYMBOL(mmu_dev_create);
 
-gm_ret_t mmu_as_attach(struct device *dev)
+enum gm_ret mmu_as_attach(struct device *dev)
 {
-	gm_ret_t ret;
-	gm_dev_t *gm_dev = dev->gm_dev;
-	gm_context_t *gm_ctx;
+	enum gm_ret ret;
+	struct gm_dev *gm_dev = dev->gm_dev;
+	struct gm_context *gm_ctx;
 
 	if (!gm_dev) {
 		pr_err("NPU device gm_dev is NULL\n");

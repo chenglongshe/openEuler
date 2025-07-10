@@ -1323,7 +1323,7 @@ static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf,
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
 	vm_fault_t ret = 0;
 #ifdef CONFIG_GMEM
-	gm_mapping_t *gm_mapping = NULL;
+	struct gm_mapping *gm_mapping = NULL;
 
 	if (vma_is_peer_shared(vma))
 		gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
@@ -1337,12 +1337,8 @@ static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf,
 		count_vm_event(THP_FAULT_FALLBACK_CHARGE);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK_CHARGE);
-#ifdef CONFIG_GMEM
 		ret = VM_FAULT_FALLBACK;
 		goto gm_mapping_release;
-#else
-		return VM_FAULT_FALLBACK;
-#endif
 	}
 	folio_throttle_swaprate(folio, gfp);
 
@@ -1386,11 +1382,7 @@ static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf,
 			pte_free(vma->vm_mm, pgtable);
 			ret = handle_userfault(vmf, VM_UFFD_MISSING);
 			VM_BUG_ON(ret & VM_FAULT_FALLBACK);
-#ifdef CONFIG_GMEM
 			goto gm_mapping_release;
-#else
-			return ret;
-#endif
 		}
 
 		entry = mk_huge_pmd(page, vma->vm_page_prot);
@@ -1401,7 +1393,7 @@ static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf,
 #ifdef CONFIG_GMEM
 		if (vma_is_peer_shared(vma) && gm_mapping_device(gm_mapping)) {
 			vmf->page = page;
-			ret = gm_host_fault_locked(vmf, PE_SIZE_PMD);
+			ret = gm_host_fault_locked(vmf, PMD_ORDER);
 			if (ret)
 				goto unlock_release;
 		}
@@ -1498,7 +1490,7 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
 	vm_fault_t ret;
 #ifdef CONFIG_GMEM
-	gm_mapping_t *gm_mapping;
+	struct gm_mapping *gm_mapping;
 
 	if (vma_is_peer_shared(vma)) {
 		xa_lock(vma->vm_obj->logical_page_table);
@@ -1586,12 +1578,8 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 	if (unlikely(!folio)) {
 		count_vm_event(THP_FAULT_FALLBACK);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK);
-#ifdef CONFIG_GMEM
 		ret = VM_FAULT_FALLBACK;
 		goto gm_mapping_release;
-#else
-		return VM_FAULT_FALLBACK;
-#endif
 	}
 	return __do_huge_pmd_anonymous_page(vmf, &folio->page, gfp);
 gm_mapping_release:

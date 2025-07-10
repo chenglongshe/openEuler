@@ -1985,6 +1985,7 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 
 EXPORT_SYMBOL(get_unmapped_area);
 
+#ifdef CONFIG_GMEM
 unsigned long
 get_unmapped_area_aligned(struct file *file, unsigned long addr, unsigned long len,
 		unsigned long pgoff, unsigned long flags, unsigned long align)
@@ -2005,6 +2006,7 @@ get_unmapped_area_aligned(struct file *file, unsigned long addr, unsigned long l
 	return addr;
 }
 EXPORT_SYMBOL(get_unmapped_area_aligned);
+#endif
 
 /**
  * find_vma_intersection() - Look up the first VMA which intersects the interval
@@ -2619,9 +2621,9 @@ static void munmap_in_peer_devices(struct mm_struct *mm,
 {
 	unsigned long addr = start;
 	struct vm_object *obj = vma->vm_obj;
-	gm_ret_t ret;
-	gm_context_t *ctx, *tmp;
-	gm_mapping_t *gm_mapping;
+	enum gm_ret ret;
+	struct gm_context *ctx, *tmp;
+	struct gm_mapping *gm_mapping;
 
 	struct gm_fault_t gmf = {
 		.mm = mm,
@@ -2920,9 +2922,8 @@ static int alloc_va_in_peer_devices(struct mm_struct *mm,
 		struct vm_area_struct *vma, unsigned long addr, unsigned long len,
 		vm_flags_t vm_flags)
 {
-	gm_context_t *ctx, *tmp;
-	gm_prot_t prot = VM_NONE;
-	gm_ret_t ret;
+	struct gm_context *ctx, *tmp;
+	enum gm_ret ret;
 
 	pr_debug("gmem: start mmap, as %p\n", mm->gm_as);
 	if (!mm->gm_as)
@@ -3159,7 +3160,7 @@ file_expanded:
 expanded:
 #ifdef CONFIG_GMEM
 	if (vma_is_peer_shared(vma)) {
-		gm_ret_t ret = alloc_va_in_peer_devices(mm, vma, addr, len, vm_flags);
+		enum gm_ret ret = alloc_va_in_peer_devices(mm, vma, addr, len, vm_flags);
 
 		if (ret == GM_RET_NOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
 			retry_times++;

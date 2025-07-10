@@ -284,7 +284,7 @@ extern enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long beg
 					unsigned long end);
 enum gm_ret gm_dev_fault(struct mm_struct *mm, unsigned long addr, struct gm_dev *dev,
 			int behavior);
-vm_fault_t gm_host_fault_locked(struct vm_fault *vmf, enum page_entry_size pe_size);
+vm_fault_t gm_host_fault_locked(struct vm_fault *vmf, unsigned int order);
 
 /* GMEM address space KPI */
 extern enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin,
