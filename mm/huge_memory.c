@@ -1337,8 +1337,12 @@ static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf,
 		count_vm_event(THP_FAULT_FALLBACK_CHARGE);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK_CHARGE);
+#ifdef CONFIG_GMEM
 		ret = VM_FAULT_FALLBACK;
 		goto gm_mapping_release;
+#else
+		return VM_FAULT_FALLBACK;
+#endif
 	}
 	folio_throttle_swaprate(folio, gfp);
 
@@ -1382,7 +1386,11 @@ static vm_fault_t __do_huge_pmd_anonymous_page(struct vm_fault *vmf,
 			pte_free(vma->vm_mm, pgtable);
 			ret = handle_userfault(vmf, VM_UFFD_MISSING);
 			VM_BUG_ON(ret & VM_FAULT_FALLBACK);
+#ifdef CONFIG_GMEM
 			goto gm_mapping_release;
+#else
+			return ret;
+#endif
 		}
 
 		entry = mk_huge_pmd(page, vma->vm_page_prot);
@@ -1510,7 +1518,8 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 	ret = vmf_anon_prepare(vmf);
 	if (ret)
 		return ret;
-	if (!transhuge_vma_suitable(vma, haddr)) {
+#ifdef CONFIG_GMEM
+	if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER)) {
 		ret = VM_FAULT_FALLBACK;
 		goto gm_mapping_release;
 	}
@@ -1518,6 +1527,7 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 		ret = VM_FAULT_OOM;
 		goto gm_mapping_release;
 	}
+#endif
 	khugepaged_enter_vma(vma, vma->vm_flags);
 
 	if (!(vmf->flags & FAULT_FLAG_WRITE) &&
@@ -1576,8 +1586,12 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 	if (unlikely(!folio)) {
 		count_vm_event(THP_FAULT_FALLBACK);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK);
+#ifdef CONFIG_GMEM
 		ret = VM_FAULT_FALLBACK;
 		goto gm_mapping_release;
+#else
+		return VM_FAULT_FALLBACK;
+#endif
 	}
 	return __do_huge_pmd_anonymous_page(vmf, &folio->page, gfp);
 gm_mapping_release:
