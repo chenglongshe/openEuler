@@ -19,7 +19,7 @@
 #include "svm_proc_mng.h"
 
 #define NPU_PAGE_SIZE PAGE_SIZE
-#define MAX_NR_NPU 8
+#define MAX_NR_NPU 16
 #define GMEM_DEBUG 0
 
 static gm_dev_t *gm_devs[MAX_NR_NPU];
@@ -42,7 +42,7 @@ int gmem_register_pair_remote_task(int origin_nid, int origin_pid, int remote_ni
 	struct wait_station *ws;
 
 	/* open msg chan */
-	pr_err("%s origin_nid %d, origin_pid %d, remote_nid %d, remote_pid %d\n", __func__,
+	pr_debug("%s origin_nid %d, origin_pid %d, remote_nid %d, remote_pid %d\n", __func__,
 	origin_nid, origin_pid, remote_nid, remote_pid);
 	ret = msg_open(remote_nid);
 	if (ret < 0) {

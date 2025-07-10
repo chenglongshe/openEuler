@@ -113,7 +113,10 @@ void process_remote_pager_work(struct work_struct *work)
 int handle_remote_pager_work(void *msg)
 {
 	struct rpg_kmsg_work *w = kmalloc(sizeof(*w), GFP_ATOMIC);
-
+	if (IS_ERR_OR_NULL(w)) {
+		pr_err("can not alloc memory for rpg_kmsg_work\n");
+		goto PTR_ERR(w);
+	}
 	w->msg = msg;
 
 	INIT_WORK(&w->work, process_remote_pager_work);

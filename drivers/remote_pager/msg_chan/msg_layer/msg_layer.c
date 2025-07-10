@@ -37,6 +37,8 @@ int msg_send(int chan_id, void *msg_data, size_t msg_len)
 
 	ret = g_phys_chan_ops->copy_to(chan_id, msg_data, msg_len, 1);
 	ret |= g_phys_chan_ops->notify(chan_id);
+	if (ret < 0)
+		pr_err("%s failed in chan %d\n", __func__, chan_id);
 
 	return ret;
 }
@@ -236,7 +238,7 @@ int msg_layer_install_phy_ops(struct phys_channel_ops *ops, int default_chan_id)
 	g_phys_chan_ops = ops;
 	if (default_chan_id >= 0) {
 		ret = msg_open(default_chan_id);
-		if (ret) {
+		if (ret < 0) {
 			pr_err("can not open msg channel %d\n", default_chan_id);
 			g_phys_chan_ops = NULL;
 			goto unlock;

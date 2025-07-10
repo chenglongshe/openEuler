@@ -269,7 +269,7 @@ static void free_svm_proc(struct svm_proc *proc)
 		list_for_each_entry_safe(item, next, &proc->tasks_list, node)
 			list_del(&item->node);
 	}
-	pr_err("svm proc clean up done pid %d, peer_pid %d\n", proc->pid, proc->peer_pid);
+	pr_debug("svm proc clean up done pid %d, peer_pid %d\n", proc->pid, proc->peer_pid);
 }
 
 static void svm_proc_mm_release(struct mmu_notifier *subscription, struct mm_struct *mm)
