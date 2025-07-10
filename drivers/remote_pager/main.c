@@ -30,3 +30,4 @@ module_exit(remote_pager_exit);
 MODULE_AUTHOR("Huawei Tech. Co., Ltd.");
 MODULE_DESCRIPTION("Remote-pager");
 MODULE_ALIAS("Remote-pager");
+MODULE_LICENSE("GPL");

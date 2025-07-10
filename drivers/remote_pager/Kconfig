@@ -22,17 +22,4 @@ config REMOTE_PAGER_MASTER
 		Used for memory management
 		If unsure, say Y.
 
-config REMOTE_PAGER_SLAVE
-	tristate "remote pager slave"
-	default n
-	depends on ARM64
-	depends on REMOTE_PAGER
-	help
-		Module used for gmem.
-		This is host part, used for send and recv message from device
-		Used for memory management
-		If you want to remote_pager driver to support the peer function,
-		say m.
-		If unsure, say Y.
-
 endmenu

@@ -111,17 +111,9 @@ gm_dev_t *gmem_id_to_device(unsigned int id);
 
 
 /* msg handler */
-int gmem_handle_task_pairing(struct rpg_kmsg_message *msg);
-int gmem_handle_comm_msg_rsp(struct rpg_kmsg_message *msg);
-int gmem_handle_alloc_vma_fixed(struct rpg_kmsg_message *msg);
-int gmem_handle_free_vma(struct rpg_kmsg_message *msg);
-
-int gmem_handle_alloc_page(struct rpg_kmsg_message *msg);
-int gmem_handle_free_page(struct rpg_kmsg_message *msg);
-int gmem_handle_hmadvise(struct rpg_kmsg_message *msg);
-int gmem_handle_hmemcpy(struct rpg_kmsg_message *msg);
-int gmem_handle_dev_fault(struct rpg_kmsg_message *msg);
 int gmem_handle_evict_page(struct rpg_kmsg_message *msg);
+int gmem_handle_comm_msg_rsp(struct rpg_kmsg_message *msg);
+int gmem_handle_dev_fault(struct rpg_kmsg_message *msg);
 
 int gmem_add_to_svm_proc(int my_nid, int my_pid, int peer_nid, int peer_pid);
 int gmem_send_comm_msg_reply(unsigned int from_nid, unsigned int to_nid,
@@ -129,4 +121,7 @@ int gmem_send_comm_msg_reply(unsigned int from_nid, unsigned int to_nid,
 
 int handle_remote_pager_work(void *msg);
 int msg_handle_init(void);
+
+#endif
+
 

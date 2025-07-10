@@ -108,7 +108,7 @@ static vm_fault_t __gmem_fault(struct vm_fault *vmf,
 	req.peer_pid = proc->peer_pid;
 
 	ret = msg_send_nid(GMEM_PAGE_FAULT_REQUEST, proc->nid, proc->peer_nid,
-		&req, sizeof(req));
+			   &req, sizeof(req));
 	rsp = wait_at_station(ws);
 	if ((long)rsp != -ETIMEDOUT) {
 		msg_ret = rsp->ret;
@@ -211,8 +211,8 @@ int gmem_handle_alloc_vma_fixed(struct rpg_kmsg_message *msg)
 	mmap_write_lock(mm);
 	current->mm = mm;
 	addr = __do_mmap_mm(mm, NULL, va, size, prot,
-		MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0,
-		0, &populate, NULL);
+			    MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0,
+			    0, &populate, NULL);
 	if (IS_ERR_VALUE(addr)) {
 		ret = addr;
 		goto unlock;
@@ -248,6 +248,9 @@ int gmem_handle_free_vma(struct rpg_kmsg_message *msg)
 	unsigned int my_pid = recv->peer_pid;
 	unsigned int nid = recv->header.to_nid;
 	unsigned int peer_nid = recv->header.from_nid;
+	unsigned int peer_ws = recv->my_ws;
+	struct task_struct *tsk;
+	struct mm_struct *mm;
 	struct mm_struct *old_mm = current->mm;
 
 	int ret = 0;
@@ -328,7 +331,7 @@ static inline struct page *alloc_transhuge_page_node(int nid, int zero)
 }
 
 int gmem_hugepage_remap_owner(struct svm_proc *svm_proc, u64 addr,
-		pgprot_t prot, struct page *hpage)
+			      pgprot_t prot, struct page *hpage)
 {
 	int ret;
 
@@ -342,7 +345,7 @@ int gmem_hugepage_remap_owner(struct svm_proc *svm_proc, u64 addr,
 }
 
 int gmem_hugepage_remap_local(struct svm_proc *svm_proc, u64 addr,
-		pgprot_t prot, struct page *hpage)
+			      pgprot_t prot, struct page *hpage)
 {
 	int ret = 0;
 	struct local_pair_proc *item = NULL;
@@ -351,7 +354,8 @@ int gmem_hugepage_remap_local(struct svm_proc *svm_proc, u64 addr,
 	list_for_each_entry_safe(item, next, &svm_proc->tasks_list, node) {
 		ret = hugetlb_insert_hugepage_pte(item->mm, addr, prot, hpage);
 		if (ret != 0) {
-			pr_err("insert_hugepage local fail. (va=0x%llx)\n", addr);
+			pr_err("insert_hugepage local fail. (va=0x%llx)\n",
+			       addr);
 			return ret;
 		}
 	}
@@ -359,9 +363,8 @@ int gmem_hugepage_remap_local(struct svm_proc *svm_proc, u64 addr,
 	return 0;
 }
 
-
 int gmem_hugepage_remap(struct svm_proc *svm_proc, u64 addr, pgprot_t prot,
-		struct page *hpage)
+			struct page *hpage)
 {
 	int ret;
 
@@ -432,7 +435,7 @@ new_page:
 
 	if (recv->dma_addr) {
 		handle_migrate_page((void *)recv->dma_addr, page, page_size,
-				FROM_PEER);
+				    FROM_PEER);
 	}
 
 	tsk = find_get_task_by_vpid(my_pid);
@@ -452,7 +455,7 @@ new_page:
 	vma = find_vma(mm, addr);
 	if (vma->vm_flags & VM_WRITE) {
 		prot_val = (pgprot_val(PAGE_SHARED_EXEC) & (~PTE_RDONLY)) |
-			PTE_DIRTY;
+			   PTE_DIRTY;
 	} else {
 		prot_val = pgprot_val(PAGE_READONLY_EXEC);
 	}
@@ -475,7 +478,7 @@ out:
 }
 
 static inline void zap_clear_pmd(struct vm_area_struct *vma, u64 vaddr,
-		pmd_t *pmd)
+				 pmd_t *pmd)
 {
 	pmd_clear(pmd);
 	flush_tlb_range(vma, vaddr, vaddr + HPAGE_SIZE);
@@ -573,7 +576,7 @@ int gmem_handle_free_page(struct rpg_kmsg_message *msg)
 
 	if (recv->dma_addr)
 		handle_migrate_page((void *)recv->dma_addr, page, page_size,
-				TO_PEER);
+				    TO_PEER);
 
 	free_page_info(&proc->pager, page_info);
 	put_page(page);
@@ -599,7 +602,7 @@ int gmem_handle_hmemcpy(struct rpg_kmsg_message *msg)
 }
 
 static int sync_gmem_vma_to_custom_process(struct svm_proc *svm_proc,
-			struct local_pair_proc *local_proc)
+					   struct local_pair_proc *local_proc)
 {
 	struct mm_struct *mm = svm_proc->mm;
 	struct vm_area_struct *vma, *local_vma;
@@ -615,22 +618,22 @@ static int sync_gmem_vma_to_custom_process(struct svm_proc *svm_proc,
 		if (!vma_is_peer_shared(vma))
 			continue;
 		current->mm = local_proc->mm;
-		pr_debug("%s cur %lx local %lx start %lx -- end %lx\n", __func__,
-			(unsigned long)current->mm,
-			(unsigned long)local_proc->mm, vma->vm_start,
-			vma->vm_end);
+		pr_debug("%s cur %lx local %lx start %lx -- end %lx\n",
+			 __func__, (unsigned long)current->mm,
+			 (unsigned long)local_proc->mm, vma->vm_start,
+			 vma->vm_end);
 		prot = PROT_READ;
 		if (vma->vm_flags & VM_WRITE)
 			prot |= PROT_WRITE;
 		addr = __do_mmap_mm(local_proc->mm, NULL, vma->vm_start,
-				vma->vm_end - vma->vm_start, prot,
-				MAP_SHARED | MAP_ANONYMOUS |
-				MAP_FIXED_NOREPLACE, 0,
-				0, &populate, NULL);
+				    vma->vm_end - vma->vm_start, prot,
+				    MAP_SHARED | MAP_ANONYMOUS |
+					    MAP_FIXED_NOREPLACE,
+				    0, 0, &populate, NULL);
 		current->mm = old_mm;
 		if (IS_ERR_VALUE(addr)) {
 			pr_err("%s failed start %lx - end %lx ret %ld\n",
-			__func__, vma->vm_start, vma->vm_end, addr);
+			       __func__, vma->vm_start, vma->vm_end, addr);
 			continue;
 		}
 		local_vma = find_vma(local_proc->mm, addr);
@@ -645,14 +648,14 @@ static int sync_gmem_vma_to_custom_process(struct svm_proc *svm_proc,
 }
 
 int gmem_register_pair_local_task(unsigned int bind_to_pid,
-		unsigned int local_pid)
+				  unsigned int local_pid)
 {
 	int ret = 0;
 	struct svm_proc *proc = search_svm_proc_by_pid(bind_to_pid);
 	struct local_pair_proc *local_proc;
 
 	pr_debug("%s bind_to_pid %d local_pid %d\n", __func__, bind_to_pid,
-	local_pid);
+		 local_pid);
 
 	local_proc = insert_local_proc(proc, local_pid);
 	if (IS_ERR(local_proc)) {
@@ -665,3 +668,4 @@ int gmem_register_pair_local_task(unsigned int bind_to_pid,
 
 	return ret;
 }
+EXPORT_SYMBOL(gmem_register_pair_local_task);

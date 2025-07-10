@@ -62,4 +62,4 @@ struct svm_proc *search_svm_proc_by_pid(unsigned int pid);
 struct local_pair_proc *insert_local_proc(struct svm_proc *proc,
 	unsigned int local_pid);
 struct svm_proc *search_svm_proc_by_local_mm(struct mm_struct *mm);
-
+#endif

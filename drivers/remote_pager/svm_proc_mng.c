@@ -26,8 +26,8 @@ static inline struct svm_proc_node *to_proc_node(struct svm_proc *proc)
 	return list_entry(proc, struct svm_proc_node, svm_proc);
 }
 
-#define _PROC_LIST_MAX	0x0f
-#define _PROC_LIST_SHIFT	4
+#define _PROC_LIST_MAX 0x0f
+#define _PROC_LIST_SHIFT 4
 static DEFINE_RWLOCK(svm_proc_hash_rwlock);
 static DEFINE_HASHTABLE(svm_proc_hashtable, _PROC_LIST_SHIFT);
 
@@ -82,7 +82,8 @@ struct svm_proc *search_svm_proc_by_local_mm(struct mm_struct *mm)
 
 	read_lock(&svm_proc_hash_rwlock);
 	hash_for_each(svm_proc_hashtable, hash_tag, node, list) {
-		list_for_each_entry_safe(item, next, &node->svm_proc.tasks_list, node) {
+		list_for_each_entry_safe(item, next, &node->svm_proc.tasks_list,
+					 node) {
 			if (item->mm == mm) {
 				read_unlock(&svm_proc_hash_rwlock);
 				return &node->svm_proc;
@@ -112,7 +113,7 @@ struct svm_proc *search_svm_proc_by_pid(unsigned int pid)
 }
 
 static struct page_info *__search_page_info(struct page_mng *pager,
-	unsigned long va, unsigned long len)
+					    unsigned long va, unsigned long len)
 {
 	struct rb_node *node = pager->rbtree.rb_node;
 	struct page_info *page_info = NULL;
@@ -129,13 +130,15 @@ static struct page_info *__search_page_info(struct page_mng *pager,
 	}
 
 	if (page_info) {
-		if (va < page_info->va || va + len > page_info->va + page_info->len)
+		if (va < page_info->va ||
+		    va + len > page_info->va + page_info->len)
 			return NULL;
 	}
 	return page_info;
 }
 
-struct page_info *search_page_info(struct page_mng *pager, unsigned long va, unsigned long len)
+struct page_info *search_page_info(struct page_mng *pager, unsigned long va,
+				   unsigned long len)
 {
 	struct page_info *page_info;
 
@@ -186,18 +189,15 @@ static void erase_page_info(struct page_mng *pager, struct page_info *page_info)
 }
 
 static struct page_info *alloc_page_info(unsigned long va, unsigned long len,
-	unsigned int page_size)
+					 unsigned int page_size)
 {
-
 	struct page_info *page_info;
 	size_t size;
 
 	size = sizeof(struct page_info);
 	page_info = kzalloc(size, GFP_KERNEL);
-	if (!page_info) {
-		pr_err("alloc page_info failed: (size=%lx)\n", (unsigned long)size);
+	if (!page_info)
 		return NULL;
-	}
 
 	page_info->va = va;
 	page_info->len = len;
@@ -206,8 +206,8 @@ static struct page_info *alloc_page_info(unsigned long va, unsigned long len,
 	return page_info;
 }
 
-struct page_info *get_page_info(struct page_mng *pager,
-	unsigned long va, unsigned long len, unsigned int page_size)
+struct page_info *get_page_info(struct page_mng *pager, unsigned long va,
+				unsigned long len, unsigned int page_size)
 {
 	struct page_info *page_info = search_page_info(pager, va, len);
 
@@ -269,12 +269,15 @@ static void free_svm_proc(struct svm_proc *proc)
 		list_for_each_entry_safe(item, next, &proc->tasks_list, node)
 			list_del(&item->node);
 	}
-	pr_debug("svm proc clean up done pid %d, peer_pid %d\n", proc->pid, proc->peer_pid);
+	pr_debug("svm proc clean up done pid %d, peer_pid %d\n", proc->pid,
+		 proc->peer_pid);
 }
 
-static void svm_proc_mm_release(struct mmu_notifier *subscription, struct mm_struct *mm)
+static void svm_proc_mm_release(struct mmu_notifier *subscription,
+				struct mm_struct *mm)
 {
-	struct svm_proc *proc = container_of(subscription, struct svm_proc, notifier);
+	struct svm_proc *proc =
+		container_of(subscription, struct svm_proc, notifier);
 
 	free_svm_proc(proc);
 	kfree(proc);
@@ -291,10 +294,11 @@ static int svm_proc_mmu_notifier_register(struct svm_proc *proc)
 	return mmu_notifier_register(&proc->notifier, proc->mm);
 }
 
-static void local_pair_proc_mm_release(struct mmu_notifier *subscription, struct mm_struct *mm)
+static void local_pair_proc_mm_release(struct mmu_notifier *subscription,
+				       struct mm_struct *mm)
 {
 	struct local_pair_proc *local_proc =
-	container_of(subscription, struct local_pair_proc, notifier);
+		container_of(subscription, struct local_pair_proc, notifier);
 
 	list_del(&local_proc->node);
 	kfree(local_proc);
@@ -305,17 +309,20 @@ static const struct mmu_notifier_ops local_pair_proc_mmu_notifier_ops = {
 	.release = local_pair_proc_mm_release,
 };
 
-static int local_pair_proc_mmu_notifier_register(struct local_pair_proc *local_proc)
+static int
+local_pair_proc_mmu_notifier_register(struct local_pair_proc *local_proc)
 {
 	local_proc->notifier.ops = &local_pair_proc_mmu_notifier_ops;
 
 	return mmu_notifier_register(&local_proc->notifier, local_proc->mm);
 }
 
-struct local_pair_proc *insert_local_proc(struct svm_proc *proc, unsigned int pid)
+struct local_pair_proc *insert_local_proc(struct svm_proc *proc,
+					  unsigned int pid)
 {
 	int ret = 0;
-	struct local_pair_proc *local_proc = kzalloc(sizeof(struct local_pair_proc), GFP_KERNEL);
+	struct local_pair_proc *local_proc =
+		kzalloc(sizeof(struct local_pair_proc), GFP_KERNEL);
 
 	if (!local_proc)
 		return ERR_PTR(-ENOMEM);
@@ -346,7 +353,8 @@ struct local_pair_proc *insert_local_proc(struct svm_proc *proc, unsigned int pi
 	put_task_struct(local_proc->tsk);
 
 	list_add(&local_proc->node, &proc->tasks_list);
-	pr_debug("%s bind_to_pid %d local_pid %d\n", __func__, proc->pid, local_proc->pid);
+	pr_debug("%s bind_to_pid %d local_pid %d\n", __func__, proc->pid,
+		 local_proc->pid);
 
 	return local_proc;
 

@@ -17,31 +17,6 @@
 static struct workqueue_struct *remote_pager_wq;
 
 struct msg_handler_st rpg_kmsg_cbftns[GMEM_MSG_MAX_ID] = {
-#if IS_ENABLED(CONFIG_REMOTE_PAGER_SLAVE)
-	/* HOST TO REMOTE */
-	[GMEM_TASK_PAIRING_REQUEST] = {
-		gmem_handle_task_pairing
-	},
-	[GMEM_ALLOC_VMA_REQUEST] = {
-		gmem_handle_alloc_vma_fixed
-	},
-	[GMEM_FREE_VMA_REQUEST] = {
-		gmem_handle_free_vma
-	},
-	[GMEM_ALLOC_PAGE_REQUEST] = {
-		gmem_handle_alloc_page
-	},
-	[GMEM_FREE_PAGE_REQUEST] = {
-		gmem_handle_free_page
-	},
-	[GMEM_HMADVISE_REQUEST] = {
-		gmem_handle_hmadvise
-	},
-	[GMEM_HMEMCPY_REQUEST] = {
-		gmem_handle_hmemcpy
-	},
-#endif
-
 #if IS_ENABLED(CONFIG_REMOTE_PAGER_MASTER)
 	/* REMOTE TO HOST */
 	[GMEM_PAGE_FAULT_REQUEST] = {
@@ -115,7 +90,7 @@ int handle_remote_pager_work(void *msg)
 	struct rpg_kmsg_work *w = kmalloc(sizeof(*w), GFP_ATOMIC);
 	if (IS_ERR_OR_NULL(w)) {
 		pr_err("can not alloc memory for rpg_kmsg_work\n");
-		goto PTR_ERR(w);
+		return PTR_ERR(w);
 	}
 	w->msg = msg;
 

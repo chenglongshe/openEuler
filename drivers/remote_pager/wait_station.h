@@ -28,3 +28,4 @@ struct wait_station *get_wait_station(void);
 struct wait_station *wait_station(int id);
 void put_wait_station(struct wait_station *ws);
 void *wait_at_station(struct wait_station *ws);
+#endif

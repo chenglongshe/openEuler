@@ -66,7 +66,8 @@ void *wait_at_station(struct wait_station *ws)
 	void *ret;
 
 	if (!try_wait_for_completion(&ws->pendings)) {
-		if (wait_for_completion_io_timeout(&ws->pendings, MAX_WAIT_IO_TIMEOUT) == 0) {
+		if (wait_for_completion_io_timeout(&ws->pendings,
+						   MAX_WAIT_IO_TIMEOUT) == 0) {
 			pr_err("%s timeout\n", __func__);
 			ret = ERR_PTR(-ETIMEDOUT);
 			goto out;
@@ -79,3 +80,4 @@ out:
 	put_wait_station(ws);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(wait_at_station);

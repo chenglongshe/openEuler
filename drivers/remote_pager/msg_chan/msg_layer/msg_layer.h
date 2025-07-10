@@ -46,3 +46,4 @@ int msg_open(int nid);
 int msg_close(int nid);
 int handle_migrate_page(void *peer_addr, struct page *local_page, size_t size, int dir);
 
+#endif

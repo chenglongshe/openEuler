@@ -41,3 +41,4 @@ int msg_layer_uninstall_phy_ops(struct phys_channel_ops *ops);
 #define TO_PEER			0
 #define FROM_PEER		1
 
+#endif
