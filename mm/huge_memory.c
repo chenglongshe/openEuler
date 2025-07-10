@@ -1543,7 +1543,6 @@ release:
 		pte_free(vma->vm_mm, pgtable);
 	folio_put(folio);
 	return ret;
-
 }
 
 /*

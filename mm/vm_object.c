@@ -44,9 +44,9 @@ static struct kmem_cache *vm_object_cachep;
 static struct kmem_cache *gm_mapping_cachep;
 
 /* gm_mapping will not be release dynamically */
-gm_mapping_t *alloc_gm_mapping(void)
+struct gm_mapping *alloc_gm_mapping(void)
 {
-	gm_mapping_t *gm_mapping = kmem_cache_zalloc(gm_mapping_cachep, GFP_KERNEL);
+	struct gm_mapping *gm_mapping = kmem_cache_zalloc(gm_mapping_cachep, GFP_KERNEL);
 
 	if (!gm_mapping)
 		return NULL;
@@ -58,12 +58,12 @@ gm_mapping_t *alloc_gm_mapping(void)
 }
 EXPORT_SYMBOL(alloc_gm_mapping);
 
-static inline void release_gm_mapping(gm_mapping_t *mapping)
+static inline void release_gm_mapping(struct gm_mapping *mapping)
 {
 	kmem_cache_free(gm_mapping_cachep, mapping);
 }
 
-static inline gm_mapping_t *lookup_gm_mapping(struct vm_object *obj, unsigned long pindex)
+static inline struct gm_mapping *lookup_gm_mapping(struct vm_object *obj, unsigned long pindex)
 {
 	return xa_load(obj->logical_page_table, pindex);
 }
@@ -146,7 +146,7 @@ void vm_object_drop_locked(struct vm_area_struct *vma)
 void dup_vm_object(struct vm_area_struct *dst, struct vm_area_struct *src)
 {
 	unsigned long index;
-	gm_mapping_t *mapping;
+	struct gm_mapping *mapping;
 	unsigned long moved_pages = 0;
 
 	XA_STATE(xas, src->vm_obj->logical_page_table, linear_page_index(src, src->vm_start));
@@ -168,7 +168,7 @@ void vm_object_adjust(struct vm_area_struct *vma, unsigned long start, unsigned 
 {
 	/* remove logical mapping in [vma->vm_start, start) and [end, vm->vm_end) */
 	unsigned long removed_pages = 0;
-	gm_mapping_t *mapping;
+	struct gm_mapping *mapping;
 
 	XA_STATE(xas, vma->vm_obj->logical_page_table, linear_page_index(vma, vma->vm_start));
 
@@ -205,7 +205,7 @@ EXPORT_SYMBOL_GPL(vm_object_lookup);
 void vm_object_mapping_create(struct vm_object *obj, unsigned long start)
 {
 	pgoff_t index = linear_page_index(obj->vma, start);
-	gm_mapping_t *gm_mapping;
+	struct gm_mapping *gm_mapping;
 
 	gm_mapping = alloc_gm_mapping();
 	if (!gm_mapping)
@@ -216,7 +216,7 @@ void vm_object_mapping_create(struct vm_object *obj, unsigned long start)
 
 void free_gm_mappings(struct vm_area_struct *vma)
 {
-	gm_mapping_t *gm_mapping;
+	struct gm_mapping *gm_mapping;
 	XA_STATE(xas, vma->vm_obj->logical_page_table, linear_page_index(vma, vma->vm_start));
 
 	xa_lock(vma->vm_obj->logical_page_table);

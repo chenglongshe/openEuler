@@ -61,7 +61,7 @@ static inline unsigned long pe_mask(unsigned int order)
 		return HPAGE_PMD_MASK;
 	if (order == PUD_ORDER)
 		return HPAGE_PUD_MASK;
-	return ~0;
+	return 0;
 }
 
 static struct percpu_counter g_gmem_stats[NR_GMEM_STAT_ITEMS];
@@ -185,7 +185,7 @@ __setup("gmem=", setup_gmem);
  * The returned device pointer will be passed by new_dev.
  * A unique id will be assigned to the GMEM device, using Linux's xarray.
  */
-gm_ret_t gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned long cap,
+enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned long cap,
 		       struct gm_dev **new_dev)
 {
 	struct gm_dev *dev;
@@ -215,7 +215,7 @@ gm_ret_t gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned long cap,
 EXPORT_SYMBOL_GPL(gm_dev_create);
 
 // Destroy a GMEM device and reclaim the resources.
-gm_ret_t gm_dev_destroy(struct gm_dev *dev)
+enum gm_ret gm_dev_destroy(struct gm_dev *dev)
 {
 	// TODO: implement it
 	xa_erase(&gm_dev_id_pool, dev->id);
@@ -224,10 +224,10 @@ gm_ret_t gm_dev_destroy(struct gm_dev *dev)
 EXPORT_SYMBOL_GPL(gm_dev_destroy);
 
 /* Handle the page fault triggered by a given device */
-gm_ret_t gm_dev_fault(struct mm_struct *mm, unsigned long addr, struct gm_dev *dev,
+enum gm_ret gm_dev_fault(struct mm_struct *mm, unsigned long addr, struct gm_dev *dev,
 		      int behavior)
 {
-	gm_ret_t ret = GM_RET_SUCCESS;
+	enum gm_ret ret = GM_RET_SUCCESS;
 	struct gm_mmu *mmu = dev->mmu;
 	struct device *dma_dev = dev->dma_dev;
 	struct vm_area_struct *vma;
@@ -376,7 +376,7 @@ vm_fault_t gm_host_fault_locked(struct vm_fault *vmf,
  * This implies dynamically creating
  * the struct page data structures.
  */
-gm_ret_t gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin, unsigned long end)
+enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin, unsigned long end)
 {
 	struct gm_mapping *mapping;
 	unsigned long addr = PAGE_ALIGN(begin);
@@ -463,7 +463,7 @@ struct gm_mapping *gm_mappings_alloc(unsigned int nid, unsigned int order)
 EXPORT_SYMBOL_GPL(gm_mappings_alloc);
 
 /* GMEM Virtual Address Space API */
-gm_ret_t gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
+enum gm_ret gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
 		      unsigned long cache_quantum, struct gm_as **new_as)
 {
 	struct gm_as *as;
@@ -488,7 +488,7 @@ gm_ret_t gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc p
 }
 EXPORT_SYMBOL_GPL(gm_as_create);
 
-gm_ret_t gm_as_destroy(struct gm_as *as)
+enum gm_ret gm_as_destroy(struct gm_as *as)
 {
 	struct gm_context *ctx, *tmp_ctx;
 
@@ -501,7 +501,7 @@ gm_ret_t gm_as_destroy(struct gm_as *as)
 }
 EXPORT_SYMBOL_GPL(gm_as_destroy);
 
-gm_ret_t gm_as_attach(struct gm_as *as, struct gm_dev *dev, enum gm_mmu_mode mode,
+enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev, enum gm_mmu_mode mode,
 		      bool activate, struct gm_context **out_ctx)
 {
 	struct gm_context *ctx;
