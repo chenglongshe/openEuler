@@ -1003,6 +1003,7 @@ static void hclgevf_update_mac_node(struct hclgevf_mac_addr_node *mac_node,
 		if (mac_node->state == HCLGEVF_MAC_TO_ADD) {
 			list_del(&mac_node->node);
 			kfree(mac_node);
+			mac_node = NULL;
 		} else {
 			mac_node->state = HCLGEVF_MAC_TO_DEL;
 		}
@@ -2466,6 +2467,7 @@ static int hclgevf_init_msi(struct hclgevf_dev *hdev)
 					sizeof(int), GFP_KERNEL);
 	if (!hdev->vector_irq) {
 		devm_kfree(&pdev->dev, hdev->vector_status);
+		hdev->vector_status = NULL;
 		pci_free_irq_vectors(pdev);
 		return -ENOMEM;
 	}
@@ -2479,6 +2481,8 @@ static void hclgevf_uninit_msi(struct hclgevf_dev *hdev)
 
 	devm_kfree(&pdev->dev, hdev->vector_status);
 	devm_kfree(&pdev->dev, hdev->vector_irq);
+	hdev->vector_status = NULL;
+	hdev->vector_irq = NULL;
 	pci_free_irq_vectors(pdev);
 }
 
@@ -2536,7 +2540,7 @@ static int hclgevf_init_nic_client_instance(struct hnae3_ae_dev *ae_dev,
 					    struct hnae3_client *client)
 {
 	struct hclgevf_dev *hdev = ae_dev->priv;
-	int rst_cnt = hdev->rst_stats.rst_cnt;
+	u32 rst_cnt = hdev->rst_stats.rst_cnt;
 	int ret;
 
 	ret = client->ops->init_instance(&hdev->nic);
