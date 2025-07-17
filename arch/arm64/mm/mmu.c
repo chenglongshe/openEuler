@@ -196,7 +196,7 @@ static void alloc_init_cont_pte(pmd_t *pmdp, unsigned long addr,
 		phys_addr_t pte_phys;
 		BUG_ON(!pgtable_alloc);
 		pte_phys = pgtable_alloc(PAGE_SHIFT);
-		__pmd_populate(pmdp, pte_phys, PMD_TYPE_TABLE);
+		__pmd_populate(pmdp, pte_phys, PMD_TYPE_TABLE | PMD_TABLE_AF);
 		pmd = READ_ONCE(*pmdp);
 	}
 	BUG_ON(pmd_bad(pmd));
@@ -270,7 +270,7 @@ static void alloc_init_cont_pmd(pud_t *pudp, unsigned long addr,
 		phys_addr_t pmd_phys;
 		BUG_ON(!pgtable_alloc);
 		pmd_phys = pgtable_alloc(PMD_SHIFT);
-		__pud_populate(pudp, pmd_phys, PUD_TYPE_TABLE);
+		__pud_populate(pudp, pmd_phys, PUD_TYPE_TABLE | PUD_TABLE_UXN | PUD_TABLE_AF);
 		pud = READ_ONCE(*pudp);
 	}
 	BUG_ON(pud_bad(pud));
@@ -317,7 +317,7 @@ static void alloc_init_pud(pgd_t *pgdp, unsigned long addr, unsigned long end,
 		phys_addr_t pud_phys;
 		BUG_ON(!pgtable_alloc);
 		pud_phys = pgtable_alloc(PUD_SHIFT);
-		__p4d_populate(p4dp, pud_phys, PUD_TYPE_TABLE);
+		__p4d_populate(p4dp, pud_phys, PUD_TYPE_TABLE | P4D_TABLE_UXN | P4D_TABLE_AF);
 		p4d = READ_ONCE(*p4dp);
 	}
 	BUG_ON(p4d_bad(p4d));
@@ -1295,13 +1295,13 @@ void __init early_fixmap_init(void)
 		pudp = pud_offset_kimg(p4dp, addr);
 	} else {
 		if (p4d_none(p4d))
-			__p4d_populate(p4dp, __pa_symbol(bm_pud), PUD_TYPE_TABLE);
+			__p4d_populate(p4dp, __pa_symbol(bm_pud), PUD_TYPE_TABLE | P4D_TABLE_AF);
 		pudp = fixmap_pud(addr);
 	}
 	if (pud_none(READ_ONCE(*pudp)))
-		__pud_populate(pudp, __pa_symbol(bm_pmd), PMD_TYPE_TABLE);
+		__pud_populate(pudp, __pa_symbol(bm_pmd), PMD_TYPE_TABLE | PUD_TABLE_AF);
 	pmdp = fixmap_pmd(addr);
-	__pmd_populate(pmdp, __pa_symbol(bm_pte), PMD_TYPE_TABLE);
+	__pmd_populate(pmdp, __pa_symbol(bm_pte), PMD_TYPE_TABLE | PMD_TABLE_AF);
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which
