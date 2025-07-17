@@ -1570,6 +1570,10 @@ vm_fault_t do_huge_pmd_anonymous_page_with_peer_shared(struct vm_fault *vmf)
 		gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
 	}
 	xa_unlock(vma->vm_obj->logical_page_table);
+	if (unlikely(!gm_mapping)) {
+		gmem_err("OOM when creating vm_obj!\n");
+		return VM_FAULT_OOM;
+	}
 	mutex_lock(&gm_mapping->lock);
 	if (unlikely(!pmd_none(*vmf->pmd)))
 		goto gm_mapping_release;
@@ -1586,6 +1590,11 @@ vm_fault_t do_huge_pmd_anonymous_page_with_peer_shared(struct vm_fault *vmf)
 
 	gfp = vma_thp_gfp_mask(vma);
 
+	/*
+	 * gmem support device memory overcommit, which uses host page
+	 * as the device's swap space. When device needs to reload data,
+	 * remap the swapped page.
+	 */
 	if (gm_mapping_cpu(gm_mapping))
 		folio = page_folio(gm_mapping->page);
 	if (!folio) {
