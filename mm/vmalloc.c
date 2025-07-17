@@ -3957,8 +3957,6 @@ again:
 	}
 
 #ifdef CONFIG_KERNEL_REPLICATION
-	if (numa_addr_has_replica(area->addr))
-		vm_flags |= VM_NUMA_SHARED;
 	area->node = node;
 #endif
 	/*
