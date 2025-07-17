@@ -1793,8 +1793,8 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 		 * because MADV_DONTNEED holds the mmap_lock in read
 		 * mode.
 		 */
-		if (pmd_none_or_clear_bad(pmd) || pmd_trans_huge(*pmd)) {
-			if (vma_is_peer_shared(vma))
+		if (vma_is_peer_shared(vma)) {
+			if (pmd_none_or_clear_bad(pmd) || pmd_trans_huge(*pmd))
 				zap_logic_pmd_range(vma, addr, next);
 		}
 #endif

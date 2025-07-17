@@ -1543,6 +1543,7 @@ release:
 		pte_free(vma->vm_mm, pgtable);
 	folio_put(folio);
 	return ret;
+
 }
 
 /*
@@ -1598,12 +1599,14 @@ static void set_huge_zero_page(pgtable_t pgtable, struct mm_struct *mm,
 vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
+	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
+	vm_fault_t ret;
+
 	if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER))
 		return VM_FAULT_FALLBACK;
 	ret = vmf_anon_prepare(vmf);
 	if (ret)
 		return ret;
-
 	khugepaged_enter_vma(vma, vma->vm_flags);
 
 #ifdef CONFIG_GMEM
@@ -1653,6 +1656,7 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 
 	return __do_huge_pmd_anonymous_page(vmf);
 }
+
 
 static void insert_pfn_pmd(struct vm_area_struct *vma, unsigned long addr,
 		pmd_t *pmd, pfn_t pfn, pgprot_t prot, bool write,

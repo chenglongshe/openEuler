@@ -532,10 +532,7 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 	dup_anon_vma_name(orig, new);
 
 #ifdef CONFIG_GMEM
-	if (vma_is_peer_shared(orig)) {
-		pr_debug("gmem: peer-shared vma should not be dup\n");
-		new->vm_obj = vm_object_create(new);
-	}
+	dup_peer_shared_vma(new);
 #endif
 
 	return new;

@@ -647,12 +647,10 @@ static inline int dup_anon_vma(struct vm_area_struct *dst,
 	 * anon pages imported.
 	 */
 	if (src->anon_vma && !dst->anon_vma) {
-#ifdef CONFIG_GMEM
-		if (vma_is_peer_shared(dst))
-			dup_vm_object(dst, src);
-#endif
 		int ret;
-
+#ifdef CONFIG_GMEM
+		dup_vm_object(dst, src, true);
+#endif
 		vma_assert_write_locked(dst);
 		dst->anon_vma = src->anon_vma;
 		ret = anon_vma_clone(dst, src);
@@ -1363,9 +1361,9 @@ unsigned long __do_mmap_mm(struct mm_struct *mm, struct file *file, unsigned lon
 	 */
 #ifdef CONFIG_GMEM
 	if (gmem_is_enabled() && (flags & MAP_PEER_SHARED)) {
-		len = round_up(len, SZ_2M);
+		len = round_up(len, PMD_SIZE);
 		addr = get_unmapped_area_aligned(file, addr, len, pgoff, flags,
-					SZ_2M);
+						PMD_SIZE);
 	} else {
 		addr = get_unmapped_area(file, addr, len, pgoff, flags);
 	}
@@ -2554,12 +2552,9 @@ int __split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	err = anon_vma_clone(new, vma);
 	if (err)
 		goto out_free_mpol;
-
-#ifdef CONFIG_GMEM
-		if (vma_is_peer_shared(vma))
-			dup_vm_object(new, vma);
+#ifdef COFNIG_GMEM
+	dup_vm_object(new, vma, false);
 #endif
-
 	if (new->vm_file)
 		get_file(new->vm_file);
 

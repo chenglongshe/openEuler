@@ -302,13 +302,14 @@ extern unsigned long gm_as_alloc(struct gm_as *as, unsigned long hint, unsigned 
 
 extern int hmadvise_inner(int hnid, unsigned long start, size_t len_in, int behavior);
 
-enum gmem_stat_item {
-	NR_PAGE_MIGRATING,
+enum gmem_stats_item {
+	NR_PAGE_MIGRATING_H2D,
+	NR_PAGE_MIGRATING_D2H,
 	NR_GMEM_STAT_ITEMS
 };
 
-extern void gmem_state_counter(enum gmem_stat_item item, int val);
-extern void gmem_state_counter_show(void);
+extern void gmem_stats_counter(enum gmem_stats_item item, int val);
+extern void gmem_stats_counter_show(void);
 
 /* h-NUMA topology */
 struct hnode {
