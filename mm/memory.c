@@ -1829,8 +1829,11 @@ static inline unsigned long zap_pud_range(struct mmu_gather *tlb,
 				goto next;
 			/* fall through */
 		}
-		if (pud_none_or_clear_bad(pud))
+		if (pud_none_or_clear_bad(pud)) {
+			if (vma_is_peer_shared(vma))
+				zap_logic_pud_range(vma, addr, next);
 			continue;
+		}
 		next = zap_pmd_range(tlb, vma, pud, addr, next, details);
 next:
 		cond_resched();
@@ -1850,8 +1853,11 @@ static inline unsigned long zap_p4d_range(struct mmu_gather *tlb,
 	p4d = p4d_offset(pgd, addr);
 	do {
 		next = p4d_addr_end(addr, end);
-		if (p4d_none_or_clear_bad(p4d))
+		if (p4d_none_or_clear_bad(p4d)) {
+			if (vma_is_peer_shared(vma))
+				zap_logic_pud_range(vma, addr, next);
 			continue;
+		}
 		next = zap_pud_range(tlb, vma, p4d, addr, next, details);
 	} while (p4d++, addr = next, addr != end);
 

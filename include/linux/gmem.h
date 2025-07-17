@@ -121,10 +121,8 @@ struct gm_mmu {
 	unsigned long cookie;
 
 	/* Synchronize VMA in a peer OS to interact with the host OS */
-	enum gm_ret (*peer_va_alloc_fixed)(struct mm_struct *mm, unsigned long va,
-					unsigned long size, unsigned long prot);
-	enum gm_ret (*peer_va_free)(struct mm_struct *mm, unsigned long va,
-				 unsigned long size);
+	enum gm_ret (*peer_va_alloc_fixed)(struct gm_fault_t *gmf);
+	enum gm_ret (*peer_va_free)(struct gm_fault_t *gmf);
 
 	/* Create physical mappings on peer host.
 	 * If copy is set, copy data [dma_addr, dma_addr + size] to peer host
@@ -152,6 +150,9 @@ struct gm_mmu {
 	/* Invalidation functions of the MMU TLB */
 	enum gm_ret (*tlb_invl)(void *pmap, unsigned long va, unsigned long size);
 	enum gm_ret (*tlb_invl_coalesced)(void *pmap, struct list_head *mappings);
+
+	// copy one area of memory from device to host or from host to device
+	enum gm_ret (*peer_hmemcpy)(struct gm_memcpy_t *gmc);
 };
 
 /**
@@ -301,6 +302,7 @@ extern unsigned long gm_as_alloc(struct gm_as *as, unsigned long hint, unsigned 
 				struct gm_region **new_region);
 
 extern int hmadvise_inner(int hnid, unsigned long start, size_t len_in, int behavior);
+extern int hmemcpy(int hnid, unsigned long dest, unsigned long src, size_t size);
 
 enum gmem_stats_item {
 	NR_PAGE_MIGRATING_H2D,
@@ -337,6 +339,11 @@ static inline bool is_hnode_allowed(int node)
 static inline struct hnode *get_hnode(unsigned int hnid)
 {
 	return hnodes[hnid];
+}
+
+static inline int get_hnuma_id(struct gm_dev *gm_dev)
+{
+	return first_node(gm_dev->registered_hnodes);
 }
 
 void __init hnuma_init(void);

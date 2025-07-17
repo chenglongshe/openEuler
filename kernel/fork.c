@@ -119,6 +119,10 @@
 #include <asm/xcall.h>
 #endif
 
+#ifdef CONFIG_GMEM
+#include <linux/vm_object.h>
+#endif
+
 #include <trace/events/sched.h>
 
 #define CREATE_TRACE_POINTS
@@ -560,6 +564,10 @@ static void vm_area_free_rcu_cb(struct rcu_head *head)
 
 void vm_area_free(struct vm_area_struct *vma)
 {
+#ifdef CONFIG_GMEM
+	if (vma_is_peer_shared(vma))
+		vm_object_drop_locked(vma);
+#endif
 #ifdef CONFIG_PER_VMA_LOCK
 	call_rcu(&vma->vm_rcu, vm_area_free_rcu_cb);
 #else

@@ -1523,7 +1523,26 @@ unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 	struct file *file = NULL;
 	unsigned long retval;
 
+#ifdef CONFIG_GMEM
+	if (gmem_is_enabled() && (flags & MAP_SHARED) && (flags & MAP_PEER_SHARED)) {
+		retval = -EINVAL;
+		gmem_err(" MAP_PEER_SHARED and MAP_SHARE cannot be used together.\n");
+		goto out_fput;
+	}
+	if (gmem_is_enabled() && (flags & MAP_HUGETLB) && (flags & MAP_PEER_SHARED)) {
+		retval = -EINVAL;
+		gmem_err(" MAP_PEER_SHARED and MAP_HUGETLB cannot be used together.\n");
+		goto out_fput;
+	}
+#endif
 	if (!(flags & MAP_ANONYMOUS)) {
+#ifdef CONFIG_GMEM
+		if (gmem_is_enabled() && (flags & MAP_PEER_SHARED)) {
+			retval = -EINVAL;
+			gmem_err(" MAP_PEER_SHARED cannot map file page.\n");
+			goto out_fput;
+		}
+#endif
 		audit_mmap_fd(fd, flags);
 		file = fget(fd);
 		if (!file)
@@ -2619,10 +2638,10 @@ int split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 }
 
 #ifdef CONFIG_GMEM
-static void munmap_in_peer_devices(struct mm_struct *mm,
-	struct vm_area_struct *vma, unsigned long start, unsigned long end)
+static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_area_struct *vma,
+					unsigned long start_addr, unsigned long end_addr)
 {
-	unsigned long addr = start;
+	unsigned long start, end, addr;
 	struct vm_object *obj = vma->vm_obj;
 	enum gm_ret ret;
 	struct gm_context *ctx, *tmp;
@@ -2633,7 +2652,18 @@ static void munmap_in_peer_devices(struct mm_struct *mm,
 		.copy = false,
 	};
 
+	start = max(vma->vm_start, start_addr);
+	if (start >= vma->vm_end)
+		return;
+	addr = start;
+	end = min(vma->vm_end, end_addr);
+	if (end <= vma->vm_start)
+		return;
+
 	if (!obj)
+		return;
+
+	if (!mm->gm_as)
 		return;
 
 	do {
@@ -2656,15 +2686,12 @@ static void munmap_in_peer_devices(struct mm_struct *mm,
 		gmf.dev = gm_mapping->dev;
 		ret = gm_mapping->dev->mmu->peer_unmap(&gmf);
 		if (ret != GM_RET_SUCCESS) {
-			pr_err("%s: call dev peer_unmap error %d\n", __func__, ret);
+			gmem_err("%s: call dev peer_unmap error %d\n", __func__, ret);
 			mutex_unlock(&gm_mapping->lock);
 			continue;
 		}
 		mutex_unlock(&gm_mapping->lock);
 	} while (addr += HPAGE_SIZE, addr != end);
-
-	if (!mm->gm_as)
-		return;
 
 	list_for_each_entry_safe(ctx, tmp, &mm->gm_as->gm_ctx_list, gm_as_link) {
 		if (!gm_dev_is_peer(ctx->dev))
@@ -2672,10 +2699,25 @@ static void munmap_in_peer_devices(struct mm_struct *mm,
 		if (!ctx->dev->mmu->peer_va_free)
 			continue;
 
-		ret = ctx->dev->mmu->peer_va_free(mm, start, end - start);
+		gmf.va = start;
+		gmf.size = end - start;
+		gmf.dev = ctx->dev;
+
+		ret = ctx->dev->mmu->peer_va_free(&gmf);
 		if (ret != GM_RET_SUCCESS)
 			pr_debug("gmem: free_vma(start:%lx, len:%lx) ret %d\n",
 				start, end - start, ret);
+	}
+}
+
+static void munmap_in_peer_devices(struct mm_struct *mm, unsigned long start, unsigned long end)
+{
+	struct vm_area_struct *vma;
+
+	VMA_ITERATOR(vmi, mm, start);
+	for_each_vma_range(vmi, vma, end) {
+		if (vma_is_peer_shared(vma))
+			munmap_single_vma_in_peer_devices(mm, vma, start, end);
 	}
 }
 #endif
@@ -2754,6 +2796,10 @@ do_vmi_align_munmap(struct vma_iterator *vmi, struct vm_area_struct *vma,
 			locked_vm += vma_pages(next);
 
 		count++;
+#ifdef CONFIG_GMEM
+	if (gmem_is_enabled())
+		munmap_single_vma_in_peer_devices(mm, vma, start, end);
+#endif
 		if (unlikely(uf)) {
 			/*
 			 * If userfaultfd_unmap_prep returns an error the vmas
@@ -2812,7 +2858,7 @@ do_vmi_align_munmap(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	next = vma_next(vmi);
 #ifdef CONFIG_GMEM
 	if (gmem_is_enabled())
-		munmap_in_peer_devices(mm, vma, start, end);
+		munmap_in_peer_devices(mm, start, end);
 #endif
 	if (next)
 		vma_iter_prev_range(vmi);
@@ -2872,17 +2918,23 @@ int do_vmi_munmap(struct vma_iterator *vmi, struct mm_struct *mm,
 	unsigned long end;
 	struct vm_area_struct *vma;
 
+#ifdef CONFIG_GMEM
+	struct vm_area_struct *vma_end;
 	if (gmem_is_enabled()) {
 		vma = find_vma_intersection(mm, start, start + len);
+		vma_end = find_vma(mm, start + len);
 		if (!vma)
 			return 0;
 		if (vma_is_peer_shared(vma)) {
 			if (!IS_ALIGNED(start, PMD_SIZE))
 				return -EINVAL;
-
-			len = round_up(len, SZ_2M);
 		}
+		/* Prevents partial release of the peer_share page. */
+		if (vma_end && vma_end->vm_start < (start + len) && vma_is_peer_shared(vma_end))
+			len = round_up(len, SZ_2M);
 	}
+#endif
+
 	if ((offset_in_page(start)) || start > TASK_SIZE || len > TASK_SIZE-start)
 		return -EINVAL;
 
@@ -2921,16 +2973,19 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len,
 }
 
 #ifdef CONFIG_GMEM
-static int alloc_va_in_peer_devices(struct mm_struct *mm,
-		struct vm_area_struct *vma, unsigned long addr, unsigned long len,
-		vm_flags_t vm_flags)
+static int alloc_va_in_peer_devices(struct mm_struct *mm, struct vm_area_struct *vma,
+			unsigned long addr, unsigned long len, vm_flags_t vm_flags)
 {
 	struct gm_context *ctx, *tmp;
 	enum gm_ret ret;
 
-	pr_debug("gmem: start mmap, as %p\n", mm->gm_as);
-	if (!mm->gm_as)
-		return -ENODEV;
+	if (!mm->gm_as) {
+		ret = gm_as_create(0, ULONG_MAX, GM_AS_ALLOC_DEFAULT, PAGE_SIZE,
+				&mm->gm_as);
+		if (ret)
+			return ret;
+	}
+	pr_debug("gmem: start mmap, as %p\n", (void *)mm->gm_as);
 
 	if (!vma->vm_obj)
 		vma->vm_obj = vm_object_create(vma);
@@ -2940,7 +2995,16 @@ static int alloc_va_in_peer_devices(struct mm_struct *mm,
 	 * TODO: consider the concurrency problem of device
 	 * attaching/detaching from the gm_as.
 	 */
+	ret = -ENODEV;
 	list_for_each_entry_safe(ctx, tmp, &mm->gm_as->gm_ctx_list, gm_as_link) {
+		struct gm_fault_t gmf = {
+				.mm = mm,
+				.dev = ctx->dev,
+				.va = addr,
+				.size = len,
+				.prot = vm_flags,
+		};
+
 		if (!gm_dev_is_peer(ctx->dev))
 			continue;
 
@@ -2948,16 +3012,15 @@ static int alloc_va_in_peer_devices(struct mm_struct *mm,
 			pr_debug("gmem: mmu ops has no alloc_vma\n");
 			continue;
 		}
-
 		pr_debug("gmem: call vma_alloc\n");
-		ret = ctx->dev->mmu->peer_va_alloc_fixed(mm, addr, len, vm_flags);
+		ret = ctx->dev->mmu->peer_va_alloc_fixed(&gmf);
 		if (ret != GM_RET_SUCCESS) {
 			pr_debug("gmem: alloc_vma ret %d\n", ret);
 			return ret;
 		}
 	}
 
-	return GM_RET_SUCCESS;
+	return ret;
 }
 #endif
 
@@ -2994,7 +3057,8 @@ retry:
 		if (!may_expand_vm(mm, vm_flags,
 					(len >> PAGE_SHIFT) - nr_pages)) {
 #ifdef CONFIG_GMEM
-			gmem_release_vma(mm, &reserve_list);
+			if (gmem_is_enabled())
+				gmem_release_vma(mm, &reserve_list);
 #endif
 			return -ENOMEM;
 		}
@@ -3003,7 +3067,8 @@ retry:
 	/* Unmap any existing mapping in the area */
 	if (do_vmi_munmap(&vmi, mm, addr, len, uf, false)) {
 #ifdef CONFIG_GMEM
-		gmem_release_vma(mm, &reserve_list);
+		if (gmem_is_enabled())
+			gmem_release_vma(mm, &reserve_list);
 #endif
 		return -ENOMEM;
 	}
@@ -3015,7 +3080,8 @@ retry:
 		charged = len >> PAGE_SHIFT;
 		if (security_vm_enough_memory_mm(mm, charged)) {
 #ifdef CONFIG_GMEM
-			gmem_release_vma(mm, &reserve_list);
+			if (gmem_is_enabled())
+				gmem_release_vma(mm, &reserve_list);
 #endif
 			return -ENOMEM;
 		}
@@ -3081,6 +3147,24 @@ cannot_expand:
 	vm_flags_init(vma, vm_flags);
 	vma->vm_page_prot = vm_get_page_prot(vm_flags);
 	vma->vm_pgoff = pgoff;
+
+#ifdef CONFIG_GMEM
+	if (vma_is_peer_shared(vma)) {
+		enum gm_ret ret = alloc_va_in_peer_devices(mm, vma, addr, len, vm_flags);
+
+		if (ret == GM_RET_NOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
+			retry_times++;
+			addr = get_unmapped_area(file, addr, len, pgoff, 0);
+			gmem_reserve_vma(vma, &reserve_list);
+			goto retry;
+		} else if (ret != GM_RET_SUCCESS) {
+			pr_debug("gmem: alloc_vma ret %d\n", ret);
+			error = -ENOMEM;
+			goto free_vma;
+		}
+		gmem_release_vma(mm, &reserve_list);
+	}
+#endif
 
 	if (vma_iter_prealloc(&vmi, vma)) {
 		error = -ENOMEM;
@@ -3161,23 +3245,6 @@ file_expanded:
 	file = vma->vm_file;
 	ksm_add_vma(vma);
 expanded:
-#ifdef CONFIG_GMEM
-	if (vma_is_peer_shared(vma)) {
-		enum gm_ret ret = alloc_va_in_peer_devices(mm, vma, addr, len, vm_flags);
-
-		if (ret == GM_RET_NOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
-			retry_times++;
-			addr = get_unmapped_area(file, addr, len, pgoff, 0);
-			gmem_reserve_vma(vma, &reserve_list);
-			goto retry;
-		} else if (ret != GM_RET_SUCCESS) {
-			pr_debug("gmem: alloc_vma ret %d\n", ret);
-			error = -ENOMEM;
-			goto free_vma;
-		}
-		gmem_release_vma(mm, &reserve_list);
-	}
-#endif
 	perf_event_mmap(vma);
 
 	vm_stat_account(mm, vm_flags, len >> PAGE_SHIFT);
@@ -3222,6 +3289,7 @@ unacct_error:
 	if (charged)
 		vm_unacct_memory(charged);
 #ifdef CONFIG_GMEM
+	if (gmem_is_enabled())
 		gmem_release_vma(mm, &reserve_list);
 #endif
 	return error;
