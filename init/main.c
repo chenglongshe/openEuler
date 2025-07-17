@@ -102,10 +102,6 @@
 #include <linux/randomize_kstack.h>
 #include <net/net_namespace.h>
 
-#ifdef CONFIG_GMEM
-#include <linux/gmem.h>
-#endif
-
 #include <asm/io.h>
 #include <asm/setup.h>
 #include <asm/sections.h>
@@ -908,10 +904,6 @@ void start_kernel(void)
 	setup_per_cpu_areas();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 	boot_cpu_hotplug_init();
-
-#ifdef CONFIG_GMEM
-	hnuma_init();
-#endif
 
 	pr_notice("Kernel command line: %s\n", saved_command_line);
 	/* parameters may set static keys */

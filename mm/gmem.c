@@ -66,7 +66,7 @@ static inline unsigned long pe_mask(unsigned int order)
 
 static struct percpu_counter g_gmem_stats[NR_GMEM_STAT_ITEMS];
 
-void gmem_state_counter(enum gmem_stat_item item, int val)
+void gmem_stats_counter(enum gmem_stats_item item, int val)
 {
 	if (!gmem_is_enabled())
 		return;
@@ -95,14 +95,17 @@ static int gmem_stat_init(void)
 }
 
 #ifdef CONFIG_PROC_FS
-static int gmemstat_show(struct seq_file *m, void *arg)
+static int gmem_stats_show(struct seq_file *m, void *arg)
 {
 	if (!gmem_is_enabled())
 		return 0;
 
 	seq_printf(
-		m, "migrating     : %lld\n",
-		percpu_counter_read_positive(&g_gmem_stats[NR_PAGE_MIGRATING]));
+		m, "migrating H2D     : %lld\n",
+		percpu_counter_read_positive(&g_gmem_stats[NR_PAGE_MIGRATING_H2D]));
+	seq_printf(
+		m, "migrating D2H     : %lld\n",
+		percpu_counter_read_positive(&g_gmem_stats[NR_PAGE_MIGRATING_D2H]));
 
 	return 0;
 }
@@ -154,7 +157,7 @@ static int __init gmem_init(void)
 	}
 
 #ifdef CONFIG_PROC_FS
-	proc_create_single("gmemstat", 0444, NULL, gmemstat_show);
+	proc_create_single("gmemstat", 0444, NULL, gmem_stats_show);
 #endif
 
 	static_branch_enable(&gmem_status);
@@ -301,7 +304,7 @@ peer_map:
 			 * update page to willneed and this will stop page evicting
 			 */
 			gm_mapping_flags_set(gm_mapping, GM_PAGE_WILLNEED);
-			gmem_state_counter(NR_PAGE_MIGRATING, 1);
+			gmem_stats_counter(NR_PAGE_MIGRATING_D2H, 1);
 			ret = GM_RET_SUCCESS;
 		} else {
 			pr_err("gmem: peer map failed\n");

@@ -30,6 +30,9 @@
 #include "internal.h"
 #include "slab.h"
 #include "shuffle.h"
+#ifdef CONFIG_GMEM
+#include <linux/gmem.h>
+#endif
 
 #include <asm/setup.h>
 
@@ -2797,6 +2800,9 @@ static void __init mem_init_print_info(void)
  */
 void __init mm_core_init(void)
 {
+#ifdef CONFIG_GMEM
+	hnuma_init();
+#endif
 	/* Initializations relying on SMP setup */
 	build_all_zonelists(NULL);
 	page_alloc_init_cpuhp();

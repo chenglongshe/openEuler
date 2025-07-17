@@ -1489,37 +1489,13 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 	struct folio *folio = NULL;
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
 	vm_fault_t ret;
-#ifdef CONFIG_GMEM
-	struct gm_mapping *gm_mapping;
 
-	if (vma_is_peer_shared(vma)) {
-		xa_lock(vma->vm_obj->logical_page_table);
-		gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
-		if (!gm_mapping) {
-			vm_object_mapping_create(vma->vm_obj, haddr);
-			gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
-		}
-		xa_unlock(vma->vm_obj->logical_page_table);
-		mutex_lock(&gm_mapping->lock);
-		if (unlikely(!pmd_none(*vmf->pmd)))
-			goto gm_mapping_release;
-	}
-#endif
 	if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER))
 		return VM_FAULT_FALLBACK;
 	ret = vmf_anon_prepare(vmf);
 	if (ret)
 		return ret;
-#ifdef CONFIG_GMEM
-	if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER)) {
-		ret = VM_FAULT_FALLBACK;
-		goto gm_mapping_release;
-	}
-	if (unlikely(anon_vma_prepare(vma))) {
-		ret = VM_FAULT_OOM;
-		goto gm_mapping_release;
-	}
-#endif
+
 	khugepaged_enter_vma(vma, vma->vm_flags);
 
 	if (!(vmf->flags & FAULT_FLAG_WRITE) &&
@@ -1564,17 +1540,8 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 	}
 	gfp = vma_thp_gfp_mask(vma);
 
-#ifdef CONFIG_GMEM
-	if (vma_is_peer_shared(vma) && gm_mapping_cpu(gm_mapping))
-		folio = page_folio(gm_mapping->page);
-	if (!folio) {
-		if (vma_is_peer_shared(vma))
-			gfp = GFP_TRANSHUGE;
-		folio = vma_alloc_folio(gfp, HPAGE_PMD_ORDER, vma, haddr, true);
-	}
-#else
 	folio = vma_alloc_folio(gfp, HPAGE_PMD_ORDER, vma, haddr, true);
-#endif
+
 	if (unlikely(!folio)) {
 		count_vm_event(THP_FAULT_FALLBACK);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK);
@@ -1583,12 +1550,61 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 	}
 	return __do_huge_pmd_anonymous_page(vmf, &folio->page, gfp);
 gm_mapping_release:
-#ifdef CONFIG_GMEM
-	if (vma_is_peer_shared(vma))
-		mutex_unlock(&gm_mapping->lock);
-#endif
 	return ret;
 }
+
+#ifdef CONFIG_GMEM
+vm_fault_t do_huge_pmd_anonymous_page_with_peer_shared(struct vm_fault *vmf)
+{
+	struct vm_area_struct *vma = vmf->vma;
+	gfp_t gfp;
+	struct folio *folio = NULL;
+	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
+	vm_fault_t ret;
+	struct gm_mapping *gm_mapping;
+
+	xa_lock(vma->vm_obj->logical_page_table);
+	gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
+	if (!gm_mapping) {
+		vm_object_mapping_create(vma->vm_obj, haddr);
+		gm_mapping = vm_object_lookup(vma->vm_obj, haddr);
+	}
+	xa_unlock(vma->vm_obj->logical_page_table);
+	mutex_lock(&gm_mapping->lock);
+	if (unlikely(!pmd_none(*vmf->pmd)))
+		goto gm_mapping_release;
+
+	if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER)) {
+		ret = VM_FAULT_FALLBACK;
+		goto gm_mapping_release;
+	}
+	ret = vmf_anon_prepare(vmf);
+	if (ret)
+		goto gm_mapping_release;
+
+	khugepaged_enter_vma(vma, vma->vm_flags);
+
+	gfp = vma_thp_gfp_mask(vma);
+
+	if (gm_mapping_cpu(gm_mapping))
+		folio = page_folio(gm_mapping->page);
+	if (!folio) {
+		gfp = GFP_TRANSHUGE;
+		folio = vma_alloc_folio(gfp, HPAGE_PMD_ORDER, vma, haddr, true);
+	}
+
+	if (unlikely(!folio)) {
+		count_vm_event(THP_FAULT_FALLBACK);
+		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK);
+		ret = VM_FAULT_FALLBACK;
+		goto gm_mapping_release;
+	}
+	return __do_huge_pmd_anonymous_page(vmf, &folio->page, gfp);
+gm_mapping_release:
+	mutex_unlock(&gm_mapping->lock);
+	return ret;
+}
+#endif
 
 static void insert_pfn_pmd(struct vm_area_struct *vma, unsigned long addr,
 		pmd_t *pmd, pfn_t pfn, pgprot_t prot, bool write,

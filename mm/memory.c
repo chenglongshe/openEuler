@@ -1793,8 +1793,8 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 		 * because MADV_DONTNEED holds the mmap_lock in read
 		 * mode.
 		 */
-		if (pmd_none_or_clear_bad(pmd) || pmd_trans_huge(*pmd)) {
-			if (vma_is_peer_shared(vma))
+		if (vma_is_peer_shared(vma)) {
+			if (pmd_none_or_clear_bad(pmd) || pmd_trans_huge(*pmd))
 				zap_logic_pmd_range(vma, addr, next);
 		}
 #endif
@@ -5697,8 +5697,17 @@ out_map:
 static inline vm_fault_t create_huge_pmd(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
+#ifdef CONFIG_GMEM
+	if (vma_is_anonymous(vma)) {
+		if (vma_is_peer_shared(vma))
+			return do_huge_pmd_anonymous_page_with_peer_shared(vmf);
+		else
+			return do_huge_pmd_anonymous_page(vmf);
+	}
+#else
 	if (vma_is_anonymous(vma))
 		return do_huge_pmd_anonymous_page(vmf);
+#endif
 	if (vma->vm_ops->huge_fault)
 		return vma->vm_ops->huge_fault(vmf, PMD_ORDER);
 	return VM_FAULT_FALLBACK;

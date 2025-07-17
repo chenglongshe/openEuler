@@ -143,11 +143,19 @@ void vm_object_drop_locked(struct vm_area_struct *vma)
 	}
 }
 
-void dup_vm_object(struct vm_area_struct *dst, struct vm_area_struct *src)
+void dup_vm_object(struct vm_area_struct *dst, struct vm_area_struct *src, bool dst_peer_shared)
 {
 	unsigned long index;
 	struct gm_mapping *mapping;
 	unsigned long moved_pages = 0;
+
+	if (dst_peer_shared) {
+		if (!vma_is_peer_shared(dst))
+			return;
+	} else {
+		if (!vma_is_peer_shared(src))
+			return;
+	}
 
 	XA_STATE(xas, src->vm_obj->logical_page_table, linear_page_index(src, src->vm_start));
 
@@ -162,6 +170,14 @@ void dup_vm_object(struct vm_area_struct *dst, struct vm_area_struct *src)
 	rcu_read_unlock();
 	atomic_add(moved_pages, &dst->vm_obj->nr_pages);
 	xa_unlock(dst->vm_obj->logical_page_table);
+}
+
+void dup_peer_shared_vma(struct vm_area_struct *vma)
+{
+	if (vma_is_peer_shared(vma)) {
+		pr_debug("gmem: peer-shared vma should not be dup\n");
+		vma->vm_obj = vm_object_create(vma);
+	}
 }
 
 void vm_object_adjust(struct vm_area_struct *vma, unsigned long start, unsigned long end)
