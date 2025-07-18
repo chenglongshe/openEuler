@@ -168,13 +168,16 @@ SYM_CODE_START(xcall_entry)
 SYM_CODE_END(xcall_entry)
 
 	.macro check_hw_xcall_pre_kernel_entry
+	stp	x20, x21, [sp, #0]
+	str	x8, [sp, #16]
+	mov	x21, __NR_syscalls
 	/* x8 >= __NR_syscalls */
 	cmp	x8, __NR_syscalls
-	bhs	.Lskip_xcall\@
+	csel	x20, x8, x21, lt
 
-	stp	x20, x21, [sp, #0]
-	ldr_this_cpu	x21, __cpu_xcall_entry, x20
-	ldr	x21, [x21, x8, lsl #3]
+	ldr_this_cpu	x21, __cpu_xcall_entry, x8
+	ldr	x21, [x21, x20, lsl #3]
+	ldr	x8, [sp, #16]
 	br	x21
 .Lskip_xcall\@:
 	.endm

@@ -26,8 +26,8 @@ static inline int sw_xcall_init_task(struct task_struct *p, struct task_struct *
 }
 
 #ifdef CONFIG_ACTLR_XCALL_XINT
-static void *default_syscall_table[__NR_syscalls] = {
-	[0 ... __NR_syscalls - 1] = no_xcall_entry,
+static void *default_syscall_table[__NR_syscalls + 1] = {
+	[0 ... __NR_syscalls] = no_xcall_entry,
 };
 
 asmlinkage DEFINE_PER_CPU(void **, __cpu_xcall_entry) = default_syscall_table;
@@ -39,7 +39,7 @@ static inline int hw_xcall_init_task(struct task_struct *p, struct task_struct *
 	if (!p->xinfo)
 		return -ENOMEM;
 
-	for (i = 0; i < __NR_syscalls; i++)
+	for (i = 0; i < __NR_syscalls + 1; i++)
 		TASK_HW_XINFO(p)->xcall_entry[i] = no_xcall_entry;
 
 	if (orig->xinfo) {

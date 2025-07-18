@@ -25,12 +25,12 @@ void xcall_task_free(struct task_struct *p);
 #ifdef CONFIG_ACTLR_XCALL_XINT
 struct hw_xcall_info {
 	/* Must be first! */
-	void *xcall_entry[__NR_syscalls];
+	void *xcall_entry[__NR_syscalls + 1];
 	bool xcall_scno_enabled;
 };
 
 #define TASK_HW_XINFO(p)	((struct hw_xcall_info *)p->xinfo)
-#define XCALL_ENTRY_SIZE	(sizeof(unsigned long) * __NR_syscalls)
+#define XCALL_ENTRY_SIZE	(sizeof(unsigned long) * (__NR_syscalls + 1))
 
 DECLARE_PER_CPU(void **, __cpu_xcall_entry);
 extern void xcall_entry(void);
