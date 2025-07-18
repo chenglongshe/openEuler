@@ -581,6 +581,8 @@ SYM_CODE_START(vectors)
 SYM_CODE_END(vectors)
 
 #ifdef CONFIG_ACTLR_XCALL_XINT
+#include "xcall/entry.S"
+
 	.align	11
 SYM_CODE_START(vectors_xcall_xint)
 	kernel_ventry	1, t, 64, sync		// Synchronous EL1t
@@ -598,7 +600,7 @@ SYM_CODE_START(vectors_xcall_xint)
 	kernel_ventry	0, t, 64, fiq		// FIQ 64-bit EL0
 	kernel_ventry	0, t, 64, error		// Error 64-bit EL0
 
-	kernel_ventry	0, t, 64, xcall		// XCALL synchronous 64-bit EL0
+	xcall_ventry	0, t, 64, xcall		// XCALL synchronous 64-bit EL0
 	kernel_ventry	0, t, 64, xint		// XINT 64-bit EL0
 	kernel_ventry	0, t, 32, fiq		// FIQ 32-bit EL0
 	kernel_ventry	0, t, 32, error		// Error 32-bit EL0
@@ -647,10 +649,22 @@ SYM_CODE_END(__bad_stack)
 	cmp	x8, __NR_syscalls
 	.endm
 
-	.macro check_xcall_enable
+	.macro check_xcall_pre_kernel_entry
+	stp	x20, x21, [sp, #0]
+	/* is ESR_ELx_EC_SVC64 */
+	check_esr_el1_ec_svc64
+	bne	.Lskip_xcall\@
+	/* x8 >= __NR_syscalls */
+	check_syscall_nr
+	bhs	.Lskip_xcall\@
+
+	/* is xcall enabled */
 	/* x21 = task_struct->xinfo->xcall_enable */
 	ldr_this_cpu	x20, __entry_task, x21
 	ldr	x21, [x20, #TSK_XCALL]
+	/* is task_struct->xinfo == NULL */
+	cbz	x21, .Lskip_xcall\@
+	str	x8, [sp, #16]
 	/* x20 = sc_no / 8 */
 	lsr	x20, x8, 3
 	ldr	x21, [x21, x20]
@@ -660,19 +674,7 @@ SYM_CODE_END(__bad_stack)
 	lsl	x20, x20, x8
 	and	x21, x21, x20
 	cmp	x21, 0
-	.endm
 
-	.macro check_xcall_pre_kernel_entry
-	stp	x20, x21, [sp, #0]
-	/* is ESR_ELx_EC_SVC64 */
-	check_esr_el1_ec_svc64
-	bne	.Lskip_xcall\@
-	/* x8 >= __NR_syscalls */
-	check_syscall_nr
-	bhs	.Lskip_xcall\@
-	str	x8, [sp, #16]
-	/* is xcall enabled */
-	check_xcall_enable
 	ldr	x8, [sp, #16]
 	beq	.Lskip_xcall\@
 	ldp	x20, x21, [sp, #0]
