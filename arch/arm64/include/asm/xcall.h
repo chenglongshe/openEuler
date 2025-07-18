@@ -32,6 +32,7 @@ struct hw_xcall_info {
 #define TASK_HW_XINFO(p)	((struct hw_xcall_info *)p->xinfo)
 #define XCALL_ENTRY_SIZE	(sizeof(unsigned long) * __NR_syscalls)
 
+DECLARE_PER_CPU(void **, __cpu_xcall_entry);
 extern void xcall_entry(void);
 extern void no_xcall_entry(void);
 
@@ -84,8 +85,10 @@ static inline void cpu_switch_xcall_entry(struct task_struct *tsk)
 	if (!is_hw_xcall_support || !tsk->xinfo)
 		return;
 
-	if (TASK_HW_XINFO(tsk)->xcall_scno_enabled)
+	if (TASK_HW_XINFO(tsk)->xcall_scno_enabled) {
+		__this_cpu_write(__cpu_xcall_entry, TASK_HW_XINFO(tsk)->xcall_entry);
 		cpu_enable_arch_xcall();
+	}
 }
 #endif /* CONFIG_ACTLR_XCALL_XINT */
 

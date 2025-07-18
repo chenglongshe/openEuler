@@ -173,10 +173,7 @@ SYM_CODE_END(xcall_entry)
 	bhs	.Lskip_xcall\@
 
 	stp	x20, x21, [sp, #0]
-	/* x21 = task_struct->xinfo->xcall_entry */
-	ldr_this_cpu	x20, __entry_task, x21
-	ldr	x21, [x20, #TSK_XCALL]
-	/* x21 = task_struct->xinfo->xcall_entry[x8] */
+	ldr_this_cpu	x21, __cpu_xcall_entry, x20
 	ldr	x21, [x21, x8, lsl #3]
 	br	x21
 .Lskip_xcall\@:

@@ -26,6 +26,11 @@ static inline int sw_xcall_init_task(struct task_struct *p, struct task_struct *
 }
 
 #ifdef CONFIG_ACTLR_XCALL_XINT
+static void *default_syscall_table[__NR_syscalls] = {
+	[0 ... __NR_syscalls - 1] = no_xcall_entry,
+};
+
+asmlinkage DEFINE_PER_CPU(void **, __cpu_xcall_entry) = default_syscall_table;
 static inline int hw_xcall_init_task(struct task_struct *p, struct task_struct *orig)
 {
 	int i;
