@@ -119,9 +119,6 @@ struct gpio_desc *gpio_to_desc(unsigned gpio)
 
 	spin_unlock_irqrestore(&gpio_lock, flags);
 
-	if (!gpio_is_valid(gpio))
-		WARN(1, "invalid GPIO %d\n", gpio);
-
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(gpio_to_desc);
@@ -181,14 +178,14 @@ EXPORT_SYMBOL_GPL(gpiod_to_chip);
 static int gpiochip_find_base(int ngpio)
 {
 	struct gpio_device *gdev;
-	int base = ARCH_NR_GPIOS - ngpio;
+	int base = GPIO_DYNAMIC_BASE;
 
-	list_for_each_entry_reverse(gdev, &gpio_devices, list) {
+	list_for_each_entry(gdev, &gpio_devices, list) {
 		/* found a free space? */
-		if (gdev->base + gdev->ngpio <= base)
+		if (gdev->base >= base + ngpio)
 			break;
-		/* nope, check the space right before the chip */
-		base = gdev->base - ngpio;
+		/* nope, check the space right after the chip */
+		base = gdev->base + gdev->ngpio;
 	}
 
 	if (gpio_is_valid(base)) {
