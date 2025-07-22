@@ -10,6 +10,37 @@
 #include <asm/xcall.h>
 #include "internal.h"
 
+#ifdef CONFIG_ACTLR_XCALL_XINT
+static void hw_xcall_show(struct task_struct *p, struct seq_file *m)
+{
+	struct hw_xcall_info *hw_xinfo = TASK_HW_XINFO(p);
+	unsigned int i, start = 0, end = 0;
+	bool in_range = false;
+
+	if (!hw_xinfo)
+		return;
+
+	for (i = 0; i < __NR_syscalls; i++) {
+		bool scno_xcall_enable = is_xcall_entry(hw_xinfo, i);
+
+		if (scno_xcall_enable && !in_range) {
+			in_range = true;
+			start = i;
+		}
+
+		if ((!scno_xcall_enable || i == __NR_syscalls - 1) && in_range) {
+			in_range = false;
+			end = scno_xcall_enable ? i : i - 1;
+			if (i == start + 1)
+				seq_printf(m, "%u,", start);
+			else
+				seq_printf(m, "%u-%u,", start, end);
+		}
+	}
+	seq_puts(m, "\n");
+}
+#endif
+
 static int xcall_show(struct seq_file *m, void *v)
 {
 	struct inode *inode = m->private;
@@ -17,12 +48,20 @@ static int xcall_show(struct seq_file *m, void *v)
 	unsigned int rs, re;
 	struct xcall_info *xinfo;
 
-	if (!system_supports_xcall())
+	if (!static_branch_unlikely(&has_hwcap_actlr_xcall) &&
+	    !static_branch_unlikely(&xcall_enable))
 		return -EACCES;
 
 	p = get_proc_task(inode);
 	if (!p)
 		return -ESRCH;
+
+#ifdef CONFIG_ACTLR_XCALL_XINT
+	if (static_branch_unlikely(&has_hwcap_actlr_xcall)) {
+		hw_xcall_show(p, m);
+		goto out;
+	}
+#endif
 
 	xinfo = TASK_XINFO(p);
 	if (!xinfo)
@@ -60,6 +99,21 @@ static int xcall_disable_one(struct xcall_info *xinfo, unsigned int sc_no)
 	return 0;
 }
 
+#ifdef CONFIG_ACTLR_XCALL_XINT
+static int set_hw_xcall(struct task_struct *p, unsigned int sc_no, bool is_clear)
+{
+	struct hw_xcall_info *hw_xinfo = TASK_HW_XINFO(p);
+
+	if (!is_clear && !is_xcall_entry(hw_xinfo, sc_no))
+		return set_xcall_entry(hw_xinfo, sc_no);
+
+	if (is_clear && is_xcall_entry(hw_xinfo, sc_no))
+		return set_no_xcall_entry(hw_xinfo, sc_no);
+
+	return -EINVAL;
+}
+#endif
+
 static ssize_t xcall_write(struct file *file, const char __user *buf,
 				      size_t count, loff_t *offset)
 {
@@ -72,7 +126,8 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 	int is_clear = 0;
 	struct xcall_info *xinfo;
 
-	if (!system_supports_xcall())
+	if (!static_branch_unlikely(&has_hwcap_actlr_xcall) &&
+	    !static_branch_unlikely(&xcall_enable))
 		return -EACCES;
 
 	memset(buffer, 0, sizeof(buffer));
@@ -83,7 +138,6 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 	if (!p || !p->xinfo)
 		return -ESRCH;
 
-	xinfo = TASK_XINFO(p);
 	if (buffer[0] == '!')
 		is_clear = 1;
 
@@ -97,6 +151,14 @@ static ssize_t xcall_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
+#ifdef CONFIG_ACTLR_XCALL_XINT
+	if (static_branch_unlikely(&has_hwcap_actlr_xcall)) {
+		ret = set_hw_xcall(p, sc_no, is_clear);
+		goto out;
+	}
+#endif
+
+	xinfo = TASK_XINFO(p);
 	if (!is_clear && !test_bit(sc_no, xinfo->xcall_enable))
 		ret = xcall_enable_one(xinfo, sc_no);
 	else if (is_clear && test_bit(sc_no, xinfo->xcall_enable))
