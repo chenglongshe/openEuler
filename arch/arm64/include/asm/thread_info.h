@@ -48,7 +48,11 @@ struct thread_info {
 #endif
 	u32			cpu;
 
+#ifdef CONFIG_ARM64_MPAM
+	KABI_USE(1, u32			prefetch_dis)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 };
 
