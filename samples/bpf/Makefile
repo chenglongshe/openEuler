@@ -162,6 +162,7 @@ always-$(CONFIG_BPF_RVI) += bpf_rvi_loadavg.bpf.o
 always-$(CONFIG_BPF_RVI) += bpf_rvi_uptime.bpf.o
 always-$(CONFIG_BPF_RVI) += bpf_rvi_swaps.bpf.o
 always-$(CONFIG_BPF_RVI) += bpf_rvi_stat.bpf.o
+always-$(CONFIG_BPF_RVI) += bpf_rvi_meminfo.bpf.o
 
 ifeq ($(ARCH), arm)
 # Strip all except -D__LINUX_ARM_ARCH__ option needed to handle linux
