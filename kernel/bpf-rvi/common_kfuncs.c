@@ -6,6 +6,10 @@
 #include <linux/types.h>
 #include <linux/page_counter.h>
 #include <linux/seq_file.h>
+#include <linux/sched/stat.h>
+#include <linux/time64.h>
+#include <linux/timekeeping.h>
+#include <linux/time_namespace.h>
 #include <linux/btf_ids.h>
 #include <linux/bpf.h>
 
@@ -59,10 +63,23 @@ __bpf_kfunc void bpf_seq_file_append(struct seq_file *dst, struct seq_file *src)
 		}
 }
 
+__bpf_kfunc void bpf_get_boottime_timens(struct task_struct *tsk, struct timespec64 *boottime)
+{
+	getboottime64(boottime);
+	*boottime = timespec64_sub(*boottime, tsk->nsproxy->time_ns->offsets.boottime);
+}
+
+__bpf_kfunc unsigned long bpf_get_total_forks(void)
+{
+	return total_forks;
+}
+
 BTF_SET8_START(bpf_common_kfuncs_ids)
 BTF_ID_FLAGS(func, bpf_si_memswinfo)
 BTF_ID_FLAGS(func, bpf_page_counter_read)
 BTF_ID_FLAGS(func, bpf_seq_file_append)
+BTF_ID_FLAGS(func, bpf_get_boottime_timens)
+BTF_ID_FLAGS(func, bpf_get_total_forks)
 BTF_SET8_END(bpf_common_kfuncs_ids)
 
 static const struct btf_kfunc_id_set bpf_common_kfuncs_set = {
