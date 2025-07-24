@@ -5,6 +5,7 @@
 #include <linux/swap.h>
 #include <linux/types.h>
 #include <linux/page_counter.h>
+#include <linux/seq_file.h>
 #include <linux/btf_ids.h>
 #include <linux/bpf.h>
 
@@ -43,9 +44,25 @@ __bpf_kfunc unsigned long bpf_page_counter_read(struct page_counter *counter)
 	return page_counter_read(counter);
 }
 
+/* Moving src's content to the end of dst. Reference: seq_vprintf. */
+__bpf_kfunc void bpf_seq_file_append(struct seq_file *dst, struct seq_file *src)
+{
+	/*
+	 * ->count: length of content
+	 * ->size: available buffer space
+	 * i.e. seq_printf(dst, "%s", src->buf)
+	 */
+	if (dst->count < dst->size)
+		if (src->count < dst->size - dst->count) {
+			memmove(dst->buf + dst->count, src->buf, src->count);
+			dst->count += src->count;
+		}
+}
+
 BTF_SET8_START(bpf_common_kfuncs_ids)
 BTF_ID_FLAGS(func, bpf_si_memswinfo)
 BTF_ID_FLAGS(func, bpf_page_counter_read)
+BTF_ID_FLAGS(func, bpf_seq_file_append)
 BTF_SET8_END(bpf_common_kfuncs_ids)
 
 static const struct btf_kfunc_id_set bpf_common_kfuncs_set = {
