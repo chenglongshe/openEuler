@@ -4,6 +4,7 @@
 #include <linux/mm.h>
 #include <linux/swap.h>
 #include <linux/types.h>
+#include <linux/page_counter.h>
 #include <linux/btf_ids.h>
 #include <linux/bpf.h>
 
@@ -37,8 +38,14 @@ __bpf_kfunc void bpf_si_memswinfo(struct bpf_sysinfo *bsi)
 	}
 }
 
+__bpf_kfunc unsigned long bpf_page_counter_read(struct page_counter *counter)
+{
+	return page_counter_read(counter);
+}
+
 BTF_SET8_START(bpf_common_kfuncs_ids)
 BTF_ID_FLAGS(func, bpf_si_memswinfo)
+BTF_ID_FLAGS(func, bpf_page_counter_read)
 BTF_SET8_END(bpf_common_kfuncs_ids)
 
 static const struct btf_kfunc_id_set bpf_common_kfuncs_set = {
