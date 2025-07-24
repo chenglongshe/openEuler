@@ -24,6 +24,10 @@
 #include <linux/sizes.h>
 #include <linux/compat.h>
 #include <linux/share_pool.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 
 #include <linux/uaccess.h>
 #include <linux/oom.h>
@@ -943,6 +947,34 @@ unsigned long vm_memory_committed(void)
 	return percpu_counter_sum_positive(&vm_committed_as);
 }
 EXPORT_SYMBOL_GPL(vm_memory_committed);
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc unsigned long bpf_mem_commit_limit(void)
+{
+	return vm_commit_limit();
+}
+__bpf_kfunc unsigned long bpf_mem_committed(void)
+{
+	return vm_memory_committed();
+}
+
+BTF_SET8_START(bpf_memcommit_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_commit_limit)
+BTF_ID_FLAGS(func, bpf_mem_committed)
+BTF_SET8_END(bpf_memcommit_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_memcommit_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_memcommit_kfunc_ids,
+};
+
+static int __init bpf_memcommit_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_memcommit_kfunc_set);
+}
+late_initcall(bpf_memcommit_kfunc_init);
+#endif
 
 /*
  * Check that a process has enough memory to allocate a new virtual
