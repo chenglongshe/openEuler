@@ -37,6 +37,10 @@
 #include <linux/mm_inline.h>
 #include <linux/share_pool.h>
 #include <linux/dynamic_pool.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 
 #include <asm/page.h>
 #include <asm/pgalloc.h>
@@ -7883,4 +7887,57 @@ struct folio *alloc_hugetlb_folio_size(int nid, unsigned long size)
 	return folio;
 }
 EXPORT_SYMBOL(alloc_hugetlb_folio_size);
+#endif
+
+#ifdef CONFIG_BPF_RVI
+struct bpf_mem_hugepage {
+	unsigned long total;
+	unsigned long free;
+	unsigned long rsvd;
+	unsigned long surp;
+	unsigned long size;
+	unsigned long hugetlb;
+};
+
+__bpf_kfunc int bpf_hugetlb_report_meminfo(struct bpf_mem_hugepage *hugepage_info)
+{
+	struct hstate *h;
+	unsigned long total = 0;
+
+	if (!hugepages_supported())
+		return -1;
+
+	for_each_hstate(h) {
+		unsigned long count = h->nr_huge_pages;
+
+		total += huge_page_size(h) * count;
+
+		if (h == &default_hstate) {
+			hugepage_info->total = count;
+			hugepage_info->free = h->free_huge_pages;
+			hugepage_info->rsvd = h->resv_huge_pages;
+			hugepage_info->surp = h->surplus_huge_pages;
+			hugepage_info->size = huge_page_size(h) / SZ_1K;
+		}
+	}
+
+	hugepage_info->hugetlb = total / SZ_1K;
+	return 0;
+}
+
+BTF_SET8_START(bpf_mem_hugepage_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_hugetlb_report_meminfo, KF_TRUSTED_ARGS)
+BTF_SET8_END(bpf_mem_hugepage_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_mem_hugepage_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_mem_hugepage_kfunc_ids,
+};
+
+static int __init bpf_mem_hugepage_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_mem_hugepage_kfunc_set);
+}
+late_initcall(bpf_mem_hugepage_kfunc_init);
 #endif
