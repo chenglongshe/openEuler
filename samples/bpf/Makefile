@@ -157,6 +157,7 @@ always-$(CONFIG_BPF_RVI) += bpf_rvi_cpuinfo_arm64.bpf.o
 endif
 always-$(CONFIG_BPF_RVI) += bpf_rvi_cpu_online.bpf.o
 always-$(CONFIG_BPF_RVI) += bpf_rvi_diskstats.bpf.o
+always-$(CONFIG_BPF_RVI) += bpf_rvi_partitions.bpf.o
 
 ifeq ($(ARCH), arm)
 # Strip all except -D__LINUX_ARM_ARCH__ option needed to handle linux
