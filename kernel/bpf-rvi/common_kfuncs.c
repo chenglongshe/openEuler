@@ -90,6 +90,25 @@ __bpf_kfunc unsigned int bpf_nr_iowait(void)
 	return nr_iowait();
 }
 
+/*
+ * Kernel statistics for CPU accounting
+ */
+
+__bpf_kfunc unsigned int bpf_kstat_softirqs_cpu(unsigned int irq, int cpu)
+{
+	return kstat_softirqs_cpu(irq, cpu);
+}
+
+__bpf_kfunc unsigned long bpf_kstat_cpu_irqs_sum(unsigned int cpu)
+{
+	return kstat_cpu_irqs_sum(cpu);
+}
+
+__bpf_kfunc void bpf_kcpustat_cpu_fetch(struct kernel_cpustat *dst, int cpu)
+{
+	kcpustat_cpu_fetch(dst, cpu);
+}
+
 BTF_SET8_START(bpf_common_kfuncs_ids)
 BTF_ID_FLAGS(func, bpf_si_memswinfo)
 BTF_ID_FLAGS(func, bpf_page_counter_read)
@@ -99,6 +118,9 @@ BTF_ID_FLAGS(func, bpf_get_total_forks)
 BTF_ID_FLAGS(func, bpf_nr_running)
 BTF_ID_FLAGS(func, bpf_nr_context_switches)
 BTF_ID_FLAGS(func, bpf_nr_iowait)
+BTF_ID_FLAGS(func, bpf_kstat_softirqs_cpu)
+BTF_ID_FLAGS(func, bpf_kstat_cpu_irqs_sum)
+BTF_ID_FLAGS(func, bpf_kcpustat_cpu_fetch)
 BTF_SET8_END(bpf_common_kfuncs_ids)
 
 static const struct btf_kfunc_id_set bpf_common_kfuncs_set = {
