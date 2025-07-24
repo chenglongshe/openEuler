@@ -19,6 +19,10 @@
 #endif
 #include <linux/zswap.h>
 #include <linux/dynamic_pool.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 #include <asm/page.h>
 #include "internal.h"
 
@@ -175,6 +179,42 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 
 	return 0;
 }
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc unsigned long bpf_mem_file_hugepage(void)
+{
+	return global_node_page_state(NR_FILE_THPS);
+}
+
+__bpf_kfunc unsigned long bpf_mem_file_pmdmapped(void)
+{
+	return global_node_page_state(NR_FILE_PMDMAPPED);
+}
+
+__bpf_kfunc unsigned long bpf_mem_kreclaimable(void)
+{
+	return global_node_page_state_pages(NR_SLAB_RECLAIMABLE_B) +
+		global_node_page_state(NR_KERNEL_MISC_RECLAIMABLE);
+}
+
+BTF_SET8_START(bpf_fs_meminfo_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_file_hugepage)
+BTF_ID_FLAGS(func, bpf_mem_file_pmdmapped)
+BTF_ID_FLAGS(func, bpf_mem_kreclaimable)
+BTF_SET8_END(bpf_fs_meminfo_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_fs_meminfo_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_fs_meminfo_kfunc_ids,
+};
+
+static int __init bpf_fs_meminfo_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_fs_meminfo_kfunc_set);
+}
+late_initcall(bpf_fs_meminfo_kfunc_init);
+#endif
 
 static int __init proc_meminfo_init(void)
 {
