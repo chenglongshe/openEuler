@@ -236,7 +236,7 @@ void free_gm_mappings(struct vm_area_struct *vma)
 	XA_STATE(xas, vma->vm_obj->logical_page_table, linear_page_index(vma, vma->vm_start));
 
 	xa_lock(vma->vm_obj->logical_page_table);
-	xas_for_each(&xas, gm_mapping, linear_page_index(vma, vma->vm_end)) {
+	xas_for_each(&xas, gm_mapping, linear_page_index(vma, vma->vm_end - SZ_2M)) {
 		release_gm_mapping(gm_mapping);
 		xas_store(&xas, NULL);
 	}

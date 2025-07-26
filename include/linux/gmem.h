@@ -278,20 +278,18 @@ static inline bool gm_mapping_pinned(struct gm_mapping *gm_mapping)
 /* GMEM Device KPI */
 extern enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned long cap,
 				struct gm_dev **new_dev);
-extern enum gm_ret gm_dev_destroy(struct gm_dev *dev);
 extern enum gm_ret gm_dev_switch(struct gm_dev *dev, struct gm_as *as);
 extern enum gm_ret gm_dev_detach(struct gm_dev *dev, struct gm_as *as);
 extern enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin,
 					unsigned long end);
-enum gm_ret gm_dev_fault(struct mm_struct *mm, unsigned long addr, struct gm_dev *dev,
-			int behavior);
+enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long addr,
+				struct gm_dev *dev, int behavior);
 vm_fault_t gm_host_fault_locked(struct vm_fault *vmf, unsigned int order);
 
 /* GMEM address space KPI */
 extern enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin,
 					unsigned long end);
 extern void gm_dev_unregister_physmem(struct gm_dev *dev, unsigned int nid);
-extern struct gm_mapping *gm_mappings_alloc(unsigned int nid, unsigned int order);
 extern enum gm_ret gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
 				unsigned long cache_quantum, struct gm_as **new_as);
 extern enum gm_ret gm_as_destroy(struct gm_as *as);
@@ -322,8 +320,6 @@ struct hnode {
 	struct xarray pages;
 };
 
-extern struct hnode *hnodes[];
-
 static inline bool is_hnode(int node)
 {
 	return (node < MAX_NUMNODES) && !node_isset(node, node_possible_map) &&
@@ -336,11 +332,6 @@ static inline bool is_hnode_allowed(int node)
 	       node_isset(node, current->mems_allowed);
 }
 
-static inline struct hnode *get_hnode(unsigned int hnid)
-{
-	return hnodes[hnid];
-}
-
 static inline int get_hnuma_id(struct gm_dev *gm_dev)
 {
 	return first_node(gm_dev->registered_hnodes);
@@ -351,5 +342,8 @@ unsigned int alloc_hnode_id(void);
 void free_hnode_id(unsigned int nid);
 void hnode_init(struct hnode *hnode, unsigned int hnid, struct gm_dev *dev);
 void hnode_deinit(unsigned int hnid, struct gm_dev *dev);
+
+#define gmem_err(fmt, ...) \
+	((void)pr_err("[gmem]" fmt "\n", ##__VA_ARGS__))
 
 #endif /* _GMEM_H */
