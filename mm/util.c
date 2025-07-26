@@ -27,6 +27,9 @@
 
 #include <linux/uaccess.h>
 #include <linux/oom.h>
+#ifdef CONFIG_GMEM
+#include <linux/vm_object.h>
+#endif
 
 #include "internal.h"
 #include "swap.h"
@@ -540,6 +543,114 @@ int account_locked_vm(struct mm_struct *mm, unsigned long pages, bool inc)
 }
 EXPORT_SYMBOL_GPL(account_locked_vm);
 
+#ifdef CONFIG_GMEM
+static unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
+						unsigned long flag)
+{
+	struct vm_area_struct *vma;
+	struct mm_struct *mm = current->mm;
+	struct gm_context *ctx, *tmp;
+	unsigned long prot = VM_NONE;
+	enum gm_ret ret;
+	char *thp_enable_path = "/sys/kernel/mm/transparent_hugepage/enabled";
+
+	vma = find_vma(mm, addr);
+	if (!vma) {
+		gmem_err("vma for addr %lx is NULL, should not happen\n", addr);
+		return -EINVAL;
+	}
+
+	if (thp_disabled_by_hw() || vma_thp_disabled(vma, vma->vm_flags)) {
+		gmem_err("transparent hugepage is not enabled. check %s\n",
+				thp_enable_path);
+		return -EINVAL;
+	}
+
+	prot |= vma->vm_flags;
+
+	if (!mm->gm_as) {
+		ret = gm_as_create(0, ULONG_MAX, GM_AS_ALLOC_DEFAULT, HPAGE_SIZE, &mm->gm_as);
+		if (ret) {
+			gmem_err("gm_as_create failed\n");
+			return ret;
+		}
+	}
+
+	ret = -ENODEV;
+	// TODO: consider the concurrency problem of device attaching/detaching from the gm_as.
+	list_for_each_entry_safe(ctx, tmp, &mm->gm_as->gm_ctx_list, gm_as_link) {
+		struct gm_fault_t gmf = {
+			.mm = mm,
+			.dev = ctx->dev,
+			.va = addr,
+			.size = len,
+			.prot = prot,
+		};
+
+		if (!gm_dev_is_peer(ctx->dev))
+			continue;
+
+		if (!ctx->dev->mmu->peer_va_alloc_fixed) {
+			pr_debug("gmem: mmu ops has no alloc_vma\n");
+			continue;
+		}
+
+		ret = ctx->dev->mmu->peer_va_alloc_fixed(&gmf);
+		if (ret != GM_RET_SUCCESS) {
+			gmem_err("device mmap failed\n");
+			return ret;
+		}
+	}
+
+	if (!vma->vm_obj)
+		vma->vm_obj = vm_object_create(vma);
+	if (!vma->vm_obj)
+		return -ENOMEM;
+
+	return ret;
+}
+
+struct gmem_vma_list {
+	unsigned long start;
+	size_t len;
+	struct list_head list;
+};
+
+static void gmem_reserve_vma(struct mm_struct *mm, unsigned long start,
+				size_t len, struct list_head *head)
+{
+	struct vm_area_struct *vma;
+	struct gmem_vma_list *node = kmalloc(sizeof(struct gmem_vma_list), GFP_KERNEL);
+
+	vma = find_vma(mm, start);
+	if (!vma || vma->vm_start >= start + len) {
+		kfree(node);
+		return;
+	}
+	vm_flags_set(vma, ~VM_PEER_SHARED);
+
+	node->start = start;
+	node->len = round_up(len, SZ_2M);
+	list_add_tail(&node->list, head);
+}
+
+static void gmem_release_vma(struct mm_struct *mm, struct list_head *head)
+{
+	struct gmem_vma_list *node, *next;
+
+	list_for_each_entry_safe(node, next, head, list) {
+		unsigned long start = node->start;
+		size_t len = node->len;
+
+		if (len)
+			vm_munmap(start, len);
+
+		list_del(&node->list);
+		kfree(node);
+	}
+}
+#endif
+
 unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
 	unsigned long len, unsigned long prot,
 	unsigned long flag, unsigned long pgoff)
@@ -548,7 +659,11 @@ unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
 	struct mm_struct *mm = current->mm;
 	unsigned long populate;
 	LIST_HEAD(uf);
-
+#ifdef CONFIG_GMEM
+	unsigned int retry_times = 0;
+	LIST_HEAD(reserve_list);
+retry:
+#endif
 	ret = security_mmap_file(file, prot, flag);
 	if (!ret) {
 		if (mmap_write_lock_killable(mm))
@@ -559,6 +674,27 @@ unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
 		userfaultfd_unmap_complete(mm, &uf);
 		if (populate)
 			mm_populate(ret, populate);
+#ifdef CONFIG_GMEM
+		if (gmem_is_enabled() && !IS_ERR_VALUE(ret) && flag & MAP_PEER_SHARED) {
+			enum gm_ret gm_ret = 0;
+
+			gm_ret = alloc_va_in_peer_devices(ret, len, flag);
+			/*
+			 * if alloc_va_in_peer_devices failed
+			 * add vma to reserve_list and release after find a proper vma
+			 */
+			if (gm_ret == GM_RET_NOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
+				retry_times++;
+				gmem_reserve_vma(mm, ret, len, &reserve_list);
+				goto retry;
+			} else if (gm_ret != GM_RET_SUCCESS) {
+				gmem_err("alloc vma ret %lu\n", ret);
+				gmem_reserve_vma(mm, ret, len, &reserve_list);
+				ret = -ENOMEM;
+			}
+			gmem_release_vma(mm, &reserve_list);
+		}
+#endif
 	}
 	return ret;
 }

@@ -1722,6 +1722,9 @@ static inline void zap_logic_pmd_range(struct vm_area_struct *vma,
 	struct gm_mapping *gm_mapping = NULL;
 	struct page *page = NULL;
 
+	if (!vma->vm_obj)
+		return;
+
 	xa_lock(vma->vm_obj->logical_page_table);
 	gm_mapping = vm_object_lookup(vma->vm_obj, addr);
 
@@ -5924,8 +5927,22 @@ retry_pud:
 		ret = create_huge_pmd(&vmf);
 		if (!(ret & VM_FAULT_FALLBACK))
 			return ret;
+		if (vma_is_peer_shared(vma))
+			return VM_FAULT_OOM;
 	} else {
 		vmf.orig_pmd = pmdp_get_lockless(vmf.pmd);
+
+#ifdef CONFIG_GMEM
+#define THP_ENABLE_PATH "/sys/kernel/mm/transparent_hugepage/enabled"
+
+		if (vma_is_peer_shared(vma) && pmd_none(*vmf.pmd) &&
+			(thp_disabled_by_hw() || vma_thp_disabled(vma, vma->vm_flags))) {
+			/* if transparent hugepage is not enabled, return pagefault failed */
+			gmem_err("transparent hugepage is not enabled. check %s\n",
+					THP_ENABLE_PATH);
+			return VM_FAULT_SIGBUS;
+		}
+#endif
 
 		if (unlikely(is_swap_pmd(vmf.orig_pmd))) {
 			VM_BUG_ON(thp_migration_supported() &&

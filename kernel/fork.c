@@ -1783,7 +1783,9 @@ static struct mm_struct *dup_mm(struct task_struct *tsk,
 	err = dup_mmap(mm, oldmm);
 	if (err)
 		goto free_pt;
-
+#ifdef CONFIG_GMEM
+	mm->gm_as = NULL;
+#endif
 	mm->hiwater_rss = get_mm_rss(mm);
 	mm->hiwater_vm = mm->total_vm;
 
