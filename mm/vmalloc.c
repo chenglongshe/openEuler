@@ -50,6 +50,10 @@
 #include "internal.h"
 #include "pgalloc-track.h"
 
+#ifndef VMALLOC_EARLY_START
+#define VMALLOC_EARLY_START		(VMALLOC_START)
+#endif
+
 #ifdef CONFIG_HAVE_ARCH_HUGE_VMAP
 static unsigned int __ro_after_init ioremap_max_page_shift = BITS_PER_LONG - 1;
 
@@ -3077,7 +3081,7 @@ void __init vm_area_add_early(struct vm_struct *vm)
  */
 void __init vm_area_register_early(struct vm_struct *vm, size_t align)
 {
-	unsigned long addr = ALIGN(VMALLOC_START, align);
+	unsigned long addr = ALIGN(VMALLOC_EARLY_START, align);
 	struct vm_struct *cur, **p;
 
 	BUG_ON(vmap_initialized);
@@ -3953,8 +3957,6 @@ again:
 	}
 
 #ifdef CONFIG_KERNEL_REPLICATION
-	if (numa_addr_has_replica(area->addr))
-		vm_flags |= VM_NUMA_SHARED;
 	area->node = node;
 #endif
 	/*

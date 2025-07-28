@@ -27,6 +27,7 @@
 #define VMALLOC_START		(MODULES_END)
 #endif /* CONFIG_KERNEL_REPLICATION */
 #define VMALLOC_END		(VMEMMAP_START - SZ_256M)
+#define VMALLOC_EARLY_START	(MODULES_END) /* for early vmalloc before vmalloc_init() */
 
 #define vmemmap			((struct page *)VMEMMAP_START - (memstart_addr >> PAGE_SHIFT))
 
