@@ -806,7 +806,11 @@ struct device {
 	bool			dma_ops_bypass : 1;
 #endif
 
+#ifdef CONFIG_GMEM
+	KABI_USE(1, void *gm_dev)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
