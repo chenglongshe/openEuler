@@ -949,6 +949,20 @@ static void prefetch_work_fn(struct work_struct *work)
 	trace_epoll_rc_ready(pfi->file, pfi->len);
 }
 
+static int get_nth_cpu_in_cpumask(const struct cpumask *mask, int n)
+{
+	int count = 0;
+	int cpu;
+
+	for_each_cpu(cpu, mask) {
+		if (count == n)
+			return cpu;
+		count++;
+	}
+
+	return cpumask_first(mask);
+}
+
 static void set_prefetch_numa_cpu(struct prefetch_item *pfi, int fd)
 {
 	int cur_cpu = smp_processor_id();
@@ -959,11 +973,9 @@ static void set_prefetch_numa_cpu(struct prefetch_item *pfi, int fd)
 	cpumask_and(&pfi->related_cpus, cpu_cpu_mask(cur_cpu), cpu_online_mask);
 	if (cpumask_intersects(&tmp, &pfi->related_cpus))
 		cpumask_and(&pfi->related_cpus, &pfi->related_cpus, &tmp);
-	cpu = cpumask_next(fd % cpumask_weight(&pfi->related_cpus),
-			   &pfi->related_cpus);
-	if (cpu > cpumask_last(&pfi->related_cpus))
-		cpu = cpumask_first(&pfi->related_cpus);
-	pfi->cpu = cpu;
+
+	pfi->cpu = get_nth_cpu_in_cpumask(&pfi->related_cpus,
+					  fd % cpumask_weight(&pfi->related_cpus));
 }
 
 static struct prefetch_item *alloc_prefetch_item(struct epitem *epi)
