@@ -36,7 +36,7 @@
 
 	.macro	disable_allint
 #ifdef CONFIG_ARM64_NMI
-alternative_if ARM64_HAS_NMI
+alternative_if ARM64_USES_NMI
 	msr_s	SYS_ALLINT_SET, xzr
 alternative_else_nop_endif
 #endif
@@ -44,7 +44,7 @@ alternative_else_nop_endif
 
 	.macro	enable_allint
 #ifdef CONFIG_ARM64_NMI
-alternative_if ARM64_HAS_NMI
+alternative_if ARM64_USES_NMI
 	msr_s	SYS_ALLINT_CLR, xzr
 alternative_else_nop_endif
 #endif
