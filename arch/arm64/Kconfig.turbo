@@ -36,7 +36,7 @@ config FAST_IRQ
 
 config DEBUG_FEATURE_BYPASS
 	bool "Bypass debug feature in fast syscall"
-	depends on FAST_SYSCALL || FAST_IRQ
+	depends on FAST_SYSCALL || FAST_IRQ || ACTLR_XCALL_XINT
 	depends on !LOCKDEP
 	default n
 	help
@@ -51,7 +51,7 @@ config SECURITY_FEATURE_BYPASS
 	bool "Bypass security feature in fast syscall"
 	depends on !ARM64_MTE
 	depends on !KASAN_HW_TAGS
-	depends on FAST_SYSCALL || FAST_IRQ
+	depends on FAST_SYSCALL || FAST_IRQ || ACTLR_XCALL_XINT
 	default n
 	help
 	  This to bypass security feature in fast syscall.
@@ -63,6 +63,7 @@ config SECURITY_FEATURE_BYPASS
 
 config ACTLR_XCALL_XINT
 	bool "Hardware XCALL and Xint support"
+	depends on FAST_SYSCALL
 	default n
 	help
 	  Use the 0x600 as the offset to the exception vector base address for
