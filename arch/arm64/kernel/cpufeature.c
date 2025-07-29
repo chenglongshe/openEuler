@@ -2430,22 +2430,39 @@ static void mpam_extra_caps(void)
 }
 
 #ifdef CONFIG_FAST_SYSCALL
-static bool is_xcall_support;
+#include <asm/xcall.h>
+DEFINE_STATIC_KEY_FALSE(xcall_enable);
+DEFINE_STATIC_KEY_FALSE(has_hwcap_actlr_xcall);
+
+static bool is_arch_xcall_xint_support(void)
+{
+	/* List of CPUs that support Xcall/Xint */
+	static const struct midr_range xcall_xint_cpus[] = {
+		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
+		{ /* sentinel */ }
+	};
+
+	if (is_midr_in_range_list(read_cpuid_id(), xcall_xint_cpus))
+		return true;
+
+	return false;
+}
+
 static int __init xcall_setup(char *str)
 {
-	is_xcall_support = true;
+	if (!is_arch_xcall_xint_support())
+		static_branch_enable(&xcall_enable);
+
 	return 1;
 }
 __setup("xcall", xcall_setup);
 
-bool fast_syscall_enabled(void)
-{
-	return is_xcall_support;
-}
-
 static bool has_xcall_support(const struct arm64_cpu_capabilities *entry, int __unused)
 {
-	return is_xcall_support;
+	if (static_branch_unlikely(&xcall_enable))
+		return true;
+
+	return false;
 }
 #endif
 
@@ -2470,13 +2487,12 @@ static bool has_xint_support(const struct arm64_cpu_capabilities *entry, int __u
 #ifdef CONFIG_ACTLR_XCALL_XINT
 static bool has_arch_xcall_xint_support(const struct arm64_cpu_capabilities *entry, int scope)
 {
-	/* List of CPUs that support Xcall/Xint */
-	static const struct midr_range xcall_xint_cpus[] = {
-		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
-		{ /* sentinel */ }
-	};
+	if (is_arch_xcall_xint_support()) {
+		static_branch_enable(&has_hwcap_actlr_xcall);
+		return true;
+	}
 
-	return is_midr_in_range_list(read_cpuid_id(), xcall_xint_cpus);
+	return false;
 }
 
 static void enable_xcall_xint_vectors(void)
@@ -2508,7 +2524,7 @@ static void enable_xcall_xint_vectors(void)
 	isb();
 }
 
-static void cpu_enable_arch_xcall_xint(const struct arm64_cpu_capabilities *__unused)
+static void cpu_enable_arch_xint(void)
 {
 	int cpu = smp_processor_id();
 	u64 actlr_el1, actlr_el2;
@@ -2521,20 +2537,24 @@ static void cpu_enable_arch_xcall_xint(const struct arm64_cpu_capabilities *__un
 		 */
 		write_sysreg_s(read_sysreg_s(SYS_HCR_EL2) | HCR_TACR, SYS_HCR_EL2);
 		actlr_el2 = read_sysreg(actlr_el2);
-		actlr_el2 |= (ACTLR_ELx_XINT | ACTLR_ELx_XCALL);
+		actlr_el2 |= ACTLR_ELx_XINT;
 		write_sysreg(actlr_el2, actlr_el2);
 		isb();
 		actlr_el2 = read_sysreg(actlr_el2);
 		pr_info("actlr_el2: %llx, cpu:%d\n", actlr_el2, cpu);
 	} else {
 		actlr_el1 = read_sysreg(actlr_el1);
-		actlr_el1 |= (ACTLR_ELx_XINT | ACTLR_ELx_XCALL);
+		actlr_el1 |= ACTLR_ELx_XINT;
 		write_sysreg(actlr_el1, actlr_el1);
 		isb();
 		actlr_el1 = read_sysreg(actlr_el1);
 		pr_info("actlr_el1: %llx, cpu:%d\n", actlr_el1, cpu);
 	}
+}
 
+static void cpu_enable_arch_xcall_xint(const struct arm64_cpu_capabilities *__unused)
+{
+	cpu_enable_arch_xint();
 	enable_xcall_xint_vectors();
 }
 #endif
