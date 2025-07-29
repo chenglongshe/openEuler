@@ -77,8 +77,19 @@ __syscall_enter_from_user_work(struct pt_regs *regs, long syscall)
 	unsigned long ti_work;
 
 	ti_work = READ_ONCE(current_thread_info()->flags);
+#ifdef CONFIG_AUDITSYSCALL_OPTIMIZE
+	if (ti_work == _TIF_SYSCALL_AUDIT) {
+		if (!audit_get_dummy_context()) {
+			syscall = syscall_get_nr(current, regs);
+			syscall_enter_audit(regs, syscall);
+		}
+	} else if (ti_work & SYSCALL_ENTER_WORK) {
+		syscall = syscall_trace_enter(regs, syscall, ti_work);
+	}
+#else
 	if (ti_work & SYSCALL_ENTER_WORK)
 		syscall = syscall_trace_enter(regs, syscall, ti_work);
+#endif
 
 	return syscall;
 }
@@ -270,8 +281,15 @@ static void syscall_exit_to_user_mode_prepare(struct pt_regs *regs)
 	 * enabled, we want to run them exactly once per syscall exit with
 	 * interrupts enabled.
 	 */
+#ifdef CONFIG_AUDITSYSCALL_OPTIMIZE
+	if (cached_flags == _TIF_SYSCALL_AUDIT)
+		audit_syscall_exit(regs);
+	else if (unlikely(cached_flags & SYSCALL_EXIT_WORK))
+		syscall_exit_work(regs, cached_flags);
+#else
 	if (unlikely(cached_flags & SYSCALL_EXIT_WORK))
 		syscall_exit_work(regs, cached_flags);
+#endif
 }
 
 __visible noinstr void syscall_exit_to_user_mode(struct pt_regs *regs)

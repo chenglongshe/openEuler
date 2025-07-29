@@ -319,6 +319,26 @@ static inline bool audit_dummy_context(void)
 	void *p = audit_context();
 	return !p || *(int *)p;
 }
+
+#ifdef CONFIG_AUDITSYSCALL_OPTIMIZE
+extern int audit_n_rules;
+static inline bool audit_get_dummy_context(void)
+{
+	void *p = audit_context();
+	int *dummy = p;
+
+	if (!p)
+		return true;
+
+	if (!audit_n_rules) {
+		*dummy = 1;
+		return true;
+	} else {
+		return false;
+	}
+}
+#endif
+
 static inline void audit_free(struct task_struct *task)
 {
 	if (unlikely(task->audit_context))
@@ -328,12 +348,20 @@ static inline void audit_syscall_entry(int major, unsigned long a0,
 				       unsigned long a1, unsigned long a2,
 				       unsigned long a3)
 {
+#ifdef CONFIG_AUDITSYSCALL_OPTIMIZE
+	if (unlikely(!audit_get_dummy_context()))
+#else
 	if (unlikely(audit_context()))
+#endif
 		__audit_syscall_entry(major, a0, a1, a2, a3);
 }
 static inline void audit_syscall_exit(void *pt_regs)
 {
+#ifdef CONFIG_AUDITSYSCALL_OPTIMIZE
+	if (unlikely(!audit_get_dummy_context())) {
+#else
 	if (unlikely(audit_context())) {
+#endif
 		int success = is_syscall_success(pt_regs);
 		long return_code = regs_return_value(pt_regs);
 

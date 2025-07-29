@@ -449,6 +449,11 @@ config AUDITSYSCALL
 	depends on AUDIT && HAVE_ARCH_AUDITSYSCALL
 	select FSNOTIFY
 
+config AUDITSYSCALL_OPTIMIZE
+	bool "System call auditing optimize"
+	def_bool n
+	depends on AUDITSYSCALL
+
 source "kernel/irq/Kconfig"
 source "kernel/time/Kconfig"
 source "kernel/Kconfig.preempt"
