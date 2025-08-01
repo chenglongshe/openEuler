@@ -165,3 +165,48 @@ static int __init cpuinfo_iter_init(void)
 	return bpf_iter_reg_target(&cpuinfo_arm64_reg_info);
 }
 late_initcall(cpuinfo_iter_init);
+
+enum arch_flags_type {
+	ARM64_HWCAP,
+	ARM64_HWCAP_SIZE,
+	ARM64_COMPAT_HWCAP,
+	ARM64_COMPAT_HWCAP_SIZE,
+	ARM64_COMPAT_HWCAP2,
+	ARM64_COMPAT_HWCAP2_SIZE,
+};
+
+__bpf_kfunc const char *bpf_arch_flags(enum arch_flags_type t, int i)
+{
+	switch (t) {
+	case ARM64_HWCAP:
+		return hwcap_str[i];
+	case ARM64_HWCAP_SIZE:
+		return (void *)ARRAY_SIZE(hwcap_str);
+	case ARM64_COMPAT_HWCAP:
+		return compat_hwcap_str[i];
+	case ARM64_COMPAT_HWCAP_SIZE:
+		return (void *)ARRAY_SIZE(compat_hwcap_str);
+	case ARM64_COMPAT_HWCAP2:
+		return compat_hwcap2_str[i];
+	case ARM64_COMPAT_HWCAP2_SIZE:
+		return (void *)ARRAY_SIZE(compat_hwcap2_str);
+	default:
+		return NULL;
+	}
+}
+
+BTF_SET8_START(bpf_arch_flags_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_arch_flags)
+BTF_SET8_END(bpf_arch_flags_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_arch_flags_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_arch_flags_kfunc_ids,
+};
+
+static int __init bpf_arch_flags_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+			&bpf_arch_flags_kfunc_set);
+}
+late_initcall(bpf_arch_flags_kfunc_init);
