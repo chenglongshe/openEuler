@@ -75,6 +75,11 @@
 #include <linux/cpu.h>
 #include <linux/kasan.h>
 #include <linux/percpu.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/bpf.h>
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 
 #include <asm/actlr.h>
 #include <asm/cpu.h>
@@ -3730,6 +3735,29 @@ bool cpu_have_feature(unsigned int num)
 	return test_bit(num, elf_hwcap);
 }
 EXPORT_SYMBOL_GPL(cpu_have_feature);
+
+#ifdef CONFIG_BPF_RVI
+bool bpf_arm64_cpu_have_feature(unsigned int num)
+{
+	return cpu_have_feature(num);
+}
+
+BTF_SET8_START(bpf_arm64_cpufeature_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_arm64_cpu_have_feature, KF_RCU)
+BTF_SET8_END(bpf_arm64_cpufeature_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_arm64_cpufeature_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_arm64_cpufeature_kfunc_ids,
+};
+
+static int __init bpf_arm64_cpufeature_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_arm64_cpufeature_kfunc_set);
+}
+late_initcall(bpf_arm64_cpufeature_kfunc_init);
+#endif
 
 unsigned long cpu_get_elf_hwcap(void)
 {
