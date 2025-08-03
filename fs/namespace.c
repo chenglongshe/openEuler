@@ -2810,7 +2810,7 @@ static void mnt_warn_timestamp_expiry(struct path *mountpoint, struct vfsmount *
 		if (IS_ERR(mntpath))
 			mntpath = "(unknown)";
 
-		pr_warn("%s filesystem being %s at %s supports timestamps until %ptTd (0x%llx)\n",
+		pr_warn_once("%s filesystem being %s at %s supports timestamps until %ptTd (0x%llx)\n",
 			sb->s_type->name,
 			is_mounted(mnt) ? "remounted" : "mounted",
 			mntpath, &sb->s_time_max,
