@@ -443,6 +443,8 @@ BUILD_CONTROLS_SHADOW(pin, PIN_BASED_VM_EXEC_CONTROL, 32)
 BUILD_CONTROLS_SHADOW(exec, CPU_BASED_VM_EXEC_CONTROL, 32)
 BUILD_CONTROLS_SHADOW(secondary_exec, SECONDARY_VM_EXEC_CONTROL, 32)
 BUILD_CONTROLS_SHADOW(tertiary_exec, TERTIARY_VM_EXEC_CONTROL, 64)
+BUILD_CONTROLS_SHADOW(zx_tertiary_exec, ZX_TERTIARY_VM_EXEC_CONTROL, 32)
+BUILD_CONTROLS_SHADOW(zx_vmexit_tsc, ZXPAUSE_VMEXIT_TSC, 64)
 
 static inline void vmx_register_cache_reset(struct kvm_vcpu *vcpu)
 {
@@ -555,6 +557,12 @@ static inline bool vmx_has_waitpkg(struct vcpu_vmx *vmx)
 {
 	return secondary_exec_controls_get(vmx) &
 		SECONDARY_EXEC_ENABLE_USR_WAIT_PAUSE;
+}
+
+static inline bool vmx_guest_zxpause_enabled(struct vcpu_vmx *vmx)
+{
+	return zx_tertiary_exec_controls_get(vmx) &
+		ZX_TERTIARY_EXEC_GUEST_ZXPAUSE;
 }
 
 static inline bool vmx_need_pf_intercept(struct kvm_vcpu *vcpu)
