@@ -164,3 +164,12 @@ void watchdog_ops_init(void)
 	if (!disable_sdei_nmi_watchdog)
 		nmi_watchdog_ops = arch_watchdog_ops;
 }
+static int __init sdei_watchdog_hardlockup_init(void)
+{
+	/* sdei_watchdog needs to be initialized after sdei_init */
+	if (!disable_sdei_nmi_watchdog)
+		lockup_detector_retry_init();
+
+	return 0;
+}
+device_initcall(sdei_watchdog_hardlockup_init)
