@@ -406,10 +406,7 @@ static DEFINE_SPINLOCK(all_mddevs_lock);
 
 static bool is_md_suspended(struct mddev *mddev)
 {
-	if (mddev->suspended)
-		return true;
-	else
-		return false;
+	return percpu_ref_is_dying(&mddev->active_io);
 }
 /* Rather than calling directly into the personality make_request function,
  * IO requests come here first so that we can check if the device is
@@ -436,7 +433,6 @@ static bool is_suspended(struct mddev *mddev, struct bio *bio)
 void md_handle_request(struct mddev *mddev, struct bio *bio)
 {
 check_suspended:
-	rcu_read_lock();
 	if (is_suspended(mddev, bio)) {
 		DEFINE_WAIT(__wait);
 		for (;;) {
@@ -444,23 +440,19 @@ check_suspended:
 					TASK_UNINTERRUPTIBLE);
 			if (!is_suspended(mddev, bio))
 				break;
-			rcu_read_unlock();
 			schedule();
-			rcu_read_lock();
 		}
 		finish_wait(&mddev->sb_wait, &__wait);
 	}
-	atomic_inc(&mddev->active_io);
-	rcu_read_unlock();
+	if (!percpu_ref_tryget_live(&mddev->active_io))
+		goto check_suspended;
 
 	if (!mddev->pers->make_request(mddev, bio)) {
-		atomic_dec(&mddev->active_io);
-		wake_up(&mddev->sb_wait);
+		percpu_ref_put(&mddev->active_io);
 		goto check_suspended;
 	}
 
-	if (atomic_dec_and_test(&mddev->active_io) && is_md_suspended(mddev))
-		wake_up(&mddev->sb_wait);
+	percpu_ref_put(&mddev->active_io);
 }
 EXPORT_SYMBOL(md_handle_request);
 
@@ -510,11 +502,10 @@ void mddev_suspend(struct mddev *mddev)
 	WARN_ON_ONCE(thread && current == thread->tsk);
 	if (mddev->suspended++)
 		return;
-	synchronize_rcu();
 	wake_up(&mddev->sb_wait);
 	set_bit(MD_ALLOW_SB_UPDATE, &mddev->flags);
-	smp_mb__after_atomic();
-	wait_event(mddev->sb_wait, atomic_read(&mddev->active_io) == 0);
+	percpu_ref_kill(&mddev->active_io);
+	wait_event(mddev->sb_wait, percpu_ref_is_zero(&mddev->active_io));
 	mddev->pers->quiesce(mddev, 1);
 	clear_bit_unlock(MD_ALLOW_SB_UPDATE, &mddev->flags);
 	wait_event(mddev->sb_wait, !test_bit(MD_UPDATING_SB, &mddev->flags));
@@ -534,6 +525,7 @@ void mddev_resume(struct mddev *mddev)
 	/* entred the memalloc scope from mddev_suspend() */
 	memalloc_noio_restore(mddev->noio_flag);
 
+	percpu_ref_resurrect(&mddev->active_io);
 	wake_up(&mddev->sb_wait);
 	mddev->pers->quiesce(mddev, 0);
 
@@ -634,7 +626,6 @@ void mddev_init(struct mddev *mddev)
 	timer_setup(&mddev->safemode_timer, md_safemode_timeout, 0);
 	atomic_set(&mddev->active, 1);
 	atomic_set(&mddev->openers, 0);
-	atomic_set(&mddev->active_io, 0);
 	atomic_set(&mddev->sync_seq, 0);
 	spin_lock_init(&mddev->lock);
 	init_waitqueue_head(&mddev->sb_wait);
@@ -5663,6 +5654,7 @@ static void md_free(struct kobject *ko)
 	blk_cleanup_disk(mddev->gendisk);
 
 	percpu_ref_exit(&mddev->writes_pending);
+	percpu_ref_exit(&mddev->active_io);
 
 	bioset_exit(&mddev->bio_set);
 	bioset_exit(&mddev->sync_set);
@@ -5871,6 +5863,12 @@ static void md_safemode_timeout(struct timer_list *t)
 }
 
 static int start_dirty_degraded;
+static void active_io_release(struct percpu_ref *ref)
+{
+	struct mddev *mddev = container_of(ref, struct mddev, active_io);
+
+	wake_up(&mddev->sb_wait);
+}
 
 int md_run(struct mddev *mddev)
 {
@@ -5951,10 +5949,15 @@ int md_run(struct mddev *mddev)
 		sysfs_notify_dirent_safe(rdev->sysfs_state);
 	}
 
+	err = percpu_ref_init(&mddev->active_io, active_io_release,
+				PERCPU_REF_ALLOW_REINIT, GFP_KERNEL);
+	if (err)
+		return err;
+
 	if (!bioset_initialized(&mddev->bio_set)) {
 		err = bioset_init(&mddev->bio_set, BIO_POOL_SIZE, 0, BIOSET_NEED_BVECS);
 		if (err)
-			return err;
+			goto exit_active_io;
 	}
 	if (!bioset_initialized(&mddev->sync_set)) {
 		err = bioset_init(&mddev->sync_set, BIO_POOL_SIZE, 0, BIOSET_NEED_BVECS);
@@ -6148,6 +6151,8 @@ exit_sync_set:
 	bioset_exit(&mddev->sync_set);
 exit_bio_set:
 	bioset_exit(&mddev->bio_set);
+exit_active_io:
+	percpu_ref_exit(&mddev->active_io);
 	return err;
 }
 EXPORT_SYMBOL_GPL(md_run);
@@ -6374,6 +6379,7 @@ void md_stop(struct mddev *mddev)
 	 */
 	__md_stop_writes(mddev);
 	__md_stop(mddev);
+	percpu_ref_exit(&mddev->active_io);
 	bioset_exit(&mddev->bio_set);
 	bioset_exit(&mddev->sync_set);
 	bioset_exit(&mddev->io_acct_set);
