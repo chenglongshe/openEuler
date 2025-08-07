@@ -1,0 +1,132 @@
+[
+    {
+	"EventCode": "0x09",
+	"EventName": "sllc_cycles",
+	"BriefDescription": "Count of SLLC cycles",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x09",
+	"EventName": "cycles",
+	"BriefDescription": "Count of SLLC cycles",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x20",
+	"EventName": "sllc_rx_req_lat",
+	"BriefDescription": "Total latency SLLC taken to receive requests",
+	"Filter": "tracetag_en",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x21",
+	"EventName": "sllc_rx_data_lat",
+	"BriefDescription": "Total latency SLLC taken to receive data",
+	"Filter": "tracetag_en",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x24",
+	"EventName": "sllc_tx_req_lat",
+	"BriefDescription": "Total latency SLLC taken to transmit requests",
+	"Filter": "tracetag_en",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x25",
+	"EventName": "sllc_tx_data_lat",
+	"BriefDescription": "Total latency SLLC taken to transmit data",
+	"Filter": "tracetag_en",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x30",
+	"EventName": "rx_req",
+	"BriefDescription": "Count of the requests received by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x30",
+	"EventName": "sllc_rx_req",
+	"BriefDescription": "Count of the requests received by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x31",
+	"EventName": "rx_data",
+	"BriefDescription": "Count of the data received by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x31",
+	"EventName": "sllc_rx_data",
+	"BriefDescription": "Count of the data received by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x32",
+	"EventName": "sllc_rx_snp",
+	"BriefDescription": "Count of the snoop received by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x33",
+	"EventName": "sllc_rx_rsp",
+	"BriefDescription": "Count of the response received by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x34",
+	"EventName": "tx_req",
+	"BriefDescription": "Count of the requests transmitted by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x34",
+	"EventName": "sllc_tx_req",
+	"BriefDescription": "Count of the requests transmitted by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x35",
+	"EventName": "tx_data",
+	"BriefDescription": "Count of the data transmitted by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x35",
+	"EventName": "sllc_tx_data",
+	"BriefDescription": "Count of the data transmitted by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x36",
+	"EventName": "sllc_tx_snp",
+	"BriefDescription": "Count of the snoop transmitted by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    },
+    {
+	"EventCode": "0x37",
+	"EventName": "sllc_tx_rsp",
+	"BriefDescription": "Count of the response transmitted by SLLC",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,sllc"
+    }
+]
