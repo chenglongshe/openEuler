@@ -135,6 +135,10 @@ static ssize_t ext4_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	if (unlikely(ext4_forced_shutdown(inode->i_sb)))
 		return -EIO;
 
+	if ((iocb->ki_flags & IOCB_DONTCACHE) &&
+	    !ext4_test_inode_state(inode, EXT4_STATE_BUFFERED_IOMAP))
+		return -EOPNOTSUPP;
+
 	if (!iov_iter_count(to))
 		return 0; /* skip atime */
 
@@ -710,6 +714,10 @@ ext4_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (unlikely(ext4_forced_shutdown(inode->i_sb)))
 		return -EIO;
 
+	if ((iocb->ki_flags & IOCB_DONTCACHE) &&
+	    !ext4_test_inode_state(inode, EXT4_STATE_BUFFERED_IOMAP))
+		return -EOPNOTSUPP;
+
 #ifdef CONFIG_FS_DAX
 	if (IS_DAX(inode))
 		return ext4_dax_write_iter(iocb, from);
@@ -967,7 +975,7 @@ const struct file_operations ext4_file_operations = {
 	.splice_write	= iter_file_splice_write,
 	.fallocate	= ext4_fallocate,
 	.fop_flags	= FOP_MMAP_SYNC | FOP_BUFFER_RASYNC |
-			  FOP_DIO_PARALLEL_WRITE,
+			  FOP_DIO_PARALLEL_WRITE | FOP_DONTCACHE,
 };
 
 const struct inode_operations ext4_file_inode_operations = {
