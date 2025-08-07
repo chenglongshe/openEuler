@@ -1871,6 +1871,9 @@ new_ioend:
 	if (!bio_add_folio(&wpc->ioend->io_bio, folio, len, poff))
 		goto new_ioend;
 
+	if (folio_test_dropbehind(folio))
+		wpc->ioend->io_flags |= IOMAP_F_DONTCACHE;
+
 	if (ifs)
 		atomic_add(len, &ifs->write_bytes_pending);
 
