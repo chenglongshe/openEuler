@@ -1,0 +1,58 @@
+[
+	{
+		"MetricName": "snp_dvm_average_latency",
+		"MetricExpr": "snp_dvm_latency / snp_dvm_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Non-Sync snoop request average latency",
+		"ScaleUnit": "1cycle"
+	},
+	{
+		"MetricName": "pa_req_dvm_average_latency",
+		"MetricExpr": "pa_req_dvm_latency / pa_req_dvm_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Non-Sync request average latency from PA",
+		"ScaleUnit": "1cycle"
+	},
+	{
+		"MetricName": "mn_req_dvm_average_latency",
+		"MetricExpr": "mn_req_dvm_latency / mn_req_dvm_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Non-Sync request average latency from MN",
+		"ScaleUnit": "1cycle"
+	},
+	{
+		"MetricName": "l3t_req_dvm_average_latency",
+		"MetricExpr": "l3t_req_dvm_latency / l3t_req_dvm_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Non-Sync request average latency from L3T",
+		"ScaleUnit": "1cycle"
+	},
+	{
+		"MetricName": "snp_dvmsync_average_latency",
+		"MetricExpr": "snp_dvmsync_latency / snp_dvmsync_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Sync snoop request average latency",
+		"ScaleUnit": "1cycle"
+	},
+	{
+		"MetricName": "pa_req_dvmsync_average_latency",
+		"MetricExpr": "pa_req_dvmsync_latency / pa_req_dvmsync_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Sync request average latency from PA",
+		"ScaleUnit": "1cycle"
+	},
+	{
+		"MetricName": "mn_req_dvmsync_average_latency",
+		"MetricExpr": "mn_req_dvmsync_latency / mn_req_dvmsync_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Sync request average latency from MN",
+		"ScaleUnit": "1cycle"
+	},
+	{
+		"MetricName": "l3t_req_dvmsync_average_latency",
+		"MetricExpr": "l3t_req_dvmsync_latency / l3t_req_dvmsync_num",
+		"MetricGroup": "MN_AVG_LAT",
+		"BriefDescription": "Count of one DVM Sync request average latency from L3T",
+		"ScaleUnit": "1cycle"
+	}
+]

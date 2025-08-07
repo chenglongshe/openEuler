@@ -1,0 +1,459 @@
+[
+    {
+        "MetricExpr": "FETCH_BUBBLE / (8 * CPU_CYCLES)",
+        "BriefDescription": "L1 topdown: Frontend bound",
+        "DefaultMetricgroupName": "TopdownL1",
+        "MetricGroup": "Default;TopdownL1",
+        "MetricName": "frontend_bound"
+    },
+    {
+        "MetricExpr": "(INST_SPEC - INST_RETIRED) / (8 * CPU_CYCLES)",
+        "BriefDescription": "L1 topdown: Bad Speculation",
+        "DefaultMetricgroupName": "TopdownL1",
+        "MetricGroup": "Default;TopdownL1",
+        "MetricName": "bad_speculation"
+    },
+    {
+        "MetricExpr": "INST_RETIRED / (CPU_CYCLES * 8)",
+        "BriefDescription": "L1 topdown: Retiring",
+        "DefaultMetricgroupName": "TopdownL1",
+        "MetricGroup": "Default;TopdownL1",
+        "MetricName": "retiring"
+    },
+    {
+        "MetricExpr": "1 - (frontend_bound + bad_speculation + retiring)",
+        "BriefDescription": "L1 topdown: Backend Bound",
+        "DefaultMetricgroupName": "TopdownL1",
+        "MetricGroup": "Default;TopdownL1",
+        "MetricName": "backend_bound"
+    },
+    {
+        "MetricExpr": "FETCH_BUBBLE_EQ_MAX / CPU_CYCLES",
+        "BriefDescription": "L2 topdown: Fetch latency bound",
+        "MetricGroup": "TopdownL2;frontend_bound_group",
+        "MetricName": "fetch_latency_bound"
+    },
+    {
+        "MetricExpr": "frontend_bound - fetch_latency_bound",
+        "BriefDescription": "L2 topdown: Fetch bandwidth bound",
+        "MetricGroup": "TopdownL2;frontend_bound_group",
+        "MetricName": "fetch_bandwidth_bound"
+    },
+    {
+        "MetricExpr": "(bad_speculation * BR_MIS_PRED) / (BR_MIS_PRED + armv8_pmuv3_0@event\\=0x2010@)",
+        "BriefDescription": "L2 topdown: Branch mispredicts",
+        "MetricGroup": "TopdownL2;bad_speculation_group",
+        "MetricName": "branch_mispredicts"
+    },
+    {
+        "MetricExpr": "bad_speculation - branch_mispredicts",
+        "BriefDescription": "L2 topdown: Machine clears",
+        "MetricGroup": "TopdownL2;bad_speculation_group",
+        "MetricName": "machine_clears"
+    },
+    {
+        "MetricExpr": "(MEM_STALL_ANYLOAD + MEM_STALL_ANYSTORE) / CPU_CYCLES",
+        "BriefDescription": "L2 topdown: Memory bound",
+        "MetricGroup": "TopdownL2;backend_bound_group",
+        "MetricName": "memory_bound"
+    },
+    {
+        "MetricExpr": "(EXE_STALL_CYCLE - MEM_STALL_ANYLOAD - MEM_STALL_ANYSTORE) / CPU_CYCLES",
+        "BriefDescription": "L2 topdown: Core bound",
+        "MetricGroup": "TopdownL2;backend_bound_group",
+        "MetricName": "core_bound"
+    },
+    {
+        "MetricExpr": "(armv8_pmuv3_0@event\\=0x1f10@ + armv8_pmuv3_0@event\\=0x1f11@)/ CPU_CYCLES",
+        "BriefDescription": "L3 topdown: L1 instruction tlb or cache miss bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "l1i_tlb_or_cache_miss"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f12@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: OoO flush bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "ooo_flush"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f13@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Static predictor flush bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "sp_flush"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f14@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Branch unit flush bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "bru_flush"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f15@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Branch unit5 flush bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "b5_flush"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f16@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Branch unit3 flush bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "b3_flush"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f17@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Branch unit2 flush bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "b2_flush"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f18@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Prediction supplement Q stall bubble",
+        "MetricGroup": "TopdownL3;fetch_bandwidth_bound_group",
+        "MetricName": "bpu_q_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1010@ / BR_MIS_PRED",
+        "BriefDescription": "L3 topdown: Indirect branch",
+        "MetricGroup": "TopdownL3;branch_mispredicts_group",
+        "MetricName": "indirect_branch"
+    },
+    {
+        "MetricExpr": "(armv8_pmuv3_0@event\\=0x1013@ + armv8_pmuv3_0@event\\=0x1016@) / BR_MIS_PRED",
+        "BriefDescription": "L3 topdown: Push branch",
+        "MetricGroup": "TopdownL3;branch_mispredicts_group",
+        "MetricName": "push_branch"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x100d@ / BR_MIS_PRED",
+        "BriefDescription": "L3 topdown: Pop branch",
+        "MetricGroup": "TopdownL3;branch_mispredicts_group",
+        "MetricName": "pop_branch"
+    },
+    {
+        "MetricExpr": "1 - (push_branch + pop_branch)",
+        "BriefDescription": "L3 topdown: Other branch",
+        "MetricGroup": "TopdownL3;branch_mispredicts_group",
+        "MetricName": "other_branch"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x203f@ / armv8_pmuv3_0@event\\=0x2040@",
+        "BriefDescription": "L3 topdown: Nuke flush",
+        "MetricGroup": "TopdownL3;machine_clears_group",
+        "MetricName": "nuke_flush"
+    },
+    {
+        "MetricExpr": "1 - nuke_flush",
+        "BriefDescription": "L3 topdown: Other flush",
+        "MetricGroup": "TopdownL3;machine_clears_group",
+        "MetricName": "other_flush"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7000@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Resource Bound",
+        "MetricGroup": "TopdownL3;core_bound_group",
+        "MetricName": "resource_bound"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7002@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: FSU divqsrt stall",
+        "MetricGroup": "TopdownL3;core_bound_group",
+        "MetricName": "fdiv_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7003@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: divqsrt stall",
+        "MetricGroup": "TopdownL3;core_bound_group",
+        "MetricName": "div_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7004@ / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: FSU stall",
+        "MetricGroup": "TopdownL3;core_bound_group",
+        "MetricName": "fsu_stall"
+    },
+    {
+        "MetricExpr": "core_bound - resource_bound - fdiv_stall - div_stall - fsu_stall",
+        "BriefDescription": "L3 topdown: EXE ports util",
+        "MetricGroup": "TopdownL3;core_bound_group",
+        "MetricName": "exe_ports_util"
+    },
+    {
+        "MetricExpr": "(MEM_STALL_ANYLOAD - MEM_STALL_L1MISS) / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: L1 bound",
+        "MetricGroup": "TopdownL3;memory_bound_group",
+        "MetricName": "l1_bound"
+    },
+    {
+        "MetricExpr": "(MEM_STALL_L1MISS - MEM_STALL_L2MISS) / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: L2 bound",
+        "MetricGroup": "TopdownL3;memory_bound_group",
+        "MetricName": "l2_bound"
+    },
+    {
+        "MetricExpr": "(MEM_STALL_L2MISS - MEM_STALL_L3MISS) / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: L3 bound",
+        "MetricGroup": "TopdownL3;memory_bound_group",
+        "MetricName": "l3_bound"
+    },
+    {
+        "MetricExpr": "MEM_STALL_L3MISS / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Mem bound",
+        "MetricGroup": "TopdownL3;memory_bound_group",
+        "MetricName": "mem_bound"
+    },
+    {
+        "MetricExpr": "MEM_STALL_ANYSTORE / CPU_CYCLES",
+        "BriefDescription": "L3 topdown: Store bound",
+        "MetricGroup": "TopdownL3;memory_bound_group",
+        "MetricName": "store_bound"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f10@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: L1 instruction tlb miss bubble",
+        "MetricGroup": "TopdownL4;l1i_tlb_or_cache_miss_group",
+        "MetricName": "l1i_tlb_miss"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f11@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: L1 instruction cache miss bubble",
+        "MetricGroup": "TopdownL4;l1i_tlb_or_cache_miss_group",
+        "MetricName": "l1i_cache_miss"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f19@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: Target fifo full stall bubble",
+        "MetricGroup": "TopdownL4;bpu_q_stall_group",
+        "MetricName": "tgt_fifo_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f1a@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: Branch Q stall bubble",
+        "MetricGroup": "TopdownL4;bpu_q_stall_group",
+        "MetricName": "branch_q_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f1b@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: Return Stack full stall bubble",
+        "MetricGroup": "TopdownL4;bpu_q_stall_group",
+        "MetricName": "rs_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x2006@ + armv8_pmuv3_0@event\\=0x2007@ + armv8_pmuv3_0@event\\=0x2008@ + armv8_pmuv3_0@event\\=0x200a@",
+        "BriefDescription": "Total ptag stall",
+        "MetricName": "total_ptag_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x200b@ + armv8_pmuv3_0@event\\=0x200c@ + armv8_pmuv3_0@event\\=0x200d@",
+        "BriefDescription": "Total mapq stall",
+        "MetricName": "total_mapq_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x2004@ + armv8_pmuv3_0@event\\=0x2005@ + total_ptag_stall + total_mapq_stall + armv8_pmuv3_0@event\\=0x2010@",
+        "BriefDescription": "Total OoO stall",
+        "MetricName": "total_ooo_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x2004@ / total_ooo_stall",
+        "BriefDescription": "L4 topdown: Rob stall",
+        "MetricGroup": "TopdownL4;resource_bound_group",
+        "MetricName": "rob_stall"
+    },
+    {
+        "MetricExpr": "total_ptag_stall / total_ooo_stall",
+        "BriefDescription": "L4 topdown: Ptag stall",
+        "MetricGroup": "TopdownL4;resource_bound_group",
+        "MetricName": "ptag_stall"
+    },
+    {
+        "MetricExpr": "total_mapq_stall / total_ooo_stall",
+        "BriefDescription": "L4 topdown: Mapq stall",
+        "MetricGroup": "TopdownL4;resource_bound_group",
+        "MetricName": "Mapq_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x2005@ / total_ooo_stall",
+        "BriefDescription": "L4 topdown: PC buffer stall",
+        "MetricGroup": "TopdownL4;resource_bound_group",
+        "MetricName": "pc_buffer_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x2010@ / total_ooo_stall",
+        "BriefDescription": "L4 topdown: DSP stall",
+        "MetricGroup": "TopdownL4;resource_bound_group",
+        "MetricName": "dsp_stall"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x700a@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 0 uops of integer instructions are issued with serializing block",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_0_ports_serialize"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x700b@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 0 uops of integer instructions are issued without serializing block",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_0_ports_non_serialize"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x700c@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 1 uop of integer instructions is issued",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_1_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x700d@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 2 uops of integer instructions is issue",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_2_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x700e@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 3 uops of integer instructions is issue",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_3_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x700f@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 4 uops of integer instructions is issue",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_4_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7010@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 5 uops of integer instructions is issue",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_5_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7011@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 6 uops of integer instructions is issue",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_6_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7012@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: 7 uops of integer instructions is issue",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_7_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7013@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: no less than 8 uops of integer instructions are issued",
+        "MetricGroup": "TopdownL4;exe_ports_util_group",
+        "MetricName": "is_8_ports"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x701e@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: MEM_STALL_L1MISS happens. Any request in wlb/plb/evb pending state",
+        "MetricGroup": "TopdownL4;l2_bound_group",
+        "MetricName": "l2_buf_pending"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x701f@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: MEM_STALL_L1MISS happens. Any request in snoop pending state",
+        "MetricGroup": "TopdownL4;l2_bound_group",
+        "MetricName": "l2_snp_pending"
+    },
+    {
+        "MetricExpr": "l2_bound - l2_buf_pending - l2_snp_pending",
+        "BriefDescription": "L4 topdown: MEM_STALL_L1MISS happens. Any request in snoop pending state",
+        "MetricGroup": "TopdownL4;l2_bound_group",
+        "MetricName": "l2_pipeline_bound"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7020@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: MEM_STALL_L1MISS happens. L2C ARB in idle state",
+        "MetricGroup": "TopdownL4;l2_bound_group",
+        "MetricName": "l2_arb_idle"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7021@",
+        "BriefDescription": "L4 topdown: MEM_STALL_L3MISS happens. The data source from local die DDR or local chip other die DDR",
+        "MetricGroup": "TopdownL4;mem_bound_group",
+        "MetricName": "local_memory_bound"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x7022@",
+        "BriefDescription": "L4 topdown: MEM_STALL_L3MISS happens. The data source from another chip DDR",
+        "MetricGroup": "TopdownL4;mem_bound_group",
+        "MetricName": "remote_memory_bound"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x1f23@",
+        "BriefDescription": "L4 topdown: MEM_STALL_L3MISS happens. The data source from another chip L3",
+        "MetricGroup": "TopdownL4;mem_bound_group",
+        "MetricName": "remote_cache_bound"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x5090@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: ld cancel dtlb miss",
+        "MetricGroup": "TopdownL4;l1_bound_group",
+        "MetricName": "ld_cancel_dtlb_miss"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x5091@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: ld cancel misalign",
+        "MetricGroup": "TopdownL4;l1_bound_group",
+        "MetricName": "ld_cancel_misalign"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x5092@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: ld cancel resource full",
+        "MetricGroup": "TopdownL4;l1_bound_group",
+        "MetricName": "ld_cancel_resource_full"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x5093@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: ld cancel instruction type",
+        "MetricGroup": "TopdownL4;l1_bound_group",
+        "MetricName": "ld_cancel_instruction_type"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x5094@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: ld cancel forward hazard",
+        "MetricGroup": "TopdownL4;l1_bound_group",
+        "MetricName": "ld_cancel_forward_hazard:"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x5095@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: ld cancel structure hazard",
+        "MetricGroup": "TopdownL4;l1_bound_group",
+        "MetricName": "ld_cancel_structure_hazard"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x5096@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: ld cancel pipeline",
+        "MetricGroup": "TopdownL4;l1_bound_group",
+        "MetricName": "ld_cancel_pipeline"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x50a0@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: store SCA full",
+        "MetricGroup": "TopdownL4;store_bound_group",
+        "MetricName": "st_sca_full"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x50a1@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: store SCD full",
+        "MetricGroup": "TopdownL4;store_bound_group",
+        "MetricName": "st_scd_full"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x50a2@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: store head no pgen",
+        "MetricGroup": "TopdownL4;store_bound_group",
+        "MetricName": "st_head_no_pgen"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x50a3@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: store order fail",
+        "MetricGroup": "TopdownL4;store_bound_group",
+        "MetricName": "st_order_fail"
+    },
+    {
+        "MetricExpr": "armv8_pmuv3_0@event\\=0x50a4@ / CPU_CYCLES",
+        "BriefDescription": "L4 topdown: store bound pipeline",
+        "MetricGroup": "TopdownL4;store_bound_group",
+        "MetricName": "st_other"
+    }
+]

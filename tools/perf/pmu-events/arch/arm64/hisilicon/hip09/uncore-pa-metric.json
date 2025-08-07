@@ -1,0 +1,92 @@
+[
+    {
+	"MetricName": "pa_rx_bw",
+	"MetricExpr": "(pa_rx_data_link0 + pa_rx_data_link1 + pa_rx_data_link2 + pa_rx_data_link3) * 20 / duration_time / 1e6",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth from Ring to PA",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_tx_bw",
+	"MetricExpr": "(pa_tx_data_link0 + pa_tx_data_link1 + pa_tx_data_link2 + pa_tx_data_link3) * 20 / duration_time / 1e6",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth from PA to Ring",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_rx_link0_bw_occupancy",
+	"MetricExpr": "pa_rx_data_link0 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from Ring to PA link0",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_rx_link1_bw_occupancy",
+	"MetricExpr": "pa_rx_data_link1 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from Ring to PA link1",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_rx_link2_bw_occupancy",
+	"MetricExpr": "pa_rx_data_link2 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from Ring to PA link2",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_rx_link3_bw_occupancy",
+	"MetricExpr": "pa_rx_data_link3 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from Ring to PA link3",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_tx_link0_bw_occupancy",
+	"MetricExpr": "pa_tx_data_link0 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from PA link0 to Ring",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_tx_link1_bw_occupancy",
+	"MetricExpr": "pa_tx_data_link1 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from PA link1 to Ring",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_tx_link2_bw_occupancy",
+	"MetricExpr": "pa_tx_data_link2 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from PA link2 to Ring",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"MetricName": "pa_tx_link3_bw_occupancy",
+	"MetricExpr": "pa_tx_data_link3 / pa_cycles",
+	"MetricGroup": "PA_bw",
+	"BriefDescription": "Average data bandwidth occupancy from PA link3 to Ring",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    }
+]
