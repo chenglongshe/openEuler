@@ -1375,14 +1375,13 @@ struct readahead_control {
 	struct file *file;
 	struct address_space *mapping;
 	struct file_ra_state *ra;
-	KABI_RESERVE(1)
+	KABI_USE(1, bool dropbehind)
 	KABI_RESERVE(2)
 	KABI_RESERVE(3)
 /* private: use the readahead_* accessors instead */
 	pgoff_t _index;
 	unsigned int _nr_pages;
 	unsigned int _batch_count;
-	bool dropbehind;
 	bool _workingset;
 	unsigned long _pflags;
 };
