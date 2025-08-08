@@ -609,12 +609,16 @@ int kvm_arch_vcpu_create(struct kvm_vcpu *vcpu)
 		return err;
 
 	err = kvm_sched_affinity_vcpu_init(vcpu);
-	if (err)
-		return err;
+	if (err) {
+        kvm_vgic_vcpu_destroy(vcpu);
+		return err;        
+    }
 
 	err = kvm_share_hyp(vcpu, vcpu + 1);
-	if (err)
+	if (err) {
+        kvm_sched_affinity_vcpu_destroy(vcpu);
 		kvm_vgic_vcpu_destroy(vcpu);
+    }
 
 	return err;
 }
