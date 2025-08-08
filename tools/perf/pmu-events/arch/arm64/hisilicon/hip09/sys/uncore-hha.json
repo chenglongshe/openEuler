@@ -127,7 +127,7 @@
    },
    {
 	"MetricName": "hha_read_ddrc_bw",
-	"MetricExpr": "(hha_rd_ddr_64b * 8 + hha_rd_ddr_128b * 16) / duration_time / 1e6",
+	"MetricExpr": "(hha_rd_ddr_64b * 64 + hha_rd_ddr_128b * 128) / duration_time / 1e6",
 	"MetricGroup": "HHA_bw",
 	"BriefDescription": "Average bandwidth of reading DDRC",
 	"ScaleUnit": "1MB/s",
@@ -136,7 +136,7 @@
    },
    {
 	"MetricName": "hha_write_ddrc_bw",
-	"MetricExpr": "(hha_wr_ddr_64b * 8 + hha_wr_ddr_128b * 16) / duration_time / 1e6",
+	"MetricExpr": "(hha_wr_ddr_64b * 64 + hha_wr_ddr_128b * 128) / duration_time / 1e6",
 	"MetricGroup": "HHA_bw",
 	"BriefDescription": "Average bandwidth of writing DDRC",
 	"ScaleUnit": "1MB/s",

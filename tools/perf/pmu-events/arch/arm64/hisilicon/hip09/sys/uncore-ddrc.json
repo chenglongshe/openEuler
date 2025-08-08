@@ -99,7 +99,7 @@
    },
    {
 	"MetricName": "ddrc_write_bw",
-	"MetricExpr": "flux_wr * 4 / duration_time / 1e6",
+	"MetricExpr": "flux_wr * 32 / duration_time / 1e6",
 	"MetricGroup": "DDRC_bw",
 	"BriefDescription": "Average bandwidth of write DDRC memory",
 	"ScaleUnit": "1MB/s",
@@ -108,7 +108,7 @@
    },
    {
 	"MetricName": "ddrc_read_bw",
-	"MetricExpr": "flux_rd * 4 / duration_time / 1e6",
+	"MetricExpr": "flux_rd * 32 / duration_time / 1e6",
 	"MetricGroup": "DDRC_bw",
 	"BriefDescription": "Average bandwidth of read DDRC memory",
 	"ScaleUnit": "1MB/s",
@@ -117,7 +117,7 @@
    },
    {
 	"MetricName": "ddrc_rdwr_bw",
-	"MetricExpr": "(flux_wr + flux_rd) * 4 / duration_time / 1e6",
+	"MetricExpr": "(flux_wr + flux_rd) * 32 / duration_time / 1e6",
 	"MetricGroup": "DDRC_bw",
 	"BriefDescription": "Average bandwidth of DDRC (including memory read and write)",
 	"ScaleUnit": "1MB/s",
