@@ -91,22 +91,6 @@
 	"Unit": "hisi_sccl,l3c"
    },
    {
-	"EventCode": "0x80",
-	"EventName": "cpu_read_l3c_lat",
-	"Filter": "tt_core=0xff",
-	"BriefDescription": "Count the total latency that L3C completes the cluster CPU read requests",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x83",
-	"EventName": "l3c_read_hha_lat",
-	"Filter": "tt_core=0xff,tt_req=0x4",
-	"BriefDescription": "Count the total latency that HHA completes the L3C read requests",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
 	"EventCode": "0xb8",
 	"EventName": "l3c_ref",
 	"BriefDescription": "Count number of all CPU accessed L3C",
@@ -168,70 +152,6 @@
 	"Filter": "tt_core=0xff",
 	"BriefDescription": "Count of the L3C retry CPU",
 	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x81",
-	"EventName": "l3t_dvmop_sum",
-	"Filter": "tt_req=0x3",
-	"BriefDescription": "Total time spent by L3T on DVMOp requests",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x84",
-	"EventName": "l3t_aq_time_sum",
-	"BriefDescription": "Total time spent by marked requests in AQ buffer",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x85",
-	"EventName": "l3t_pq_time_sum",
-	"BriefDescription": "Total time spent by marked requests in PQ buffer",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x86",
-	"EventName": "l3t_snp_cpu_sum",
-	"BriefDescription": "Total time spent by L3T on sending SNPs to CPU",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x88",
-	"EventName": "l3t_rxsnp_l3t_sum",
-	"BriefDescription": "Total time spent by L3T receiving SNPs from RING",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x8a",
-	"EventName": "l3t_rxhydrasnp_l3t_sum",
-	"BriefDescription": "Total time spent by L3T receiving HYDRASNPs from RING",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x8b",
-	"EventName": "l3t_dbid_l3t_sum",
-	"BriefDescription": "Total time spent by L3T returning DBIDs to CPU",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x8d",
-	"EventName": "l3t_wrnotram_sum",
-	"BriefDescription": "Total time spent by L3T on sending writes to MATA",
-	"Compat": "0x00000040",
-	"Unit": "hisi_sccl,l3c"
-   },
-   {
-	"EventCode": "0x8e",
-	"EventName": "l3t_retry_sum",
-	"BriefDescription": "Total time spent by L3T on sending retries to CPU",
-	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
    {
