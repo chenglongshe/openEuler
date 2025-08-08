@@ -96,59 +96,5 @@
 	"BriefDescription": "Count of DDRC read commands",
 	"Compat": "0x000000(30|40)",
 	"Unit": "hisi_sccl,ddrc"
-   },
-   {
-	"MetricName": "ddrc_write_bw",
-	"MetricExpr": "flux_wr * 32 / duration_time / 1e6",
-	"MetricGroup": "DDRC_bw",
-	"BriefDescription": "Average bandwidth of write DDRC memory",
-	"ScaleUnit": "1MB/s",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,ddrc"
-   },
-   {
-	"MetricName": "ddrc_read_bw",
-	"MetricExpr": "flux_rd * 32 / duration_time / 1e6",
-	"MetricGroup": "DDRC_bw",
-	"BriefDescription": "Average bandwidth of read DDRC memory",
-	"ScaleUnit": "1MB/s",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,ddrc"
-   },
-   {
-	"MetricName": "ddrc_rdwr_bw",
-	"MetricExpr": "(flux_wr + flux_rd) * 32 / duration_time / 1e6",
-	"MetricGroup": "DDRC_bw",
-	"BriefDescription": "Average bandwidth of DDRC (including memory read and write)",
-	"ScaleUnit": "1MB/s",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,ddrc"
-   },
-   {
-	"MetricName": "ddrc_read_lat",
-	"MetricExpr": "ddrc_read_cmd_occupancy / ddrc_read_cmd * (duration_time * 1e9 / ddrc_cycles)",
-	"MetricGroup": "DDRC_lat",
-	"BriefDescription": "Average scheduling latency of DDRC read command",
-	"ScaleUnit": "1ns",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,ddrc"
-   },
-   {
-	"MetricName": "ddrc_write_lat",
-	"MetricExpr": "ddrc_write_cmd_occupancy / ddrc_write_cmd * (duration_time * 1e9 / ddrc_cycles)",
-	"MetricGroup": "DDRC_lat",
-	"BriefDescription": "Average scheduling of DDRC write command",
-	"ScaleUnit": "1ns",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,ddrc"
-   },
-   {
-	"MetricName": "ddrc_rowhit_rate",
-	"MetricExpr": "1 - ddrc_active_cmd / ddrc_cas_cmd",
-	"MetricGroup": "DDRC",
-	"BriefDescription": "Row hit rate of DDRC",
-	"ScaleUnit": "100%",
-	"Compat": "0x000000(30|40)",
-	"Unit": "hisi_sccl,ddrc"
    }
 ]
