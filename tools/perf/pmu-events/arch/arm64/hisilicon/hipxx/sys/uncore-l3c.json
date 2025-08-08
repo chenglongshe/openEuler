@@ -110,7 +110,7 @@
 	"EventCode": "0xb8",
 	"EventName": "l3c_ref",
 	"BriefDescription": "Count number of all CPU accessed L3C",
-	"Compat": "0x00000030",
+	"Compat": "0x000000(30|40)",
 	"Unit": "hisi_sccl,l3c"
    },
    {
@@ -132,12 +132,19 @@
    },
    {
 	"EventCode": "0xbd",
-	"EventName": "l3t_ret_ring_sum",
+	"EventName": "l3c2ring",
 	"BriefDescription": "Count number of the L3T return data to RING(64B)",
-	"Filter": "tt_core=0xff",
+	"Filter": "tt_core=0xff,ext=1",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
-
+   },
+   {
+	"EventCode": "0xbd",
+	"EventName": "l3c2ring_ext",
+	"BriefDescription": "Count number of the L3T ext return data to RING(64B)",
+	"Filter": "tt_core=0xff,ext=2",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0xc0",
@@ -287,67 +294,144 @@
    {
 	"EventCode": "0x00",
 	"EventName": "rd_cpipe",
-	"BriefDescription": "the number of CPIPEs from CPU send read request",
+	"BriefDescription": "the number of CPIPEs from CPU send read request to L3",
+	"Filter": "ext=1",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x00",
+	"EventName": "rd_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU send read request to L3 ext",
+	"Filter": "ext=2",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x01",
 	"EventName": "rd_hit_cpipe",
-	"BriefDescription": "the number of CPIPEs from CPU read request hit",
+	"BriefDescription": "the number of CPIPEs from CPU read request hit to L3",
+	"Filter": "ext=1",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x01",
+	"EventName": "rd_hit_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU read request hit to L3 ext",
+	"Filter": "ext=2",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x02",
 	"EventName": "wr_cpipe",
-	"BriefDescription": "the number of CPIPEs from CPU send stream write request",
+	"BriefDescription": "the number of CPIPEs from CPU send stream write request to L3",
 	"Compat": "0x00000040",
+	"Filter": "ext=1",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x02",
+	"EventName": "wr_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU send stream write request to L3 ext",
+	"Compat": "0x00000040",
+	"Filter": "ext=2",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x03",
 	"EventName": "wr_hit_cpipe",
-	"BriefDescription": "the number of CPIPEs from CPU stream write request hit",
+	"BriefDescription": "the number of CPIPEs from CPU stream write request hit to L3",
 	"Compat": "0x00000040",
+	"Filter": "ext=1",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x03",
+	"EventName": "wr_hit_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU stream write request hit to L3 ext",
+	"Compat": "0x00000040",
+	"Filter": "ext=2",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x04",
 	"EventName": "io_rd_cpipe",
-	"Filter": "tt_req=0x4",
-	"BriefDescription": "the number of IO send read request to CPIPE",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO send read request to CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x04",
+	"EventName": "io_rd_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO send read request to CPIPE to L3 ext",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x05",
 	"EventName": "io_rd_hit_cpipe",
-	"Filter": "tt_req=0x4",
-	"BriefDescription": "the number of IO read request hit CPIPE",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO read request hit CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x05",
+	"EventName": "io_rd_hit_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO read request hit CPIPE to L3 ext",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x06",
 	"EventName": "io_wr_cpipe",
-	"Filter": "tt_req=0x5",
-	"BriefDescription": "the number of IO send stream write request to CPIPE",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO send stream write request to CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x06",
+	"EventName": "io_wr_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO send stream write request to CPIPE to L3 ext",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x07",
 	"EventName": "io_wr_hit_cpipe",
-	"Filter": "tt_req=0x5",
-	"BriefDescription": "the number of IO stream write request hit CPIPE",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO stream write request hit CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x07",
+	"EventName": "io_wr_hit_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO stream write request hit CPIPE to L3 ext",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
    {
 	"EventCode": "0x0c",
-	"EventName": "l3_victim",
+	"EventName": "victim_num",
+	"Filter": "ext=1",
 	"BriefDescription": "the number of victim entries in L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x0c",
+	"EventName": "victim_num_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of victim entries in L3 ext",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
    },
@@ -402,7 +486,7 @@
    },
    {
 	"EventCode": "0x1a",
-	"EventName": "wr_hit",
+	"EventName": "wr_spipe",
 	"BriefDescription": "the number of SPipe from CPU send stream write request",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
@@ -417,7 +501,6 @@
    {
 	"EventCode": "0x1c",
 	"EventName": "io_rd_spipe",
-	"Filter": "tt_req=0x4",
 	"BriefDescription": "the number of IO send read request to SPipe",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
@@ -425,7 +508,6 @@
    {
 	"EventCode": "0x1d",
 	"EventName": "io_rd_hit_spipe",
-	"Filter": "tt_req=0x4",
 	"BriefDescription": "the number of IO read request hit SPipe",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
@@ -433,7 +515,6 @@
    {
 	"EventCode": "0x1e",
 	"EventName": "io_wr_spipe",
-	"Filter": "tt_req=0x5",
 	"BriefDescription": "the number of IO send stream write request to SPipe",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
@@ -441,7 +522,6 @@
    {
 	"EventCode": "0x1f",
 	"EventName": "io_wr_hit_spipe",
-	"Filter": "tt_req=0x5",
 	"BriefDescription": "the number of IO send stream write request hit to SPipe",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
