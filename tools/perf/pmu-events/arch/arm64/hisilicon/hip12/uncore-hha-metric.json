@@ -1,0 +1,65 @@
+[
+   {
+	"MetricName": "hha_read_ddrc_bw",
+	"MetricExpr": "(hha_rd_ddr_64b * 64 + hha_rd_ddr_128b * 128) / duration_time / 1e6",
+	"MetricGroup": "HHA_bw",
+	"BriefDescription": "Average bandwidth of reading DDRC",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"MetricName": "hha_write_ddrc_bw",
+	"MetricExpr": "(hha_wr_ddr_64b * 64 + hha_wr_ddr_128b * 128) / duration_time / 1e6",
+	"MetricGroup": "HHA_bw",
+	"BriefDescription": "Average bandwidth of writing DDRC",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"MetricName": "hha_cross_chip_ops_rate",
+	"MetricExpr": "rx_outer / rx_ops_num",
+	"MetricGroup": "HHA",
+	"BriefDescription": "Rate of cross-chip operations received by HHA",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"MetricName": "hha_cross_die_ops_rate",
+	"MetricExpr": "rx_sccl / rx_ops_num",
+	"MetricGroup": "HHA",
+	"BriefDescription": "Rate of cross-die operations received by HHA",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"MetricName": "hha_channel0_ops_rate",
+	"MetricExpr": "hha_rx_ch0 / rx_ops_num",
+	"MetricGroup": "HHA",
+	"BriefDescription": "Rate of channel 0 operations received by HHA",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"MetricName": "hha_channel1_ops_rate",
+	"MetricExpr": "hha_rx_ch1 / rx_ops_num",
+	"MetricGroup": "HHA_lat",
+	"BriefDescription": "Rate of channel 1 operations received by HHA",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"MetricName": "hha_req_average_lat",
+	"MetricExpr": "hha_req_lat / hha_req_cnt * (duration_time * 1e9 / hha_cycles)",
+	"MetricGroup": "HHA_lat",
+	"BriefDescription": "Average latency that HHA completes all requests",
+	"ScaleUnit": "1ns",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   }
+]
