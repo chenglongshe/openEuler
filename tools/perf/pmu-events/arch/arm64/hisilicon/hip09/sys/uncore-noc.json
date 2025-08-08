@@ -1,0 +1,158 @@
+[
+    {
+	"EventCode": "0x0e",
+	"EventName": "noc_cycles",
+	"BriefDescription": "Count of noc cycles",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x0e",
+	"EventName": "cycles",
+	"BriefDescription": "Count of noc cycles",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x01",
+	"EventName": "cw_ingress_fail",
+	"BriefDescription": "Count the number of retry data flits clockwise from subsys to Ring",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x03",
+	"EventName": "cw_egress_fail",
+	"BriefDescription": "Count the number of retry data flits clockwise from Ring to subsys",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x09",
+	"EventName": "cc_ingress_fail",
+	"BriefDescription": "Count the number of retry data flits counterclockwise from subsys to Ring",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x0b",
+	"EventName": "cc_egress_fail",
+	"BriefDescription": "Count the number of retry data flits counterclockwise from Ring to subsys",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x05",
+	"EventName": "cw_main_flow_sum",
+	"BriefDescription": "Count the number of clockwise main Ring data flits",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x0d",
+	"EventName": "cc_main_flow_sum",
+	"BriefDescription": "Count the number of counterclockwise main Ring data flits",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x12",
+	"EventName": "egress_buf_full",
+	"BriefDescription": "Count the number of data buffer full from Ring to subsys",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x17",
+	"EventName": "egress_flow_sum",
+	"BriefDescription": "Count the number of data flits from Ring to subsys",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x19",
+	"EventName": "ingress_buf_full",
+	"BriefDescription": "Count the number of data buffer full from subsys to Ring",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"EventCode": "0x1a",
+	"EventName": "ingress_flow_sum",
+	"BriefDescription": "Count the number of data flits from subsys to Ring",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "ingress_flow_bw",
+	"MetricExpr": "ingress_flow_sum * 64 / duration_time / 1e6",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth from subsys to Ring",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "ingress_flow_bw_occupancy",
+	"MetricExpr": "ingress_flow_sum / noc_cycles",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth occupancy from subsys to Ring",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "egress_flow_bw",
+	"MetricExpr": "egress_flow_sum * 64 / duration_time / 1e6",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth from Ring to subsys",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "egress_flow_bw_occupancy",
+	"MetricExpr": "egress_flow_sum / noc_cycles",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth occupancy from Ring to subsys",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "cw_main_flow_bw",
+	"MetricExpr": "cw_main_flow_sum * 64 / duration_time / 1e6",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth of clockwise main Ring",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "cw_main_flow_bw_occupancy",
+	"MetricExpr": "cw_main_flow_sum / noc_cycles",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth occupancy of clockwise main Ring",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "cw_main_flow_bw",
+	"MetricExpr": "cc_main_flow_sum * 64 / duration_time / 1e6",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth of counterclockwise main Ring",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    },
+    {
+	"MetricName": "cw_main_flow_bw_occupancy",
+	"MetricExpr": "cc_main_flow_sum / noc_cycles",
+	"MetricGroup": "NOC_bw",
+	"BriefDescription": "Average data bandwidth occupancy of counterclockwise main Ring",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,noc"
+    }
+]

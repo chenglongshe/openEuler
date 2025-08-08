@@ -1,0 +1,154 @@
+[
+   {
+	"EventCode": "0x00",
+	"EventName": "ddrc_cycles",
+	"BriefDescription": "Count of DDRC cycles",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x00",
+	"EventName": "cycles",
+	"BriefDescription": "Count of DDRC cycles",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x01",
+	"EventName": "ddrc_active_cmd",
+	"BriefDescription": "Count of DDRC active commands",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x02",
+	"EventName": "ddrc_precharge_cmd",
+	"BriefDescription": "Count of DDRC precharge commands",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x03",
+	"EventName": "ddrc_cas_cmd",
+	"BriefDescription": "Count of DDRC read and write commands",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x30",
+	"EventName": "ddrc_rdwr_changes",
+	"BriefDescription": "Count the DDRC read and write changes",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x31",
+	"EventName": "ddrc_rank_changes",
+	"BriefDescription": "Count the DDRC rank changes",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x32",
+	"EventName": "ddrc_bg_changes",
+	"BriefDescription": "Count the DDRC BG changes",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x41",
+	"EventName": "ddrc_read_cmd",
+	"BriefDescription": "Count of DDRC read commands",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x44",
+	"EventName": "ddrc_write_cmd",
+	"BriefDescription": "Count of DDRC write commands",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x80",
+	"EventName": "ddrc_read_cmd_occupancy",
+	"BriefDescription": "Count of cycles occupied by the read command in the queue",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x81",
+	"EventName": "ddrc_write_cmd_occupancy",
+	"BriefDescription": "Count of cycles occupied by the write command in the queue",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x83",
+	"EventName": "flux_wr",
+	"BriefDescription": "Count of DDRC write commands",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"EventCode": "0x84",
+	"EventName": "flux_rd",
+	"BriefDescription": "Count of DDRC read commands",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"MetricName": "ddrc_write_bw",
+	"MetricExpr": "flux_wr * 4 / duration_time / 1e6",
+	"MetricGroup": "DDRC_bw",
+	"BriefDescription": "Average bandwidth of write DDRC memory",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"MetricName": "ddrc_read_bw",
+	"MetricExpr": "flux_rd * 4 / duration_time / 1e6",
+	"MetricGroup": "DDRC_bw",
+	"BriefDescription": "Average bandwidth of read DDRC memory",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"MetricName": "ddrc_rdwr_bw",
+	"MetricExpr": "(flux_wr + flux_rd) * 4 / duration_time / 1e6",
+	"MetricGroup": "DDRC_bw",
+	"BriefDescription": "Average bandwidth of DDRC (including memory read and write)",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"MetricName": "ddrc_read_lat",
+	"MetricExpr": "ddrc_read_cmd_occupancy / ddrc_read_cmd * (duration_time * 1e9 / ddrc_cycles)",
+	"MetricGroup": "DDRC_lat",
+	"BriefDescription": "Average scheduling latency of DDRC read command",
+	"ScaleUnit": "1ns",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"MetricName": "ddrc_write_lat",
+	"MetricExpr": "ddrc_write_cmd_occupancy / ddrc_write_cmd * (duration_time * 1e9 / ddrc_cycles)",
+	"MetricGroup": "DDRC_lat",
+	"BriefDescription": "Average scheduling of DDRC write command",
+	"ScaleUnit": "1ns",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   },
+   {
+	"MetricName": "ddrc_rowhit_rate",
+	"MetricExpr": "1 - ddrc_active_cmd / ddrc_cas_cmd",
+	"MetricGroup": "DDRC",
+	"BriefDescription": "Row hit rate of DDRC",
+	"ScaleUnit": "100%",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,ddrc"
+   }
+]

@@ -1,0 +1,142 @@
+[
+   {
+	"EventCode": "0x29",
+	"EventName": "l3c_back_invalid",
+	"BriefDescription": "Count number of L3C back invalid operations",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x3c",
+	"EventName": "l3c_cpu_evict",
+	"BriefDescription": "Count number of evict from CPU core",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x40",
+	"EventName": "l3c_retry_cpu",
+	"BriefDescription": "Count number of retry that L3C suppresses the CPU operations",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x41",
+	"EventName": "l3c_retry_ring",
+	"BriefDescription": "Count number of retry that L3C suppresses the ring operations",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x48",
+	"EventName": "l3c_hit",
+	"BriefDescription": "Count number of hit data from L3C to CPU core",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x7f",
+	"EventName": "l3c_cycles",
+	"BriefDescription": "Count of L3C cycles",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x7f",
+	"EventName": "cycles",
+	"BriefDescription": "Count of L3C cycles",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x80",
+	"EventName": "cpu_read_l3c_lat",
+	"Filter": "tt_core=0xff",
+	"BriefDescription": "Count the total latency that L3C completes the cluster CPU read requests",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x83",
+	"EventName": "l3c_read_hha_lat",
+	"Filter": "tt_core=0xff,tt_req=0x4",
+	"BriefDescription": "Count the total latency that HHA completes the L3C read requests",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xb8",
+	"EventName": "l3c_ref",
+	"BriefDescription": "Count number of all CPU accessed L3C",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xb9",
+	"EventName": "dat_access",
+	"BriefDescription": "Count number of the cluster CPU accessed L3C",
+	"Filter": "tt_core=0xff",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc0",
+	"EventName": "cpu_read_l3c_sum",
+	"Filter": "tt_core=0xff",
+	"BriefDescription": "Count of the requests issued by the cluster CPU read L3C",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc3",
+	"EventName": "l3c_read_hha_sum",
+	"Filter": "tt_core=0xff,tt_req=0x4",
+	"BriefDescription": "Count number of L3C read access to HHA",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xce",
+	"EventName": "l3c_retry_alloc",
+	"Filter": "tt_core=0xff",
+	"BriefDescription": "Count of the L3C retry CPU",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"MetricName": "l3c_hit_rate",
+	"MetricExpr": "l3c_hit / l3c_ref",
+	"MetricGroup": "L3C",
+	"BriefDescription": "hit rate of L3C",
+	"ScaleUnit": "100%",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"MetricName": "l3c_access_bw",
+	"MetricExpr": "l3c_ref * 64 / duration_time / 1e6",
+	"MetricGroup": "L3C_bw",
+	"BriefDescription": "Average bandwidth of CPU access L3C",
+	"ScaleUnit": "1MB/s",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"MetricName": "cpu_read_l3c_average_lat",
+	"MetricExpr": "cpu_read_l3c_lat / cpu_read_l3c_sum * (duration_time * 1e9 / l3c_cycles)",
+	"MetricGroup": "L3C_lat",
+	"BriefDescription": "Average latency of CPU reading L3C",
+	"ScaleUnit": "1ns",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"MetricName": "l3c_read_hha_average_lat",
+	"MetricExpr": "l3c_read_hha_lat / l3c_read_hha_sum * (duration_time * 1e9 / l3c_cycles)",
+	"MetricGroup": "L3C_lat",
+	"BriefDescription": "Average latency of L3C reading HHA",
+	"ScaleUnit": "1ns",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   }
+]
