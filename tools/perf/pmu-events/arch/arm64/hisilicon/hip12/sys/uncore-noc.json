@@ -1,0 +1,365 @@
+[
+	{
+		"ConfigCode": "0x0e",
+		"EventName": "cycles",
+		"BriefDescription": "Count of noc cycles",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x1a",
+		"EventName": "req_ingress_flow_sum",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel data flits from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x1a",
+		"EventName": "snp_ingress_flow_sum",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel data flits from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x1a",
+		"EventName": "rsp_ingress_flow_sum",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel data flits from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x1a",
+		"EventName": "ingress_flow_sum",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel data flits from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x17",
+		"EventName": "req_egress_flow_sum",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel data flits from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x17",
+		"EventName": "snp_egress_flow_sum",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel data flits from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x17",
+		"EventName": "rsp_egress_flow_sum",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel data flits from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x17",
+		"EventName": "egress_flow_sum",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel data flits from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x19",
+		"EventName": "req_ingress_buf_full",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel data buffer full from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x19",
+		"EventName": "snp_ingress_buf_full",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel data buffer full from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x19",
+		"EventName": "rsp_ingress_buf_full",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel data buffer full from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x19",
+		"EventName": "ingress_buf_full",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel data buffer full from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x12",
+		"EventName": "req_egress_buf_full",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel data buffer full from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x12",
+		"EventName": "snp_egress_buf_full",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel data buffer full from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x12",
+		"EventName": "rsp_egress_buf_full",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel data buffer full from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x12",
+		"EventName": "egress_buf_full",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel data buffer full from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x05",
+		"EventName": "req_cw_main_flow_sum",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel clockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x05",
+		"EventName": "snp_cw_main_flow_sum",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel clockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x05",
+		"EventName": "rsp_cw_main_flow_sum",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel clockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x05",
+		"EventName": "cw_main_flow_sum",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel clockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0d",
+		"EventName": "req_cc_main_flow_sum",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel counterclockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0d",
+		"EventName": "snp_cc_main_flow_sum",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel counterclockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0d",
+		"EventName": "rsp_cc_main_flow_sum",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel counterclockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0d",
+		"EventName": "cc_main_flow_sum",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel counterclockwise main Ring data flits",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x01",
+		"EventName": "req_cw_ingress_fail",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel retry data flits clockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x01",
+		"EventName": "snp_cw_ingress_fail",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel retry data flits clockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x01",
+		"EventName": "rsp_cw_ingress_fail",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel retry data flits clockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x01",
+		"EventName": "cw_ingress_fail",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel retry data flits clockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x09",
+		"EventName": "req_cc_ingress_fail",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel retry data flits counterclockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x09",
+		"EventName": "snp_cc_ingress_fail",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel retry data flits counterclockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x09",
+		"EventName": "rsp_cc_ingress_fail",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel retry data flits counterclockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x09",
+		"EventName": "cc_ingress_fail",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel retry data flits counterclockwise from subsys to Ring",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x03",
+		"EventName": "req_cw_egress_fail",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel retry data flits clockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x03",
+		"EventName": "snp_cw_egress_fail",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel retry data flits clockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x03",
+		"EventName": "rsp_cw_egress_fail",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel retry data flits clockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x03",
+		"EventName": "cw_egress_fail",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel retry data flits clockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0b",
+		"EventName": "req_cc_egress_fail",
+		"Filter": "ch=2",
+		"BriefDescription": "Count the number of req channel retry data flits counterclockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0b",
+		"EventName": "snp_cc_egress_fail",
+		"Filter": "ch=4",
+		"BriefDescription": "Count the number of snp channel retry data flits counterclockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0b",
+		"EventName": "rsp_cc_egress_fail",
+		"Filter": "ch=6",
+		"BriefDescription": "Count the number of rsp channel retry data flits counterclockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"ConfigCode": "0x0b",
+		"EventName": "cc_egress_fail",
+		"Filter": "ch=7",
+		"BriefDescription": "Count the number of data channel retry data flits counterclockwise from Ring to subsys",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"MetricName": "ingress_flow_bw",
+		"MetricExpr": "ingress_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth from subsys to Ring",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"MetricName": "egress_flow_bw",
+		"MetricExpr": "egress_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth from Ring to subsys",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"MetricName": "cw_main_flow_bw",
+		"MetricExpr": "cw_main_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth of clockwise main Ring",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"MetricName": "cc_main_flow_bw",
+		"MetricExpr": "cc_main_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth of counterclockwise main Ring",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	}
+]
