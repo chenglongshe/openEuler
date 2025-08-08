@@ -85,15 +85,15 @@
    },
    {
 	"EventCode": "0x23",
-	"EventName": "hha_retry",
-	"BriefDescription": "Count of the HHA retry",
+	"EventName": "hha_backinvalid",
+	"BriefDescription": "Count number of HHA back invalid operations",
 	"Compat": "0x00000030",
 	"Unit": "hisi_sccl,hha"
    },
    {
 	"EventCode": "0x2e",
-	"EventName": "hha_backinvalid",
-	"BriefDescription": "Count number of HHA back invalid operations",
+	"EventName": "hha_retry",
+	"BriefDescription": "Count of the HHA retry",
 	"Compat": "0x00000030",
 	"Unit": "hisi_sccl,hha"
    },
