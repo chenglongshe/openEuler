@@ -94,7 +94,7 @@
 	"EventCode": "0xb8",
 	"EventName": "l3c_ref",
 	"BriefDescription": "Count number of all CPU accessed L3C",
-	"Compat": "0x000000(30|40)",
+	"Compat": "0x00000030",
 	"Unit": "hisi_sccl,l3c"
    },
    {
@@ -107,9 +107,8 @@
    },
    {
 	"EventCode": "0xbc",
-	"EventName": "l3t_ret_cpu_sum",
-	"BriefDescription": "Count number of the L3T return data to CPU(64B)",
-	"Filter": "tt_core=0xff",
+	"EventName": "l3c_ref",
+	"BriefDescription": "Count number of all CPU accessed L3C",
 	"Compat": "0x00000040",
 	"Unit": "hisi_sccl,l3c"
 
