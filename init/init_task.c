@@ -61,6 +61,12 @@ static struct task_struct_resvd init_task_struct_resvd = {
 	.task = &init_task,
 };
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+static struct sched_entity_resvd init_sched_entity_resvd = {
+	.se = &init_task.se,
+};
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
+
 /*
  * Set up the first task table, touch at your own risk!. Base=0,
  * limit=0x1fffff (=2MB)
@@ -94,6 +100,9 @@ struct task_struct init_task
 	},
 	.se		= {
 		.group_node 	= LIST_HEAD_INIT(init_task.se.group_node),
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+		._resvd = &init_sched_entity_resvd,
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
 	},
 	.rt		= {
 		.run_list	= LIST_HEAD_INIT(init_task.rt.run_list),
