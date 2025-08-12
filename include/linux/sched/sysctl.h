@@ -35,4 +35,8 @@ int sched_cluster_handler(struct ctl_table *table, int write,
 			  void *buffer, size_t *lenp, loff_t *ppos);
 #endif
 
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+extern int sysctl_sched_util_ratio;
+#endif
+
 #endif /* _LINUX_SCHED_SYSCTL_H */
