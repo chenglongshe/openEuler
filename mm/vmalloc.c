@@ -40,6 +40,10 @@
 #include <linux/pgtable.h>
 #include <linux/hugetlb.h>
 #include <linux/sched/mm.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 #include <asm/tlbflush.h>
 #include <asm/shmparam.h>
 
@@ -988,6 +992,35 @@ unsigned long vmalloc_nr_pages(void)
 {
 	return atomic_long_read(&nr_vmalloc_pages);
 }
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc unsigned long bpf_mem_vmalloc_used(void)
+{
+	return vmalloc_nr_pages();
+}
+
+__bpf_kfunc unsigned long bpf_mem_vmalloc_total(void)
+{
+	return (unsigned long)VMALLOC_TOTAL >> 10;
+}
+
+BTF_SET8_START(bpf_mem_vmalloc_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_vmalloc_used)
+BTF_ID_FLAGS(func, bpf_mem_vmalloc_total)
+BTF_SET8_END(bpf_mem_vmalloc_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_mem_vmalloc_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_mem_vmalloc_kfunc_ids,
+};
+
+static int __init bpf_mem_vmalloc_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_mem_vmalloc_kfunc_set);
+}
+late_initcall(bpf_mem_vmalloc_kfunc_init);
+#endif
 
 static struct vmap_area *__find_vmap_area(unsigned long addr, struct rb_root *root)
 {

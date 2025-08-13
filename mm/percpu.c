@@ -87,6 +87,10 @@
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
 #include <linux/memcontrol.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 
 #include <asm/cacheflush.h>
 #include <asm/sections.h>
@@ -3418,6 +3422,29 @@ unsigned long pcpu_nr_pages(void)
 {
 	return pcpu_nr_populated * pcpu_nr_units;
 }
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc unsigned long bpf_mem_percpu(void)
+{
+	return pcpu_nr_pages();
+}
+
+BTF_SET8_START(bpf_mem_percpu_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_percpu)
+BTF_SET8_END(bpf_mem_percpu_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_mem_percpu_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_mem_percpu_kfunc_ids,
+};
+
+static int __init bpf_mem_percpu_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_mem_percpu_kfunc_set);
+}
+late_initcall(bpf_mem_percpu_kfunc_init);
+#endif
 
 /*
  * Percpu allocator is initialized early during boot when neither slab or

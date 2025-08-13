@@ -61,6 +61,11 @@
 #include <linux/shmem_fs.h>
 #include <linux/sysctl.h>
 #include <linux/dynamic_pool.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#include <linux/atomic.h>
+#endif
 #include "swap.h"
 #include "internal.h"
 #include "ras/ras_event.h"
@@ -2841,3 +2846,26 @@ retry:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(soft_offline_page);
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc unsigned long bpf_mem_failure(void)
+{
+	return atomic_long_read(&num_poisoned_pages) << (PAGE_SHIFT - 10);
+}
+
+BTF_SET8_START(bpf_mem_failure_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_failure)
+BTF_SET8_END(bpf_mem_failure_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_mem_failure_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_mem_failure_kfunc_ids,
+};
+
+static int __init bpf_mem_failure_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_mem_failure_kfunc_set);
+}
+late_initcall(bpf_mem_failure_kfunc_init);
+#endif

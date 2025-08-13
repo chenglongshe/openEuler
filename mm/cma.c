@@ -31,6 +31,12 @@
 #include <linux/highmem.h>
 #include <linux/io.h>
 #include <linux/kmemleak.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#include <linux/vmstat.h>
+#include <linux/mmzone.h>
+#endif
 #include <trace/events/cma.h>
 
 #include "internal.h"
@@ -624,3 +630,32 @@ int cma_for_each_area(int (*it)(struct cma *cma, void *data), void *data)
 
 	return 0;
 }
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc unsigned long bpf_mem_totalcma(void)
+{
+	return totalcma_pages;
+}
+
+__bpf_kfunc unsigned long bpf_mem_freecma(void)
+{
+	return global_zone_page_state(NR_FREE_CMA_PAGES);
+}
+
+BTF_SET8_START(bpf_mem_cma_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_totalcma)
+BTF_ID_FLAGS(func, bpf_mem_freecma)
+BTF_SET8_END(bpf_mem_cma_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_mem_cma_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_mem_cma_kfunc_ids,
+};
+
+static int __init bpf_mem_cma_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_mem_cma_kfunc_set);
+}
+late_initcall(bpf_mem_cma_kfunc_init);
+#endif

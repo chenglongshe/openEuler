@@ -78,11 +78,16 @@
 #include <net/ip.h>
 #include "slab.h"
 #include "swap.h"
-
 #include <linux/uaccess.h>
 
 #include <trace/events/vmscan.h>
 #include <linux/ksm.h>
+
+#ifdef CONFIG_BPF_RVI
+#include <linux/bpf.h>
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 
 struct cgroup_subsys memory_cgrp_subsys __read_mostly;
 EXPORT_SYMBOL(memory_cgrp_subsys);
@@ -8982,6 +8987,29 @@ static __init int mem_cgroup_sysctls_init(void)
 {
 	return 0;
 }
+#endif
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc struct mem_cgroup *bpf_mem_cgroup_from_task(struct task_struct *p)
+{
+	return mem_cgroup_from_task(p);
+}
+
+BTF_SET8_START(bpf_memcg_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_cgroup_from_task, KF_RET_NULL | KF_RCU)
+BTF_SET8_END(bpf_memcg_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_memcg_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_memcg_kfunc_ids,
+};
+
+static int __init bpf_memcg_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_memcg_kfunc_set);
+}
+late_initcall(bpf_memcg_kfunc_init);
 #endif
 
 static int __init cgroup_memory(char *s)

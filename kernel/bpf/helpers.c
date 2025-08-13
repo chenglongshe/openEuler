@@ -2387,6 +2387,30 @@ __bpf_kfunc struct task_struct *bpf_current_level1_reaper(void)
 
 	return p;
 }
+
+__bpf_kfunc struct pid_namespace *bpf_task_active_pid_ns(struct task_struct *task)
+{
+	return task_active_pid_ns(task);
+}
+
+__bpf_kfunc u64 bpf_pidns_nr_tasks(struct pid_namespace *ns)
+{
+	struct pid_iter iter;
+	u32 nr_running = 0, nr_threads = 0;
+
+	for_each_task_in_pidns(iter, ns) {
+		nr_threads++;
+		if (task_is_running(iter.task))
+			nr_running++;
+	}
+
+	return (u64)nr_running << 32 | nr_threads;
+}
+
+__bpf_kfunc u32 bpf_pidns_last_pid(struct pid_namespace *ns)
+{
+	return idr_get_cursor(&ns->idr) - 1;
+}
 #endif
 
 /**
@@ -2633,6 +2657,9 @@ BTF_ID_FLAGS(func, bpf_task_under_cgroup, KF_RCU)
 BTF_ID_FLAGS(func, bpf_task_from_pid, KF_ACQUIRE | KF_RET_NULL)
 #ifdef CONFIG_BPF_RVI
 BTF_ID_FLAGS(func, bpf_current_level1_reaper, KF_ACQUIRE | KF_RET_NULL)
+BTF_ID_FLAGS(func, bpf_task_active_pid_ns, KF_TRUSTED_ARGS)
+BTF_ID_FLAGS(func, bpf_pidns_nr_tasks)
+BTF_ID_FLAGS(func, bpf_pidns_last_pid)
 #endif
 BTF_SET8_END(generic_btf_ids)
 
