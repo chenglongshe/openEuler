@@ -22,6 +22,10 @@
 #include <linux/cc_platform.h>
 #include <linux/set_memory.h>
 #include <linux/memregion.h>
+#ifdef CONFIG_BPF_RVI
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#endif
 
 #include <asm/e820/api.h>
 #include <asm/processor.h>
@@ -122,6 +126,35 @@ void arch_report_meminfo(struct seq_file *m)
 		seq_printf(m, "DirectMap1G:    %8lu kB\n",
 			direct_pages_count[PG_LEVEL_1G] << 20);
 }
+
+#ifdef CONFIG_BPF_RVI
+__bpf_kfunc void bpf_mem_direct_map(unsigned long *p)
+{
+	p[0] = direct_pages_count[PG_LEVEL_4K] << 2;
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+	p[1] = direct_pages_count[PG_LEVEL_2M] << 11;
+#else
+	p[1] = direct_pages_count[PG_LEVEL_2M] << 12;
+#endif
+	p[2] = direct_pages_count[PG_LEVEL_1G] << 20;
+}
+
+BTF_SET8_START(bpf_direct_map_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_mem_direct_map, KF_TRUSTED_ARGS)
+BTF_SET8_END(bpf_direct_map_kfunc_ids)
+
+static const struct btf_kfunc_id_set bpf_direct_map_kfunc_set = {
+	.owner		= THIS_MODULE,
+	.set		= &bpf_direct_map_kfunc_ids,
+};
+
+static int __init bpf_direct_map_kfunc_init(void)
+{
+	return register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING,
+					 &bpf_direct_map_kfunc_set);
+}
+late_initcall(bpf_direct_map_kfunc_init);
+#endif /* CONFIG_BPF_RVI */
 #else
 static inline void split_page_count(int level) { }
 #endif
