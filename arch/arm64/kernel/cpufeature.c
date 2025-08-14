@@ -1809,7 +1809,7 @@ void __init early_pbha_init(void)
 	if (prop)
 		goto found;
 
-	node = fdt_path_offset(fdt, "/cpus");
+	node = fdt_path_offset(fdt, "/chosen");
 	if (node < 0)
 		return;
 
