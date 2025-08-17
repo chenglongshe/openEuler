@@ -1,0 +1,12 @@
+config RB_MUTEX
+	tristate "RB Mutex Support"
+	depends on MODULES
+	help
+	  This enables support for RB Mutex, a custom mutex implementation
+	  that can be used as an alternative to rt_mutex.
+	  
+	  If you want to compile it as a module, say M here.
+	  If you want to compile it into the kernel, say Y here.
+	  If you don't want to compile it, say N here.
+	  
+	  If unsure, say N. 

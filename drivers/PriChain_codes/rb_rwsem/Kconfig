@@ -1,0 +1,12 @@
+config RB_RWSEM
+	tristate "RB Read-Write Semaphore Support"
+	depends on MODULES
+	help
+	  This enables support for RB Read-Write Semaphore, a custom read-write
+	  semaphore implementation that can be used as an alternative to rwsem.
+	  
+	  If you want to compile it as a module, say M here.
+	  If you want to compile it into the kernel, say Y here.
+	  If you don't want to compile it, say N here.
+	  
+	  If unsure, say N. 
