@@ -481,8 +481,8 @@ static unsigned int unf_get_xchg_config_sum(struct unf_lport_s *v_lport,
 	 * Don't need to check it again.
 	 */
 	*v_xchg_sum = lport_cfg_items->max_sfs_xchg + lport_cfg_items->max_io;
-	if ((*v_xchg_sum / UNF_EXCHG_MGR_NUM) == 0 ||
-	    lport_cfg_items->max_sfs_xchg / UNF_EXCHG_MGR_NUM == 0) {
+	if (*v_xchg_sum < UNF_EXCHG_MGR_NUM ||
+	    lport_cfg_items->max_sfs_xchg < UNF_EXCHG_MGR_NUM) {
 		UNF_TRACE(UNF_EVTLOG_DRIVER_ERR, UNF_LOG_REG_ATT, UNF_ERR,
 			  "[err]Port(0x%x) Xchgsum(%u) or SfsXchg(%u) is less than ExchangeMgrNum(%u).",
 			  v_lport->port_id, *v_xchg_sum,
