@@ -5682,6 +5682,13 @@ union bpf_attr {
  *	Return
  *		Valid ingress dst on success, or negative error
  *		in case of failure.
+ *
+ * int bpf_set_ingress_dst(struct xdp_buff *xdp, void *dst)
+ *	Description
+ *		Set valid ingress dst entry to the skb associated
+ *		with xdp_buff.
+ *	Return
+ *		0 on success, or a negative error in case of failure.
  */
 #define ___BPF_FUNC_MAPPER(FN, ctx...)			\
 	FN(unspec, 0, ##ctx)				\
@@ -5897,6 +5904,7 @@ union bpf_attr {
 	FN(cgrp_storage_get, 210, ##ctx)		\
 	FN(cgrp_storage_delete, 211, ##ctx)		\
 	FN(get_ingress_dst, 212, ##ctx)			\
+	FN(set_ingress_dst, 213, ##ctx)			\
 	/* */
 
 /* backwards-compatibility macros for users of __BPF_FUNC_MAPPER that don't
