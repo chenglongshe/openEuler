@@ -8,6 +8,7 @@
 #include <linux/init.h>
 #include <linux/kvm_host.h>
 #include "hisi_virt.h"
+#include <linux/bitfield.h>
 
 static enum hisi_cpu_type cpu_type = UNKNOWN_HI_TYPE;
 
@@ -490,7 +491,10 @@ static void kvm_update_vm_lsudvmbm_hip12(struct kvm *kvm)
 
 	if (nr_dies == 1) {
 		val = DVMBM_RANGE_ONE_DIE << DVMBM_RANGE_SHIFT	|
-		      vm_aff3s[0] << DVMBM_DIE1_VDIE_SHIFT_HIP12;
+		      FIELD_PREP(DVMBM_DIE1_VDIE_MASK_HIP12,
+				 FIELD_GET(MPIDR_AFF3_VDIE_ID_MASK, vm_aff3s[0])) |
+		      FIELD_PREP(DVMBM_DIE1_SOCKET_MASK_HIP12,
+				 FIELD_GET(MPIDR_AFF3_SOCKET_ID_MASK, vm_aff3s[0]));
 
 		/* fulfill bits [11:6] */
 		for_each_cpu(cpu, kvm->arch.sched_cpus) {
@@ -506,8 +510,14 @@ static void kvm_update_vm_lsudvmbm_hip12(struct kvm *kvm)
 	/* nr_dies == 2 */
 	val = DVMBM_RANGE_TWO_DIES << DVMBM_RANGE_SHIFT	|
 	      DVMBM_GRAN_CLUSTER << DVMBM_GRAN_SHIFT	|
-	      vm_aff3s[0] << DVMBM_DIE1_VDIE_SHIFT_HIP12    |
-	      vm_aff3s[1] << DVMBM_DIE2_VDIE_SHIFT_HIP12;
+	      FIELD_PREP(DVMBM_DIE1_VDIE_MASK_HIP12,
+			 FIELD_GET(MPIDR_AFF3_VDIE_ID_MASK, vm_aff3s[0]))	|
+	      FIELD_PREP(DVMBM_DIE1_SOCKET_MASK_HIP12,
+			 FIELD_GET(MPIDR_AFF3_SOCKET_ID_MASK, vm_aff3s[0]))	|
+	      FIELD_PREP(DVMBM_DIE2_VDIE_MASK_HIP12,
+			 FIELD_GET(MPIDR_AFF3_VDIE_ID_MASK, vm_aff3s[1]))	|
+	      FIELD_PREP(DVMBM_DIE2_SOCKET_MASK_HIP12,
+			 FIELD_GET(MPIDR_AFF3_SOCKET_ID_MASK, vm_aff3s[1]));
 
 	/* and fulfill bits [11:0] */
 	for_each_cpu(cpu, kvm->arch.sched_cpus) {
