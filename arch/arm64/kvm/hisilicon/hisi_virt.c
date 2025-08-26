@@ -486,7 +486,9 @@ static void kvm_update_vm_lsudvmbm_hip12(struct kvm *kvm)
 
 	if (nr_dies == 1) {
 		val = DVMBM_RANGE_ONE_DIE << DVMBM_RANGE_SHIFT	|
-		      vm_aff3s[0] << DVMBM_DIE1_VDIE_SHIFT_HIP12;
+		      (vm_aff3s[0] & MPIDR_AFF3_DIE_ID_MASK) << DVMBM_DIE1_VDIE_SHIFT_HIP12 |
+		      ((vm_aff3s[0] & MPIDR_AFF3_SOCKET_ID_MASK) >> MPIDR_AFF3_SOCKET_ID_SHIFT)
+		            << DVMBM_DIE1_SOCKET_SHIFT_HIP12;
 
 		/* fulfill bits [11:6] */
 		for_each_cpu(cpu, kvm->arch.sched_cpus) {
@@ -502,8 +504,12 @@ static void kvm_update_vm_lsudvmbm_hip12(struct kvm *kvm)
 	/* nr_dies == 2 */
 	val = DVMBM_RANGE_TWO_DIES << DVMBM_RANGE_SHIFT	|
 	      DVMBM_GRAN_CLUSTER << DVMBM_GRAN_SHIFT	|
-	      vm_aff3s[0] << DVMBM_DIE1_VDIE_SHIFT_HIP12    |
-	      vm_aff3s[1] << DVMBM_DIE2_VDIE_SHIFT_HIP12;
+	      (vm_aff3s[0] & MPIDR_AFF3_DIE_ID_MASK) << DVMBM_DIE1_VDIE_SHIFT_HIP12 |
+	      ((vm_aff3s[0] & MPIDR_AFF3_SOCKET_ID_MASK) >> MPIDR_AFF3_SOCKET_ID_SHIFT)
+	            << DVMBM_DIE1_SOCKET_SHIFT_HIP12 |
+	      (vm_aff3s[1] & MPIDR_AFF3_DIE_ID_MASK) << DVMBM_DIE2_VDIE_SHIFT_HIP12 |
+	      ((vm_aff3s[1] & MPIDR_AFF3_SOCKET_ID_MASK) >> MPIDR_AFF3_SOCKET_ID_SHIFT)
+	            << DVMBM_DIE2_SOCKET_SHIFT_HIP12;
 
 	/* and fulfill bits [11:0] */
 	for_each_cpu(cpu, kvm->arch.sched_cpus) {
