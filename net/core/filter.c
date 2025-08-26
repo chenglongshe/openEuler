@@ -7082,6 +7082,36 @@ static const struct bpf_func_proto bpf_xdp_sk_lookup_tcp_proto = {
 	.arg5_type      = ARG_ANYTHING,
 };
 
+#ifdef CONFIG_HISOCK
+BPF_CALL_2(bpf_xdp_set_ingress_dst, struct xdp_buff *, xdp, void *, dst)
+{
+	struct hisock_xdp_buff *hxdp = (struct hisock_xdp_buff *)xdp;
+	struct dst_entry *_dst = (struct dst_entry *)dst;
+
+	if (!hxdp->skb)
+		return -EOPNOTSUPP;
+
+	if (!_dst || !virt_addr_valid(_dst))
+		return -EFAULT;
+
+	/* same as skb_valid_dst */
+	if (_dst->flags & DST_METADATA)
+		return -EINVAL;
+
+	skb_dst_set_noref(hxdp->skb, _dst);
+	return 0;
+}
+
+static const struct bpf_func_proto bpf_xdp_set_ingress_dst_proto = {
+	.func		= bpf_xdp_set_ingress_dst,
+	.gpl_only       = false,
+	.pkt_access     = true,
+	.ret_type       = RET_INTEGER,
+	.arg1_type      = ARG_PTR_TO_CTX,
+	.arg2_type      = ARG_ANYTHING,
+};
+#endif
+
 BPF_CALL_5(bpf_sock_addr_skc_lookup_tcp, struct bpf_sock_addr_kern *, ctx,
 	   struct bpf_sock_tuple *, tuple, u32, len, u64, netns_id, u64, flags)
 {
@@ -8381,6 +8411,10 @@ xdp_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 		return &bpf_tcp_check_syncookie_proto;
 	case BPF_FUNC_tcp_gen_syncookie:
 		return &bpf_tcp_gen_syncookie_proto;
+#ifdef CONFIG_HISOCK
+	case BPF_FUNC_set_ingress_dst:
+		return &bpf_xdp_set_ingress_dst_proto;
+#endif
 #ifdef CONFIG_SYN_COOKIES
 	case BPF_FUNC_tcp_raw_gen_syncookie_ipv4:
 		return &bpf_tcp_raw_gen_syncookie_ipv4_proto;
