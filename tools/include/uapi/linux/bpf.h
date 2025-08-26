@@ -1006,6 +1006,7 @@ enum bpf_prog_type {
 	BPF_PROG_TYPE_SYSCALL, /* a program that can execute syscalls */
 	BPF_PROG_TYPE_NETFILTER,
 	BPF_PROG_TYPE_SCHED,
+	BPF_PROG_TYPE_HISOCK,
 };
 
 enum bpf_attach_type {
@@ -1059,6 +1060,7 @@ enum bpf_attach_type {
 	BPF_TCX_EGRESS,
 	BPF_TRACE_UPROBE_MULTI,
 	BPF_SCHED,
+	BPF_HISOCK_EGRESS,
 	__MAX_BPF_ATTACH_TYPE
 };
 
@@ -7355,5 +7357,12 @@ struct bpf_iter_num {
 	 */
 	__u64 __opaque[1];
 } __attribute__((aligned(8)));
+
+enum hisock_action {
+	HISOCK_PASS,
+	HISOCK_DROP,
+	HISOCK_REDIRECT,
+	__MAX_HISOCK_ACTION,
+};
 
 #endif /* _UAPI__LINUX_BPF_H__ */
