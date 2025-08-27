@@ -37,7 +37,7 @@ void *bpf_jit_alloc_exec_page(void)
 	/* Keep image as writeable. The alternative is to keep flipping ro/rw
 	 * everytime new program is attached or detached.
 	 */
-	set_memory_x((long)image, 1);
+	numa_set_memory_x((long)image, 1);
 	return image;
 }
 

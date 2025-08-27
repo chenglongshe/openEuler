@@ -223,7 +223,11 @@ static inline void tlb_remove_table_sync_one(void) { }
  * If we can't allocate a page to make a big batch of page pointers
  * to work on, then just handle a few from the on-stack structure.
  */
+#ifdef CONFIG_USER_REPLICATION
+#define MMU_GATHER_BUNDLE	MAX_NUMNODES
+#else
 #define MMU_GATHER_BUNDLE	8
+#endif
 
 struct mmu_gather_batch {
 	struct mmu_gather_batch	*next;
@@ -244,6 +248,8 @@ struct mmu_gather_batch {
 #define MAX_GATHER_BATCH_COUNT	(10000UL/MAX_GATHER_BATCH)
 
 extern bool __tlb_remove_page_size(struct mmu_gather *tlb, struct page *page,
+				   int page_size);
+extern bool __tlb_remove_replica_pages_size(struct mmu_gather *tlb, struct page **pages,
 				   int page_size);
 #endif
 
@@ -440,6 +446,11 @@ static inline void tlb_remove_page_size(struct mmu_gather *tlb,
 static inline bool __tlb_remove_page(struct mmu_gather *tlb, struct page *page)
 {
 	return __tlb_remove_page_size(tlb, page, PAGE_SIZE);
+}
+
+static inline bool __tlb_remove_replica_pages(struct mmu_gather *tlb, struct page **pages)
+{
+	return __tlb_remove_replica_pages_size(tlb, pages, PAGE_SIZE);
 }
 
 /* tlb_remove_page

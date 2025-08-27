@@ -25,6 +25,17 @@ unsigned int arch_mod_section_prepend(struct module *mod, unsigned int section);
 /* Allocator used for allocating struct module, core sections and init
    sections.  Returns NULL on failure. */
 void *module_alloc(unsigned long size);
+void *module_alloc_replica(unsigned long size);
+
+#ifndef CONFIG_KERNEL_REPLICATION
+static inline void module_replicate_numa(void *ptr)
+{
+	(void) ptr;
+}
+#else
+/* Replicate memory allocated in previous function*/
+void module_replicate_numa(void *ptr);
+#endif /* CONFIG_KERNEL_REPLICATION */
 
 /* Free memory returned from module_alloc. */
 void module_memfree(void *module_region);

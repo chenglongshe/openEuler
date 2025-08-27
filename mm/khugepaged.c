@@ -18,6 +18,7 @@
 #include <linux/page_idle.h>
 #include <linux/swapops.h>
 #include <linux/shmem_fs.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/tlb.h>
 #include <asm/pgalloc.h>
@@ -467,6 +468,8 @@ static bool hugepage_vma_check(struct vm_area_struct *vma,
 		return false;
 	if (vma_is_temporary_stack(vma))
 		return false;
+	if (vma_has_replicas(vma))
+		return false;
 	return !(vm_flags & VM_NO_KHUGEPAGED);
 }
 
@@ -631,6 +634,7 @@ static int __collapse_huge_page_isolate(struct vm_area_struct *vma,
 			result = SCAN_PAGE_NULL;
 			goto out;
 		}
+		BUG_ON(PageReplicated(compound_head(page)));
 
 		VM_BUG_ON_PAGE(!PageAnon(page), page);
 
@@ -762,7 +766,7 @@ static void __collapse_huge_page_copy(pte_t *pte, struct page *page,
 				 * paravirt calls inside pte_clear here are
 				 * superfluous.
 				 */
-				pte_clear(vma->vm_mm, address, _pte);
+				pte_clear_replicated(vma->vm_mm, address, _pte);
 				spin_unlock(ptl);
 			}
 		} else {
@@ -780,7 +784,8 @@ static void __collapse_huge_page_copy(pte_t *pte, struct page *page,
 			 * paravirt calls inside pte_clear here are
 			 * superfluous.
 			 */
-			pte_clear(vma->vm_mm, address, _pte);
+
+			pte_clear_replicated(vma->vm_mm, address, _pte);
 			reliable_page_counter(src_page, vma->vm_mm, -1);
 			page_remove_rmap(src_page, false);
 			spin_unlock(ptl);
@@ -1076,7 +1081,13 @@ static void collapse_huge_page(struct mm_struct *mm,
 	struct vm_area_struct *vma;
 	struct mmu_notifier_range range;
 	gfp_t gfp;
-
+#ifdef CONFIG_USER_REPLICATION
+	pmd_t _pmd_numa[MAX_NUMNODES];
+	unsigned long offset;
+	struct page *curr;
+	pmd_t *curr_pmd;
+	bool pmd_replicated = false;
+#endif
 	VM_BUG_ON(address & ~HPAGE_PMD_MASK);
 
 	/* Only allocate from the target node */
@@ -1162,6 +1173,16 @@ static void collapse_huge_page(struct mm_struct *mm,
 	 * it detects PMD is changed.
 	 */
 	_pmd = pmdp_collapse_flush(vma, address, pmd);
+#ifdef CONFIG_USER_REPLICATION
+	pmd_replicated = numa_pgtable_replicated(pmd);
+	if (pmd_replicated) {
+		_pmd_numa[first_memory_node] = _pmd;
+		for_each_pgtable_replica(curr, curr_pmd, pmd, offset) {
+			_pmd_numa[page_to_nid(curr)] = pmdp_collapse_flush(vma, address, curr_pmd);
+		}
+	}
+#endif
+
 	spin_unlock(pmd_ptl);
 	mmu_notifier_invalidate_range_end(&range);
 	tlb_remove_table_sync_one();
@@ -1181,6 +1202,13 @@ static void collapse_huge_page(struct mm_struct *mm,
 		 * points to regular pagetables. Use pmd_populate for that
 		 */
 		pmd_populate(mm, pmd, pmd_pgtable(_pmd));
+#ifdef CONFIG_USER_REPLICATION
+		if (pmd_replicated) {
+			for_each_pgtable_replica(curr, curr_pmd, pmd, offset) {
+				pmd_populate(mm, curr_pmd, pmd_pgtable(_pmd_numa[page_to_nid(curr)]));
+			}
+		}
+#endif
 		spin_unlock(pmd_ptl);
 		anon_vma_unlock_write(vma->anon_vma);
 		result = SCAN_FAIL;
@@ -1214,8 +1242,29 @@ static void collapse_huge_page(struct mm_struct *mm,
 	reliable_page_counter(new_page, vma->vm_mm, HPAGE_PMD_NR);
 	page_add_new_anon_rmap(new_page, vma, address, true);
 	lru_cache_add_inactive_or_unevictable(new_page, vma);
-	pgtable_trans_huge_deposit(mm, pmd, pgtable);
-	set_pmd_at(mm, address, pmd, _pmd);
+
+#ifdef CONFIG_USER_REPLICATION
+	if (numa_pgtable_replicated(page_to_virt(pgtable))) {
+		int nid;
+
+		pgtable->master_table = pgtable;
+		for_each_memory_node(nid) {
+			pgtable_t curr_pgtable = pmd_pgtable(_pmd_numa[nid]);
+
+			curr_pgtable->replica_list_head.first = NULL;
+			ClearPageReplicated(curr_pgtable);
+			memcg_account_dereplicated_pgtable_page(page_to_virt(curr_pgtable));
+			if (nid != first_memory_node) {
+				pte_free(mm, curr_pgtable);
+				mm_dec_nr_ptes(mm);
+			}
+		}
+		account_dereplicated_table(mm);
+	}
+#endif
+
+	pgtable_trans_huge_deposit(mm, get_master_pmd(pmd), pgtable);
+	set_pmd_at_replicated(mm, address, pmd, _pmd);
 	update_mmu_cache_pmd(vma, address, pmd);
 	spin_unlock(pmd_ptl);
 

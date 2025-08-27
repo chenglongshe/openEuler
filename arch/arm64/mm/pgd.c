@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+ // SPDX-License-Identifier: GPL-2.0-only
 /*
  * PGD allocation/freeing
  *
@@ -10,6 +10,7 @@
 #include <linux/gfp.h>
 #include <linux/highmem.h>
 #include <linux/slab.h>
+#include <linux/numa_kernel_replication.h>
 
 #include <asm/pgalloc.h>
 #include <asm/page.h>
@@ -17,6 +18,58 @@
 
 static struct kmem_cache *pgd_cache __ro_after_init;
 
+#ifdef CONFIG_KERNEL_REPLICATION
+
+static pgd_t *page_pgd_alloc(struct mm_struct *mm)
+{
+	int nid;
+	gfp_t gfp = GFP_PGTABLE_USER | __GFP_THISNODE;
+
+	/*
+	 * Kernel replication is not supproted in case of non-page size pgd,
+	 * in general we can support it, but maybe later, due to we need to
+	 * update page tables allocation significantly, so, let's panic here.
+	 */
+	for_each_memory_node(nid) {
+		struct page *page;
+
+		page = alloc_pages_node(nid, gfp, 0);
+		if (!page)
+			goto fail;
+
+		SetPageReplicated(page);
+
+		per_node_pgd(mm, nid) = (pgd_t *)page_address(page);
+	}
+
+	for_each_online_node(nid)
+		per_node_pgd(mm, nid) = per_node_pgd(mm, numa_get_memory_node(nid));
+
+	mm->pgd = per_node_pgd(mm, numa_get_memory_node(0));
+
+	build_pgd_chain(mm->pgd_numa);
+
+	return mm->pgd;
+
+fail:
+	pgd_free(mm, mm->pgd);
+
+	return NULL;
+}
+
+pgd_t *pgd_alloc(struct mm_struct *mm)
+{
+	pgd_t **pgd_numa = (pgd_t **)kmalloc(sizeof(pgd_t *) * MAX_NUMNODES, GFP_PGTABLE_KERNEL);
+
+	if (!pgd_numa)
+		return NULL;
+
+	mm->pgd_numa = pgd_numa;
+
+	return page_pgd_alloc(mm);
+}
+
+#else
 pgd_t *pgd_alloc(struct mm_struct *mm)
 {
 	gfp_t gfp = GFP_PGTABLE_USER;
@@ -26,7 +79,43 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	else
 		return kmem_cache_alloc(pgd_cache, gfp);
 }
+#endif /* CONFIG_KERNEL_REPLICATION */
 
+#ifdef CONFIG_KERNEL_REPLICATION
+
+static void page_pgd_free(struct mm_struct *mm, pgd_t *pgd)
+{
+	int nid;
+	/*
+	 * Kernel replication is not supproted in case of non-page size pgd,
+	 * in general we can support it, but maybe later, due to we need to
+	 * update page tables allocation significantly, so, let's panic here.
+	 */
+
+	if (per_node_pgd(mm, first_memory_node) == NULL)
+		return;
+
+	clear_pgtable_list(virt_to_page(per_node_pgd(mm, first_memory_node)));
+	for_each_memory_node(nid) {
+		if (per_node_pgd(mm, nid) == NULL)
+			break;
+		ClearPageReplicated(virt_to_page(per_node_pgd(mm, nid)));
+
+		free_page((unsigned long)per_node_pgd(mm, nid));
+	}
+
+	for_each_online_node(nid)
+		per_node_pgd(mm, nid) = NULL;
+}
+
+void pgd_free(struct mm_struct *mm, pgd_t *pgd)
+{
+	page_pgd_free(mm, pgd);
+
+	kfree(mm->pgd_numa);
+}
+
+#else
 void pgd_free(struct mm_struct *mm, pgd_t *pgd)
 {
 	if (PGD_SIZE == PAGE_SIZE)
@@ -34,6 +123,7 @@ void pgd_free(struct mm_struct *mm, pgd_t *pgd)
 	else
 		kmem_cache_free(pgd_cache, pgd);
 }
+#endif /* CONFIG_KERNEL_REPLICATION */
 
 void __init pgtable_cache_init(void)
 {

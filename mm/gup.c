@@ -17,6 +17,7 @@
 #include <linux/migrate.h>
 #include <linux/mm_inline.h>
 #include <linux/sched/mm.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/mmu_context.h>
 #include <asm/tlbflush.h>
@@ -453,7 +454,7 @@ static int follow_pfn_pte(struct vm_area_struct *vma, unsigned long address,
 		entry = pte_mkyoung(entry);
 
 		if (!pte_same(*pte, entry)) {
-			set_pte_at(vma->vm_mm, address, pte, entry);
+			set_pte_at_replicated(vma->vm_mm, address, pte, entry);
 			update_mmu_cache(vma, address, pte);
 		}
 	}
@@ -530,6 +531,7 @@ retry:
 	}
 
 	page = vm_normal_page(vma, address, pte);
+
 	if (!page && pte_devmap(pte) && (flags & (FOLL_GET | FOLL_PIN))) {
 		/*
 		 * Only return device mapping pages in the FOLL_GET or FOLL_PIN
@@ -602,7 +604,10 @@ retry:
 		/* Do not mlock pte-mapped THP */
 		if (PageTransCompound(page))
 			goto out;
-
+		if (page && PageReplicated(compound_head(page))) {
+			page = ERR_PTR(-EEXIST);
+			goto out;
+		}
 		/*
 		 * The preliminary mapping check is mainly to avoid the
 		 * pointless overhead of lock_page on the ZERO_PAGE
@@ -881,6 +886,10 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
 	struct page *page;
 
 	page = follow_page_mask(vma, address, foll_flags, &ctx);
+
+	if (foll_flags & FOLL_MLOCK)
+		BUG_ON(page && !IS_ERR(page) && PageReplicated(compound_head(page)));
+
 	if (ctx.pgmap)
 		put_dev_pagemap(ctx.pgmap);
 	return page;
@@ -1147,10 +1156,20 @@ static long __get_user_pages(struct mm_struct *mm,
 				goto next_page;
 			}
 
-			if (!vma || check_vma_flags(vma, gup_flags)) {
+			if (!vma) {
 				ret = -EFAULT;
 				goto out;
 			}
+
+			/*
+			 * TODO: It seems to me that we cannot (and should not) pin replicated memory.
+			 * Add a check in vma if memory has already been replicated.
+			 */
+
+			ret = check_vma_flags(vma, gup_flags);
+			if (ret)
+				goto out;
+
 			if (is_vm_hugetlb_page(vma)) {
 				i = follow_hugetlb_page(mm, vma, pages, vmas,
 						&start, &nr_pages, i,
@@ -1180,6 +1199,11 @@ retry:
 		cond_resched();
 
 		page = follow_page_mask(vma, start, foll_flags, &ctx);
+
+		if ((foll_flags & FOLL_MLOCK) && page && !IS_ERR(page) && PageReplicated(compound_head(page))) {
+			pr_info("bruh\n");
+			BUG_ON(page && !IS_ERR(page) && PageReplicated(compound_head(page)));
+		}
 		if (!page) {
 			ret = faultin_page(vma, start, &foll_flags, locked);
 			switch (ret) {
@@ -1567,6 +1591,11 @@ int do_mm_populate(struct mm_struct *mm, unsigned long start, unsigned long len,
 			}
 			break;
 		}
+#ifdef CONFIG_USER_REPLICATION
+		if (get_data_replication_policy(mm) == DATA_REPLICATION_ALL && vma_might_be_replicated(vma)) {
+			phys_duplicate(vma, nstart, nstart - nend);
+		}
+#endif
 		nend = nstart + ret * PAGE_SIZE;
 		ret = 0;
 	}

@@ -155,7 +155,6 @@ enum pageflags {
 	PG_reserve_pgflag_0,
 	PG_reserve_pgflag_1,
 #endif
-
 	__NR_PAGEFLAGS,
 
 	/* Filesystems */
@@ -191,6 +190,10 @@ enum pageflags {
 
 	/* Only valid for buddy pages. Used to track pages that are reported */
 	PG_reported = PG_uptodate,
+
+#ifdef CONFIG_KERNEL_REPLICATION
+	PG_replicated = PG_reserve_pgflag_0,
+#endif
 };
 
 #ifndef __GENERATING_BOUNDS_H
@@ -544,6 +547,13 @@ PAGEFLAG(Idle, idle, PF_ANY)
  * any possible races on the setting or clearing of the bit.
  */
 __PAGEFLAG(Reported, reported, PF_NO_COMPOUND)
+
+#ifdef CONFIG_KERNEL_REPLICATION
+PAGEFLAG(Replicated, replicated, PF_ANY)
+#else
+PAGEFLAG_FALSE(Replicated)
+#endif
+
 
 /*
  * PagePool() is used to track page allocated from hpool.
@@ -919,6 +929,12 @@ static inline void ClearPageSlabPfmemalloc(struct page *page)
 #define __PG_MLOCKED		0
 #endif
 
+#ifdef CONFIG_KERNEL_REPLICATION
+#define __PG_REPLICATED		(1UL << PG_replicated)
+#else
+#define __PG_REPLICATED		0
+#endif
+
 /*
  * Flags checked when a page is freed.  Pages being freed should not have
  * these flags set.  It they are, there is a problem.
@@ -928,7 +944,7 @@ static inline void ClearPageSlabPfmemalloc(struct page *page)
 	 1UL << PG_private	| 1UL << PG_private_2	|	\
 	 1UL << PG_writeback	| 1UL << PG_reserved	|	\
 	 1UL << PG_slab		| 1UL << PG_active 	|	\
-	 1UL << PG_unevictable	| __PG_MLOCKED)
+	 1UL << PG_unevictable	| __PG_REPLICATED	| __PG_MLOCKED)
 
 /*
  * Flags checked when a page is prepped for return by the page allocator.

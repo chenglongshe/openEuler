@@ -40,6 +40,7 @@
 #include <linux/swap_slots.h>
 #include <linux/sort.h>
 #include <linux/completion.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/tlbflush.h>
 #include <linux/swapops.h>
@@ -2048,7 +2049,7 @@ static int unuse_pte(struct vm_area_struct *vma, pmd_t *pmd,
 	dec_mm_counter(vma->vm_mm, MM_SWAPENTS);
 	inc_mm_counter(vma->vm_mm, MM_ANONPAGES);
 	get_page(page);
-	set_pte_at(vma->vm_mm, addr, pte,
+	set_pte_at_replicated(vma->vm_mm, addr, pte,
 		   pte_mkold(mk_pte(page, vma->vm_page_prot)));
 
 	reliable_page_counter(page, vma->vm_mm, 1);

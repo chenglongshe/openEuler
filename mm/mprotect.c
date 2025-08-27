@@ -29,24 +29,149 @@
 #include <linux/uaccess.h>
 #include <linux/mm_inline.h>
 #include <linux/pgtable.h>
+#include <linux/numa_user_replication.h>
 #include <asm/cacheflush.h>
 #include <asm/mmu_context.h>
 #include <asm/tlbflush.h>
 
 #include "internal.h"
 
-static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
-		unsigned long addr, unsigned long end, pgprot_t newprot,
-		unsigned long cp_flags)
+static unsigned long change_pte_entry(struct vm_area_struct *vma, unsigned long addr,
+				      pte_t *pte, pgprot_t newprot, unsigned long cp_flags)
 {
-	pte_t *pte, oldpte;
-	spinlock_t *ptl;
+	pte_t oldpte = *pte;
 	unsigned long pages = 0;
 	int target_node = NUMA_NO_NODE;
 	bool dirty_accountable = cp_flags & MM_CP_DIRTY_ACCT;
 	bool prot_numa = cp_flags & MM_CP_PROT_NUMA;
 	bool uffd_wp = cp_flags & MM_CP_UFFD_WP;
 	bool uffd_wp_resolve = cp_flags & MM_CP_UFFD_WP_RESOLVE;
+
+	/* Get target node for single threaded private VMAs */
+	if (prot_numa && !(vma->vm_flags & VM_SHARED) &&
+	    atomic_read(&vma->vm_mm->mm_users) == 1)
+		target_node = numa_node_id();
+
+	if (pte_present(oldpte)) {
+		pte_t ptent;
+		bool preserve_write = prot_numa && pte_write(oldpte);
+
+		/*
+		 * Avoid trapping faults against the zero or KSM
+		 * pages. See similar comment in change_huge_pmd.
+		 */
+		if (prot_numa) {
+			struct page *page;
+
+			/* Avoid TLB flush if possible */
+			if (pte_protnone(oldpte))
+				return pages;
+
+			page = vm_normal_page(vma, addr, oldpte);
+			if (!page || PageKsm(page))
+				return pages;
+
+			/* Skip fully replicated memory */
+			if (page && PageReplicated(compound_head(page)))
+				return pages;
+
+			/* Also skip shared copy-on-write pages */
+			if ((get_data_replication_policy(vma->vm_mm) == DATA_REPLICATION_NONE) &&
+			    is_cow_mapping(vma->vm_flags) &&
+			    page_count(page) != 1)
+				return pages;
+
+			/*
+			 * While migration can move some dirty pages,
+			 * it cannot move them all from MIGRATE_ASYNC
+			 * context.
+			 */
+			if (page_is_file_lru(page) && PageDirty(page))
+				return pages;
+
+			/*
+			 * Don't mess with PTEs if page is already on the node
+			 * a single-threaded process is running on.
+			 */
+			if (target_node == page_to_nid(page))
+				return pages;
+		}
+
+		oldpte = ptep_modify_prot_start(vma, addr, pte);
+		ptent = pte_modify(oldpte, newprot);
+		if (preserve_write)
+			ptent = pte_mk_savedwrite(ptent);
+
+		if (uffd_wp) {
+			ptent = pte_wrprotect(ptent);
+			ptent = pte_mkuffd_wp(ptent);
+		} else if (uffd_wp_resolve) {
+			/*
+			 * Leave the write bit to be handled
+			 * by PF interrupt handler, then
+			 * things like COW could be properly
+			 * handled.
+			 */
+			ptent = pte_clear_uffd_wp(ptent);
+		}
+
+		/* Avoid taking write faults for known dirty pages */
+		if (dirty_accountable && pte_dirty(ptent) &&
+				(pte_soft_dirty(ptent) ||
+				 !(vma->vm_flags & VM_SOFTDIRTY))) {
+			ptent = pte_mkwrite(ptent);
+		}
+		ptep_modify_prot_commit(vma, addr, pte, oldpte, ptent);
+		pages++;
+	} else if (is_swap_pte(oldpte)) {
+		swp_entry_t entry = pte_to_swp_entry(oldpte);
+		pte_t newpte;
+
+		if (is_write_migration_entry(entry)) {
+			/*
+			 * A protection check is difficult so
+			 * just be safe and disable write
+			 */
+			make_migration_entry_read(&entry);
+			newpte = swp_entry_to_pte(entry);
+			if (pte_swp_soft_dirty(oldpte))
+				newpte = pte_swp_mksoft_dirty(newpte);
+			if (pte_swp_uffd_wp(oldpte))
+				newpte = pte_swp_mkuffd_wp(newpte);
+		} else if (is_write_device_private_entry(entry)) {
+			/*
+			 * We do not preserve soft-dirtiness. See
+			 * copy_one_pte() for explanation.
+			 */
+			make_device_private_entry_read(&entry);
+			newpte = swp_entry_to_pte(entry);
+			if (pte_swp_uffd_wp(oldpte))
+				newpte = pte_swp_mkuffd_wp(newpte);
+		} else {
+			newpte = oldpte;
+		}
+
+		if (uffd_wp)
+			newpte = pte_swp_mkuffd_wp(newpte);
+		else if (uffd_wp_resolve)
+			newpte = pte_swp_clear_uffd_wp(newpte);
+
+		if (!pte_same(oldpte, newpte)) {
+			set_pte_at(vma->vm_mm, addr, pte, newpte);
+			pages++;
+		}
+	}
+
+	return pages;
+}
+
+static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
+				      unsigned long addr, unsigned long end, pgprot_t newprot,
+				      unsigned long cp_flags)
+{
+	pte_t *pte;
+	spinlock_t *ptl;
+	unsigned long pages = 0;
 
 	/*
 	 * Can be called with only the mmap_lock for reading by
@@ -64,119 +189,21 @@ static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 	 */
 	pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
 
-	/* Get target node for single threaded private VMAs */
-	if (prot_numa && !(vma->vm_flags & VM_SHARED) &&
-	    atomic_read(&vma->vm_mm->mm_users) == 1)
-		target_node = numa_node_id();
-
 	flush_tlb_batched_pending(vma->vm_mm);
 	arch_enter_lazy_mmu_mode();
 	do {
-		oldpte = *pte;
-		if (pte_present(oldpte)) {
-			pte_t ptent;
-			bool preserve_write = prot_numa && pte_write(oldpte);
+		pages += change_pte_entry(vma, addr, pte, newprot, cp_flags);
+#ifdef CONFIG_USER_REPLICATION
+		if (numa_pgtable_replicated(pte)) {
+			unsigned long offset;
+			struct page *curr;
+			pte_t *curr_pte;
 
-			/*
-			 * Avoid trapping faults against the zero or KSM
-			 * pages. See similar comment in change_huge_pmd.
-			 */
-			if (prot_numa) {
-				struct page *page;
-
-				/* Avoid TLB flush if possible */
-				if (pte_protnone(oldpte))
-					continue;
-
-				page = vm_normal_page(vma, addr, oldpte);
-				if (!page || PageKsm(page))
-					continue;
-
-				/* Also skip shared copy-on-write pages */
-				if (is_cow_mapping(vma->vm_flags) &&
-				    page_count(page) != 1)
-					continue;
-
-				/*
-				 * While migration can move some dirty pages,
-				 * it cannot move them all from MIGRATE_ASYNC
-				 * context.
-				 */
-				if (page_is_file_lru(page) && PageDirty(page))
-					continue;
-
-				/*
-				 * Don't mess with PTEs if page is already on the node
-				 * a single-threaded process is running on.
-				 */
-				if (target_node == page_to_nid(page))
-					continue;
-			}
-
-			oldpte = ptep_modify_prot_start(vma, addr, pte);
-			ptent = pte_modify(oldpte, newprot);
-			if (preserve_write)
-				ptent = pte_mk_savedwrite(ptent);
-
-			if (uffd_wp) {
-				ptent = pte_wrprotect(ptent);
-				ptent = pte_mkuffd_wp(ptent);
-			} else if (uffd_wp_resolve) {
-				/*
-				 * Leave the write bit to be handled
-				 * by PF interrupt handler, then
-				 * things like COW could be properly
-				 * handled.
-				 */
-				ptent = pte_clear_uffd_wp(ptent);
-			}
-
-			/* Avoid taking write faults for known dirty pages */
-			if (dirty_accountable && pte_dirty(ptent) &&
-					(pte_soft_dirty(ptent) ||
-					 !(vma->vm_flags & VM_SOFTDIRTY))) {
-				ptent = pte_mkwrite(ptent);
-			}
-			ptep_modify_prot_commit(vma, addr, pte, oldpte, ptent);
-			pages++;
-		} else if (is_swap_pte(oldpte)) {
-			swp_entry_t entry = pte_to_swp_entry(oldpte);
-			pte_t newpte;
-
-			if (is_write_migration_entry(entry)) {
-				/*
-				 * A protection check is difficult so
-				 * just be safe and disable write
-				 */
-				make_migration_entry_read(&entry);
-				newpte = swp_entry_to_pte(entry);
-				if (pte_swp_soft_dirty(oldpte))
-					newpte = pte_swp_mksoft_dirty(newpte);
-				if (pte_swp_uffd_wp(oldpte))
-					newpte = pte_swp_mkuffd_wp(newpte);
-			} else if (is_write_device_private_entry(entry)) {
-				/*
-				 * We do not preserve soft-dirtiness. See
-				 * copy_one_pte() for explanation.
-				 */
-				make_device_private_entry_read(&entry);
-				newpte = swp_entry_to_pte(entry);
-				if (pte_swp_uffd_wp(oldpte))
-					newpte = pte_swp_mkuffd_wp(newpte);
-			} else {
-				newpte = oldpte;
-			}
-
-			if (uffd_wp)
-				newpte = pte_swp_mkuffd_wp(newpte);
-			else if (uffd_wp_resolve)
-				newpte = pte_swp_clear_uffd_wp(newpte);
-
-			if (!pte_same(oldpte, newpte)) {
-				set_pte_at(vma->vm_mm, addr, pte, newpte);
-				pages++;
+			for_each_pgtable_replica(curr, curr_pte, pte, offset) {
+				change_pte_entry(vma, addr, curr_pte, newprot, cp_flags);
 			}
 		}
+#endif
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 	arch_leave_lazy_mmu_mode();
 	pte_unmap_unlock(pte - 1, ptl);
@@ -332,7 +359,7 @@ static unsigned long change_protection_range(struct vm_area_struct *vma,
 	unsigned long pages = 0;
 
 	BUG_ON(addr >= end);
-	pgd = pgd_offset(mm, addr);
+	pgd = pgd_offset_pgd(this_node_pgd(mm), addr);
 	flush_cache_range(vma, addr, end);
 	inc_tlb_flush_pending(mm);
 	do {
@@ -448,6 +475,16 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 		}
 	}
 
+#ifdef CONFIG_USER_REPLICATION
+	if ((newflags & VM_WRITE) && vma_has_replicas(vma)) {
+		if (phys_deduplicate(vma, start, end - start, true))
+			goto fail;
+		newflags &= ~VM_REPLICA_COMMIT;
+	}
+
+	numa_mprotect_vm_flags_modify(&newflags, vma);
+#endif
+
 	/*
 	 * First try to merge with previous and/or next vma.
 	 */
@@ -481,12 +518,16 @@ success:
 	 * held in write mode.
 	 */
 	vma->vm_flags = newflags;
+
 	dirty_accountable = vma_wants_writenotify(vma, vma->vm_page_prot);
 	vma_set_page_prot(vma);
 
 	change_protection(vma, start, end, vma->vm_page_prot,
 			  dirty_accountable ? MM_CP_DIRTY_ACCT : 0);
 
+#ifdef CONFIG_USER_REPLICATION
+	numa_replication_post_mprotect(vma);
+#endif
 	/*
 	 * Private VM_LOCKED VMA becoming writable: trigger COW to avoid major
 	 * fault on access.
@@ -518,6 +559,7 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 	const int grows = prot & (PROT_GROWSDOWN|PROT_GROWSUP);
 	const bool rier = (current->personality & READ_IMPLIES_EXEC) &&
 				(prot & PROT_READ);
+	bool arch_valid_prot;
 
 	start = untagged_addr(start);
 
@@ -533,13 +575,39 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 	end = start + len;
 	if (end <= start)
 		return -ENOMEM;
-	if (!arch_validate_prot(prot, start))
+
+	arch_valid_prot = !arch_validate_prot(prot, start);
+#ifdef CONFIG_USER_REPLICATION
+	arch_valid_prot = arch_valid_prot && (prot != PROT_REPLICA);
+#endif
+	if (arch_valid_prot)
 		return -EINVAL;
 
 	reqprot = prot;
 
 	if (mmap_write_lock_killable(current->mm))
 		return -EINTR;
+
+	vma = find_vma(current->mm, start);
+	error = -ENOMEM;
+	if (!vma)
+		goto out;
+	prev = vma->vm_prev;
+
+#ifdef CONFIG_USER_REPLICATION
+	if (prot == PROT_REPLICA) {
+		error = -EINVAL;
+		if (vma->vm_flags & VM_SHARED)
+			goto out;
+
+		error = phys_duplicate(vma, start, len);
+		if (error)
+			pr_info("Failed to replicate memory -- start:%zx; len:%zx PID: %d NAME: %s\n",
+				 start, len, current->pid, current->comm);
+
+		goto out;
+	}
+#endif /* CONFIG_USER_REPLICATION */
 
 	/*
 	 * If userspace did not allocate the pkey, do not let
@@ -549,11 +617,6 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 	if ((pkey != -1) && !mm_pkey_is_allocated(current->mm, pkey))
 		goto out;
 
-	vma = find_vma(current->mm, start);
-	error = -ENOMEM;
-	if (!vma)
-		goto out;
-	prev = vma->vm_prev;
 	if (unlikely(grows & PROT_GROWSDOWN)) {
 		if (vma->vm_start >= end)
 			goto out;

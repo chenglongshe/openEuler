@@ -317,6 +317,105 @@ TRACE_EVENT(mm_page_alloc_extfrag,
 		__entry->change_ownership)
 );
 
+DECLARE_EVENT_CLASS(mm_ureplica_cost,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time),
+
+	TP_STRUCT__entry(
+		__field(ktime_t, time)
+	),
+
+	TP_fast_assign(
+		__entry->time = ktime_to_ns(time);
+	),
+
+	TP_printk("time=%lldns", __entry->time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_handle_mm_fault,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_set_pte_at,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_pte_clear,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_pte_get_and_clear,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_ptep_test_and_clear_young,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_ptep_set_wrprotect,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_ptep_set_access_flags,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_ptep_modify_prot_start,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_handle_pte_fault,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_do_anonymous_page,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_do_fault,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_do_swap_page,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_do_numa_page,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_do_wp_page,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_fault_p4d_alloc,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_fault_pud_alloc,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
+
+DEFINE_EVENT(mm_ureplica_cost, mm_ureplica_cost_fault_pmd_alloc,
+	TP_PROTO(ktime_t time),
+	TP_ARGS(time)
+);
 /*
  * Required for uniquely and securely identifying mm in rss_stat tracepoint.
  */
