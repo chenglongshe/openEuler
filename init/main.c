@@ -99,6 +99,7 @@
 #include <linux/kcsan.h>
 #include <linux/init_syscalls.h>
 #include <linux/randomize_kstack.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/io.h>
 #include <asm/setup.h>
@@ -818,6 +819,7 @@ static void __init report_meminit(void)
 		pr_info("mem auto-init: clearing system memory may take some time...\n");
 }
 
+void __weak preallocate_vmalloc_pages(void) { }
 /*
  * Set up kernel memory allocators
  */
@@ -838,6 +840,7 @@ static void __init mm_init(void)
 	kmemleak_init();
 	pgtable_init();
 	debug_objects_mem_init();
+	preallocate_vmalloc_pages();
 	vmalloc_init();
 	/* Should be run before the first non-init thread is created */
 	init_espfix_bsp();
@@ -926,12 +929,15 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	 * These use large bootmem allocations and must precede
 	 * kmem_cache_init()
 	 */
+	numa_replication_init();
 	setup_log_buf(0);
 	vfs_caches_init_early();
 	sort_main_extable();
 	trap_init();
 	mm_init();
 	poking_init();
+	numa_replicate_kernel_text();
+
 	ftrace_init();
 
 	/* trace_printk can be enabled here */
@@ -1450,6 +1456,14 @@ static int __ref kernel_init(void *unused)
 	free_initmem();
 	mark_readonly();
 
+	/*
+	 * RODATA replication is done here due to
+	 * it is necessary to finalize the kernel
+	 * and modules initialization before
+	 */
+	numa_replicate_kernel_rodata();
+	numa_replication_fini();
+	numa_replication_init_sysfs();
 	/*
 	 * Kernel mappings are now finalized - update the userspace page-table
 	 * to finalize PTI.

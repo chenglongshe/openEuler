@@ -1238,7 +1238,7 @@ static void __init register_page_bootmem_info(void)
  * Only the level which needs to be synchronized between all page-tables is
  * allocated because the synchronization can be expensive.
  */
-static void __init preallocate_vmalloc_pages(void)
+void __init preallocate_vmalloc_pages(void)
 {
 	unsigned long addr;
 	const char *lvl;
