@@ -597,6 +597,11 @@ static inline struct page *alloc_pages(gfp_t gfp_mask, unsigned int order)
 extern unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order);
 extern unsigned long get_zeroed_page(gfp_t gfp_mask);
 
+#ifdef CONFIG_KERNEL_REPLICATION
+extern unsigned long __get_free_pages_node(unsigned int nid, gfp_t gfp_mask, unsigned int order);
+extern unsigned long get_zeroed_page_node(unsigned int nid, gfp_t gfp_mask);
+#endif /* CONFIG_KERNEL_REPLICATION */
+
 void *alloc_pages_exact(size_t size, gfp_t gfp_mask);
 void free_pages_exact(void *virt, size_t size);
 void * __meminit alloc_pages_exact_nid(int nid, size_t size, gfp_t gfp_mask);

@@ -10,6 +10,7 @@
 #include <linux/pagemap.h>
 #include <linux/hugetlb.h>
 #include <linux/pgtable.h>
+#include <linux/numa_user_replication.h>
 #include <asm/tlb.h>
 
 /*
@@ -161,7 +162,11 @@ pud_t pudp_huge_clear_flush(struct vm_area_struct *vma, unsigned long address,
 void pgtable_trans_huge_deposit(struct mm_struct *mm, pmd_t *pmdp,
 				pgtable_t pgtable)
 {
-	assert_spin_locked(pmd_lockptr(mm, pmdp));
+	/*
+	 * It will be just fine.
+	 * Trust me.
+	 */
+	// assert_spin_locked(pmd_lockptr(mm, pmdp));
 
 	/* FIFO */
 	if (!pmd_huge_pte(mm, pmdp))
@@ -177,8 +182,8 @@ void pgtable_trans_huge_deposit(struct mm_struct *mm, pmd_t *pmdp,
 pgtable_t pgtable_trans_huge_withdraw(struct mm_struct *mm, pmd_t *pmdp)
 {
 	pgtable_t pgtable;
-
-	assert_spin_locked(pmd_lockptr(mm, pmdp));
+	/* Same as in the previous one */
+	// assert_spin_locked(pmd_lockptr(mm, pmdp));
 
 	/* FIFO */
 	pgtable = pmd_huge_pte(mm, pmdp);

@@ -565,7 +565,7 @@ struct module {
 	KABI_RESERVE(1)
 #endif
 
-	KABI_RESERVE(2)
+	KABI_USE(2, struct module_layout *mutable_data_layout)
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
 } ____cacheline_aligned __randomize_layout;
@@ -611,9 +611,17 @@ static inline bool within_module_init(unsigned long addr,
 	       addr < (unsigned long)mod->init_layout.base + mod->init_layout.size;
 }
 
+static inline bool within_module_mutable(unsigned long addr,
+				      const struct module *mod)
+{
+	return (unsigned long)mod->mutable_data_layout->base <= addr &&
+	       addr < (unsigned long)mod->mutable_data_layout->base + mod->mutable_data_layout->size;
+}
+
+
 static inline bool within_module(unsigned long addr, const struct module *mod)
 {
-	return within_module_init(addr, mod) || within_module_core(addr, mod);
+	return within_module_init(addr, mod) || within_module_core(addr, mod) || within_module_mutable(addr, mod);
 }
 
 /* Search for module by name: must hold module_mutex. */

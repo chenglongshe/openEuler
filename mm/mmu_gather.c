@@ -7,6 +7,7 @@
 #include <linux/rcupdate.h>
 #include <linux/smp.h>
 #include <linux/swap.h>
+#include <linux/numa_user_replication.h>
 
 #include <asm/pgalloc.h>
 #include <asm/tlb.h>
@@ -78,6 +79,37 @@ static void tlb_batch_list_free(struct mmu_gather *tlb)
 bool __tlb_remove_page_size(struct mmu_gather *tlb, struct page *page, int page_size)
 {
 	struct mmu_gather_batch *batch;
+	int mem_nodes = num_node_state(N_MEMORY);
+	VM_BUG_ON(!tlb->end);
+
+#ifdef CONFIG_MMU_GATHER_PAGE_SIZE
+	VM_WARN_ON(tlb->page_size != page_size);
+#endif
+
+	batch = tlb->active;
+	/*
+	 * Add the page and check if we are full. If so
+	 * force a flush.
+	 */
+	/*
+	 * Leave enough entries for fully replicated page
+	 */
+	batch->pages[batch->nr++] = page;
+	if (batch->nr + mem_nodes > batch->max) {
+		if (!tlb_next_batch(tlb))
+			return true;
+		batch = tlb->active;
+	}
+	VM_BUG_ON_PAGE(batch->nr > batch->max, page);
+
+	return false;
+}
+
+bool __tlb_remove_replica_pages_size(struct mmu_gather *tlb, struct page **pages, int page_size)
+{
+	struct mmu_gather_batch *batch;
+	int mem_nodes = num_node_state(N_MEMORY);
+	int nid;
 
 	VM_BUG_ON(!tlb->end);
 
@@ -90,16 +122,22 @@ bool __tlb_remove_page_size(struct mmu_gather *tlb, struct page *page, int page_
 	 * Add the page and check if we are full. If so
 	 * force a flush.
 	 */
-	batch->pages[batch->nr++] = page;
-	if (batch->nr == batch->max) {
+	/*
+	 * Leave enough entries for fully replicated page
+	 */
+	for_each_memory_node(nid) {
+		batch->pages[batch->nr++] = pages[nid];
+	}
+	if (batch->nr + mem_nodes > batch->max) {
 		if (!tlb_next_batch(tlb))
 			return true;
 		batch = tlb->active;
 	}
-	VM_BUG_ON_PAGE(batch->nr > batch->max, page);
+	VM_BUG_ON_PAGE(batch->nr > batch->max, pages[0]);
 
 	return false;
 }
+
 
 #endif /* MMU_GATHER_NO_GATHER */
 
