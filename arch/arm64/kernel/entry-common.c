@@ -818,8 +818,7 @@ static void noinstr el0_fpac(struct pt_regs *regs, unsigned long esr)
 }
 
 #ifdef CONFIG_FAST_SYSCALL
-/* Copy from el0_sync */
-static void noinstr el0_xcall(struct pt_regs *regs)
+asmlinkage void noinstr el0t_64_fast_syscall_handler(struct pt_regs *regs)
 {
 	fast_enter_from_user_mode(regs);
 #ifndef CONFIG_SECURITY_FEATURE_BYPASS
@@ -829,11 +828,6 @@ static void noinstr el0_xcall(struct pt_regs *regs)
 	local_daif_restore(DAIF_PROCCTX);
 	do_el0_svc(regs);
 	fast_exit_to_user_mode(regs);
-}
-
-asmlinkage void noinstr el0t_64_fast_syscall_handler(struct pt_regs *regs)
-{
-	el0_xcall(regs);
 }
 #endif
 
@@ -1054,8 +1048,16 @@ UNHANDLED(el0t, 32, error)
 #ifdef CONFIG_ACTLR_XCALL_XINT
 asmlinkage void noinstr el0t_64_xcall_handler(struct pt_regs *regs)
 {
-	el0_xcall(regs);
+	fast_enter_from_user_mode(regs);
+#ifndef CONFIG_SECURITY_FEATURE_BYPASS
+	cortex_a76_erratum_1463225_svc_handler();
+#endif
+	fp_user_discard();
+	local_daif_restore(DAIF_PROCCTX);
+	do_el0_svc(regs);
+	fast_exit_to_user_mode(regs);
 }
+
 asmlinkage void noinstr el0t_64_xint_handler(struct pt_regs *regs)
 {
 	el0_interrupt(regs, ISR_EL1_IS, handle_arch_irq, handle_arch_nmi_irq);
