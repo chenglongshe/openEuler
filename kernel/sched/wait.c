@@ -167,10 +167,18 @@ EXPORT_SYMBOL_GPL(__wake_up_locked_key);
 void __wake_up_sync_key(struct wait_queue_head *wq_head, unsigned int mode,
 			void *key)
 {
+	int wake_flags;
+
 	if (unlikely(!wq_head))
 		return;
 
-	__wake_up_common_lock(wq_head, mode, 1, WF_SYNC, key);
+	if (likely(sysctl_sched_shortask_syncwake_curcpu == 0) ||
+	    sched_cpu_util(smp_processor_id()) >= arch_scale_cpu_capacity(smp_processor_id())) {
+		wake_flags = WF_SYNC;
+	} else {
+		wake_flags = WF_SYNC | WF_CURRENT_CPU;
+	}
+	__wake_up_common_lock(wq_head, mode, 1, wake_flags, key);
 }
 EXPORT_SYMBOL_GPL(__wake_up_sync_key);
 

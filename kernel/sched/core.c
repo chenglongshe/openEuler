@@ -4921,6 +4921,7 @@ void wake_up_new_task(struct task_struct *p)
 {
 	struct rq_flags rf;
 	struct rq *rq;
+	int wake_flags;
 
 	raw_spin_lock_irqsave(&p->pi_lock, rf.flags);
 	WRITE_ONCE(p->__state, TASK_RUNNING);
@@ -4935,7 +4936,13 @@ void wake_up_new_task(struct task_struct *p)
 	 */
 	p->recent_used_cpu = task_cpu(p);
 	rseq_migrate(p);
-	__set_task_cpu(p, select_task_rq(p, task_cpu(p), WF_FORK));
+	if (likely(sysctl_sched_shortask_syncwake_curcpu == 0) ||
+	    sched_cpu_util(smp_processor_id()) >= arch_scale_cpu_capacity(smp_processor_id())) {
+		wake_flags = WF_FORK;
+	} else {
+		wake_flags = WF_FORK | WF_TTWU | WF_CURRENT_CPU;
+	}
+	__set_task_cpu(p, select_task_rq(p, task_cpu(p), wake_flags));
 #endif
 	rq = __task_rq_lock(p, &rf);
 	update_rq_clock(rq);

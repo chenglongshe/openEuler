@@ -223,6 +223,8 @@ extern unsigned int sysctl_smart_grid_strategy_ctrl;
 static int sysctl_affinity_adjust_delay_ms = 5000;
 #endif
 
+unsigned int __read_mostly sysctl_sched_shortask_syncwake_curcpu = 0;
+
 #ifdef CONFIG_SYSCTL
 static struct ctl_table sched_fair_sysctls[] = {
 	{
@@ -321,6 +323,17 @@ static struct ctl_table sched_fair_sysctls[] = {
 		.proc_handler   = proc_dointvec_minmax,
 		.extra1         = SYSCTL_ZERO,
 		.extra2		= &hundred_thousand,
+	},
+#endif
+#ifdef CONFIG_SMP
+	{
+		.procname       = "sched_shortask_syncwake_curcpu",
+		.data           = &sysctl_sched_shortask_syncwake_curcpu,
+		.maxlen         = sizeof(unsigned int),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_minmax,
+		.extra1         = SYSCTL_ZERO,
+		.extra2         = SYSCTL_ONE,
 	},
 #endif
 	{}
