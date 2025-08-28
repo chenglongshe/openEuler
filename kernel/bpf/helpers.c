@@ -1799,6 +1799,29 @@ static const struct bpf_func_proto bpf_dynptr_data_proto = {
 	.arg3_type	= ARG_CONST_ALLOC_SIZE_OR_ZERO,
 };
 
+#ifdef CONFIG_HISOCK
+BPF_CALL_4(bpf_ext_memcpy, void *, dst, size_t, dst_sz,
+	   const void *, src, size_t, src_sz)
+{
+	if (dst_sz < src_sz)
+		return -EINVAL;
+
+	memcpy(dst, src, src_sz);
+	return 0;
+}
+
+const struct bpf_func_proto bpf_ext_memcpy_proto = {
+	.func		= bpf_ext_memcpy,
+	.gpl_only	= false,
+	.pkt_access     = true,
+	.ret_type	= RET_INTEGER,
+	.arg1_type	= ARG_PTR_TO_MEM | MEM_UNINIT,
+	.arg2_type	= ARG_CONST_SIZE,
+	.arg3_type	= ARG_PTR_TO_MEM | MEM_RDONLY,
+	.arg4_type	= ARG_CONST_SIZE,
+};
+#endif
+
 const struct bpf_func_proto bpf_get_current_task_proto __weak;
 const struct bpf_func_proto bpf_get_current_task_btf_proto __weak;
 const struct bpf_func_proto bpf_probe_read_user_proto __weak;
@@ -1855,6 +1878,10 @@ bpf_base_func_proto(enum bpf_func_id func_id)
 		return &bpf_strtol_proto;
 	case BPF_FUNC_strtoul:
 		return &bpf_strtoul_proto;
+#ifdef CONFIG_HISOCK
+	case BPF_FUNC_ext_memcpy:
+		return &bpf_ext_memcpy_proto;
+#endif
 	default:
 		break;
 	}

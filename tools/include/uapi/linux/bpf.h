@@ -1006,6 +1006,9 @@ enum bpf_prog_type {
 	BPF_PROG_TYPE_SYSCALL, /* a program that can execute syscalls */
 	BPF_PROG_TYPE_NETFILTER,
 	BPF_PROG_TYPE_SCHED,
+#ifndef __GENKSYMS__
+	BPF_PROG_TYPE_HISOCK,
+#endif
 };
 
 enum bpf_attach_type {
@@ -1059,6 +1062,9 @@ enum bpf_attach_type {
 	BPF_TCX_EGRESS,
 	BPF_TRACE_UPROBE_MULTI,
 	BPF_SCHED,
+#ifndef __GENKSYMS__
+	BPF_HISOCK_EGRESS,
+#endif
 	__MAX_BPF_ATTACH_TYPE
 };
 
@@ -5669,6 +5675,37 @@ union bpf_attr {
  *		0 on success.
  *
  *		**-ENOENT** if the bpf_local_storage cannot be found.
+ *
+ * void *bpf_get_ingress_dst(struct bpf_sock_ops *skops)
+ *	Description
+ *		Get the ingress dst entry of the full sock.
+ *	Return
+ *		Valid ingress dst on success, or negative error
+ *		in case of failure.
+ *
+ * int bpf_set_ingress_dst(struct xdp_buff *xdp, void *dst)
+ *	Description
+ *		Set valid ingress dst entry to the skb associated
+ *		with xdp_buff.
+ *	Return
+ *		0 on success, or a negative error in case of failure.
+ *
+ * int bpf_change_skb_dev(void *ctx, u32 ifindex)
+ *	Description
+ *		Change ingress or egress device of the associated skb.
+ *		Supports only BPF_PROG_TYPE_HISOCK and BPF_PROG_TYPE_XDP
+ *		program types.
+ *
+ *		*ctx* is either **struct xdp_md** for XDP programs or
+ *		**struct __sk_buff** hisock_egress programs.
+ *	Return
+ *		0 on success, or negative error in case of failure.
+ *
+ * int bpf_ext_memcpy(void *dst, size_t dst_sz, const void *src, size_t src_sz)
+ *	Description
+ *		Copy *src_sz* bytes from *src* to *dst* if *dst_sz* >= *src_sz*.
+ *	Return
+ *		0 on success, or negative error in case of failure.
  */
 #define ___BPF_FUNC_MAPPER(FN, ctx...)			\
 	FN(unspec, 0, ##ctx)				\
@@ -5883,6 +5920,10 @@ union bpf_attr {
 	FN(user_ringbuf_drain, 209, ##ctx)		\
 	FN(cgrp_storage_get, 210, ##ctx)		\
 	FN(cgrp_storage_delete, 211, ##ctx)		\
+	FN(get_ingress_dst, 212, ##ctx)			\
+	FN(set_ingress_dst, 213, ##ctx)			\
+	FN(change_skb_dev, 214, ##ctx)			\
+	FN(ext_memcpy, 215, ##ctx)			\
 	/* */
 
 /* backwards-compatibility macros for users of __BPF_FUNC_MAPPER that don't
@@ -6313,6 +6354,7 @@ enum xdp_action {
 	XDP_PASS,
 	XDP_TX,
 	XDP_REDIRECT,
+	XDP_HISOCK_REDIRECT = 100,
 };
 
 /* user accessible metadata for XDP packet hook
@@ -7354,5 +7396,12 @@ struct bpf_iter_num {
 	 */
 	__u64 __opaque[1];
 } __attribute__((aligned(8)));
+
+enum hisock_action {
+	HISOCK_PASS,
+	HISOCK_DROP,
+	HISOCK_REDIRECT,
+	__MAX_HISOCK_ACTION,
+};
 
 #endif /* _UAPI__LINUX_BPF_H__ */
