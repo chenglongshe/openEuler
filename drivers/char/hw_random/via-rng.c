@@ -192,7 +192,7 @@ static struct hwrng via_rng = {
 };
 
 static struct x86_cpu_id via_rng_ids[] = {
-	{ X86_VENDOR_CENTAUR, 6, X86_MODEL_ANY, X86_FEATURE_XSTORE },
+	{ X86_VENDOR_CENTAUR, 6, X86_MODEL_ANY, X86_STEPPING_ANY, X86_FEATURE_XSTORE },
 	{}
 };
 MODULE_DEVICE_TABLE(x86cpu, via_rng_ids);
