@@ -238,6 +238,7 @@ void sdei_watchdog_hardlockup_enable(unsigned int cpu);
 void sdei_watchdog_hardlockup_disable(unsigned int cpu);
 void sdei_watchdog_clear_eoi(void);
 int sdei_watchdog_hardlockup_probe(void);
+DECLARE_PER_CPU(bool, sdei_usr_en);
 extern bool disable_sdei_nmi_watchdog;
 #else
 static inline void sdei_watchdog_hardlockup_enable(unsigned int cpu) { }
