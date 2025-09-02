@@ -48,6 +48,9 @@
 #include <linux/ratelimit.h>
 #include <linux/task_work.h>
 #include <linux/rbtree_augmented.h>
+#ifdef CONFIG_MEM_SAMPLING
+#include <linux/mem_sampling.h>
+#endif
 
 #include <asm/switch_to.h>
 
@@ -71,6 +74,10 @@
 #include "sparsemask.h"
 #endif
 #include <linux/sched/grid_qos.h>
+
+#ifdef CONFIG_SCHED_PARAL
+#include <asm/prefer_numa.h>
+#endif
 
 /*
  * The initial- and re-scaling of tunables is configurable
@@ -183,6 +190,10 @@ unsigned int sysctl_qos_level_weights[5] = {
 static long qos_reweight(long shares, struct task_group *tg);
 #endif
 
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+static DEFINE_PER_CPU_SHARED_ALIGNED(struct list_head, soft_quota_throttled_cfs_rq);
+#endif
+
 #ifdef CONFIG_CFS_BANDWIDTH
 /*
  * Amount of runtime to allocate from global (tg) to local (per-cfs_rq) pool
@@ -214,6 +225,10 @@ int sysctl_sched_util_low_pct = 85;
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 extern unsigned int sysctl_smart_grid_strategy_ctrl;
 static int sysctl_affinity_adjust_delay_ms = 5000;
+#endif
+
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+unsigned int sysctl_soft_runtime_ratio = 20;
 #endif
 
 #ifdef CONFIG_SYSCTL
@@ -314,6 +329,17 @@ static struct ctl_table sched_fair_sysctls[] = {
 		.proc_handler   = proc_dointvec_minmax,
 		.extra1         = SYSCTL_ZERO,
 		.extra2		= &hundred_thousand,
+	},
+#endif
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	{
+		.procname       = "sched_soft_runtime_ratio",
+		.data           = &sysctl_soft_runtime_ratio,
+		.maxlen         = sizeof(sysctl_soft_runtime_ratio),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_minmax,
+		.extra1         = SYSCTL_ONE,
+		.extra2         = SYSCTL_ONE_HUNDRED,
 	},
 #endif
 	{}
@@ -585,10 +611,11 @@ static inline struct sched_entity *parent_entity(const struct sched_entity *se)
 	return se->parent;
 }
 
-static void
+static bool
 find_matching_se(struct sched_entity **se, struct sched_entity **pse)
 {
 	int se_depth, pse_depth;
+	bool ret = false;
 
 	/*
 	 * preemption test can be made between sibling entities who are in the
@@ -602,6 +629,10 @@ find_matching_se(struct sched_entity **se, struct sched_entity **pse)
 	pse_depth = (*pse)->depth;
 
 	while (se_depth > pse_depth) {
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+		if (!ret && cfs_rq_of(*se)->soft_quota_enable == 1)
+			ret = true;
+#endif
 		se_depth--;
 		*se = parent_entity(*se);
 	}
@@ -612,9 +643,15 @@ find_matching_se(struct sched_entity **se, struct sched_entity **pse)
 	}
 
 	while (!is_same_group(*se, *pse)) {
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+		if (!ret && cfs_rq_of(*se)->soft_quota_enable == 1)
+			ret = true;
+#endif
 		*se = parent_entity(*se);
 		*pse = parent_entity(*pse);
 	}
+
+	return ret;
 }
 
 static int tg_is_idle(struct task_group *tg)
@@ -660,9 +697,10 @@ static inline struct sched_entity *parent_entity(struct sched_entity *se)
 	return NULL;
 }
 
-static inline void
+static inline bool
 find_matching_se(struct sched_entity **se, struct sched_entity **pse)
 {
+	return false;
 }
 
 static inline int tg_is_idle(struct task_group *tg)
@@ -3368,6 +3406,18 @@ static void task_numa_work(struct callback_head *work)
 	long pages, virtpages;
 	struct vma_iterator vmi;
 
+#ifdef CONFIG_NUMABALANCING_MEM_SAMPLING
+	/*
+	 * If we are using access hints from hardware (like using
+	 * SPE), don't scan the address space.
+	 * Note that currently PMD-level page migration is not
+	 * supported.
+	 */
+	if (static_branch_unlikely(&mem_sampling_access_hints) &&
+		static_branch_unlikely(&sched_numabalancing_mem_sampling))
+		return;
+#endif
+
 	SCHED_WARN_ON(p != container_of(work, struct task_struct, numa_work));
 
 	work->next = work;
@@ -4186,14 +4236,16 @@ static inline bool child_cfs_rq_on_list(struct cfs_rq *cfs_rq)
 {
 	struct cfs_rq *prev_cfs_rq;
 	struct list_head *prev;
+	struct rq *rq = rq_of(cfs_rq);
 
 	if (cfs_rq->on_list) {
 		prev = cfs_rq->leaf_cfs_rq_list.prev;
 	} else {
-		struct rq *rq = rq_of(cfs_rq);
-
 		prev = rq->tmp_alone_branch;
 	}
+
+	if (prev == &rq->leaf_cfs_rq_list)
+		return false;
 
 	prev_cfs_rq = container_of(prev, struct cfs_rq, leaf_cfs_rq_list);
 
@@ -5202,7 +5254,10 @@ static inline void update_misfit_status(struct task_struct *p, struct rq *rq)
 
 static inline void rq_idle_stamp_update(struct rq *rq)
 {
-	rq->idle_stamp = rq_clock(rq);
+	if (sched_feat(IRQ_AVG))
+		rq->idle_stamp = rq_clock_task(rq);
+	else
+		rq->idle_stamp = rq_clock(rq);
 }
 
 static inline void rq_idle_stamp_clear(struct rq *rq)
@@ -6006,6 +6061,14 @@ done:
 	SCHED_WARN_ON(cfs_rq->throttled_clock);
 	if (cfs_rq->nr_running)
 		cfs_rq->throttled_clock = rq_clock(rq);
+
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	if (cfs_rq->tg->soft_quota == 1) {
+		list_add(&cfs_rq->soft_quota_throttled_list,
+			 &per_cpu(soft_quota_throttled_cfs_rq, cpu_of(rq)));
+	}
+#endif
+
 	return true;
 }
 
@@ -6022,6 +6085,10 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 
 	se = cfs_rq->tg->se[cpu_of(rq)];
 
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	list_del_init(&cfs_rq->soft_quota_throttled_list);
+#endif
+
 #ifdef CONFIG_QOS_SCHED
 	/*
 	 * if this cfs_rq throttled by qos, not need unthrottle it.
@@ -6036,8 +6103,12 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 
 	raw_spin_lock(&cfs_b->lock);
 	if (cfs_rq->throttled_clock) {
-		cfs_b->throttled_time += rq_clock(rq) - cfs_rq->throttled_clock;
+		u64 delta = rq_clock(rq) - cfs_rq->throttled_clock;
+
+		cfs_b->throttled_time += delta;
 		cfs_rq->throttled_clock = 0;
+		cgroup_ifs_account_throttle(cfs_rq->tg->css.cgroup,
+					    cpu_of(rq), delta);
 	}
 	list_del_rcu(&cfs_rq->throttled_list);
 	raw_spin_unlock(&cfs_b->lock);
@@ -6216,6 +6287,16 @@ static bool distribute_cfs_runtime(struct cfs_bandwidth *cfs_b)
 		}
 
 		rq_lock_irqsave(rq, &rf);
+
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+		if (cfs_rq->soft_quota_enable == 1) {
+			if (cfs_rq->runtime_remaining > 0)
+				cfs_rq->runtime_remaining = 0;
+
+			cfs_rq->soft_quota_enable = 0;
+		}
+#endif
+
 		if (!cfs_rq_throttled(cfs_rq))
 			goto next;
 
@@ -6278,6 +6359,17 @@ next:
 	return throttled;
 }
 
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+static inline void init_tg_sum_soft_runtime(struct cfs_bandwidth *cfs_b)
+{
+	unsigned int cpu;
+	struct task_group *tg = container_of(cfs_b, struct task_group, cfs_bandwidth);
+
+	for_each_possible_cpu(cpu)
+		tg->cfs_rq[cpu]->sum_soft_runtime = 0;
+}
+#endif
+
 /*
  * Responsible for refilling a task_group's bandwidth and unthrottling its
  * cfs_rqs as appropriate. If there has been no activity within the last
@@ -6294,6 +6386,10 @@ static int do_sched_cfs_period_timer(struct cfs_bandwidth *cfs_b, int overrun, u
 
 	throttled = !list_empty(&cfs_b->throttled_cfs_rq);
 	cfs_b->nr_periods += overrun;
+
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	init_tg_sum_soft_runtime(cfs_b);
+#endif
 
 	/* Refill extra burst quota even if cfs_b->idle */
 	__refill_cfs_bandwidth_runtime(cfs_b);
@@ -6608,6 +6704,9 @@ static void init_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 #endif
 #ifdef CONFIG_QOS_SCHED
 	INIT_LIST_HEAD(&cfs_rq->qos_throttled_list);
+#endif
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	INIT_LIST_HEAD(&cfs_rq->soft_quota_throttled_list);
 #endif
 }
 
@@ -7258,7 +7357,7 @@ int init_auto_affinity(struct task_group *tg)
 	return 0;
 }
 
-static void destroy_auto_affinity(struct task_group *tg)
+void offline_auto_affinity(struct task_group *tg)
 {
 	struct auto_affinity *auto_affi = tg->auto_affinity;
 
@@ -7270,11 +7369,21 @@ static void destroy_auto_affinity(struct task_group *tg)
 
 	if (auto_affi->period_active)
 		smart_grid_usage_dec();
+}
+
+static void destroy_auto_affinity(struct task_group *tg)
+{
+	struct auto_affinity *auto_affi = tg->auto_affinity;
+
+	if (!smart_grid_enabled())
+		return;
+
+	if (unlikely(!auto_affi))
+		return;
 
 	hrtimer_cancel(&auto_affi->period_timer);
 	sched_grid_zone_del_af(auto_affi);
 	free_affinity_domains(&auto_affi->ad);
-
 	kfree(tg->auto_affinity);
 	tg->auto_affinity = NULL;
 }
@@ -8205,6 +8314,40 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, bool 
 		}
 	}
 
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+	if (sched_feat(SOFT_DOMAIN)) {
+		struct task_group *tg = task_group(p);
+
+		if (tg->sf_ctx && tg->sf_ctx->policy != 0) {
+			struct cpumask *tmpmask = to_cpumask(tg->sf_ctx->span);
+
+			for_each_cpu_wrap(cpu, tmpmask, target + 1) {
+				if (!cpumask_test_cpu(cpu, tmpmask))
+					continue;
+
+				if (has_idle_core) {
+					i = select_idle_core(p, cpu, cpus, &idle_cpu);
+					if ((unsigned int)i < nr_cpumask_bits)
+						return i;
+
+				} else {
+					if (--nr <= 0)
+						return -1;
+					idle_cpu = __select_idle_cpu(cpu, p);
+					if ((unsigned int)idle_cpu < nr_cpumask_bits)
+						return idle_cpu;
+				}
+			}
+
+			if (idle_cpu != -1)
+				return idle_cpu;
+
+			cpumask_andnot(cpus, cpus, tmpmask);
+		}
+
+	}
+#endif
+
 	if (static_branch_unlikely(&sched_cluster_active)) {
 		struct sched_group *sg = sd->groups;
 
@@ -8989,6 +9132,12 @@ unlock:
 }
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
+#ifdef CONFIG_SCHED_PARAL
+bool sched_paral_used(void)
+{
+	return sched_feat(PARAL);
+}
+#endif
 
 DEFINE_STATIC_KEY_FALSE(__dynamic_affinity_switch);
 
@@ -9016,16 +9165,15 @@ __setup("dynamic_affinity=", dynamic_affinity_switch_setup);
 
 static inline bool prefer_cpus_valid(struct task_struct *p)
 {
-	struct cpumask *prefer_cpus;
+	struct cpumask *prefer_cpus = task_prefer_cpus(p);
 
-	if (!dynamic_affinity_enabled())
-		return false;
+	if (dynamic_affinity_enabled() || sched_paral_used()) {
+		return !cpumask_empty(prefer_cpus) &&
+			!cpumask_equal(prefer_cpus, p->cpus_ptr) &&
+			cpumask_subset(prefer_cpus, p->cpus_ptr);
+	}
 
-	prefer_cpus = task_prefer_cpus(p);
-
-	return !cpumask_empty(prefer_cpus) &&
-	       !cpumask_equal(prefer_cpus, p->cpus_ptr) &&
-	       cpumask_subset(prefer_cpus, p->cpus_ptr);
+	return false;
 }
 
 static inline unsigned long taskgroup_cpu_util(struct task_group *tg,
@@ -9036,6 +9184,19 @@ static inline unsigned long taskgroup_cpu_util(struct task_group *tg,
 		return tg->se[cpu]->avg.util_avg;
 #endif
 	return cpu_util_cfs(cpu);
+}
+
+static unsigned long scale_rt_capacity(int cpu);
+
+static inline unsigned long calc_cpu_capacity(int cpu)
+{
+	unsigned long capacity;
+
+	capacity = scale_rt_capacity(cpu);
+	if (!capacity)
+		capacity = 1;
+
+	return capacity;
 }
 
 /*
@@ -9060,6 +9221,7 @@ static void set_task_select_cpus(struct task_struct *p, int *idlest_cpu,
 	struct task_group *tg;
 	long spare;
 	int cpu, mode;
+	int nr_cpus_valid = 0;
 
 	p->select_cpus = p->cpus_ptr;
 	if (!prefer_cpus_valid(p))
@@ -9081,7 +9243,7 @@ static void set_task_select_cpus(struct task_struct *p, int *idlest_cpu,
 
 	/* manual mode */
 	tg = task_group(p);
-	for_each_cpu(cpu, p->prefer_cpus) {
+	for_each_cpu_and(cpu, p->prefer_cpus, cpu_online_mask) {
 		if (idlest_cpu && (available_idle_cpu(cpu) || sched_idle_cpu(cpu))) {
 			*idlest_cpu = cpu;
 		} else if (idlest_cpu) {
@@ -9102,16 +9264,64 @@ static void set_task_select_cpus(struct task_struct *p, int *idlest_cpu,
 		}
 
 		util_avg_sum += taskgroup_cpu_util(tg, cpu);
-		tg_capacity += capacity_of(cpu);
+		nr_cpus_valid++;
+
+		if (cpu_rq(cpu)->rt.rt_nr_running)
+			tg_capacity += calc_cpu_capacity(cpu);
+		else
+			tg_capacity += capacity_of(cpu);
 	}
 	rcu_read_unlock();
 
-	if (tg_capacity > cpumask_weight(p->prefer_cpus) &&
+	/* In extreme cases, it may cause uneven system load. */
+	if (sched_paral_used() && sysctl_sched_util_low_pct == 100 && nr_cpus_valid > 0) {
+		p->select_cpus = p->prefer_cpus;
+		if (sd_flag & SD_BALANCE_WAKE)
+			schedstat_inc(p->stats.nr_wakeups_preferred_cpus);
+		return;
+	}
+
+	/*
+	 * Follow cases should select cpus_ptr, checking by condition of
+	 * tg_capacity > nr_cpus_valid:
+	 * 1. all prefer_cpus offline;
+	 * 2. all prefer_cpus has no cfs capaicity(tg_capacity = nr_cpus_valid * 1)
+	 */
+	if (tg_capacity > nr_cpus_valid &&
 	    util_avg_sum * 100 <= tg_capacity * sysctl_sched_util_low_pct) {
 		p->select_cpus = p->prefer_cpus;
 		if (sd_flag & SD_BALANCE_WAKE)
 			schedstat_inc(p->stats.nr_wakeups_preferred_cpus);
+	} else if (idlest_cpu) {
+		*idlest_cpu = -1;
 	}
+}
+#endif
+
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+static int wake_soft_domain(struct task_struct *p, int target)
+{
+	struct cpumask *mask = this_cpu_cpumask_var_ptr(select_rq_mask);
+	struct soft_domain_ctx *ctx = NULL;
+
+	ctx = task_group(p)->sf_ctx;
+	if (!ctx || ctx->policy == 0)
+		goto out;
+
+#ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
+	cpumask_and(mask, to_cpumask(ctx->span), p->select_cpus);
+#else
+	cpumask_and(mask, to_cpumask(ctx->span), p->cpus_ptr);
+#endif
+	cpumask_and(mask, mask, cpu_active_mask);
+	if (cpumask_empty(mask) || cpumask_test_cpu(target, mask))
+		goto out;
+	else
+		target = cpumask_any_distribute(mask);
+
+out:
+
+	return target;
 }
 #endif
 
@@ -9177,6 +9387,11 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 	}
 
 	rcu_read_lock();
+
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+	if (sched_feat(SOFT_DOMAIN))
+		new_cpu = prev_cpu = wake_soft_domain(p, prev_cpu);
+#endif
 #ifdef CONFIG_BPF_SCHED
 	if (bpf_sched_enabled()) {
 		ctx.task = p;
@@ -9313,6 +9528,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	struct cfs_rq *cfs_rq = task_cfs_rq(curr);
 	int next_buddy_marked = 0;
 	int cse_is_idle, pse_is_idle;
+	bool ret = 0;
 
 	if (unlikely(se == pse))
 		return;
@@ -9347,7 +9563,12 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	if (!sched_feat(WAKEUP_PREEMPTION))
 		return;
 
-	find_matching_se(&se, &pse);
+	ret = find_matching_se(&se, &pse);
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	if (ret)
+		goto preempt;
+#endif
+
 	WARN_ON_ONCE(!pse);
 
 	cse_is_idle = se_is_idle(se);
@@ -10236,7 +10457,7 @@ static void yield_task_fair(struct rq *rq)
 	 */
 	rq_clock_skip_update(rq);
 
-	se->deadline += calc_delta_fair(se->slice, se);
+	se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
 }
 
 static bool yield_to_task_fair(struct rq *rq, struct task_struct *p)
@@ -10609,6 +10830,15 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 	 */
 	if (throttled_lb_pair(task_group(p), env->src_cpu, env->dst_cpu))
 		return 0;
+
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+	/* Do not migrate soft domain tasks between numa. */
+	if (sched_feat(SOFT_DOMAIN)) {
+		if (task_group(p)->sf_ctx && task_group(p)->sf_ctx->policy &&
+		(env->sd->flags & SD_NUMA) != 0)
+			return 0;
+	}
+#endif
 
 	/* Disregard pcpu kthreads; they are where they need to be. */
 	if (kthread_is_per_cpu(p))
@@ -14327,7 +14557,11 @@ bool cfs_prio_less(const struct task_struct *a, const struct task_struct *b,
 
 	return delta > 0;
 }
+#else
+static inline void task_tick_core(struct rq *rq, struct task_struct *curr) {}
+#endif
 
+#if defined(CONFIG_SCHED_CORE) || defined(CONFIG_CGROUP_IFS)
 static int task_is_throttled_fair(struct task_struct *p, int cpu)
 {
 	struct cfs_rq *cfs_rq;
@@ -14339,8 +14573,6 @@ static int task_is_throttled_fair(struct task_struct *p, int cpu)
 #endif
 	return throttled_hierarchy(cfs_rq);
 }
-#else
-static inline void task_tick_core(struct rq *rq, struct task_struct *curr) {}
 #endif
 
 #ifdef CONFIG_SCHED_STEAL
@@ -14541,6 +14773,12 @@ static void task_fork_fair(struct task_struct *p)
 	if (curr)
 		update_curr(cfs_rq);
 	place_entity(cfs_rq, se, ENQUEUE_INITIAL);
+
+#ifdef CONFIG_SCHED_PARAL
+	if (sched_paral_used())
+		set_task_paral_node(p);
+#endif
+
 	rq_unlock(rq, &rf);
 }
 
@@ -14768,6 +15006,10 @@ int alloc_fair_sched_group(struct task_group *tg, struct task_group *parent)
 	if (ret)
 		goto err;
 
+	ret = init_soft_domain(tg, parent);
+	if (ret)
+		goto err;
+
 	for_each_possible_cpu(i) {
 		cfs_rq = kzalloc_node(sizeof(struct cfs_rq),
 				      GFP_KERNEL, cpu_to_node(i));
@@ -14790,6 +15032,7 @@ err_free_rq:
 	kfree(cfs_rq);
 err:
 	destroy_auto_affinity(tg);
+	destroy_soft_domain(tg);
 	return 0;
 }
 
@@ -14816,18 +15059,28 @@ void unregister_fair_sched_group(struct task_group *tg)
 	unsigned long flags;
 	struct rq *rq;
 	int cpu;
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	struct cfs_rq *cfs_rq;
+#endif
 
 	destroy_cfs_bandwidth(tg_cfs_bandwidth(tg));
 	destroy_auto_affinity(tg);
+	destroy_soft_domain(tg);
 
 	for_each_possible_cpu(cpu) {
 		if (tg->se[cpu])
 			remove_entity_load_avg(tg->se[cpu]);
 
-		#ifdef CONFIG_QOS_SCHED
-			if (tg->cfs_rq && tg->cfs_rq[cpu])
-				unthrottle_qos_sched_group(tg->cfs_rq[cpu]);
-		#endif
+#ifdef CONFIG_QOS_SCHED
+		if (tg->cfs_rq && tg->cfs_rq[cpu])
+			unthrottle_qos_sched_group(tg->cfs_rq[cpu]);
+#endif
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+		if (tg->cfs_rq && tg->cfs_rq[cpu]) {
+			cfs_rq = tg->cfs_rq[cpu];
+			list_del_init(&cfs_rq->soft_quota_throttled_list);
+		}
+#endif
 
 		/*
 		 * Only empty task groups can be destroyed; so we can speculatively
@@ -15075,7 +15328,7 @@ DEFINE_SCHED_CLASS(fair) = {
 	.task_change_group	= task_change_group_fair,
 #endif
 
-#ifdef CONFIG_SCHED_CORE
+#if defined(CONFIG_SCHED_CORE) || defined(CONFIG_CGROUP_IFS)
 	.task_is_throttled	= task_is_throttled_fair,
 #endif
 
@@ -15142,6 +15395,11 @@ __init void init_sched_fair_class(void)
 		INIT_LIST_HEAD(&per_cpu(qos_throttled_cfs_rq, i));
 #endif
 
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	for_each_possible_cpu(i)
+		INIT_LIST_HEAD(&per_cpu(soft_quota_throttled_cfs_rq, i));
+#endif
+
 	open_softirq(SCHED_SOFTIRQ, run_rebalance_domains);
 
 #ifdef CONFIG_NO_HZ_COMMON
@@ -15152,3 +15410,66 @@ __init void init_sched_fair_class(void)
 #endif /* SMP */
 
 }
+
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+static bool check_soft_runtime(struct task_group *tg, int slice)
+{
+	int cpu;
+	u64 sum_soft_runtime = slice;
+	struct cfs_bandwidth *cfs_b = &tg->cfs_bandwidth;
+
+	if (cfs_b->quota == RUNTIME_INF)
+		return true;
+
+	for_each_possible_cpu(cpu)
+		sum_soft_runtime += tg->cfs_rq[cpu]->sum_soft_runtime;
+
+	return sum_soft_runtime < sysctl_soft_runtime_ratio * cfs_b->quota / 100;
+}
+
+int __weak is_sibling_idle(void)
+{
+	return 0;
+}
+
+bool unthrottle_cfs_rq_soft_quota(struct rq *rq)
+{
+	int max_cnt = 0;
+	bool ret = false;
+	struct cfs_rq *cfs_rq, *tmp_rq;
+	struct cfs_bandwidth *cfs_b;
+	int slice = sched_cfs_bandwidth_slice();
+
+	if (!is_sibling_idle())
+		return ret;
+
+	list_for_each_entry_safe(cfs_rq, tmp_rq, &per_cpu(soft_quota_throttled_cfs_rq, cpu_of(rq)),
+				 soft_quota_throttled_list) {
+		if (max_cnt++ > 20)
+			break;
+
+		if (cfs_rq->throttled) {
+			cfs_b = tg_cfs_bandwidth(cfs_rq->tg);
+			raw_spin_lock(&cfs_b->lock);
+
+			if (!check_soft_runtime(cfs_rq->tg, slice)) {
+				raw_spin_unlock(&cfs_b->lock);
+				continue;
+			}
+
+			raw_spin_unlock(&cfs_b->lock);
+
+			if (cfs_rq->runtime_remaining + slice > 0) {
+				cfs_rq->runtime_remaining += slice;
+				cfs_rq->sum_soft_runtime += slice;
+				cfs_rq->soft_quota_enable = 1;
+				unthrottle_cfs_rq(cfs_rq);
+				ret = true;
+				break;
+			}
+		}
+	}
+
+	return ret;
+}
+#endif

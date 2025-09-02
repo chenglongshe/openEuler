@@ -48,7 +48,17 @@
 	mrs	x30, tpidrro_el0
 	msr	tpidrro_el0, xzr
 	.else
+#ifdef CONFIG_ACTLR_XCALL_XINT
+	alternative_if ARM64_HAS_HW_XCALL_XINT
+	mrs	x30, tpidrro_el0
+	msr	tpidrro_el0, xzr
+	alternative_else
 	mov	x30, xzr
+	nop
+	alternative_endif
+#else
+	mov	x30, xzr
+#endif
 	.endif
 .Lskip_tramp_vectors_cleanup\@:
 	.endif
@@ -228,14 +238,14 @@ alternative_cb_end
 	 * Ensure MDSCR_EL1.SS is clear, since we can unmask debug exceptions
 	 * when scheduling.
 	 */
-	.if \fast_mode == std
 	ldr	x19, [tsk, #TSK_TI_FLAGS]
+	.if \fast_mode == std
 	disable_step_tsk x19, x20
 	.endif
 
 	/* Check for asynchronous tag check faults in user space */
-	.if \fast_mode == std
 	ldr	x0, [tsk, THREAD_SCTLR_USER]
+	.if \fast_mode == std
 	check_mte_async_tcf x22, x23, x0
 	.endif
 
@@ -278,11 +288,11 @@ alternative_if ARM64_MTE
 	isb
 	b	1f
 alternative_else_nop_endif
+	.endif
 alternative_if ARM64_HAS_ADDRESS_AUTH
 	isb
 alternative_else_nop_endif
 1:
-	.endif
 
 	scs_load_current
 	.else
@@ -399,8 +409,8 @@ alternative_else_nop_endif
 	scs_save tsk
 
 	/* Ignore asynchronous tag check faults in the uaccess routines */
-	.if \fast_mode == std
 	ldr	x0, [tsk, THREAD_SCTLR_USER]
+	.if \fast_mode == std
 	clear_mte_async_tcf x0
 	.endif
 
@@ -570,6 +580,33 @@ SYM_CODE_START(vectors)
 	kernel_ventry	0, t, 32, error		// Error 32-bit EL0
 SYM_CODE_END(vectors)
 
+#ifdef CONFIG_ACTLR_XCALL_XINT
+#include "xcall/entry.S"
+
+	.align	11
+SYM_CODE_START(vectors_xcall_xint)
+	kernel_ventry	1, t, 64, sync		// Synchronous EL1t
+	kernel_ventry	1, t, 64, irq		// IRQ EL1t
+	kernel_ventry	1, t, 64, fiq		// FIQ EL1t
+	kernel_ventry	1, t, 64, error		// Error EL1t
+
+	kernel_ventry	1, h, 64, sync		// Synchronous EL1h
+	kernel_ventry	1, h, 64, irq		// IRQ EL1h
+	kernel_ventry	1, h, 64, fiq		// FIQ EL1h
+	kernel_ventry	1, h, 64, error		// Error EL1h
+
+	kernel_ventry	0, t, 64, sync		// Synchronous 64-bit EL0
+	kernel_ventry	0, t, 64, irq		// IRQ 64-bit EL0
+	kernel_ventry	0, t, 64, fiq		// FIQ 64-bit EL0
+	kernel_ventry	0, t, 64, error		// Error 64-bit EL0
+
+	xcall_ventry				// XCALL synchronous 64-bit EL0
+	kernel_ventry	0, t, 64, xint		// XINT 64-bit EL0
+	kernel_ventry	0, t, 32, fiq		// FIQ 32-bit EL0
+	kernel_ventry	0, t, 32, error		// Error 32-bit EL0
+SYM_CODE_END(vectors_xcall_xint)
+#endif
+
 #ifdef CONFIG_VMAP_STACK
 SYM_CODE_START_LOCAL(__bad_stack)
 	/*
@@ -613,7 +650,7 @@ SYM_CODE_END(__bad_stack)
 	.endm
 
 	.macro check_xcall_enable
-	/* x21 = task_struct->xcall_enable */
+	/* x21 = task_struct->xinfo->xcall_enable */
 	ldr_this_cpu	x20, __entry_task, x21
 	ldr	x21, [x20, #TSK_XCALL]
 	/* x20 = sc_no / 8 */
@@ -648,7 +685,7 @@ SYM_CODE_END(__bad_stack)
 	kernel_entry 0, 64
 #endif
 	mov	x0, sp
-	bl	el0t_64_xcall_handler
+	bl	el0t_64_fast_syscall_handler
 #ifdef CONFIG_SECURITY_FEATURE_BYPASS
 	kernel_exit 0, xcall
 #else
@@ -696,7 +733,7 @@ SYM_CODE_END(__bad_stack)
 	kernel_entry 0, 64
 #endif
 	mov	x0, sp
-	bl	el0t_64_xint_handler
+	bl	el0t_64_fast_irq_handler
 #ifdef CONFIG_SECURITY_FEATURE_BYPASS
 	kernel_exit 0, xint
 #else
@@ -759,6 +796,10 @@ SYM_CODE_END(el\el\ht\()_\regsize\()_\label)
 	entry_handler	0, t, 64, fiq
 	entry_handler	0, t, 64, error
 
+#ifdef CONFIG_ACTLR_XCALL_XINT
+	entry_handler	0, t, 64, xcall
+	entry_handler	0, t, 64, xint
+#endif
 	entry_handler	0, t, 32, sync
 	entry_handler	0, t, 32, irq
 	entry_handler	0, t, 32, fiq
@@ -849,6 +890,14 @@ alternative_else_nop_endif
 	msr	tpidrro_el0, x30	// Restored in kernel_ventry
 	.endif
 
+#ifdef CONFIG_ACTLR_XCALL_XINT
+	.if	\regsize == 32
+	alternative_if ARM64_HAS_HW_XCALL_XINT
+	msr	tpidrro_el0, x30	// Restored in kernel_ventry
+	alternative_else_nop_endif
+	.endif
+#endif
+
 	.if	\bhb == BHB_MITIGATION_LOOP
 	/*
 	 * This sequence must appear before the first indirect branch. i.e. the
@@ -873,7 +922,16 @@ alternative_else_nop_endif
 2:
 	tramp_map_kernel	x30
 alternative_insn isb, nop, ARM64_WORKAROUND_QCOM_FALKOR_E1003
+#ifdef CONFIG_ACTLR_XCALL_XINT
+alternative_if_not ARM64_HAS_HW_XCALL_XINT
 	tramp_data_read_var	x30, vectors
+	b	3f
+alternative_else_nop_endif
+	tramp_data_read_var	x30, vectors_xcall_xint
+3:
+#else
+	tramp_data_read_var	x30, vectors
+#endif
 alternative_if_not ARM64_WORKAROUND_CAVIUM_TX2_219_PRFM
 	prfm	plil1strm, [x30, #(1b - \vector_start)]
 alternative_else_nop_endif
@@ -881,7 +939,15 @@ alternative_else_nop_endif
 	msr	vbar_el1, x30
 	isb
 	.else
+#ifdef CONFIG_ACTLR_XCALL_XINT
+alternative_if_not ARM64_HAS_HW_XCALL_XINT
 	adr_l	x30, vectors
+alternative_else
+	adr_l	x30, vectors_xcall_xint
+alternative_endif
+#else
+	adr_l	x30, vectors
+#endif
 	.endif // \kpti == 1
 
 	.if	\bhb == BHB_MITIGATION_FW
@@ -982,6 +1048,7 @@ SYM_CODE_END(__bp_harden_el1_vectors)
  *
  */
 SYM_FUNC_START(cpu_switch_to)
+	save_and_disable_daif x11
 	mov	x10, #THREAD_CPU_CONTEXT
 	add	x8, x0, x10
 	mov	x9, sp
@@ -1005,6 +1072,7 @@ SYM_FUNC_START(cpu_switch_to)
 	ptrauth_keys_install_kernel x1, x8, x9, x10
 	scs_save x0
 	scs_load_current
+	restore_irq x11
 	ret
 SYM_FUNC_END(cpu_switch_to)
 NOKPROBE(cpu_switch_to)
@@ -1031,6 +1099,7 @@ NOKPROBE(ret_from_fork)
  * Calls func(regs) using this CPU's irq stack and shadow irq stack.
  */
 SYM_FUNC_START(call_on_irq_stack)
+	save_and_disable_daif x9
 #ifdef CONFIG_SHADOW_CALL_STACK
 	get_current_task x16
 	scs_save x16
@@ -1045,8 +1114,10 @@ SYM_FUNC_START(call_on_irq_stack)
 
 	/* Move to the new stack and call the function there */
 	add	sp, x16, #IRQ_STACK_SIZE
+	restore_irq x9
 	blr	x1
 
+	save_and_disable_daif x9
 	/*
 	 * Restore the SP from the FP, and restore the FP and LR from the frame
 	 * record.
@@ -1054,6 +1125,7 @@ SYM_FUNC_START(call_on_irq_stack)
 	mov	sp, x29
 	ldp	x29, x30, [sp], #16
 	scs_load_current
+	restore_irq x9
 	ret
 SYM_FUNC_END(call_on_irq_stack)
 NOKPROBE(call_on_irq_stack)

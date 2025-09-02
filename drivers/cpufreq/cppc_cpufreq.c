@@ -26,14 +26,6 @@
 
 #include <acpi/cppc_acpi.h>
 
-/*
- * This list contains information parsed from per CPU ACPI _CPC and _PSD
- * structures: e.g. the highest and lowest supported performance, capabilities,
- * desired performance, level requested etc. Depending on the share_type, not
- * all CPUs will have an entry in the list.
- */
-static LIST_HEAD(cpu_data_list);
-
 static bool boost_supported;
 
 struct cppc_workaround_oem_info {
@@ -78,7 +70,6 @@ struct cppc_freq_invariance {
 static DEFINE_PER_CPU(struct cppc_freq_invariance, cppc_freq_inv);
 static struct kthread_worker *kworker_fie;
 
-static unsigned int hisi_cppc_cpufreq_get_rate(unsigned int cpu);
 static int cppc_perf_from_fbctrs(struct cppc_cpudata *cpu_data,
 				 struct cppc_perf_fb_ctrs *fb_ctrs_t0,
 				 struct cppc_perf_fb_ctrs *fb_ctrs_t1);
@@ -113,12 +104,23 @@ static void cppc_scale_freq_workfn(struct kthread_work *work)
 	struct cppc_cpudata *cpu_data;
 	unsigned long local_freq_scale;
 	u64 perf;
+	int ret;
 
 	cppc_fi = container_of(work, struct cppc_freq_invariance, work);
 	cpu_data = cppc_fi->cpu_data;
 
-	if (cppc_get_perf_ctrs(cppc_fi->cpu, &fb_ctrs)) {
+	ret = cppc_get_perf_ctrs(cppc_fi->cpu, &fb_ctrs);
+	/*
+	 * Perf counters could be 0 if the cpu is in a low-power idle state.
+	 * Just try it again next time.
+	 */
+	if (ret == -EFAULT)
+		return;
+
+	if (ret) {
 		pr_warn("%s: failed to read perf counters\n", __func__);
+		topology_clear_scale_freq_source(SCALE_FREQ_SOURCE_CPPC,
+						 cpu_data->shared_cpu_map);
 		return;
 	}
 
@@ -176,16 +178,14 @@ static void cppc_cpufreq_cpu_fie_init(struct cpufreq_policy *policy)
 		init_irq_work(&cppc_fi->irq_work, cppc_irq_work);
 
 		ret = cppc_get_perf_ctrs(cpu, &cppc_fi->prev_perf_fb_ctrs);
-		if (ret) {
-			pr_warn("%s: failed to read perf counters for cpu:%d: %d\n",
-				__func__, cpu, ret);
-
+		if (ret && cpu_online(cpu)) {
 			/*
 			 * Don't abort if the CPU was offline while the driver
 			 * was getting registered.
 			 */
-			if (cpu_online(cpu))
-				return;
+			pr_debug("%s: failed to read perf counters for cpu:%d: %d\n",
+				__func__, cpu, ret);
+			return;
 		}
 	}
 
@@ -381,7 +381,6 @@ static unsigned int cppc_cpufreq_get_transition_delay_us(unsigned int cpu)
 #if defined(CONFIG_ARM64) && defined(CONFIG_ENERGY_MODEL)
 
 static DEFINE_PER_CPU(unsigned int, efficiency_class);
-static void cppc_cpufreq_register_em(struct cpufreq_policy *policy);
 
 /* Create an artificial performance state every CPPC_EM_CAP_STEP capacity unit. */
 #define CPPC_EM_CAP_STEP	(20)
@@ -517,7 +516,19 @@ static int cppc_get_cpu_cost(struct device *cpu_dev, unsigned long KHz,
 	return 0;
 }
 
-static int populate_efficiency_class(void)
+static void cppc_cpufreq_register_em(struct cpufreq_policy *policy)
+{
+	struct cppc_cpudata *cpu_data;
+	struct em_data_callback em_cb =
+		EM_ADV_DATA_CB(cppc_get_cpu_power, cppc_get_cpu_cost);
+
+	cpu_data = policy->driver_data;
+	em_dev_register_perf_domain(get_cpu_device(policy->cpu),
+			get_perf_level_count(policy), &em_cb,
+			cpu_data->shared_cpu_map, 0);
+}
+
+static void populate_efficiency_class(void)
 {
 	struct acpi_madt_generic_interrupt *gicc;
 	DECLARE_BITMAP(used_classes, 256) = {};
@@ -532,7 +543,7 @@ static int populate_efficiency_class(void)
 	if (bitmap_weight(used_classes, 256) <= 1) {
 		pr_debug("Efficiency classes are all equal (=%d). "
 			"No EM registered", class);
-		return -EINVAL;
+		return;
 	}
 
 	/*
@@ -549,26 +560,11 @@ static int populate_efficiency_class(void)
 		index++;
 	}
 	cppc_cpufreq_driver.register_em = cppc_cpufreq_register_em;
-
-	return 0;
-}
-
-static void cppc_cpufreq_register_em(struct cpufreq_policy *policy)
-{
-	struct cppc_cpudata *cpu_data;
-	struct em_data_callback em_cb =
-		EM_ADV_DATA_CB(cppc_get_cpu_power, cppc_get_cpu_cost);
-
-	cpu_data = policy->driver_data;
-	em_dev_register_perf_domain(get_cpu_device(policy->cpu),
-			get_perf_level_count(policy), &em_cb,
-			cpu_data->shared_cpu_map, 0);
 }
 
 #else
-static int populate_efficiency_class(void)
+static void populate_efficiency_class(void)
 {
-	return 0;
 }
 #endif
 
@@ -596,8 +592,6 @@ static struct cppc_cpudata *cppc_cpufreq_get_cpu_data(unsigned int cpu)
 		goto free_mask;
 	}
 
-	list_add(&cpu_data->node, &cpu_data_list);
-
 	return cpu_data;
 
 free_mask:
@@ -612,7 +606,6 @@ static void cppc_cpufreq_put_cpu_data(struct cpufreq_policy *policy)
 {
 	struct cppc_cpudata *cpu_data = policy->driver_data;
 
-	list_del(&cpu_data->node);
 	free_cpumask_var(cpu_data->shared_cpu_map);
 	kfree(cpu_data);
 	policy->driver_data = NULL;
@@ -787,7 +780,7 @@ static unsigned int cppc_cpufreq_get_rate(unsigned int cpu)
 	int ret;
 
 	if (!policy)
-		return -ENODEV;
+		return 0;
 
 	cpu_data = policy->driver_data;
 
@@ -981,7 +974,7 @@ static unsigned int hisi_cppc_cpufreq_get_rate(unsigned int cpu)
 	int ret;
 
 	if (!policy)
-		return -ENODEV;
+		return 0;
 
 	cpu_data = policy->driver_data;
 
@@ -989,7 +982,7 @@ static unsigned int hisi_cppc_cpufreq_get_rate(unsigned int cpu)
 
 	ret = cppc_get_desired_perf(cpu, &desired_perf);
 	if (ret < 0)
-		return -EIO;
+		return 0;
 
 	return cppc_perf_to_khz(&cpu_data->perf_caps, desired_perf);
 }
@@ -1036,24 +1029,10 @@ static int __init cppc_cpufreq_init(void)
 	return ret;
 }
 
-static inline void free_cpu_data(void)
-{
-	struct cppc_cpudata *iter, *tmp;
-
-	list_for_each_entry_safe(iter, tmp, &cpu_data_list, node) {
-		free_cpumask_var(iter->shared_cpu_map);
-		list_del(&iter->node);
-		kfree(iter);
-	}
-
-}
-
 static void __exit cppc_cpufreq_exit(void)
 {
 	cpufreq_unregister_driver(&cppc_cpufreq_driver);
 	cppc_freq_invariance_exit();
-
-	free_cpu_data();
 }
 
 module_exit(cppc_cpufreq_exit);

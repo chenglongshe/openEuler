@@ -38,7 +38,6 @@ struct rpc_sysfs_client {
 	struct rpc_xprt_switch *xprt_switch;
 };
 
-
 /*
  * The high-level client handle
  */
@@ -65,7 +64,12 @@ struct rpc_clnt {
 				cl_noretranstimeo: 1,/* No retransmit timeouts */
 				cl_autobind : 1,/* use getport() */
 				cl_chatty   : 1,/* be verbose */
+#if defined(__GENKSYMS__) || !IS_ENABLED(CONFIG_SUNRPC_ENFS)
 				cl_shutdown : 1;/* rpc immediate -EIO */
+#else
+				cl_shutdown : 1,/* rpc immediate -EIO */
+				cl_enfs     : 1;/* be enfs */
+#endif
 	struct xprtsec_parms	cl_xprtsec;	/* transport security policy */
 
 	struct rpc_rtt *	cl_rtt;		/* RTO estimator data */
@@ -162,7 +166,11 @@ struct rpc_create_args {
 	unsigned long		connect_timeout;
 	unsigned long		reconnect_timeout;
 
+#if IS_ENABLED(CONFIG_SUNRPC_ENFS)
+	void *multipath_option;
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 };
 
@@ -236,6 +244,7 @@ void		rpc_force_rebind(struct rpc_clnt *);
 size_t		rpc_peeraddr(struct rpc_clnt *, struct sockaddr *, size_t);
 const char	*rpc_peeraddr2str(struct rpc_clnt *, enum rpc_display_format_t);
 int		rpc_localaddr(struct rpc_clnt *, struct sockaddr *, size_t);
+int rpc_localalladdr(struct rpc_xprt *xprt, struct sockaddr *buf, size_t buflen);
 
 int 		rpc_clnt_iterate_for_each_xprt(struct rpc_clnt *clnt,
 			int (*fn)(struct rpc_clnt *, struct rpc_xprt *, void *),
@@ -273,6 +282,10 @@ bool rpc_clnt_xprt_switch_has_addr(struct rpc_clnt *clnt,
 void rpc_clnt_xprt_set_online(struct rpc_clnt *clnt, struct rpc_xprt *xprt);
 void rpc_clnt_disconnect(struct rpc_clnt *clnt);
 void rpc_cleanup_clids(void);
+int rpc_clnt_test_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
+	const struct rpc_call_ops *ops, void *data, int flags);
+
+struct rpc_xprt *rpc_task_get_next_xprt(struct rpc_clnt *clnt);
 
 static inline int rpc_reply_expected(struct rpc_task *task)
 {

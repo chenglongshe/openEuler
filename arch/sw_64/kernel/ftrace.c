@@ -72,13 +72,17 @@ int ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 	else
 		offset = TI_FTRACE_REGS_ADDR;
 
-	insn[0] = SW64_NOP;
 	/* ldl r28,(ftrace_addr_offset)(r8) */
-	insn[1] = (0x23U << 26) | (28U << 21) | (8U << 16) | offset;
-	insn[2] = SW64_CALL(R28, R28, 0);
+	insn[0] = (0x23U << 26) | (28U << 21) | (8U << 16) | offset;
+	insn[1] = SW64_CALL(R28, R28, 0);
+	insn[2] = SW64_NOP;
 
-	/* replace the 3 mcount instructions at once */
-	return copy_to_kernel_nofault((void *)pc, insn, 3 * SW64_INSN_SIZE);
+	*((u32 *)pc) = insn[0];
+	mb();
+	*((u32 *)(pc + 4)) = insn[1];
+	*((u32 *)(pc + 8)) = insn[2];
+
+	return 0;
 }
 
 /*
@@ -90,7 +94,12 @@ int ftrace_make_nop(struct module *mod, struct dyn_ftrace *rec,
 	unsigned long pc = rec->ip + MCOUNT_LDGP_SIZE;
 	unsigned int insn[3] = {SW64_NOP, SW64_NOP, SW64_NOP};
 
-	return copy_to_kernel_nofault((void *)pc, insn, 3 * SW64_INSN_SIZE);
+	*((u32 *)(pc + 8)) = insn[2];
+	*((u32 *)(pc + 4)) = insn[1];
+	mb();
+	*((u32 *)pc) = insn[0];
+
+	return 0;
 }
 
 void arch_ftrace_update_code(int command)
@@ -115,6 +124,19 @@ int __init ftrace_dyn_arch_init(void)
 int ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
 		       unsigned long addr)
 {
+	unsigned int insn[1];
+	unsigned long pc = rec->ip + MCOUNT_LDGP_SIZE;
+	unsigned long offset;
+
+	if (addr == FTRACE_ADDR)
+		offset = TI_FTRACE_ADDR;
+	else
+		offset = TI_FTRACE_REGS_ADDR;
+
+	/* ldl r28,(ftrace_addr_offset)(r8) */
+	insn[0] = (0x23U << 26) | (28U << 21) | (8U << 16) | offset;
+	copy_to_kernel_nofault((void *)pc, insn, SW64_INSN_SIZE);
+
 	return 0;
 }
 #endif
@@ -153,6 +175,17 @@ void prepare_ftrace_return(unsigned long *parent, unsigned long self_addr,
  * Turn on/off the call to ftrace_graph_caller() in ftrace_caller()
  * depending on @enable.
  */
+#ifdef CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS
+void ftrace_graph_func(unsigned long ip, unsigned long parent_ip,
+		       struct ftrace_ops *op, struct ftrace_regs *fregs)
+{
+	struct pt_regs *regs = arch_ftrace_get_regs(fregs);
+	unsigned long *parent = (unsigned long *)&regs->regs[26];
+	unsigned long frame_pointer = regs->regs[15];
+
+	prepare_ftrace_return(parent, ip, frame_pointer);
+}
+#else
 static int ftrace_modify_graph_caller(bool enable)
 {
 	unsigned long pc = (unsigned long)&ftrace_graph_call;
@@ -172,5 +205,6 @@ int ftrace_disable_ftrace_graph_caller(void)
 {
 	return ftrace_modify_graph_caller(false);
 }
+#endif /* CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS */
 #endif /* CONFIG_DYNAMIC_FTRACE */
 #endif /* CONFIG_FUNCTION_GRAPH_TRACER */

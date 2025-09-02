@@ -297,7 +297,7 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 		if (anon_name)
 			seq_printf(m, "[anon_shmem:%s]", anon_name->name);
 		else
-			seq_file_path(m, file, "\n");
+			seq_path(m, file_user_path(file), "\n");
 		goto done;
 	}
 
@@ -727,23 +727,28 @@ static int smaps_hugetlb_range(pte_t *pte, unsigned long hmask,
 {
 	struct mem_size_stats *mss = walk->private;
 	struct vm_area_struct *vma = walk->vma;
-	struct page *page = NULL;
-	pte_t ptent = ptep_get(pte);
+	struct folio *folio = NULL;
+	spinlock_t *ptl;
+	pte_t ptent;
 
+	ptl = huge_pte_lock(hstate_vma(vma), walk->mm, pte);
+	ptent = huge_ptep_get(pte);
 	if (pte_present(ptent)) {
-		page = vm_normal_page(vma, addr, ptent);
+		folio = page_folio(pte_page(ptent));
 	} else if (is_swap_pte(ptent)) {
 		swp_entry_t swpent = pte_to_swp_entry(ptent);
 
 		if (is_pfn_swap_entry(swpent))
-			page = pfn_swap_entry_to_page(swpent);
+			folio = pfn_swap_entry_folio(swpent);
 	}
-	if (page) {
-		if (page_mapcount(page) >= 2 || hugetlb_pmd_shared(pte))
+	if (folio) {
+		if (folio_likely_mapped_shared(folio) ||
+		    hugetlb_pmd_shared(pte))
 			mss->shared_hugetlb += huge_page_size(hstate_vma(vma));
 		else
 			mss->private_hugetlb += huge_page_size(hstate_vma(vma));
 	}
+	spin_unlock(ptl);
 	return 0;
 }
 #else
@@ -1976,7 +1981,7 @@ static int show_numa_map(struct seq_file *m, void *v)
 
 	if (file) {
 		seq_puts(m, " file=");
-		seq_file_path(m, file, "\n\t= ");
+		seq_path(m, file_user_path(file), "\n\t= ");
 	} else if (vma_is_initial_heap(vma)) {
 		seq_puts(m, " heap");
 	} else if (vma_is_initial_stack(vma)) {

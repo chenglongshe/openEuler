@@ -538,6 +538,10 @@ bool kvm_set_spte_gfn(struct kvm *kvm, struct kvm_gfn_range *range)
 	 * _PAGE_DIRTY since gpa has already recorded as dirty page
 	 */
 	prot_bits |= __WRITEABLE & *ptep & pte_val(range->arg.pte);
+	if (kvm_pte_dirty(prot_bits)) {
+		prot_bits = kvm_pte_mkclean(prot_bits);
+		prot_bits = kvm_pte_mkwrite(prot_bits);
+	}
 	kvm_set_pte(ptep, kvm_pfn_pte(pfn, __pgprot(prot_bits)));
 
 	return true;
@@ -602,8 +606,8 @@ static int kvm_map_page_fast(struct kvm_vcpu *vcpu, unsigned long gpa, bool writ
 
 	/* Track access to pages marked old */
 	new = kvm_pte_mkyoung(*ptep);
-	/* call kvm_set_pfn_accessed() after unlock */
 
+	/* call kvm_set_pfn_accessed() after unlock */
 	if (write && !kvm_pte_dirty(new)) {
 		if (!kvm_pte_write(new)) {
 			ret = -EFAULT;
@@ -903,9 +907,14 @@ retry:
 		prot_bits |= _CACHE_SUC;
 
 	if (writeable) {
-		prot_bits |= _PAGE_WRITE;
+		/* If the page entry has a write attribute,
+		 * we use the page entry 50bit(KVM_RECORD_PAGE_WRITE_ABLE)
+		 * to record it to restore the write attribute of the page entry,
+		 * in the fast path kvm_map_page_fast for page table processing
+		 */
+		prot_bits = kvm_pte_mkwrite(prot_bits);
 		if (write)
-			prot_bits |= __WRITEABLE;
+			prot_bits = kvm_pte_mkdirty(prot_bits);
 	}
 
 	/* Disable dirty logging on HugePages */

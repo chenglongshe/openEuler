@@ -76,6 +76,7 @@
 #include <linux/kasan.h>
 #include <linux/percpu.h>
 
+#include <asm/actlr.h>
 #include <asm/cpu.h>
 #include <asm/cpufeature.h>
 #include <asm/cpu_ops.h>
@@ -105,6 +106,7 @@ static DECLARE_BITMAP(elf_hwcap, MAX_CPU_FEATURES) __read_mostly;
 				 COMPAT_HWCAP_LPAE)
 unsigned int a32_elf_hwcap __read_mostly = AARCH32_EL0_ELF_HWCAP_DEFAULT;
 unsigned int a32_elf_hwcap2 __read_mostly;
+unsigned int a32_elf_hwcap3 __read_mostly;
 #endif
 
 DECLARE_BITMAP(system_cpucaps, ARM64_NCAPS);
@@ -200,6 +202,7 @@ static const struct arm64_ftr_bits ftr_id_aa64isar0[] = {
 };
 
 static const struct arm64_ftr_bits ftr_id_aa64isar1[] = {
+	ARM64_FTR_BITS(FTR_VISIBLE, FTR_STRICT, FTR_LOWER_SAFE, ID_AA64ISAR1_EL1_LS64_SHIFT, 4, 0),
 	ARM64_FTR_BITS(FTR_VISIBLE, FTR_STRICT, FTR_LOWER_SAFE, ID_AA64ISAR1_EL1_I8MM_SHIFT, 4, 0),
 	ARM64_FTR_BITS(FTR_VISIBLE, FTR_STRICT, FTR_LOWER_SAFE, ID_AA64ISAR1_EL1_DGH_SHIFT, 4, 0),
 	ARM64_FTR_BITS(FTR_VISIBLE, FTR_STRICT, FTR_LOWER_SAFE, ID_AA64ISAR1_EL1_BF16_SHIFT, 4, 0),
@@ -2133,6 +2136,40 @@ static void cpu_enable_e0pd(struct arm64_cpu_capabilities const *cap)
 static bool enable_pseudo_nmi;
 #endif
 
+#ifdef CONFIG_ARM64_LS64
+static bool has_ls64(const struct arm64_cpu_capabilities *entry, int __unused)
+{
+	u64 ls64;
+
+	ls64 = cpuid_feature_extract_field(__read_sysreg_by_encoding(entry->sys_reg),
+					   entry->field_pos, entry->sign);
+
+	if (ls64 == ID_AA64ISAR1_EL1_LS64_NI ||
+	    ls64 > ID_AA64ISAR1_EL1_LS64_LS64_ACCDATA)
+		return false;
+
+	if (entry->capability == ARM64_HAS_LS64 &&
+	    ls64 >= ID_AA64ISAR1_EL1_LS64_LS64)
+		return true;
+
+	if (entry->capability == ARM64_HAS_LS64_V &&
+	    ls64 >= ID_AA64ISAR1_EL1_LS64_LS64_V)
+		return true;
+
+	return false;
+}
+
+static void cpu_enable_ls64(struct arm64_cpu_capabilities const *cap)
+{
+	sysreg_clear_set(sctlr_el1, SCTLR_EL1_EnALS, SCTLR_EL1_EnALS);
+}
+
+static void cpu_enable_ls64_v(struct arm64_cpu_capabilities const *cap)
+{
+	sysreg_clear_set(sctlr_el1, SCTLR_EL1_EnASR, SCTLR_EL1_EnASR);
+}
+#endif
+
 #ifdef CONFIG_ARM64_PSEUDO_NMI
 static int __init early_enable_pseudo_nmi(char *p)
 {
@@ -2393,22 +2430,35 @@ static void mpam_extra_caps(void)
 }
 
 #ifdef CONFIG_FAST_SYSCALL
-static bool is_xcall_support;
+#include <asm/xcall.h>
+DEFINE_STATIC_KEY_FALSE(xcall_enable);
+
+static bool is_arch_xcall_xint_support(void)
+{
+	/* List of CPUs that support Xcall/Xint */
+	static const struct midr_range xcall_xint_cpus[] = {
+		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
+		{ /* sentinel */ }
+	};
+
+	if (is_midr_in_range_list(read_cpuid_id(), xcall_xint_cpus))
+		return true;
+
+	return false;
+}
+
 static int __init xcall_setup(char *str)
 {
-	is_xcall_support = true;
+	if (!is_arch_xcall_xint_support())
+		static_branch_enable(&xcall_enable);
+
 	return 1;
 }
 __setup("xcall", xcall_setup);
 
-bool fast_syscall_enabled(void)
-{
-	return is_xcall_support;
-}
-
 static bool has_xcall_support(const struct arm64_cpu_capabilities *entry, int __unused)
 {
-	return is_xcall_support;
+	return static_key_enabled(&xcall_enable);
 }
 #endif
 
@@ -2427,6 +2477,72 @@ __setup("xint", xint_setup);
 static bool has_xint_support(const struct arm64_cpu_capabilities *entry, int __unused)
 {
 	return is_xint_support;
+}
+#endif
+
+#ifdef CONFIG_ACTLR_XCALL_XINT
+static bool has_arch_xcall_xint_support(const struct arm64_cpu_capabilities *entry, int scope)
+{
+	return is_arch_xcall_xint_support();
+}
+
+static void enable_xcall_xint_vectors(void)
+{
+	/*
+	 * Upon CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY is enabled,
+	 * the vbar_el1 is set to the vectors starts from __bp_harden_el1_vectors.
+	 * Kernel will jump to the xcall/xint vectors from the trampoline vector
+	 * defined in the macro tramp_ventry.
+	 */
+	if (__this_cpu_read(this_cpu_vector) != vectors)
+		return;
+
+	/*
+	 * Upon KAISER is enabled, the vbar_el1 is set to the vectors starts
+	 * from tramp_vectors. Kernel will jump to the vectors_xcall_xint from
+	 * the trampoline vector defined in the macro tramp_ventry.
+	 */
+	if (arm64_kernel_unmapped_at_el0())
+		return;
+
+	/*
+	 * If neither KAISER or BHB_MITIGATION is enabled, then we switch
+	 * the vbar_el1 from the default vectors to the xcall/xint vectors
+	 * at once.
+	 */
+	__this_cpu_write(this_cpu_vector, vectors_xcall_xint);
+	write_sysreg(vectors_xcall_xint, vbar_el1);
+	isb();
+}
+
+static void cpu_enable_arch_xcall_xint(const struct arm64_cpu_capabilities *__unused)
+{
+	int cpu = smp_processor_id();
+	u64 actlr_el1, actlr_el2;
+	u64 el;
+
+	el = read_sysreg(CurrentEL);
+	if (el == CurrentEL_EL2) {
+		/*
+		 * Enable EL2 trap when access ACTLR_EL1 in guest kernel.
+		 */
+		write_sysreg_s(read_sysreg_s(SYS_HCR_EL2) | HCR_TACR, SYS_HCR_EL2);
+		actlr_el2 = read_sysreg(actlr_el2);
+		actlr_el2 |= ACTLR_ELx_XINT;
+		write_sysreg(actlr_el2, actlr_el2);
+		isb();
+		actlr_el2 = read_sysreg(actlr_el2);
+		pr_info("actlr_el2: %llx, cpu:%d\n", actlr_el2, cpu);
+	} else {
+		actlr_el1 = read_sysreg(actlr_el1);
+		actlr_el1 |= ACTLR_ELx_XINT;
+		write_sysreg(actlr_el1, actlr_el1);
+		isb();
+		actlr_el1 = read_sysreg(actlr_el1);
+		pr_info("actlr_el1: %llx, cpu:%d\n", actlr_el1, cpu);
+	}
+
+	enable_xcall_xint_vectors();
 }
 #endif
 
@@ -2978,6 +3094,33 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
 		.matches = has_xint_support,
 	},
 #endif
+#ifdef CONFIG_ARM64_LS64
+	{
+		.desc = "LS64",
+		.capability = ARM64_HAS_LS64,
+		.type = ARM64_CPUCAP_SYSTEM_FEATURE,
+		.matches = has_ls64,
+		.cpu_enable = cpu_enable_ls64,
+		ARM64_CPUID_FIELDS(ID_AA64ISAR1_EL1, LS64, LS64)
+	},
+	{
+		.desc = "LS64_V",
+		.capability = ARM64_HAS_LS64_V,
+		.type = ARM64_CPUCAP_SYSTEM_FEATURE,
+		.matches = has_ls64,
+		.cpu_enable = cpu_enable_ls64_v,
+		ARM64_CPUID_FIELDS(ID_AA64ISAR1_EL1, LS64, LS64_V)
+	},
+#endif
+#ifdef CONFIG_ACTLR_XCALL_XINT
+	{
+		.desc = "Hardware Xcall and Xint Support",
+		.capability = ARM64_HAS_HW_XCALL_XINT,
+		.type = ARM64_CPUCAP_SYSTEM_FEATURE,
+		.matches = has_arch_xcall_xint_support,
+		.cpu_enable = cpu_enable_arch_xcall_xint,
+	},
+#endif
 	{},
 };
 
@@ -3086,6 +3229,8 @@ static const struct arm64_cpu_capabilities arm64_elf_hwcaps[] = {
 	HWCAP_CAP(ID_AA64ISAR1_EL1, BF16, EBF16, CAP_HWCAP, KERNEL_HWCAP_EBF16),
 	HWCAP_CAP(ID_AA64ISAR1_EL1, DGH, IMP, CAP_HWCAP, KERNEL_HWCAP_DGH),
 	HWCAP_CAP(ID_AA64ISAR1_EL1, I8MM, IMP, CAP_HWCAP, KERNEL_HWCAP_I8MM),
+	HWCAP_CAP(ID_AA64ISAR1_EL1, LS64, LS64, CAP_HWCAP, KERNEL_HWCAP_LS64),
+	HWCAP_CAP(ID_AA64ISAR1_EL1, LS64, LS64_V, CAP_HWCAP, KERNEL_HWCAP_LS64_V),
 	HWCAP_CAP(ID_AA64MMFR2_EL1, AT, IMP, CAP_HWCAP, KERNEL_HWCAP_USCAT),
 #ifdef CONFIG_ARM64_SVE
 	HWCAP_CAP(ID_AA64PFR0_EL1, SVE, IMP, CAP_HWCAP, KERNEL_HWCAP_SVE),
@@ -3599,6 +3744,11 @@ unsigned long cpu_get_elf_hwcap(void)
 unsigned long cpu_get_elf_hwcap2(void)
 {
 	return elf_hwcap[1];
+}
+
+unsigned long cpu_get_elf_hwcap3(void)
+{
+	return elf_hwcap[2];
 }
 
 static void __init setup_system_capabilities(void)

@@ -148,7 +148,7 @@ int closids_supported(void)
 	return closid_free_map_len;
 }
 
-static void closid_init(void)
+static int closid_init(void)
 {
 	struct resctrl_schema *s;
 	u32 rdt_min_closid = ~0;
@@ -157,12 +157,20 @@ static void closid_init(void)
 	list_for_each_entry(s, &resctrl_schema_all, list)
 		rdt_min_closid = min(rdt_min_closid, s->num_closid);
 
+	if (rdt_min_closid == ~0)
+		return -EOPNOTSUPP;
+
 	closid_free_map = bitmap_alloc(rdt_min_closid, GFP_KERNEL);
+	if (!closid_free_map)
+		return -ENOMEM;
+
 	bitmap_fill(closid_free_map, rdt_min_closid);
 
 	/* RESCTRL_RESERVED_CLOSID is always reserved for the default group */
 	__clear_bit(RESCTRL_RESERVED_CLOSID, closid_free_map);
 	closid_free_map_len = rdt_min_closid;
+
+	return 0;
 }
 
 static void closid_exit(void)
@@ -519,6 +527,8 @@ static ssize_t rdtgroup_cpus_write(struct kernfs_open_file *of,
 		ret = -ENOENT;
 		goto unlock;
 	}
+
+	rdt_last_cmd_clear();
 
 	if (rdtgrp->mode == RDT_MODE_PSEUDO_LOCKED ||
 	    rdtgrp->mode == RDT_MODE_PSEUDO_LOCKSETUP) {
@@ -1294,6 +1304,11 @@ static int rdt_delay_linear_show(struct kernfs_open_file *of,
 static int max_threshold_occ_show(struct kernfs_open_file *of,
 				  struct seq_file *seq, void *v)
 {
+	struct rdt_resource *r = of->kn->parent->priv;
+
+	if (r->cache_level != 3)
+		return 0;
+
 	seq_printf(seq, "%u\n", resctrl_rmid_realloc_threshold);
 
 	return 0;
@@ -1316,8 +1331,12 @@ static int rdt_thread_throttle_mode_show(struct kernfs_open_file *of,
 static ssize_t max_threshold_occ_write(struct kernfs_open_file *of,
 				       char *buf, size_t nbytes, loff_t off)
 {
+	struct rdt_resource *r = of->kn->parent->priv;
 	unsigned int bytes;
 	int ret;
+
+	if (r->cache_level != 3)
+		return 0;
 
 	ret = kstrtouint(buf, 0, &bytes);
 	if (ret)
@@ -2685,7 +2704,9 @@ static int rdt_get_tree(struct fs_context *fc)
 	if (ret)
 		goto out_schemata_free;
 
-	closid_init();
+	ret = closid_init();
+	if (ret)
+		goto out_schemata_free;
 
 	if (resctrl_arch_mon_capable())
 		flags |= RFTYPE_MON;
@@ -3309,7 +3330,7 @@ static int rdtgroup_init_cat(struct resctrl_schema *s, u32 closid)
 }
 
 /* Initialize MBA resource with default values. */
-static void rdtgroup_init_mba(struct rdt_resource *r, u32 closid)
+static void rdtgroup_init_res(struct rdt_resource *r, u32 closid)
 {
 	struct resctrl_staged_config *cfg;
 	struct rdt_domain *d;
@@ -3337,15 +3358,16 @@ static int rdtgroup_init_alloc(struct rdtgroup *rdtgrp)
 
 	list_for_each_entry(s, &resctrl_schema_all, list) {
 		r = s->res;
-		if (r->rid == RDT_RESOURCE_MBA ||
-		    r->rid == RDT_RESOURCE_SMBA) {
-			rdtgroup_init_mba(r, rdtgrp->closid);
-			if (is_mba_sc(r))
-				continue;
-		} else {
+		if (r->rid == RDT_RESOURCE_L2 ||
+		    r->rid == RDT_RESOURCE_L3) {
 			ret = rdtgroup_init_cat(s, rdtgrp->closid);
 			if (ret < 0)
 				goto out;
+
+		} else {
+			rdtgroup_init_res(r, rdtgrp->closid);
+			if (is_mba_sc(r))
+				continue;
 		}
 
 		ret = resctrl_arch_update_domains(r, rdtgrp->closid);
@@ -3407,6 +3429,8 @@ static int mkdir_rdt_prepare(struct kernfs_node *parent_kn,
 		ret = -ENODEV;
 		goto out_unlock;
 	}
+
+	rdt_last_cmd_clear();
 
 	if (rtype == RDTMON_GROUP &&
 	    (prdtgrp->mode == RDT_MODE_PSEUDO_LOCKSETUP ||
@@ -4024,7 +4048,8 @@ static int domain_setup_mon_state(struct rdt_resource *r, struct rdt_domain *d)
 		d->mbm_core = kcalloc(idx_limit, tsize, GFP_KERNEL);
 		if (!d->mbm_core) {
 			bitmap_free(d->rmid_busy_llc);
-			kfree(d->mbm_core);
+			kfree(d->mbm_total);
+			kfree(d->mbm_local);
 			return -ENOMEM;
 		}
 	}

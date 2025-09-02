@@ -222,6 +222,7 @@ nlmclnt_recovery(struct nlm_host *host)
 				"(%ld)\n", host->h_name, PTR_ERR(task));
 	}
 }
+EXPORT_SYMBOL_GPL(nlmclnt_recovery);
 
 static int
 reclaimer(void *ptr)
@@ -233,6 +234,9 @@ reclaimer(void *ptr)
 	u32 nsmstate;
 	struct net *net = host->net;
 
+#if IS_ENABLED(CONFIG_ENFS)
+	host->h_last_reclaim_time = ktime_to_ms(ktime_get());
+#endif
 	req = kmalloc(sizeof(*req), GFP_KERNEL);
 	if (!req)
 		return 0;

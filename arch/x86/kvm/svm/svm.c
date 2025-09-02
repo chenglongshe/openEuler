@@ -242,6 +242,17 @@ module_param(intercept_smi, bool, 0444);
 bool vnmi = true;
 module_param(vnmi, bool, 0444);
 
+/*
+ * Allow set guest PAT to WB in some non-passthrough
+ * application scenarios to enhance performance.
+ *
+ * Add kernel parameter hygon_set_guest_pat_wb(default 0):
+ * 1 - set guest PAT to WB
+ * 0 - keep guest PAT to the kernel default value
+ */
+static int hygon_set_guest_pat_wb;
+module_param(hygon_set_guest_pat_wb, int, 0444);
+
 static bool svm_gp_erratum_intercept = true;
 
 static u8 rsm_ins_bytes[] = "\x0f\xaa";
@@ -1222,7 +1233,7 @@ static inline void init_vmcb_after_set_cpuid(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
 
-	if (guest_cpuid_is_intel(vcpu)) {
+	if (guest_cpuid_is_intel_compatible(vcpu)) {
 		/*
 		 * We must intercept SYSENTER_EIP and SYSENTER_ESP
 		 * accesses because the processor only stores 32 bits.
@@ -1248,6 +1259,16 @@ static inline void init_vmcb_after_set_cpuid(struct kvm_vcpu *vcpu)
 		set_msr_interception(vcpu, svm->msrpm, MSR_IA32_SYSENTER_EIP, 1, 1);
 		set_msr_interception(vcpu, svm->msrpm, MSR_IA32_SYSENTER_ESP, 1, 1);
 	}
+}
+
+static void svm_set_guest_pat(struct vcpu_svm *svm, u64 *g_pat)
+{
+	struct kvm_vcpu *vcpu = &svm->vcpu;
+
+	if (!kvm_arch_has_assigned_device(vcpu->kvm))
+		*g_pat = GUEST_PAT_WB_ATTR;
+	else
+		*g_pat = vcpu->arch.pat;
 }
 
 static void init_vmcb(struct kvm_vcpu *vcpu)
@@ -1351,6 +1372,8 @@ static void init_vmcb(struct kvm_vcpu *vcpu)
 		svm_clr_intercept(svm, INTERCEPT_CR3_READ);
 		svm_clr_intercept(svm, INTERCEPT_CR3_WRITE);
 		save->g_pat = vcpu->arch.pat;
+		if (hygon_set_guest_pat_wb)
+			svm_set_guest_pat(svm, &save->g_pat);
 		save->cr3 = 0;
 	}
 	svm->current_vmcb->asid_generation = 0;
@@ -2024,11 +2047,11 @@ static void new_asid(struct vcpu_svm *svm, struct svm_cpu_data *sd)
 	svm->asid = sd->next_asid++;
 }
 
-static void svm_set_dr6(struct vcpu_svm *svm, unsigned long value)
+static void svm_set_dr6(struct kvm_vcpu *vcpu, unsigned long value)
 {
-	struct vmcb *vmcb = svm->vmcb;
+	struct vmcb *vmcb = to_svm(vcpu)->vmcb;
 
-	if (svm->vcpu.arch.guest_state_protected)
+	if (vcpu->arch.guest_state_protected)
 		return;
 
 	if (unlikely(value != vmcb->save.dr6)) {
@@ -2221,12 +2244,6 @@ static int shutdown_interception(struct kvm_vcpu *vcpu)
 	struct kvm_run *kvm_run = vcpu->run;
 	struct vcpu_svm *svm = to_svm(vcpu);
 
-	/*
-	 * The VM save area has already been encrypted so it
-	 * cannot be reinitialized - just terminate.
-	 */
-	if (sev_es_guest(vcpu->kvm))
-		return -EINVAL;
 
 	/*
 	 * VMCB is undefined after a SHUTDOWN intercept.  INIT the vCPU to put
@@ -2235,9 +2252,18 @@ static int shutdown_interception(struct kvm_vcpu *vcpu)
 	 * userspace.  At a platform view, INIT is acceptable behavior as
 	 * there exist bare metal platforms that automatically INIT the CPU
 	 * in response to shutdown.
+	 *
+	 * The VM save area for SEV-ES guests has already been encrypted so it
+	 * cannot be reinitialized, i.e. synthesizing INIT is futile.
 	 */
-	clear_page(svm->vmcb);
-	kvm_vcpu_reset(vcpu, true);
+	if (!sev_es_guest(vcpu->kvm)) {
+		clear_page(svm->vmcb);
+#ifdef CONFIG_KVM_SMM
+		if (is_smm(vcpu))
+			kvm_smm_changed(vcpu, false);
+#endif
+		kvm_vcpu_reset(vcpu, true);
+	}
 
 	kvm_run->exit_reason = KVM_EXIT_SHUTDOWN;
 	return 0;
@@ -2897,12 +2923,12 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		break;
 	case MSR_IA32_SYSENTER_EIP:
 		msr_info->data = (u32)svm->vmcb01.ptr->save.sysenter_eip;
-		if (guest_cpuid_is_intel(vcpu))
+		if (guest_cpuid_is_intel_compatible(vcpu))
 			msr_info->data |= (u64)svm->sysenter_eip_hi << 32;
 		break;
 	case MSR_IA32_SYSENTER_ESP:
 		msr_info->data = svm->vmcb01.ptr->save.sysenter_esp;
-		if (guest_cpuid_is_intel(vcpu))
+		if (guest_cpuid_is_intel_compatible(vcpu))
 			msr_info->data |= (u64)svm->sysenter_esp_hi << 32;
 		break;
 	case MSR_TSC_AUX:
@@ -3062,6 +3088,10 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
 		svm->vmcb01.ptr->save.g_pat = data;
 		if (is_guest_mode(vcpu))
 			nested_vmcb02_compute_g_pat(svm);
+		if (npt_enabled && hygon_set_guest_pat_wb) {
+			svm_set_guest_pat(svm, &svm->vmcb01.ptr->save.g_pat);
+			vcpu->arch.pat = svm->vmcb01.ptr->save.g_pat;
+		}
 		vmcb_mark_dirty(svm->vmcb, VMCB_NPT);
 		break;
 	case MSR_IA32_SPEC_CTRL:
@@ -3137,11 +3167,11 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
 		 * 32 bit part of these msrs to support Intel's
 		 * implementation of SYSENTER/SYSEXIT.
 		 */
-		svm->sysenter_eip_hi = guest_cpuid_is_intel(vcpu) ? (data >> 32) : 0;
+		svm->sysenter_eip_hi = guest_cpuid_is_intel_compatible(vcpu) ? (data >> 32) : 0;
 		break;
 	case MSR_IA32_SYSENTER_ESP:
 		svm->vmcb01.ptr->save.sysenter_esp = (u32)data;
-		svm->sysenter_esp_hi = guest_cpuid_is_intel(vcpu) ? (data >> 32) : 0;
+		svm->sysenter_esp_hi = guest_cpuid_is_intel_compatible(vcpu) ? (data >> 32) : 0;
 		break;
 	case MSR_TSC_AUX:
 		/*
@@ -3172,6 +3202,27 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
 			kvm_pr_unimpl_wrmsr(vcpu, ecx, data);
 			break;
 		}
+
+		/*
+		 * AMD changed the architectural behavior of bits 5:2.  On CPUs
+		 * without BusLockTrap, bits 5:2 control "external pins", but
+		 * on CPUs that support BusLockDetect, bit 2 enables BusLockTrap
+		 * and bits 5:3 are reserved-to-zero.  Sadly, old KVM allowed
+		 * the guest to set bits 5:2 despite not actually virtualizing
+		 * Performance-Monitoring/Breakpoint external pins.  Drop bits
+		 * 5:2 for backwards compatibility.
+		 */
+		data &= ~GENMASK(5, 2);
+
+		/*
+		 * Suppress BTF as KVM doesn't virtualize BTF, but there's no
+		 * way to communicate lack of support to the guest.
+		 */
+		if (data & DEBUGCTLMSR_BTF) {
+			kvm_pr_unimpl_wrmsr(vcpu, MSR_IA32_DEBUGCTLMSR, data);
+			data &= ~DEBUGCTLMSR_BTF;
+		}
+
 		if (data & DEBUGCTL_RESERVED_BITS)
 			return 1;
 
@@ -4234,10 +4285,8 @@ static __no_kcsan fastpath_t svm_vcpu_run(struct kvm_vcpu *vcpu)
 	 * Run with all-zero DR6 unless needed, so that we can get the exact cause
 	 * of a #DB.
 	 */
-	if (unlikely(vcpu->arch.switch_db_regs & KVM_DEBUGREG_WONT_EXIT))
-		svm_set_dr6(svm, vcpu->arch.dr6);
-	else
-		svm_set_dr6(svm, DR6_ACTIVE_LOW);
+	if (likely(!(vcpu->arch.switch_db_regs & KVM_DEBUGREG_WONT_EXIT)))
+		svm_set_dr6(vcpu, DR6_ACTIVE_LOW);
 
 	clgi();
 	kvm_load_guest_xsave_state(vcpu);
@@ -4409,11 +4458,11 @@ static void svm_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
 	kvm_governed_feature_check_and_set(vcpu, X86_FEATURE_LBRV);
 
 	/*
-	 * Intercept VMLOAD if the vCPU mode is Intel in order to emulate that
+	 * Intercept VMLOAD if the vCPU model is Intel in order to emulate that
 	 * VMLOAD drops bits 63:32 of SYSENTER (ignoring the fact that exposing
 	 * SVM on Intel is bonkers and extremely unlikely to work).
 	 */
-	if (!guest_cpuid_is_intel(vcpu))
+	if (!guest_cpuid_is_intel_compatible(vcpu))
 		kvm_governed_feature_check_and_set(vcpu, X86_FEATURE_V_VMSAVE_VMLOAD);
 
 	kvm_governed_feature_check_and_set(vcpu, X86_FEATURE_PAUSEFILTER);
@@ -5022,6 +5071,7 @@ static struct kvm_x86_ops svm_x86_ops __initdata = {
 	.set_idt = svm_set_idt,
 	.get_gdt = svm_get_gdt,
 	.set_gdt = svm_set_gdt,
+	.set_dr6 = svm_set_dr6,
 	.set_dr7 = svm_set_dr7,
 	.sync_dirty_debug_regs = svm_sync_dirty_debug_regs,
 	.cache_reg = svm_cache_reg,

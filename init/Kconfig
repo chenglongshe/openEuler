@@ -486,6 +486,7 @@ config AUDITSYSCALL
 source "kernel/irq/Kconfig"
 source "kernel/time/Kconfig"
 source "kernel/bpf/Kconfig"
+source "kernel/bpf-rvi/Kconfig"
 source "kernel/Kconfig.preempt"
 
 menu "CPU/Task time and stats accounting"
@@ -1027,6 +1028,20 @@ config MEMCG_KMEM
 	depends on MEMCG
 	default y
 
+config MEMCG_KMEM_STOCK
+	bool "Enable kmem stock"
+	depends on MEMCG_KMEM
+	default n
+	help
+	This option enables a per-CPU cache (stock) for kernel memory (kmem)
+	charge/uncharge operations. When multiple memory cgroups (memcgs)
+	frequently charge/uncharge kernel memory, they may contend on atomic
+	operations in shared parent memcgs, causing performance degradation.
+
+	The per-CPU stock reduces contention by batching charges locally
+	before flushing to the shared parent, improving scalability for
+	high-frequency kmem allocations.
+
 config BLK_CGROUP
 	bool "IO controller"
 	depends on BLOCK
@@ -1072,12 +1087,12 @@ config QOS_SCHED
 	bool "Qos task scheduling"
 	depends on CGROUP_SCHED
 	depends on CFS_BANDWIDTH
+	depends on SMP
 	default n
 	help
 	  This option enable qos scheduler, and support co-location online
 	  services (Latency Sensitive) and offline tasks. colocation can
 	  effectively improve the resource utilization.
-
 	  If in doubt, say N.
 
 config QOS_SCHED_SMT_EXPELLER
@@ -1146,6 +1161,36 @@ config QOS_SCHED_DYNAMIC_AFFINITY
 	 it will make taskgroup only to use preferred cpus when cpu utilization
 	 of taskgroup is below threshold setted, otherwise make taskgroup to use
 	 cpus allowed.
+
+config SCHED_SOFT_DOMAIN
+	bool "Soft domain scheduler"
+	depends on FAIR_GROUP_SCHED
+	depends on SCHED_CLUSTER
+	default n
+	help
+	  This feature builds a CPU soft domain for each task group. Tasks are
+	  prioritized and aggregated to execute within soft domains, which optimizes
+	  resource allocation and enhances cache locality.
+
+	  If in doubt, say N.
+
+#
+# For architectures that want to enable the support for SCHED_SOFT_QUOTA
+#
+config ARCH_SUPPORTS_SCHED_SOFT_QUOTA
+	bool
+
+config SCHED_SOFT_QUOTA
+	bool "More flexible use of CPU quota"
+	depends on ARCH_SUPPORTS_SCHED_SOFT_QUOTA
+	depends on CFS_BANDWIDTH
+	default n
+	help
+	  This option allows users to use CPU quota more flexibly when CPU
+	  is idle. It is better for users to have some understanding of
+	  CFS_BANDWIDTH. It cannot be used in scenarios where there are strict
+	  restrictions on the use of the CPU quota, such as some commercial
+	  scenarios that charge based on the use of CPU quota.
 
 config SCHED_MM_CID
 	def_bool n
@@ -1341,7 +1386,39 @@ config CGROUP_FILES
 	  This supports catching misbehaving processes and
 	  return EMFILE instead of ENOMEM for kernel memory limits.
 
+config CGROUP_IFS
+	bool "Cgroup-based Interference Statistics"
+	default n
+	select KERNFS
+	select IRQ_TIME_ACCOUTING
+	help
+	  This option will provide online low-overhead interference
+	  statistics based on cgroup, which will help in troubleshooting
+	  performance issues.
+
+	  Say N if unsure.
+
+config CGROUP_IFS_DEFAULT_ENABLED
+	bool "Enable Cgroup-based Interference Statistics by default"
+	default y
+	depends on CGROUP_IFS
+	help
+	  This option will enable cgroup-based interference statistics
+	  by default. If this option is N, you need to enable cgroup-based
+	  interference statistics by configuring the cgroup_ifs startup param.
+
+	  Say Y if unsure.
+
 endif # CGROUPS
+
+config UCOUNTS_PERCPU_COUNTER
+	bool "Ucount percpu counter for rlimit"
+	default n
+	help
+	  Provide percpu_counter for ucounts, which can improve scalability
+	  for rlimit counting. Opening this config will re-inplement rlimit
+	  charging or uncharging using percpu_counter, avoiding atomic
+	  operations on the common parents.
 
 menuconfig NAMESPACES
 	bool "Namespaces support" if EXPERT
@@ -1424,6 +1501,28 @@ config SCHED_STEAL
 	  order of next to run.
 
 	  If unsure, say N here.
+
+#
+# For architectures that want to enable the support for SCHED_PARAL
+#
+config ARCH_SUPPORTS_SCHED_PARAL
+	bool
+
+config SCHED_PARAL
+	bool "Parallelly schedule processes on different NUMA nodes"
+	depends on ARCH_SUPPORTS_SCHED_PARAL
+	depends on QOS_SCHED_DYNAMIC_AFFINITY
+	default n
+	help
+	  By enabling this feature, processes can be scheduled in parallel
+	  on various NUMA nodes to better utilize the cache in NUMA node.
+	  The usage is restricted to the following scenarios:
+	  1. No CPU binding is performed for user-space processes;
+	  2. It is applicable to distributed applications, such as business
+	     architectures with one master and multiple slaves running in
+	     parallel;
+	  3. The existing "qos dynamic affinity" and "qos smart grid"
+	     features must not be used simultaneously.
 
 config CHECKPOINT_RESTORE
 	bool "Checkpoint/restore support"

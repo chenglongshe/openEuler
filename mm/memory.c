@@ -665,7 +665,7 @@ struct folio *vm_normal_folio(struct vm_area_struct *vma, unsigned long addr,
 	return NULL;
 }
 
-#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+#ifdef CONFIG_PGTABLE_HAS_HUGE_LEAVES
 struct page *vm_normal_page_pmd(struct vm_area_struct *vma, unsigned long addr,
 				pmd_t pmd)
 {
@@ -1914,6 +1914,48 @@ void unmap_vmas(struct mmu_gather *tlb, struct ma_state *mas,
 }
 
 /**
+ * zap_page_range_single_batched - remove user pages in a given range
+ * @tlb: pointer to the caller's struct mmu_gather
+ * @vma: vm_area_struct holding the applicable pages
+ * @address: starting address of pages to remove
+ * @size: number of bytes to remove
+ * @details: details of shared cache invalidation
+ *
+ * @tlb shouldn't be NULL.  The range must fit into one VMA.  If @vma is for
+ * hugetlb, @tlb is flushed and re-initialized by this function.
+ */
+void zap_page_range_single_batched(struct mmu_gather *tlb,
+		struct vm_area_struct *vma, unsigned long address,
+		unsigned long size, struct zap_details *details)
+{
+	const unsigned long end = address + size;
+	struct mmu_notifier_range range;
+
+	VM_WARN_ON_ONCE(!tlb || tlb->mm != vma->vm_mm);
+
+	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, vma->vm_mm,
+				address, end);
+	hugetlb_zap_begin(vma, &range.start, &range.end);
+	update_hiwater_rss(vma->vm_mm);
+	mmu_notifier_invalidate_range_start(&range);
+	/*
+	 * unmap 'address-end' not 'range.start-range.end' as range
+	 * could have been expanded for hugetlb pmd sharing.
+	 */
+	unmap_single_vma(tlb, vma, address, end, details, false);
+	mmu_notifier_invalidate_range_end(&range);
+	if (is_vm_hugetlb_page(vma)) {
+		/*
+		 * flush tlb and free resources before hugetlb_zap_end(), to
+		 * avoid concurrent page faults' allocation failure.
+		 */
+		tlb_finish_mmu(tlb);
+		hugetlb_zap_end(vma, details);
+		tlb_gather_mmu(tlb, vma->vm_mm);
+	}
+}
+
+/**
  * zap_page_range_single - remove user pages in a given range
  * @vma: vm_area_struct holding the applicable pages
  * @address: starting address of pages to zap
@@ -1925,25 +1967,11 @@ void unmap_vmas(struct mmu_gather *tlb, struct ma_state *mas,
 void zap_page_range_single(struct vm_area_struct *vma, unsigned long address,
 		unsigned long size, struct zap_details *details)
 {
-	const unsigned long end = address + size;
-	struct mmu_notifier_range range;
 	struct mmu_gather tlb;
 
-	lru_add_drain();
-	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, vma->vm_mm,
-				address, end);
-	hugetlb_zap_begin(vma, &range.start, &range.end);
 	tlb_gather_mmu(&tlb, vma->vm_mm);
-	update_hiwater_rss(vma->vm_mm);
-	mmu_notifier_invalidate_range_start(&range);
-	/*
-	 * unmap 'address-end' not 'range.start-range.end' as range
-	 * could have been expanded for hugetlb pmd sharing.
-	 */
-	unmap_single_vma(&tlb, vma, address, end, details, false);
-	mmu_notifier_invalidate_range_end(&range);
+	zap_page_range_single_batched(&tlb, vma, address, size, details);
 	tlb_finish_mmu(&tlb);
-	hugetlb_zap_end(vma, details);
 }
 
 /**
@@ -2926,8 +2954,10 @@ static int __apply_to_page_range(struct mm_struct *mm, unsigned long addr,
 		next = pgd_addr_end(addr, end);
 		if (pgd_none(*pgd) && !create)
 			continue;
-		if (WARN_ON_ONCE(pgd_leaf(*pgd)))
-			return -EINVAL;
+		if (WARN_ON_ONCE(pgd_leaf(*pgd))) {
+			err = -EINVAL;
+			break;
+		}
 		if (!pgd_none(*pgd) && WARN_ON_ONCE(pgd_bad(*pgd))) {
 			if (!create)
 				continue;
@@ -6862,3 +6892,15 @@ void ptlock_free(struct ptdesc *ptdesc)
 	kmem_cache_free(page_ptl_cachep, ptdesc->ptl);
 }
 #endif
+
+void vma_pgtable_walk_begin(struct vm_area_struct *vma)
+{
+	if (is_vm_hugetlb_page(vma))
+		hugetlb_vma_lock_read(vma);
+}
+
+void vma_pgtable_walk_end(struct vm_area_struct *vma)
+{
+	if (is_vm_hugetlb_page(vma))
+		hugetlb_vma_unlock_read(vma);
+}

@@ -93,8 +93,17 @@ struct pid_namespace init_pid_ns = {
 #if defined(CONFIG_SYSCTL) && defined(CONFIG_MEMFD_CREATE)
 	.memfd_noexec_scope = MEMFD_NOEXEC_SCOPE_EXEC,
 #endif
+#ifdef CONFIG_BPF_RVI
+	.loadavg = &init_pidns_loadavg,
+#endif
 };
 EXPORT_SYMBOL_GPL(init_pid_ns);
+
+#ifdef CONFIG_BPF_RVI
+struct pidns_loadavg init_pidns_loadavg = {
+	.list = LIST_HEAD_INIT(init_pidns_loadavg.list),
+};
+#endif
 
 /*
  * Note: disable interrupts while the pidmap_lock is held as an
@@ -797,3 +806,28 @@ SYSCALL_DEFINE3(pidfd_getfd, int, pidfd, int, fd,
 	fdput(f);
 	return ret;
 }
+
+#ifdef CONFIG_BPF_RVI
+/*
+ * We assume that containers should start at root ns, which means that
+ * containers themselves are level-1 ns.
+ */
+struct task_struct *get_current_level1_reaper(void)
+{
+	struct task_struct *reaper;
+	struct pid_namespace *ns;
+
+	ns = task_active_pid_ns(current);
+	while (ns->level > 1) { // not !=, as ns could be init_pid_ns
+		ns = ns->parent;
+	}
+
+	read_lock(&tasklist_lock);
+	reaper = ns->child_reaper;
+	if (reaper)
+		get_task_struct(reaper);
+	read_unlock(&tasklist_lock);
+
+	return reaper;
+}
+#endif /* CONFIG_BPF_RVI */

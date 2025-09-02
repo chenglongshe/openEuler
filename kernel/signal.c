@@ -429,7 +429,7 @@ __sigqueue_alloc(int sig, struct task_struct *t, gfp_t gfp_flags,
 	rcu_read_lock();
 	ucounts = task_ucounts(t);
 	sigpending = inc_rlimit_get_ucounts(ucounts, UCOUNT_RLIMIT_SIGPENDING,
-					    override_rlimit);
+					    override_rlimit, task_rlimit(t, RLIMIT_SIGPENDING));
 	rcu_read_unlock();
 	if (!sigpending)
 		return NULL;
@@ -1388,9 +1388,7 @@ int zap_other_threads(struct task_struct *p)
 
 	while_each_thread(p, t) {
 		task_clear_jobctl_pending(t, JOBCTL_PENDING_MASK);
-		/* Don't require de_thread to wait for the vhost_worker */
-		if ((t->flags & (PF_IO_WORKER | PF_USER_WORKER)) != PF_USER_WORKER)
-			count++;
+		count++;
 
 		/* Don't bother with already dead threads */
 		if (t->exit_state)

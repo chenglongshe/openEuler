@@ -820,6 +820,8 @@ enum {
 	kvm_ioeventfd_flag_nr_deassign,
 	kvm_ioeventfd_flag_nr_virtio_ccw_notify,
 	kvm_ioeventfd_flag_nr_fast_mmio,
+	kvm_ioeventfd_flag_nr_batch_begin,
+	kvm_ioeventfd_flag_nr_batch_end,
 	kvm_ioeventfd_flag_nr_max,
 };
 
@@ -828,6 +830,10 @@ enum {
 #define KVM_IOEVENTFD_FLAG_DEASSIGN  (1 << kvm_ioeventfd_flag_nr_deassign)
 #define KVM_IOEVENTFD_FLAG_VIRTIO_CCW_NOTIFY \
 	(1 << kvm_ioeventfd_flag_nr_virtio_ccw_notify)
+#define KVM_IOEVENTFD_FLAG_BATCH_BEGIN \
+	(1 << kvm_ioeventfd_flag_nr_batch_begin)
+#define KVM_IOEVENTFD_FLAG_BATCH_END \
+	(1 << kvm_ioeventfd_flag_nr_batch_end)
 
 #define KVM_IOEVENTFD_VALID_FLAG_MASK  ((1 << kvm_ioeventfd_flag_nr_max) - 1)
 
@@ -919,14 +925,25 @@ struct kvm_ppc_resize_hpt {
 #define KVM_S390_SIE_PAGE_OFFSET 1
 
 /*
- * On arm64, machine type can be used to request the physical
- * address size for the VM. Bits[7-0] are reserved for the guest
- * PA size shift (i.e, log2(PA_Size)). For backward compatibility,
- * value 0 implies the default IPA size, 40bits.
+ * On arm64, machine type can be used to request both the machine type and
+ * the physical address size for the VM.
+ *
+ * Bits[11-8] are reserved for the ARM specific machine type.
+ *
+ * Bits[7-0] are reserved for the guest PA size shift (i.e, log2(PA_Size)).
+ * For backward compatibility, value 0 implies the default IPA size, 40bits.
  */
+#define KVM_VM_TYPE_ARM_SHIFT		8
+#define KVM_VM_TYPE_ARM_MASK		(0xfULL << KVM_VM_TYPE_ARM_SHIFT)
+#define KVM_VM_TYPE_ARM(_type)		\
+	(((_type) << KVM_VM_TYPE_ARM_SHIFT) & KVM_VM_TYPE_ARM_MASK)
+#define KVM_VM_TYPE_ARM_NORMAL		KVM_VM_TYPE_ARM(0)
+#define KVM_VM_TYPE_ARM_REALM		KVM_VM_TYPE_ARM(1)
+
 #define KVM_VM_TYPE_ARM_IPA_SIZE_MASK	0xffULL
 #define KVM_VM_TYPE_ARM_IPA_SIZE(x)		\
 	((x) & KVM_VM_TYPE_ARM_IPA_SIZE_MASK)
+
 /*
  * ioctls for /dev/kvm fds:
  */
@@ -1200,6 +1217,7 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_COUNTER_OFFSET 227
 #define KVM_CAP_ARM_EAGER_SPLIT_CHUNK_SIZE 228
 #define KVM_CAP_ARM_SUPPORTED_BLOCK_SIZES 229
+#define KVM_CAP_ARM_RME 300
 
 #define KVM_CAP_SEV_ES_GHCB 500
 #define KVM_CAP_HYGON_COCO_EXT 501
@@ -1211,8 +1229,8 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_HYGON_COCO_EXT_CSV3_INJ_SECRET    (1 << 2)
 
 #define KVM_CAP_ARM_HW_DIRTY_STATE_TRACK 502
-#define KVM_CAP_ARM_IPIV_MODE 503
 
+#define KVM_CAP_ARM_HISI_IPIV 798
 #define KVM_CAP_ARM_VIRT_MSI_BYPASS 799
 
 #ifdef KVM_CAP_IRQ_ROUTING
@@ -1476,12 +1494,12 @@ enum kvm_device_type {
 #define KVM_DEV_TYPE_ARM_PV_TIME	KVM_DEV_TYPE_ARM_PV_TIME
 	KVM_DEV_TYPE_RISCV_AIA,
 #define KVM_DEV_TYPE_RISCV_AIA		KVM_DEV_TYPE_RISCV_AIA
-	KVM_DEV_TYPE_LA_IOAPIC = 0x100,
-#define KVM_DEV_TYPE_LA_IOAPIC		KVM_DEV_TYPE_LA_IOAPIC
-	KVM_DEV_TYPE_LA_IPI,
-#define KVM_DEV_TYPE_LA_IPI		KVM_DEV_TYPE_LA_IPI
-	KVM_DEV_TYPE_LA_EXTIOI,
-#define KVM_DEV_TYPE_LA_EXTIOI		KVM_DEV_TYPE_LA_EXTIOI
+	KVM_DEV_TYPE_LOONGARCH_IPI,
+#define KVM_DEV_TYPE_LOONGARCH_IPI	KVM_DEV_TYPE_LOONGARCH_IPI
+	KVM_DEV_TYPE_LOONGARCH_EIOINTC,
+#define KVM_DEV_TYPE_LOONGARCH_EIOINTC	KVM_DEV_TYPE_LOONGARCH_EIOINTC
+	KVM_DEV_TYPE_LOONGARCH_PCHPIC,
+#define KVM_DEV_TYPE_LOONGARCH_PCHPIC	KVM_DEV_TYPE_LOONGARCH_PCHPIC
 
 	KVM_DEV_TYPE_MAX,
 
@@ -2450,5 +2468,14 @@ struct kvm_csv3_handle_memory {
 
 /* get tmi version */
 #define KVM_GET_TMI_VERSION	_IOR(KVMIO, 0xd2, u64)
+
+/* Available with KVM_CAP_ARM_RME, only for VMs with KVM_VM_TYPE_ARM_REALM  */
+struct kvm_arm_rmm_psci_complete {
+	__u64 target_mpidr;
+	__u32 psci_status;
+	__u32 padding[3];
+};
+
+#define KVM_ARM_VCPU_RMM_PSCI_COMPLETE	_IOW(KVMIO, 0xd6, struct kvm_arm_rmm_psci_complete)
 
 #endif /* __LINUX_KVM_H */

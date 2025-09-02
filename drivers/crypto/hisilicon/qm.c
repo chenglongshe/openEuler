@@ -80,6 +80,8 @@
 #define QM_EQ_OVERFLOW			1
 #define QM_CQE_ERROR			2
 
+#define QM_XQC_MIN_DEPTH		1024
+
 #define QM_XQ_DEPTH_SHIFT		16
 #define QM_XQ_DEPTH_MASK		GENMASK(15, 0)
 
@@ -3091,6 +3093,7 @@ static inline bool is_iommu_used(struct device *dev)
 static void hisi_qm_pre_init(struct hisi_qm *qm)
 {
 	struct pci_dev *pdev = qm->pdev;
+	struct acpi_device *adev;
 
 	if (qm->ver == QM_HW_V1)
 		qm->ops = &qm_hw_ops_v1;
@@ -3107,9 +3110,16 @@ static void hisi_qm_pre_init(struct hisi_qm *qm)
 	init_rwsem(&qm->qps_lock);
 	qm->qp_in_used = 0;
 	qm->use_iommu = is_iommu_used(&pdev->dev);
+	/*
+	 * If the firmware does not support power manageable,
+	 * clear the flag to avoid entering the suspend and resume process later.
+	 */
 	if (test_bit(QM_SUPPORT_RPM, &qm->caps)) {
-		if (!acpi_device_power_manageable(ACPI_COMPANION(&pdev->dev)))
-			dev_info(&pdev->dev, "_PS0 and _PR0 are not defined");
+		adev = ACPI_COMPANION(&pdev->dev);
+		if (!adev || !acpi_device_power_manageable(adev)) {
+			dev_info(&pdev->dev, "_PS0 and _PR0 are not defined!\n");
+			clear_bit(QM_SUPPORT_RPM, &qm->caps);
+		}
 	}
 }
 
@@ -3347,6 +3357,9 @@ static int qm_eq_aeq_ctx_cfg(struct hisi_qm *qm)
 
 	qm_init_eq_aeq_status(qm);
 
+	/* Before starting the dev, clear previous task info in dma memory */
+	memset(qm->qdma.va, 0, qm->qdma.size);
+
 	ret = qm_eq_ctx_cfg(qm);
 	if (ret) {
 		dev_err(dev, "Set eqc failed!\n");
@@ -3358,9 +3371,13 @@ static int qm_eq_aeq_ctx_cfg(struct hisi_qm *qm)
 
 static int __hisi_qm_start(struct hisi_qm *qm)
 {
+	struct device *dev = &qm->pdev->dev;
 	int ret;
 
-	WARN_ON(!qm->qdma.va);
+	if (unlikely(!qm->qdma.va)) {
+		dev_err(dev, "dma virtual address should not be NULL\n");
+		return -EINVAL;
+	}
 
 	if (qm->fun_type == QM_HW_PF) {
 		ret = hisi_qm_set_vft(qm, 0, qm->qp_base, qm->qp_num);
@@ -3490,7 +3507,6 @@ static void qm_invalid_queues(struct hisi_qm *qm)
 	if (qm->status.stop_reason == QM_DOWN)
 		hisi_qm_cache_wb(qm);
 
-	memset(qm->qdma.va, 0, qm->qdma.size);
 	for (i = 0; i < qm->qp_num; i++) {
 		qp = &qm->qp_array[i];
 		if (!qp->is_resetting)
@@ -3748,8 +3764,8 @@ int hisi_qm_alloc_qps_node(struct hisi_qm_list *qm_list, int qp_num,
 
 	mutex_unlock(&qm_list->lock);
 	if (ret)
-		pr_info("Failed to create qps, node[%d], alg[%u], qp[%d]!\n",
-			node, alg_type, qp_num);
+		pr_info_ratelimited("Too busy to create qps, node[%d], alg[%u], qp[%d]!\n",
+				     node, alg_type, qp_num);
 
 err:
 	free_list(&head);
@@ -3814,7 +3830,6 @@ static int qm_clear_vft_config(struct hisi_qm *qm)
 		if (ret)
 			return ret;
 	}
-	qm->vfs_num = 0;
 
 	return 0;
 }
@@ -4013,6 +4028,10 @@ static ssize_t qm_get_qos_value(struct hisi_qm *qm, const char *buf,
 	}
 
 	pdev = container_of(dev, struct pci_dev, dev);
+	if (pci_physfn(pdev) != qm->pdev) {
+		pci_err(qm->pdev, "the pdev input does not match the pf!\n");
+		return -EINVAL;
+	}
 
 	*fun_index = pdev->devfn;
 
@@ -4147,13 +4166,14 @@ int hisi_qm_sriov_enable(struct pci_dev *pdev, int max_vfs)
 		goto err_put_sync;
 	}
 
+	qm->vfs_num = num_vfs;
 	ret = pci_enable_sriov(pdev, num_vfs);
 	if (ret) {
 		pci_err(pdev, "Can't enable VF!\n");
 		qm_clear_vft_config(qm);
+		qm->vfs_num = 0;
 		goto err_put_sync;
 	}
-	qm->vfs_num = num_vfs;
 
 	pci_info(pdev, "VF enabled, vfs_num(=%d)!\n", num_vfs);
 
@@ -4175,6 +4195,7 @@ EXPORT_SYMBOL_GPL(hisi_qm_sriov_enable);
 int hisi_qm_sriov_disable(struct pci_dev *pdev, bool is_frozen)
 {
 	struct hisi_qm *qm = pci_get_drvdata(pdev);
+	int ret;
 
 	if (pci_vfs_assigned(pdev)) {
 		pci_err(pdev, "Failed to disable VFs as VFs are assigned!\n");
@@ -4188,11 +4209,14 @@ int hisi_qm_sriov_disable(struct pci_dev *pdev, bool is_frozen)
 	}
 
 	pci_disable_sriov(pdev);
+	ret = qm_clear_vft_config(qm);
+	if (ret)
+		pci_err(pdev, "Failed to clear vft config!\n");
 
 	qm->vfs_num = 0;
 	qm_pm_put_sync(qm);
 
-	return qm_clear_vft_config(qm);
+	return 0;
 }
 EXPORT_SYMBOL_GPL(hisi_qm_sriov_disable);
 
@@ -4744,6 +4768,7 @@ static int qm_controller_reset_done(struct hisi_qm *qm)
 	qm_restart_prepare(qm);
 	qm_dev_err_init(qm);
 	qm_disable_axi_error(qm);
+	qm_restart_done(qm);
 	if (qm->err_ini->open_axi_master_ooo)
 		qm->err_ini->open_axi_master_ooo(qm);
 
@@ -4768,8 +4793,6 @@ static int qm_controller_reset_done(struct hisi_qm *qm)
 		pci_err(pdev, "failed to start by vfs in soft reset!\n");
 	qm_enable_axi_error(qm);
 	qm_cmd_init(qm);
-	qm_restart_done(qm);
-
 	qm_reset_bit_clear(qm);
 
 	return 0;
@@ -4960,6 +4983,15 @@ flr_done:
 	qm_reset_bit_clear(qm);
 }
 EXPORT_SYMBOL_GPL(hisi_qm_reset_done);
+
+static irqreturn_t qm_rsvd_irq(int irq, void *data)
+{
+	struct hisi_qm *qm = data;
+
+	dev_info(&qm->pdev->dev, "Reserved interrupt, ignore!\n");
+
+	return IRQ_HANDLED;
+}
 
 static irqreturn_t qm_abnormal_irq(int irq, void *data)
 {
@@ -5253,17 +5285,14 @@ static void qm_unregister_abnormal_irq(struct hisi_qm *qm)
 	struct pci_dev *pdev = qm->pdev;
 	u32 irq_vector, val;
 
-	if (qm->fun_type == QM_HW_VF)
-		return;
-
-	if (!qm->err_ini->err_info_init)
-		return;
-
 	val = qm->cap_tables.qm_cap_table[QM_ABNORMAL_IRQ].cap_val;
 	if (!((val >> QM_IRQ_TYPE_SHIFT) & QM_ABN_IRQ_TYPE_MASK))
 		return;
-
 	irq_vector = val & QM_IRQ_VECTOR_MASK;
+
+	if (qm->fun_type == QM_HW_VF && qm->ver < QM_HW_V3)
+		return;
+
 	free_irq(pci_irq_vector(pdev, irq_vector), qm);
 }
 
@@ -5273,24 +5302,29 @@ static int qm_register_abnormal_irq(struct hisi_qm *qm)
 	u32 irq_vector, val;
 	int ret;
 
-	if (qm->fun_type == QM_HW_VF)
-		return 0;
-
-	if (!qm->err_ini->err_info_init) {
-		dev_info(&qm->pdev->dev, "device doesnot support error init!\n");
-		return 0;
-	}
-
 	val = qm->cap_tables.qm_cap_table[QM_ABNORMAL_IRQ].cap_val;
 	if (!((val >> QM_IRQ_TYPE_SHIFT) & QM_ABN_IRQ_TYPE_MASK))
 		return 0;
+	irq_vector = val & QM_IRQ_VECTOR_MASK;
+
+	/* For VF, this is a reserved interrupt in V3 version. */
+	if (qm->fun_type == QM_HW_VF) {
+		if (qm->ver < QM_HW_V3)
+			return 0;
+
+		ret = request_irq(pci_irq_vector(pdev, irq_vector), qm_rsvd_irq,
+				  IRQF_NO_AUTOEN, qm->dev_name, qm);
+		if (ret) {
+			dev_err(&pdev->dev, "failed to request reserved irq, ret = %d!\n", ret);
+			return ret;
+		}
+		return 0;
+	}
 
 	INIT_WORK(&qm->rst_work, hisi_qm_controller_reset);
-
-	irq_vector = val & QM_IRQ_VECTOR_MASK;
 	ret = request_irq(pci_irq_vector(pdev, irq_vector), qm_abnormal_irq, 0, qm->dev_name, qm);
 	if (ret) {
-		dev_err(&qm->pdev->dev, "failed to request abnormal irq, ret = %d!\n", ret);
+		dev_err(&pdev->dev, "failed to request abnormal irq, ret = %d!\n", ret);
 		return ret;
 	}
 
@@ -5394,7 +5428,15 @@ static int qm_init_eq_work(struct hisi_qm *qm)
 	if (!qm->poll_data)
 		return ret;
 
+	/* Check the minimum value to avoid array out of boundary errors. */
 	qm_get_xqc_depth(qm, &qm->eq_depth, &qm->aeq_depth, QM_XEQ_DEPTH_CAP);
+	if (qm->eq_depth < QM_XQC_MIN_DEPTH || qm->aeq_depth < QM_XQC_MIN_DEPTH) {
+		dev_err(&qm->pdev->dev, "invalid, eq depth %u, aeq depth %u, the min value %u!\n",
+			qm->eq_depth, qm->aeq_depth, QM_XQC_MIN_DEPTH);
+		kfree(qm->poll_data);
+		return -EINVAL;
+	}
+
 	eq_depth = qm->eq_depth >> 1;
 	for (i = 0; i < qm->qp_num; i++) {
 		qm->poll_data[i].qp_finish_id = kcalloc(eq_depth, sizeof(u16), GFP_KERNEL);
@@ -5579,9 +5621,11 @@ static int qm_get_hw_caps(struct hisi_qm *qm)
 	if (val)
 		set_bit(QM_SUPPORT_DB_ISOLATION, &qm->caps);
 
-	if (qm->ver >= QM_HW_V3) {
-		val = readl(qm->io_base + QM_FUNC_CAPS_REG);
-		qm->cap_ver = val & QM_CAPBILITY_VERSION;
+	val = readl(qm->io_base + QM_FUNC_CAPS_REG);
+	qm->cap_ver = val & QM_CAPBILITY_VERSION;
+	if (qm->cap_ver == QM_CAPBILITY_VERSION) {
+		dev_err(&qm->pdev->dev, "Device is abnormal, return directly!\n");
+		return -EINVAL;
 	}
 
 	/* Get PF/VF common capbility */
@@ -5733,6 +5777,12 @@ static int hisi_qm_pci_init(struct hisi_qm *qm)
 	pci_set_master(pdev);
 
 	num_vec = qm_get_irq_num(qm);
+	if (!num_vec) {
+		dev_err(dev, "Device irq num is zero!\n");
+		ret = -EINVAL;
+		goto err_get_pci_res;
+	}
+	num_vec = roundup_pow_of_two(num_vec);
 	ret = pci_alloc_irq_vectors(pdev, num_vec, num_vec, PCI_IRQ_MSI);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable MSI vectors!\n");
@@ -5765,17 +5815,24 @@ static int hisi_qp_alloc_memory(struct hisi_qm *qm)
 	if (!qm->qp_array)
 		return -ENOMEM;
 
+	/* Check the minimum value to avoid division by zero later. */
 	qm_get_xqc_depth(qm, &sq_depth, &cq_depth, QM_QP_DEPTH_CAP);
+	if (sq_depth < QM_XQC_MIN_DEPTH || cq_depth < QM_XQC_MIN_DEPTH) {
+		dev_err(dev, "invalid, sq depth %u, cq depth %u, the min value %u!\n",
+			sq_depth, cq_depth, QM_XQC_MIN_DEPTH);
+		kfree(qm->qp_array);
+		return -EINVAL;
+	}
 
 	/* one more page for device or qp statuses */
 	qp_dma_size = qm->sqe_size * sq_depth + sizeof(struct qm_cqe) * cq_depth;
 	qp_dma_size = PAGE_ALIGN(qp_dma_size) + PAGE_SIZE;
 	for (i = 0; i < qm->qp_num; i++) {
 		ret = hisi_qp_memory_init(qm, qp_dma_size, i, sq_depth, cq_depth);
-		if (ret)
+		if (ret) {
+			dev_err(dev, "failed to allocate qp dma buf size=%zx)\n", qp_dma_size);
 			goto err_init_qp_mem;
-
-		dev_dbg(dev, "allocate qp dma buf size=%zx)\n", qp_dma_size);
+		}
 	}
 
 	return 0;

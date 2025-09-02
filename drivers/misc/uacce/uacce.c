@@ -17,10 +17,6 @@ static const struct class uacce_class = {
 	.name = UACCE_NAME,
 };
 
-static struct uacce_qfile_region noiommu_ss_default_qfr = {
-	.type	=	UACCE_QFRT_SS,
-};
-
 /*
  * If the parent driver or the device disappears, the queue state is invalid and
  * ops are not usable anymore.
@@ -69,52 +65,6 @@ static void uacce_put_queue(struct uacce_queue *q)
 		uacce->ops->put_queue(q);
 }
 
-static long uacce_cmd_share_qfr(struct uacce_queue *src, int fd)
-{
-	struct device *dev = &src->uacce->dev;
-	struct file *filep = fget(fd);
-	struct uacce_queue *tgt;
-	int ret = -EINVAL;
-
-	if (!filep) {
-		dev_err(dev, "filep is NULL!\n");
-		return ret;
-	}
-
-	if (filep->f_op != &uacce_fops) {
-		dev_err(dev, "file ops mismatch!\n");
-		goto out_with_fd;
-	}
-
-	tgt = filep->private_data;
-	if (!tgt) {
-		dev_err(dev, "target queue is not exist!\n");
-		goto out_with_fd;
-	}
-
-	mutex_lock(&src->mutex);
-	if (tgt->state == UACCE_Q_ZOMBIE || src->state == UACCE_Q_ZOMBIE) {
-		dev_err(dev, "target or source queue is zombie!\n");
-		goto out_with_fd;
-	}
-
-	if (!src->qfrs[UACCE_QFRT_SS] || tgt->qfrs[UACCE_QFRT_SS]) {
-		dev_err(dev, "src q's SS not exists or target q's SS exists!\n");
-		goto out_with_fd;
-	}
-
-	/* In No-IOMMU mode, taget queue uses default SS qfr */
-	tgt->qfrs[UACCE_QFRT_SS] = &noiommu_ss_default_qfr;
-
-	ret = 0;
-
-out_with_fd:
-	mutex_unlock(&src->mutex);
-	fput(filep);
-
-	return ret;
-}
-
 static long uacce_get_ss_dma(struct uacce_queue *q, void __user *arg)
 {
 	struct uacce_device *uacce = q->uacce;
@@ -122,31 +72,29 @@ static long uacce_get_ss_dma(struct uacce_queue *q, void __user *arg)
 	unsigned long slice_idx = 0;
 	unsigned long dma, size;
 	unsigned int max_idx;
-	long ret = -EFAULT;
+	long ret = -EINVAL;
 
+	if (copy_from_user(&slice_idx, arg, sizeof(unsigned long))) {
+		dev_err(&uacce->dev, "copy_from_user fail!\n");
+		return -EFAULT;
+	}
+
+	mutex_lock(&q->mutex);
 	if (q->state == UACCE_Q_ZOMBIE) {
 		dev_err(&uacce->dev, "queue is zombie!\n");
-		ret = -EINVAL;
-		goto param_check;
+		goto unlock;
 	}
 
 	if (!q->qfrs[UACCE_QFRT_SS]) {
 		dev_err(&uacce->dev, "no ss dma region!\n");
-		ret = -EINVAL;
-		goto param_check;
+		goto unlock;
 	}
 
 	slice = q->qfrs[UACCE_QFRT_SS]->dma_list;
-	if (copy_from_user(&slice_idx, arg, sizeof(unsigned long))) {
-		dev_err(&uacce->dev, "copy_from_user fail!\n");
-		goto param_check;
-	}
-
 	if (slice[0].total_num - 1 < slice_idx) {
 		dev_err(&uacce->dev, "no ss slice idx %lu err, total %u!\n",
 			slice_idx, slice[0].total_num);
-		ret = -EINVAL;
-		goto param_check;
+		goto unlock;
 	}
 
 	dma = slice[slice_idx].dma;
@@ -156,17 +104,21 @@ static long uacce_get_ss_dma(struct uacce_queue *q, void __user *arg)
 		dev_err(&uacce->dev, "%luth ss region[size = %lu] no exist, range[[0](size = %llu) -> [%u](size = %llu)]\n",
 			slice_idx, size, slice[0].size, max_idx, slice[max_idx].size);
 		ret = -ENODEV;
-		goto param_check;
+		goto unlock;
 	}
 	dma = dma | ((size >> UACCE_GRAN_SHIFT) & UACCE_GRAN_NUM_MASK);
+	ret = (long)(slice[0].total_num - 1 - slice_idx);
+	mutex_unlock(&q->mutex);
+
 	if (copy_to_user(arg, &dma, sizeof(unsigned long))) {
 		dev_err(&uacce->dev, "copy_to_user fail!\n");
-		goto param_check;
+		return -EFAULT;
 	}
 
-	ret = (long)(slice[0].total_num - 1 - slice_idx);
+	return ret;
 
-param_check:
+unlock:
+	mutex_unlock(&q->mutex);
 	return ret;
 }
 
@@ -180,7 +132,7 @@ static void uacce_free_dma_buffers(struct uacce_queue *q)
 		return;
 
 	while (i < qfr->dma_list[0].total_num) {
-		WARN_ON(!qfr->dma_list[i].size || !qfr->dma_list[i].dma);
+		WARN_ON_ONCE(!qfr->dma_list[i].size || !qfr->dma_list[i].dma);
 		dev_dbg(pdev, "free dma qfr (index = %d)\n", i);
 		dma_free_coherent(pdev, qfr->dma_list[i].size,
 				  qfr->dma_list[i].kaddr,
@@ -229,9 +181,6 @@ static long uacce_fops_unl_ioctl(struct file *filep,
 		break;
 	case UACCE_CMD_PUT_Q:
 		ret = uacce_stop_queue(q);
-		break;
-	case UACCE_CMD_SHARE_SVAS:
-		ret = uacce_cmd_share_qfr(q, (int)arg);
 		break;
 	case UACCE_CMD_GET_SS_DMA:
 		ret = uacce_get_ss_dma(q, (void __user *)(uintptr_t)arg);
@@ -350,7 +299,7 @@ static int uacce_fops_release(struct inode *inode, struct file *filep)
 	uacce_put_queue(q);
 	uacce_unbind_queue(q);
 	ss = q->qfrs[UACCE_QFRT_SS];
-	if (ss && ss != &noiommu_ss_default_qfr) {
+	if (ss) {
 		uacce_free_dma_buffers(q);
 		kfree(ss);
 	}
@@ -390,8 +339,7 @@ static void uacce_vma_close(struct vm_area_struct *vma)
 		q->qfrs[vma->vm_pgoff] = NULL;
 		mutex_unlock(&q->mutex);
 		mutex_unlock(&uacce->mutex);
-		if (qfr != &noiommu_ss_default_qfr)
-			kfree(qfr);
+		kfree(qfr);
 	} else if (vma->vm_pgoff != UACCE_QFRT_SS) {
 		mutex_lock(&q->mutex);
 		qfr = q->qfrs[vma->vm_pgoff];
@@ -525,7 +473,7 @@ static int uacce_alloc_dma_buffers(struct uacce_queue *q,
 			size = vma->vm_end - start;
 		else
 			size = max_size;
-		dev_dbg(pdev, "allocate dma %ld pages\n",
+		dev_dbg(pdev, "allocate dma %lu pages\n",
 			(size + PAGE_SIZE - 1) >> PAGE_SHIFT);
 		slice[i].kaddr = dma_alloc_coherent(pdev, (size +
 						    PAGE_SIZE - 1) & PAGE_MASK,
@@ -886,7 +834,7 @@ static umode_t uacce_dev_is_visible(struct kobject *kobj,
 		return 0;
 
 	if (attr == &dev_attr_isolate_strategy.attr &&
-	    (!uacce->ops->isolate_err_threshold_read &&
+	    (!uacce->ops->isolate_err_threshold_read ||
 	     !uacce->ops->isolate_err_threshold_write))
 		return 0;
 
@@ -955,18 +903,14 @@ static void uacce_disable_sva(struct uacce_device *uacce)
 struct uacce_device *uacce_alloc(struct device *parent,
 				 struct uacce_interface *interface)
 {
+	unsigned int flags = interface->flags;
 	struct uacce_device *uacce;
-	unsigned int flags;
 	int ret;
-
-	if (!parent || !interface)
-		return ERR_PTR(-EINVAL);
 
 	uacce = kzalloc(sizeof(struct uacce_device), GFP_KERNEL);
 	if (!uacce)
 		return ERR_PTR(-ENOMEM);
 
-	flags = interface->flags;
 	flags = uacce_enable_sva(parent, flags);
 
 	uacce->parent = parent;
@@ -1065,7 +1009,7 @@ void uacce_remove(struct uacce_device *uacce)
 		 * access the mmaped area while parent device is already removed
 		 */
 		unmap_mapping_range(q->mapping, 0, 0, 1);
-		if (ss && ss != &noiommu_ss_default_qfr)
+		if (ss)
 			uacce_free_dma_buffers(q);
 	}
 

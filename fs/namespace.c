@@ -320,16 +320,16 @@ static int mnt_is_readonly(struct vfsmount *mnt)
  * can determine when writes are able to occur to a filesystem.
  */
 /**
- * __mnt_want_write - get write access to a mount without freeze protection
+ * mnt_get_write_access - get write access to a mount without freeze protection
  * @m: the mount on which to take a write
  *
  * This tells the low-level filesystem that a write is about to be performed to
  * it, and makes sure that writes are allowed (mnt it read-write) before
  * returning success. This operation does not protect against filesystem being
- * frozen. When the write operation is finished, __mnt_drop_write() must be
+ * frozen. When the write operation is finished, mnt_put_write_access() must be
  * called. This is effectively a refcount.
  */
-int __mnt_want_write(struct vfsmount *m)
+int mnt_get_write_access(struct vfsmount *m)
 {
 	struct mount *mnt = real_mount(m);
 	int ret = 0;
@@ -376,6 +376,7 @@ int __mnt_want_write(struct vfsmount *m)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(mnt_get_write_access);
 
 /**
  * mnt_want_write - get write access to a mount
@@ -391,7 +392,7 @@ int mnt_want_write(struct vfsmount *m)
 	int ret;
 
 	sb_start_write(m->mnt_sb);
-	ret = __mnt_want_write(m);
+	ret = mnt_get_write_access(m);
 	if (ret)
 		sb_end_write(m->mnt_sb);
 	return ret;
@@ -399,15 +400,15 @@ int mnt_want_write(struct vfsmount *m)
 EXPORT_SYMBOL_GPL(mnt_want_write);
 
 /**
- * __mnt_want_write_file - get write access to a file's mount
+ * mnt_get_write_access_file - get write access to a file's mount
  * @file: the file who's mount on which to take a write
  *
- * This is like __mnt_want_write, but if the file is already open for writing it
+ * This is like mnt_get_write_access, but if @file is already open for write it
  * skips incrementing mnt_writers (since the open file already has a reference)
  * and instead only does the check for emergency r/o remounts.  This must be
- * paired with __mnt_drop_write_file.
+ * paired with mnt_put_write_access_file.
  */
-int __mnt_want_write_file(struct file *file)
+int mnt_get_write_access_file(struct file *file)
 {
 	if (file->f_mode & FMODE_WRITER) {
 		/*
@@ -418,7 +419,7 @@ int __mnt_want_write_file(struct file *file)
 			return -EROFS;
 		return 0;
 	}
-	return __mnt_want_write(file->f_path.mnt);
+	return mnt_get_write_access(file->f_path.mnt);
 }
 
 /**
@@ -435,7 +436,7 @@ int mnt_want_write_file(struct file *file)
 	int ret;
 
 	sb_start_write(file_inode(file)->i_sb);
-	ret = __mnt_want_write_file(file);
+	ret = mnt_get_write_access_file(file);
 	if (ret)
 		sb_end_write(file_inode(file)->i_sb);
 	return ret;
@@ -443,19 +444,20 @@ int mnt_want_write_file(struct file *file)
 EXPORT_SYMBOL_GPL(mnt_want_write_file);
 
 /**
- * __mnt_drop_write - give up write access to a mount
+ * mnt_put_write_access - give up write access to a mount
  * @mnt: the mount on which to give up write access
  *
  * Tells the low-level filesystem that we are done
  * performing writes to it.  Must be matched with
- * __mnt_want_write() call above.
+ * mnt_get_write_access() call above.
  */
-void __mnt_drop_write(struct vfsmount *mnt)
+void mnt_put_write_access(struct vfsmount *mnt)
 {
 	preempt_disable();
 	mnt_dec_writers(real_mount(mnt));
 	preempt_enable();
 }
+EXPORT_SYMBOL_GPL(mnt_put_write_access);
 
 /**
  * mnt_drop_write - give up write access to a mount
@@ -467,20 +469,20 @@ void __mnt_drop_write(struct vfsmount *mnt)
  */
 void mnt_drop_write(struct vfsmount *mnt)
 {
-	__mnt_drop_write(mnt);
+	mnt_put_write_access(mnt);
 	sb_end_write(mnt->mnt_sb);
 }
 EXPORT_SYMBOL_GPL(mnt_drop_write);
 
-void __mnt_drop_write_file(struct file *file)
+void mnt_put_write_access_file(struct file *file)
 {
 	if (!(file->f_mode & FMODE_WRITER))
-		__mnt_drop_write(file->f_path.mnt);
+		mnt_put_write_access(file->f_path.mnt);
 }
 
 void mnt_drop_write_file(struct file *file)
 {
-	__mnt_drop_write_file(file);
+	mnt_put_write_access_file(file);
 	sb_end_write(file_inode(file)->i_sb);
 }
 EXPORT_SYMBOL(mnt_drop_write_file);
@@ -2102,6 +2104,11 @@ struct vfsmount *clone_private_mount(const struct path *path)
 	if (!check_mnt(old_mnt))
 		goto invalid;
 
+	if (!ns_capable(old_mnt->mnt_ns->user_ns, CAP_SYS_ADMIN)) {
+		up_read(&namespace_sem);
+		return ERR_PTR(-EPERM);
+	}
+
 	if (has_locked_children(old_mnt, path->dentry))
 		goto invalid;
 
@@ -2428,56 +2435,62 @@ static struct mountpoint *do_lock_mount(struct path *path, bool beneath)
 	struct vfsmount *mnt = path->mnt;
 	struct dentry *dentry;
 	struct mountpoint *mp = ERR_PTR(-ENOENT);
+	struct path under = {};
 
 	for (;;) {
-		struct mount *m;
+		struct mount *m = real_mount(mnt);
 
 		if (beneath) {
-			m = real_mount(mnt);
+			path_put(&under);
 			read_seqlock_excl(&mount_lock);
-			dentry = dget(m->mnt_mountpoint);
+			under.mnt = mntget(&m->mnt_parent->mnt);
+			under.dentry = dget(m->mnt_mountpoint);
 			read_sequnlock_excl(&mount_lock);
+			dentry = under.dentry;
 		} else {
 			dentry = path->dentry;
 		}
 
 		inode_lock(dentry->d_inode);
-		if (unlikely(cant_mount(dentry))) {
-			inode_unlock(dentry->d_inode);
-			goto out;
-		}
-
 		namespace_lock();
 
-		if (beneath && (!is_mounted(mnt) || m->mnt_mountpoint != dentry)) {
+		if (unlikely(cant_mount(dentry) || !is_mounted(mnt)))
+			break;		// not to be mounted on
+
+		if (beneath && unlikely(m->mnt_mountpoint != dentry ||
+				        &m->mnt_parent->mnt != under.mnt)) {
 			namespace_unlock();
 			inode_unlock(dentry->d_inode);
-			goto out;
+			continue;	// got moved
 		}
 
 		mnt = lookup_mnt(path);
-		if (likely(!mnt))
+		if (unlikely(mnt)) {
+			namespace_unlock();
+			inode_unlock(dentry->d_inode);
+			path_put(path);
+			path->mnt = mnt;
+			path->dentry = dget(mnt->mnt_root);
+			continue;	// got overmounted
+		}
+		mp = get_mountpoint(dentry);
+		if (IS_ERR(mp))
 			break;
-
-		namespace_unlock();
-		inode_unlock(dentry->d_inode);
-		if (beneath)
-			dput(dentry);
-		path_put(path);
-		path->mnt = mnt;
-		path->dentry = dget(mnt->mnt_root);
+		if (beneath) {
+			/*
+			 * @under duplicates the references that will stay
+			 * at least until namespace_unlock(), so the path_put()
+			 * below is safe (and OK to do under namespace_lock -
+			 * we are not dropping the final references here).
+			 */
+			path_put(&under);
+		}
+		return mp;
 	}
-
-	mp = get_mountpoint(dentry);
-	if (IS_ERR(mp)) {
-		namespace_unlock();
-		inode_unlock(dentry->d_inode);
-	}
-
-out:
+	namespace_unlock();
+	inode_unlock(dentry->d_inode);
 	if (beneath)
-		dput(dentry);
-
+		path_put(&under);
 	return mp;
 }
 
@@ -2488,14 +2501,11 @@ static inline struct mountpoint *lock_mount(struct path *path)
 
 static void unlock_mount(struct mountpoint *where)
 {
-	struct dentry *dentry = where->m_dentry;
-
+	inode_unlock(where->m_dentry->d_inode);
 	read_seqlock_excl(&mount_lock);
 	put_mountpoint(where);
 	read_sequnlock_excl(&mount_lock);
-
 	namespace_unlock();
-	inode_unlock(dentry->d_inode);
 }
 
 static int graft_tree(struct mount *mnt, struct mount *p, struct mountpoint *mp)
@@ -2546,6 +2556,10 @@ static int do_change_type(struct path *path, int ms_flags)
 		return -EINVAL;
 
 	namespace_lock();
+	if (!check_mnt(mnt)) {
+		err = -EINVAL;
+		goto out_unlock;
+	}
 	if (type == MS_SHARED) {
 		err = invent_group_ids(mnt, recurse);
 		if (err)
@@ -2984,7 +2998,7 @@ static int do_set_group(struct path *from_path, struct path *to_path)
 	if (IS_MNT_SLAVE(from)) {
 		struct mount *m = from->mnt_master;
 
-		list_add(&to->mnt_slave, &m->mnt_slave_list);
+		list_add(&to->mnt_slave, &from->mnt_slave);
 		to->mnt_master = m;
 	}
 
@@ -3009,18 +3023,25 @@ out:
  * Check if path is overmounted, i.e., if there's a mount on top of
  * @path->mnt with @path->dentry as mountpoint.
  *
- * Context: This function expects namespace_lock() to be held.
+ * Context: namespace_sem must be held at least shared.
+ * MUST NOT be called under lock_mount_hash() (there one should just
+ * call __lookup_mnt() and check if it returns NULL).
  * Return: If path is overmounted true is returned, false if not.
  */
 static inline bool path_overmounted(const struct path *path)
 {
+	unsigned seq = read_seqbegin(&mount_lock);
+	bool no_child;
+
 	rcu_read_lock();
-	if (unlikely(__lookup_mnt(path->mnt, path->dentry))) {
-		rcu_read_unlock();
-		return true;
-	}
+	no_child = !__lookup_mnt(path->mnt, path->dentry);
 	rcu_read_unlock();
-	return false;
+	if (need_seqretry(&mount_lock, seq)) {
+		read_seqlock_excl(&mount_lock);
+		no_child = !__lookup_mnt(path->mnt, path->dentry);
+		read_sequnlock_excl(&mount_lock);
+	}
+	return unlikely(!no_child);
 }
 
 /**

@@ -756,6 +756,12 @@ L:	linux-crypto@vger.kernel.org
 S:	Maintained
 F:	drivers/crypto/allwinner/
 
+WST CRYPTO DRIVERS
+M:	Hongchen Zhang <zhanghongchen@loongson.cn>
+L:	linux-crypto@vger.kernel.org
+S:	Maintained
+F:	drivers/crypto/sedriver/
+
 ALLWINNER DMIC DRIVERS
 M:	Ban Tao <fengzheng923@gmail.com>
 L:	alsa-devel@alsa-project.org (moderated for non-subscribers)
@@ -3021,6 +3027,8 @@ S:	Maintained
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/arm64/linux.git
 F:	Documentation/arch/arm64/
 F:	arch/arm64/
+F:	drivers/virt/coco/arm-cca-guest/
+F:	drivers/virt/coco/pkvm-guest/
 F:	tools/testing/selftests/arm64/
 X:	arch/arm64/boot/dts/
 
@@ -8058,6 +8066,15 @@ F:	include/linux/fs_types.h
 F:	include/uapi/linux/fs.h
 F:	include/uapi/linux/openat2.h
 
+FILESYSTEMS [STACKABLE]
+M:	Miklos Szeredi <miklos@szeredi.hu>
+M:	Amir Goldstein <amir73il@gmail.com>
+L:	linux-fsdevel@vger.kernel.org
+L:	linux-unionfs@vger.kernel.org
+S:	Maintained
+F:	fs/backing-file.c
+F:	include/linux/backing-file.h
+
 FINTEK F75375S HARDWARE MONITOR AND FAN CONTROLLER DRIVER
 M:	Riku Voipio <riku.voipio@iki.fi>
 L:	linux-hwmon@vger.kernel.org
@@ -9689,6 +9706,12 @@ F:	drivers/net/ethernet/huawei/hinic3/bond/
 F:	drivers/net/ethernet/huawei/hinic3/cqm/
 F:	drivers/net/ethernet/huawei/hinic3/hw/
 F:	drivers/net/ethernet/huawei/hinic3/include/
+
+HUAWEI ETHERNET DRIVER
+M:	Huangjunhua <huangjunhua14@huawei.com>
+L:	netdev@vger.kernel.org
+S:	Maintained
+F:	drivers/net/ethernet/huawei/bma/
 
 HUAWEI BIFUR DRIVER
 M:	Xiaoping zheng <zhengxiaoping5@huawei.com>
@@ -12438,6 +12461,13 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/i2c/loongson,ls2x-i2c.yaml
 F:	drivers/i2c/busses/i2c-ls2x.c
 
+LOONGSON PWM DRIVER
+M:	Binbin Zhou <zhoubinbin@loongson.cn>
+L:	linux-pwm@vger.kernel.org
+S:	Maintained
+F:	Documentation/devicetree/bindings/pwm/loongson,ls7a-pwm.yaml
+F:	drivers/pwm/pwm-loongson.c
+
 LOONGSON-2 SOC SERIES CLOCK DRIVER
 M:	Yinbo Zhu <zhuyinbo@loongson.cn>
 L:	linux-clk@vger.kernel.org
@@ -14552,6 +14582,13 @@ F:	Documentation/ABI/testing/sysfs-bus-most
 F:	drivers/most/
 F:	drivers/staging/most/
 F:	include/linux/most.h
+
+MOTORCOMM ETHERNET DRIVER
+M:	Frank <Frank.Sae@motor-comm.com>
+L:	netdev@vger.kernel.org
+S:	Maintained
+W:	https://www.motor-comm.com/
+F:	drivers/net/ethernet/motorcomm/*
 
 MOTORCOMM PHY DRIVER
 M:	Peter Geis <pgwipeout@gmail.com>
@@ -22006,6 +22043,14 @@ S:	Maintained
 W:	https://github.com/srcres258/linux-doc
 T:	git git://github.com/srcres258/linux-doc.git doc-zh-tw
 F:	Documentation/translations/zh_TW/
+
+TRUSTED SECURITY MODULE (TSM) ATTESTATION REPORTS
+M:	Dan Williams <dan.j.williams@intel.com>
+L:	linux-coco@lists.linux.dev
+S:	Maintained
+F:	Documentation/ABI/testing/configfs-tsm
+F:	drivers/virt/coco/tsm.c
+F:	include/linux/tsm.h
 
 TTY LAYER AND SERIAL DRIVERS
 M:	Greg Kroah-Hartman <gregkh@linuxfoundation.org>

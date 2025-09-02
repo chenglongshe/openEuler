@@ -134,6 +134,7 @@ struct  loongarch_iommu {
 	struct pci_dev		*pdev;
 	/* Handle for IOMMU core code */
 	struct iommu_device iommu_dev;
+	bool			disabled;
 } loongarch_iommu;
 
 struct iommu_rlookup_entry {
@@ -169,7 +170,7 @@ struct dom_entry {
 struct la_iommu_dev_data {
 	struct list_head	list;		/* for iommu_entry->dev_list */
 	struct loongarch_iommu	*iommu;
-	struct iommu_info		*iommu_entry;
+	struct iommu_info	*iommu_entry;
 	struct iommu_domain	*domain;
 	struct device		*dev;
 	unsigned short		bdf;

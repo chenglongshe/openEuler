@@ -19,6 +19,19 @@
 
 #define FTRACE_SP_OFF	0x50
 	.macro mcount_enter
+	/* save $26 & fp of the function before caller */
+	subl	$sp, 0x10, $sp
+	stl	$26, 0($sp)
+	stl	$15, 0x8($sp)
+	ldi	$15, 0($sp)
+
+	/* save $28 & fp of caller */
+	subl	$sp, 0x10, $sp
+	stl	$28, 0($sp)
+	stl	$15, 0x8($sp)
+	ldi	$15, 0($sp)
+
+	/* save other regs */
 	subl	$sp, FTRACE_SP_OFF, $sp
 	stl	$16, 0($sp)
 	stl	$17, 0x8($sp)
@@ -35,6 +48,7 @@
 	.endm
 
 	.macro mcount_end
+	/* restore all regs */
 	ldl	$16, 0($sp)
 	ldl	$17, 0x8($sp)
 	ldl	$18, 0x10($sp)
@@ -48,6 +62,9 @@
 	ldl	$20, 0x40($sp)
 	ldl	$21, 0x48($sp)
 	addl	$sp, FTRACE_SP_OFF, $sp
+
+	ldl	$15, 0x18($sp)
+	addl	$sp, 0x20, $sp
 	.endm
 
 	.macro RESTORE_GRAPH_ARGS
@@ -58,23 +75,24 @@
  #endif
 	.endm
 
-	.macro SAVE_PT_REGS
+	.macro SAVE_PT_REGS allregs=0
+	/* save $26 & fp of the function before caller */
+	subl	$sp, 0x10, $sp
+	stl	$26, 0($sp)
+	stl	$15, 0x8($sp)
+	ldi	$15, 0($sp)
+
+	/* save $28 & fp of caller */
+	subl	$sp, 0x10, $sp
+	stl	$28, 0($sp)
+	stl	$15, 0x8($sp)
+	ldi	$15, 0($sp)
+
 	ldi	$sp, -PT_REGS_SIZE($sp)
 	stl	$0, PT_REGS_R0($sp)
-	stl	$1, PT_REGS_R1($sp)
-	stl	$2, PT_REGS_R2($sp)
-	stl	$3, PT_REGS_R3($sp)
-	stl	$4, PT_REGS_R4($sp)
-	stl	$5, PT_REGS_R5($sp)
-	stl	$6, PT_REGS_R6($sp)
-	stl	$7, PT_REGS_R7($sp)
-	stl	$8, PT_REGS_R8($sp)
+#ifdef CONFIG_FUNCTION_GRAPH_TRACER
 	stl	$9, PT_REGS_R9($sp)
-	stl	$10, PT_REGS_R10($sp)
-	stl	$11, PT_REGS_R11($sp)
-	stl	$12, PT_REGS_R12($sp)
-	stl	$13, PT_REGS_R13($sp)
-	stl	$14, PT_REGS_R14($sp)
+#endif
 	stl	$15, PT_REGS_R15($sp)
 	stl	$16, PT_REGS_R16($sp)
 	stl	$17, PT_REGS_R17($sp)
@@ -90,26 +108,29 @@
 	stl	$27, PT_REGS_R27($sp)
 	stl	$28, PT_REGS_R28($sp)
 	stl	$29, PT_REGS_GP($sp)
+	subl    $28, MCOUNT_INSN_SIZE, $0
+	stl     $0, PT_REGS_PC($sp)
+	.if \allregs
+	stl	$10, PT_REGS_R10($sp)
+	stl	$11, PT_REGS_R11($sp)
+	stl	$12, PT_REGS_R12($sp)
+	stl	$13, PT_REGS_R13($sp)
+	stl	$14, PT_REGS_R14($sp)
+	.endif
 	ldi	$0, PT_REGS_SIZE($sp)
-	stl	$0, PT_REGS_SP($sp)
+	stl	$0, PT_REGS_R30($sp)
+
+	/* save direct caller reg */
+	ldi	$2, 0($31)
+	stl	$2, PT_REGS_R2($sp)
 	.endm
 
-	.macro RESTORE_PT_REGS
+	.macro RESTORE_PT_REGS allregs=0
+	/* restore pt_regs */
 	ldl	$0, PT_REGS_R0($sp)
-	ldl	$1, PT_REGS_R1($sp)
-	ldl	$2, PT_REGS_R2($sp)
-	ldl	$3, PT_REGS_R3($sp)
-	ldl	$4, PT_REGS_R4($sp)
-	ldl	$5, PT_REGS_R5($sp)
-	ldl	$6, PT_REGS_R6($sp)
-	ldl	$7, PT_REGS_R7($sp)
-	ldl	$8, PT_REGS_R8($sp)
+#ifdef CONFIG_FUNCTION_GRAPH_TRACER
 	ldl	$9, PT_REGS_R9($sp)
-	ldl	$10, PT_REGS_R10($sp)
-	ldl	$11, PT_REGS_R11($sp)
-	ldl	$12, PT_REGS_R12($sp)
-	ldl	$13, PT_REGS_R13($sp)
-	ldl	$14, PT_REGS_R14($sp)
+#endif
 	ldl	$15, PT_REGS_R15($sp)
 	ldl	$16, PT_REGS_R16($sp)
 	ldl	$17, PT_REGS_R17($sp)
@@ -125,7 +146,23 @@
 	ldl	$27, PT_REGS_R27($sp)
 	ldl	$28, PT_REGS_R28($sp)
 	ldl	$29, PT_REGS_GP($sp)
+	.if \allregs
+	ldl	$10, PT_REGS_R10($sp)
+	ldl	$11, PT_REGS_R11($sp)
+	ldl	$12, PT_REGS_R12($sp)
+	ldl	$13, PT_REGS_R13($sp)
+	ldl	$14, PT_REGS_R14($sp)
+	.endif
 	ldi	$sp, PT_REGS_SIZE($sp)
+
+	/* only restore $fp */
+	ldl	$15, 0x18($sp)
+	addl	$sp, 0x20, $sp
+
+	bne	$2, .Ldirect\@
+	ret	$31, ($28), 1
+.Ldirect\@:
+	ret	$31, ($2), 1			/* direct call */
 	.endm
 
 	.macro RESTORE_GRAPH_REG_ARGS
@@ -138,16 +175,52 @@
 
 	/* save return value regs*/
 	.macro save_return_regs
-	subl	$sp, 0x8, $sp
-	stl	$0, 0x0($sp)
+	subl	$sp, 16, $sp
+	stl	$0, 0($sp)
+	stl	$15, 8($sp)
 	.endm
 
 	/* restore return value regs*/
 	.macro restore_return_regs
-	ldl	$0, 0x0($sp)
-	addl	$sp, 0x8, $sp
+	ldl	$15, 8($sp)
+	ldl	$0, 0($sp)
+	addl	$sp, 16, $sp
 	.endm
 
+	.macro ftrace_common allregs=0
+	br	$27, 1f
+1:	ldgp	$29, 0($27)
+
+	subl	$28, MCOUNT_INSN_SIZE, $16
+	bis	$26, $31, $17
+	ldi	$4, function_trace_op
+	ldl	$18, 0($4)
+	mov	$sp, $19
+
+#ifdef CONFIG_FUNCTION_GRAPH_TRACER
+	bis	$31, $16, $9
+#endif
+	ldi	$4, current_tracer
+	ldl	$27, 0($4)
+
+.if \allregs == 0
+	.global ftrace_call
+ftrace_call:
+	nop
+.endif
+
+.if \allregs
+	.global ftrace_regs_call
+ftrace_regs_call:
+	nop
+.endif
+
+#ifdef CONFIG_FUNCTION_GRAPH_TRACER
+	RESTORE_GRAPH_REG_ARGS
+	call    ftrace_graph_caller
+#endif
+	ldl     $2, PT_REGS_R2($sp)		// load direct call addr
+	.endm
 
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 /*
@@ -196,7 +269,7 @@ ENTRY(return_to_handler)
 	br	$27, 1f
 1:	ldgp	$29, 0($27)
 	save_return_regs
-	bis	$31, $15, $16	/* parent's fp */
+	bis	$31, $sp, $16	/* ret_regs */
 	ldi	$27, ftrace_return_to_handler
 	call	$26, ($27)
 	bis	$31, $0, $26
@@ -206,6 +279,7 @@ END(return_to_handler)
 
 #endif
 
+	.pushsection ".entry.text", "ax"
 #ifdef CONFIG_DYNAMIC_FTRACE
 	.global _mcount
 	.ent _mcount
@@ -217,35 +291,9 @@ _mcount:
 	.global ftrace_caller
 	.ent ftrace_caller
 ftrace_caller:
-	mcount_enter
-	br	$27, 1f
-1:	ldgp	$29, 0($27)
-
-	subl	$28, MCOUNT_INSN_SIZE, $16
-	bis	$26, $31, $17
-	ldl	$18, function_trace_op
-
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
-	/*
-	 * the graph tracer (specifically, prepare_ftrace_return) needs these
-	 * arguments but for now the function tracer occupies the regs, so we
-	 * save them in callee-saved regs to recover later.
-	 */
-	bis	$31, $16, $9
-#endif
-	ldi	$4, current_tracer
-	ldl	$27, 0($4)
-
-	.global ftrace_call
-ftrace_call:					/* tracer(pc, ra); */
-	nop
-
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
-	RESTORE_GRAPH_ARGS
-	call    ftrace_graph_caller
-#endif
-	mcount_end
-	ret	$31, ($28), 1
+	SAVE_PT_REGS allregs=0
+	ftrace_common allregs=0
+	RESTORE_PT_REGS allregs=0
 	.end ftrace_caller
 #else /* !CONFIG_DYNAMIC_FTRACE */
 
@@ -283,39 +331,16 @@ skip_ftrace:
 3:	mcount_end
 	ret	$31, ($28), 1
 	.end _mcount
-
 #endif /* CONFIG_DYNAMIC_FTRACE */
+	.popsection
 
 #ifdef CONFIG_DYNAMIC_FTRACE_WITH_REGS
 	.global ftrace_regs_caller
 	.ent ftrace_regs_caller
 ftrace_regs_caller:
-	SAVE_PT_REGS
-	br	$27, 1f
-1:	ldgp	$29, 0($27)
-
-	subl	$28, MCOUNT_INSN_SIZE, $16
-	bis	$26, $31, $17
-	ldi	$4, function_trace_op
-	ldl	$18, 0($4)
-	mov	$sp, $19
-
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
-	bis	$31, $16, $9
-#endif
-	ldi	$4, current_tracer
-	ldl	$27, 0($4)
-
-	.global ftrace_regs_call
-ftrace_regs_call:
-	nop
-
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
-	RESTORE_GRAPH_REG_ARGS
-	call    ftrace_graph_caller
-#endif
-	RESTORE_PT_REGS
-	ret $31, ($28), 1
+	SAVE_PT_REGS allregs=1
+	ftrace_common allregs=1
+	RESTORE_PT_REGS allregs=1
 	.end ftrace_regs_caller
 #endif /* CONFIG_DYNAMIC_FTRACE_WITH_REGS */
 

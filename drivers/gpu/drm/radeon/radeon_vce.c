@@ -238,7 +238,7 @@ int radeon_vce_resume(struct radeon_device *rdev)
 		return r;
 	}
 
-#ifdef __sw_64__
+#if IS_ENABLED(CONFIG_SW64)
 	memset_io(cpu_addr, 0, radeon_bo_size(rdev->vce.vcpu_bo));
 #else
 	memset(cpu_addr, 0, radeon_bo_size(rdev->vce.vcpu_bo));
@@ -561,7 +561,7 @@ int radeon_vce_cs_parse(struct radeon_cs_parser *p)
 {
 	int session_idx = -1;
 	bool destroyed = false, created = false, allocated = false;
-	uint32_t tmp, handle = 0;
+	uint32_t tmp = 0, handle = 0;
 	uint32_t *size = &tmp;
 	int i, r = 0;
 

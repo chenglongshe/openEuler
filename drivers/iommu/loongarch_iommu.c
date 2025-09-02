@@ -42,12 +42,12 @@ MODULE_LICENSE("GPL");
 
 #define IVRS_HEADER_LENGTH		48
 #define ACPI_IVHD_TYPE_MAX_SUPPORTED	0x40
-#define IVHD_DEV_ALL                    0x01
-#define IVHD_DEV_SELECT                 0x02
-#define IVHD_DEV_SELECT_RANGE_START     0x03
-#define IVHD_DEV_RANGE_END              0x04
-#define IVHD_DEV_ALIAS                  0x42
-#define IVHD_DEV_EXT_SELECT             0x46
+#define IVHD_DEV_ALL			0x01
+#define IVHD_DEV_SELECT			0x02
+#define IVHD_DEV_SELECT_RANGE_START	0x03
+#define IVHD_DEV_RANGE_END		0x04
+#define IVHD_DEV_ALIAS			0x42
+#define IVHD_DEV_EXT_SELECT		0x46
 #define IVHD_DEV_ACPI_HID		0xf0
 
 #define IVHD_HEAD_TYPE10		0x10
@@ -199,6 +199,22 @@ static void flush_iotlb_by_domain_id(struct loongarch_iommu *iommu, u16 domain_i
 	iommu_write_regl(iommu, LA_IOMMU_VBTC, val);
 }
 
+static void flush_iotlb(struct loongarch_iommu *iommu)
+{
+	u32 val;
+
+	if (iommu == NULL) {
+		pr_err("%s iommu is NULL", __func__);
+		return;
+	}
+
+	/* Flush all tlb */
+	val = iommu_read_regl(iommu, LA_IOMMU_VBTC);
+	val &= ~0x1f;
+	val |= 0x5;
+	iommu_write_regl(iommu, LA_IOMMU_VBTC, val);
+}
+
 static int flush_pgtable_is_busy(struct loongarch_iommu *iommu)
 {
 	u32 val;
@@ -336,22 +352,6 @@ static int update_dev_table(struct la_iommu_dev_data *dev_data, int flag)
 	return 0;
 }
 
-static void flush_iotlb(struct loongarch_iommu *iommu)
-{
-	u32 val;
-
-	if (iommu == NULL) {
-		pr_err("%s iommu is NULL", __func__);
-		return;
-	}
-
-	/* Flush all tlb */
-	val = iommu_read_regl(iommu, LA_IOMMU_VBTC);
-	val &= ~0x1f;
-	val |= 0x5;
-	iommu_write_regl(iommu, LA_IOMMU_VBTC, val);
-}
-
 static int iommu_flush_iotlb(struct loongarch_iommu *iommu)
 {
 	u32 retry = 0;
@@ -443,8 +443,10 @@ static int domain_id_alloc(struct loongarch_iommu *iommu)
 	if (id < MAX_DOMAIN_ID)
 		__set_bit(id, iommu->domain_bitmap);
 	spin_unlock(&iommu->domain_bitmap_lock);
-	if (id >= MAX_DOMAIN_ID)
+	if (id >= MAX_DOMAIN_ID) {
+		id = -1;
 		pr_err("LA-IOMMU: Alloc domain id over max domain id\n");
+	}
 	return id;
 }
 
@@ -575,7 +577,7 @@ static struct dom_info *alloc_dom_info(void)
 	spin_lock_init(&info->lock);
 	mutex_init(&info->ptl_lock);
 	info->domain.geometry.aperture_start = 0;
-	info->domain.geometry.aperture_end   = ~0ULL;
+	info->domain.geometry.aperture_end = ~0ULL;
 	info->domain.geometry.force_aperture = true;
 
 	return info;
@@ -595,14 +597,15 @@ static struct iommu_domain *la_iommu_domain_alloc(unsigned int type)
 	struct dom_info *info;
 
 	switch (type) {
-	case IOMMU_DOMAIN_UNMANAGED:
+	case IOMMU_DOMAIN_BLOCKED:
 	case IOMMU_DOMAIN_IDENTITY:
+	case IOMMU_DOMAIN_UNMANAGED:
 		info = alloc_dom_info();
 		if (info == NULL)
-			return NULL;
+			return ERR_PTR(-ENOMEM);
 		break;
 	default:
-		return NULL;
+		return ERR_PTR(-EINVAL);
 	}
 	return &info->domain;
 }
@@ -671,10 +674,17 @@ struct loongarch_iommu *find_iommu_by_dev(struct pci_dev  *pdev)
 	pcisegment = pci_domain_nr(bus);
 	rlookupentry = lookup_rlooptable(pcisegment);
 	if (rlookupentry == NULL) {
-		pr_info("%s find segment %d rlookupentry failed\n", __func__,
+		pr_debug("%s find segment %d rlookupentry failed\n", __func__,
 				pcisegment);
 		return iommu;
 	}
+
+	if (devid > la_iommu_last_bdf) {
+		pci_warn(pdev, "The deviceid %x is greater than the maximum bdf number %x\n",
+			 devid, la_iommu_last_bdf);
+		return iommu;
+	}
+
 	iommu = rlookupentry->rlookup_table[devid];
 	if (iommu && (!iommu->confbase))
 		iommu = NULL;
@@ -699,7 +709,13 @@ struct iommu_device *iommu_init_device(struct device *dev)
 	}
 	iommu = find_iommu_by_dev(pdev);
 	if (iommu == NULL) {
-		pci_info(pdev, "%s find iommu failed by dev\n", __func__);
+		pci_dbg(pdev, "%s the device is not managed by iommu\n", __func__);
+		return iommu_dev;
+	}
+
+	if (iommu->disabled) {
+		pci_dbg(pdev, "%s the iommu[seg:%d devid:%#x] is disabled\n",
+			__func__, iommu->segment, iommu->devid);
 		return iommu_dev;
 	}
 	dev_data = kzalloc(sizeof(*dev_data), GFP_KERNEL);
@@ -743,7 +759,6 @@ static void la_iommu_remove_device(struct device *dev)
 {
 	struct la_iommu_dev_data *dev_data;
 
-	iommu_group_remove_device(dev);
 	dev_data = dev->archdata.iommu;
 	dev->archdata.iommu = NULL;
 	kfree(dev_data);
@@ -833,10 +848,12 @@ static int la_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	struct iommu_info *info;
 	unsigned short bdf;
 
-	if (domain->type == IOMMU_DOMAIN_IDENTITY)
-		domain = NULL;
-
 	la_iommu_detach_dev(dev);
+
+	if (domain != NULL &&
+	    (domain->type == IOMMU_DOMAIN_IDENTITY ||
+	     domain->type == IOMMU_DOMAIN_BLOCKED))
+		return 0;
 
 	if (domain == NULL)
 		return 0;
@@ -920,6 +937,7 @@ static void la_iommu_detach_dev(struct device *dev)
 	spin_lock(&iommu_entry->devlock);
 	do_detach(dev_data);
 	spin_unlock(&iommu_entry->devlock);
+	dev_data->domain = NULL;
 
 	pci_info(pdev, "%s iommu devid  %x sigment %x\n", __func__,
 			iommu->devid, iommu->segment);
@@ -1175,6 +1193,11 @@ static phys_addr_t la_iommu_iova_to_phys(struct iommu_domain *domain,
 	return phys;
 }
 
+static int la_iommu_def_domain_type(struct device *dev)
+{
+	return IOMMU_DOMAIN_IDENTITY;
+}
+
 const struct iommu_ops la_iommu_ops = {
 	.capable = la_iommu_capable,
 	.domain_alloc = la_iommu_domain_alloc,
@@ -1182,6 +1205,7 @@ const struct iommu_ops la_iommu_ops = {
 	.release_device = la_iommu_remove_device,
 	.device_group = la_iommu_device_group,
 	.pgsize_bitmap	= LA_IOMMU_PGSIZE,
+	.def_domain_type = la_iommu_def_domain_type,
 	.owner = THIS_MODULE,
 	.default_domain_ops = &(const struct iommu_domain_ops) {
 		.attach_dev	= la_iommu_attach_dev,
@@ -1239,8 +1263,9 @@ static int loongarch_iommu_probe(struct pci_dev *pdev,
 
 	compat = check_device_compat(pdev);
 	if (!compat) {
+		iommu->disabled = true;
 		pci_info(pdev,
-		"%s The iommu driver is not compatible with this device\n",
+		"%s The iommu driver is not compatible with this device, disabled!!!\n",
 		__func__);
 		return -ENODEV;
 	}
@@ -1283,7 +1308,7 @@ static int loongarch_iommu_probe(struct pci_dev *pdev,
 	}
 
 	ret = iommu_device_sysfs_add(&iommu->iommu_dev, &pdev->dev,
-		       NULL, "ivhd-%#x", iommu->devid);
+			NULL, "ivhd-%#x-%#x", iommu->segment, iommu->devid);
 	iommu_device_register(&iommu->iommu_dev, &la_iommu_ops, NULL);
 	return 0;
 
@@ -1655,7 +1680,7 @@ static int __init init_iommu_all(struct acpi_table_header *table)
 
 /**
  * get_highest_supported_ivhd_type - Look up the appropriate IVHD type
- * @ivrs          Pointer to the IVRS header
+ * @ivrs	Pointer to the IVRS header
  *
  * This function search through all IVDB of the maximum supported IVHD
  */
@@ -1787,6 +1812,7 @@ static const struct pci_device_id loongson_iommu_pci_tbl[] = {
 	{ PCI_DEVICE(0x14, 0x7a1f) },
 	{ 0, }
 };
+MODULE_DEVICE_TABLE(pci, loongson_iommu_pci_tbl);
 
 static struct pci_driver loongarch_iommu_driver = {
 	.name = "loongarch-iommu",

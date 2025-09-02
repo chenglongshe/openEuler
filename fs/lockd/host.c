@@ -165,6 +165,10 @@ static struct nlm_host *nlm_alloc_host(struct nlm_lookup_host_info *ni,
 	host->net	   = ni->net;
 	host->h_cred	   = get_cred(ni->cred);
 	strscpy(host->nodename, utsname()->nodename, sizeof(host->nodename));
+#if IS_ENABLED(CONFIG_ENFS)
+	host->enfs_flag = 0;
+	host->h_last_reclaim_time = 0;
+#endif
 
 out:
 	return host;
@@ -428,12 +432,24 @@ struct rpc_clnt *
 nlm_bind_host(struct nlm_host *host)
 {
 	struct rpc_clnt	*clnt;
+#if IS_ENABLED(CONFIG_ENFS)
+	bool is_rebuild = false;
+#endif
 
 	dprintk("lockd: nlm_bind_host %s (%s)\n",
 			host->h_name, host->h_addrbuf);
 
 	/* Lock host handle */
 	mutex_lock(&host->h_mutex);
+
+#if IS_ENABLED(CONFIG_ENFS)
+	if (host->h_rpcclnt && (host->enfs_flag & ENFS_NEED_REBUILD_NLM_XPRT)) {
+		rpc_release_client(host->h_rpcclnt);
+		host->enfs_flag &= ~ENFS_NEED_REBUILD_NLM_XPRT;
+		host->h_rpcclnt = NULL;
+		is_rebuild = true;
+	}
+#endif
 
 	/* If we've already created an RPC client, check whether
 	 * RPC rebind is required
@@ -475,6 +491,10 @@ nlm_bind_host(struct nlm_host *host)
 			args.flags |= RPC_CLNT_CREATE_NONPRIVPORT;
 		if (host->h_srcaddrlen)
 			args.saddress = nlm_srcaddr(host);
+#if IS_ENABLED(CONFIG_ENFS)
+		if (is_rebuild)
+			args.nodename = host->nodename;
+#endif
 
 		clnt = rpc_create(&args);
 		if (!IS_ERR(clnt))

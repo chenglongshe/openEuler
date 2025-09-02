@@ -36,8 +36,8 @@
 /** Default max number of pages that can be used in a single read request */
 #define FUSE_DEFAULT_MAX_PAGES_PER_REQ 32
 
-/** Maximum of max_pages received in init_out */
-#define FUSE_MAX_MAX_PAGES 256
+/** Maximum number of outstanding background requests */
+#define FUSE_DEFAULT_MAX_BACKGROUND 12
 
 /** Bias for fi->writectr, meaning new writepages must not be sent */
 #define FUSE_NOWRITE INT_MIN
@@ -47,6 +47,9 @@
 
 /** Number of dentries for each connection in the control filesystem */
 #define FUSE_CTL_NUM_DENTRIES 5
+
+/** Maximum of max_pages received in init_out */
+extern unsigned int fuse_max_pages_limit;
 
 /** List of active connections */
 extern struct list_head fuse_conn_list;
@@ -75,6 +78,16 @@ struct fuse_submount_lookup {
 
 	/** The request used for sending the FORGET message */
 	struct fuse_forget_link *forget;
+};
+
+/** Container for data related to mapping to backing file */
+struct fuse_backing {
+	struct file *file;
+	struct cred *cred;
+
+	/** refcount */
+	refcount_t count;
+	struct rcu_head rcu;
 };
 
 /** FUSE inode */
@@ -112,7 +125,7 @@ struct fuse_inode {
 	u64 attr_version;
 
 	union {
-		/* Write related fields (regular file only) */
+		/* read/write io cache (regular file only) */
 		struct {
 			/* Files usable in writepage.  Protected by fi->lock */
 			struct list_head write_files;
@@ -124,8 +137,14 @@ struct fuse_inode {
 			 * (FUSE_NOWRITE) means more writes are blocked */
 			int writectr;
 
+			/** Number of files/maps using page cache */
+			int iocachectr;
+
 			/* Waitq for writepage completion */
 			wait_queue_head_t page_waitq;
+
+			/* waitq for direct-io completion */
+			wait_queue_head_t direct_io_waitq;
 
 			/* List of writepage requestst (pending or sent) */
 			struct rb_root writepages;
@@ -174,6 +193,10 @@ struct fuse_inode {
 #endif
 	/** Submount specific lookup tracking */
 	struct fuse_submount_lookup *submount_lookup;
+#ifdef CONFIG_FUSE_PASSTHROUGH
+	/** Reference to backing file in passthrough mode */
+	struct fuse_backing *fb;
+#endif
 
 	KABI_RESERVE(1)
 };
@@ -190,19 +213,21 @@ enum {
 	FUSE_I_BAD,
 	/* Has btime */
 	FUSE_I_BTIME,
+	/* Wants or already has page cache IO */
+	FUSE_I_CACHE_IO_MODE,
 };
 
 struct fuse_conn;
 struct fuse_mount;
-struct fuse_release_args;
+union fuse_file_args;
 
 /** FUSE specific file data */
 struct fuse_file {
 	/** Fuse connection for this file */
 	struct fuse_mount *fm;
 
-	/* Argument space reserved for release */
-	struct fuse_release_args *release_args;
+	/* Argument space reserved for open/release */
+	union fuse_file_args *args;
 
 	/** Kernel file handle guaranteed to be unique */
 	u64 kh;
@@ -246,6 +271,15 @@ struct fuse_file {
 
 	/** Wait queue head for poll */
 	wait_queue_head_t poll_wait;
+
+	/** Does file hold a fi->iocachectr refcount? */
+	enum { IOM_NONE, IOM_CACHED, IOM_UNCACHED } iomode;
+
+#ifdef CONFIG_FUSE_PASSTHROUGH
+	/** Reference to backing file in passthrough mode */
+	struct file *passthrough;
+	const struct cred *cred;
+#endif
 
 	/** Has flock been performed on this file? */
 	bool flock:1;
@@ -299,6 +333,19 @@ struct fuse_args_pages {
 	struct page **pages;
 	struct fuse_page_desc *descs;
 	unsigned int num_pages;
+};
+
+struct fuse_release_args {
+	struct fuse_args args;
+	struct fuse_release_in inarg;
+	struct inode *inode;
+};
+
+union fuse_file_args {
+	/* Used during open() */
+	struct fuse_open_out open_outarg;
+	/* Used during release() */
+	struct fuse_release_args release_args;
 };
 
 #define FUSE_ARGS(args) struct fuse_args args = {}
@@ -416,22 +463,19 @@ struct fuse_iqueue;
  */
 struct fuse_iqueue_ops {
 	/**
-	 * Signal that a forget has been queued
+	 * Send one forget
 	 */
-	void (*wake_forget_and_unlock)(struct fuse_iqueue *fiq)
-		__releases(fiq->lock);
+	void (*send_forget)(struct fuse_iqueue *fiq, struct fuse_forget_link *link);
 
 	/**
-	 * Signal that an INTERRUPT request has been queued
+	 * Send interrupt for request
 	 */
-	void (*wake_interrupt_and_unlock)(struct fuse_iqueue *fiq)
-		__releases(fiq->lock);
+	void (*send_interrupt)(struct fuse_iqueue *fiq, struct fuse_req *req);
 
 	/**
-	 * Signal that a request has been queued
+	 * Send one request
 	 */
-	void (*wake_pending_and_unlock)(struct fuse_iqueue *fiq)
-		__releases(fiq->lock);
+	void (*send_req)(struct fuse_iqueue *fiq, struct fuse_req *req);
 
 	/**
 	 * Clean up when fuse_iqueue is destroyed
@@ -596,6 +640,9 @@ struct fuse_conn {
 	/** Maximum write size */
 	unsigned max_write;
 
+	/* Maxmum number of pages that write request should be aligned with */
+	unsigned int write_align_pages;
+
 	/** Maximum number of pages that can be used in a single request */
 	unsigned int max_pages;
 
@@ -620,11 +667,18 @@ struct fuse_conn {
 	/** Number of requests currently in the background */
 	unsigned num_background;
 
-	/** Number of background requests currently queued for userspace */
-	unsigned active_background;
+	/*
+	 * Number of background requests currently queued for userspace.
+	 * active_background[WRITE] for WRITE requests, and
+	 * active_background[READ] for others.
+	 */
+	unsigned active_background[2];
 
-	/** The list of background requests set aside for later queuing */
-	struct list_head bg_queue;
+	/*
+	 * The list of background requests set aside for later queuing.
+	 * bg_queue[WRITE] for WRITE requests, bg_queue[READ] for others.
+	 */
+	struct list_head bg_queue[2];
 
 	/** Protects: max_background, congestion_threshold, num_background,
 	 * active_background, bg_queue, blocked */
@@ -823,11 +877,23 @@ struct fuse_conn {
 	/* Relax restrictions to allow shared mmap in FOPEN_DIRECT_IO mode */
 	unsigned int direct_io_allow_mmap:1;
 
+	/* separate background queue for WRITE requests and the others */
+	unsigned int separate_background:1;
+
 	/* Is statx not implemented by fs? */
 	unsigned int no_statx:1;
 
 	/* Use pages instead of pointer for kernel I/O */
 	unsigned int use_pages_for_kvec_io:1;
+
+	/** Passthrough support for read/write IO */
+	unsigned int passthrough:1;
+
+	/* write reques is aligned on max_write boundary */
+	unsigned int write_alignment:1;
+
+	/** Maximum stack depth for passthrough backing files */
+	int max_stack_depth;
 
 	/** The number of requests waiting for completion */
 	atomic_t num_waiting;
@@ -878,6 +944,11 @@ struct fuse_conn {
 
 	/* New writepages go into this bucket */
 	struct fuse_sync_bucket __rcu *curr_bucket;
+
+#ifdef CONFIG_FUSE_PASSTHROUGH
+	/** IDR for backing files ids */
+	struct idr backing_files_map;
+#endif
 
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
@@ -1019,10 +1090,6 @@ void fuse_queue_forget(struct fuse_conn *fc, struct fuse_forget_link *forget,
 
 struct fuse_forget_link *fuse_alloc_forget(void);
 
-struct fuse_forget_link *fuse_dequeue_forget(struct fuse_iqueue *fiq,
-					     unsigned int max,
-					     unsigned int *countp);
-
 /*
  * Initialize READ or READDIR request
  */
@@ -1047,14 +1114,9 @@ void fuse_read_args_fill(struct fuse_io_args *ia, struct file *file, loff_t pos,
 			 size_t count, int opcode);
 
 
-/**
- * Send OPEN or OPENDIR request
- */
-int fuse_open_common(struct inode *inode, struct file *file, bool isdir);
-
-struct fuse_file *fuse_file_alloc(struct fuse_mount *fm);
+struct fuse_file *fuse_file_alloc(struct fuse_mount *fm, bool release);
 void fuse_file_free(struct fuse_file *ff);
-void fuse_finish_open(struct inode *inode, struct file *file);
+int fuse_finish_open(struct inode *inode, struct file *file);
 
 void fuse_sync_release(struct fuse_inode *fi, struct fuse_file *ff,
 		       unsigned int flags);
@@ -1364,11 +1426,91 @@ int fuse_fileattr_get(struct dentry *dentry, struct fileattr *fa);
 int fuse_fileattr_set(struct mnt_idmap *idmap,
 		      struct dentry *dentry, struct fileattr *fa);
 
-/* file.c */
+/* iomode.c */
+int fuse_file_cached_io_open(struct inode *inode, struct fuse_file *ff);
+int fuse_inode_uncached_io_start(struct fuse_inode *fi,
+				 struct fuse_backing *fb);
+void fuse_inode_uncached_io_end(struct fuse_inode *fi);
 
+int fuse_file_io_open(struct file *file, struct inode *inode);
+void fuse_file_io_release(struct fuse_file *ff, struct inode *inode);
+
+/* file.c */
 struct fuse_file *fuse_file_open(struct fuse_mount *fm, u64 nodeid,
 				 unsigned int open_flags, bool isdir);
 void fuse_file_release(struct inode *inode, struct fuse_file *ff,
 		       unsigned int open_flags, fl_owner_t id, bool isdir);
+
+/* passthrough.c */
+static inline struct fuse_backing *fuse_inode_backing(struct fuse_inode *fi)
+{
+#ifdef CONFIG_FUSE_PASSTHROUGH
+	return READ_ONCE(fi->fb);
+#else
+	return NULL;
+#endif
+}
+
+static inline struct fuse_backing *fuse_inode_backing_set(struct fuse_inode *fi,
+							  struct fuse_backing *fb)
+{
+#ifdef CONFIG_FUSE_PASSTHROUGH
+	return xchg(&fi->fb, fb);
+#else
+	return NULL;
+#endif
+}
+
+#ifdef CONFIG_FUSE_PASSTHROUGH
+struct fuse_backing *fuse_backing_get(struct fuse_backing *fb);
+void fuse_backing_put(struct fuse_backing *fb);
+#else
+
+static inline struct fuse_backing *fuse_backing_get(struct fuse_backing *fb)
+{
+	return NULL;
+}
+
+static inline void fuse_backing_put(struct fuse_backing *fb)
+{
+}
+#endif
+
+void fuse_backing_files_init(struct fuse_conn *fc);
+void fuse_backing_files_free(struct fuse_conn *fc);
+int fuse_backing_open(struct fuse_conn *fc, struct fuse_backing_map *map);
+int fuse_backing_close(struct fuse_conn *fc, int backing_id);
+
+struct fuse_backing *fuse_passthrough_open(struct file *file,
+					   struct inode *inode,
+					   int backing_id);
+void fuse_passthrough_release(struct fuse_file *ff, struct fuse_backing *fb);
+
+static inline struct file *fuse_file_passthrough(struct fuse_file *ff)
+{
+#ifdef CONFIG_FUSE_PASSTHROUGH
+	return ff->passthrough;
+#else
+	return NULL;
+#endif
+}
+
+ssize_t fuse_passthrough_read_iter(struct kiocb *iocb, struct iov_iter *iter);
+ssize_t fuse_passthrough_write_iter(struct kiocb *iocb, struct iov_iter *iter);
+ssize_t fuse_passthrough_splice_read(struct file *in, loff_t *ppos,
+				     struct pipe_inode_info *pipe,
+				     size_t len, unsigned int flags);
+ssize_t fuse_passthrough_splice_write(struct pipe_inode_info *pipe,
+				      struct file *out, loff_t *ppos,
+				      size_t len, unsigned int flags);
+ssize_t fuse_passthrough_mmap(struct file *file, struct vm_area_struct *vma);
+
+#ifdef CONFIG_SYSCTL
+extern int fuse_sysctl_register(void);
+extern void fuse_sysctl_unregister(void);
+#else
+#define fuse_sysctl_register()		(0)
+#define fuse_sysctl_unregister()	do { } while (0)
+#endif /* CONFIG_SYSCTL */
 
 #endif /* _FS_FUSE_I_H */

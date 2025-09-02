@@ -132,7 +132,7 @@ EXPORT_SYMBOL(screen_info);
 #ifdef CONFIG_HARDLOCKUP_DETECTOR_PERF
 u64 hw_nmi_get_sample_period(int watchdog_thresh)
 {
-	return get_cpu_freq() * watchdog_thresh;
+	return sunway_max_cpu_freq() * watchdog_thresh;
 }
 #endif
 
@@ -462,6 +462,31 @@ bool sunway_machine_is_compatible(const char *compat)
 	return !fdt_node_check_compatible(fdt, offset, compat);
 }
 
+#ifndef CONFIG_SUBARCH_C3B
+static void __init setup_run_mode(void)
+{
+	static_branch_disable(&run_mode_host_key);
+	static_branch_disable(&run_mode_guest_key);
+	static_branch_disable(&run_mode_emul_key);
+
+	if (sunway_machine_is_compatible("sunway,emulator")) {
+		static_branch_enable(&run_mode_emul_key);
+		pr_info("Mode: Emul\n");
+		return;
+	}
+
+	if (sunway_machine_is_compatible("sunway,virtual-machine") ||
+			(rvpcr() >> VPCR_SHIFT)) {
+		static_branch_enable(&run_mode_guest_key);
+		pr_info("Mode: Guest\n");
+		return;
+	}
+
+	static_branch_enable(&run_mode_host_key);
+	pr_info("Mode: Host\n");
+}
+#endif
+
 static void __init setup_firmware_fdt(void)
 {
 	void *dt_virt;
@@ -482,13 +507,17 @@ static void __init setup_firmware_fdt(void)
 	memblock_reserve(__boot_pa(dt_virt), fdt_totalsize(dt_virt));
 
 	if (!arch_dtb_verify(dt_virt, true) ||
-			!early_init_dt_scan(dt_virt)) {
+			!early_init_dt_scan(dt_virt, __boot_pa(dt_virt))) {
 		pr_crit("Invalid DTB(from firmware) at virtual address 0x%lx\n",
 				(unsigned long)dt_virt);
 
 		while (true)
 			cpu_relax();
 	}
+
+#ifndef CONFIG_SUBARCH_C3B
+	setup_run_mode();
+#endif
 
 	if (sunway_boot_magic == 0xDEED2024UL) {
 		/* Parse MCLK(Hz) from firmware DTB */
@@ -546,6 +575,12 @@ cmd_handle:
 	}
 }
 
+static void __init setup_cpu_caps(void)
+{
+	if (!IS_ENABLED(CONFIG_SUBARCH_C3B) && !is_junzhang_v1())
+		static_branch_enable(&hw_una_enabled);
+}
+
 static void __init setup_legacy_io(void)
 {
 	if (is_guest_or_emul()) {
@@ -577,7 +612,7 @@ static void __init setup_builtin_fdt(void)
 
 	dt_virt = (void *)__dtb_start;
 	if (!arch_dtb_verify(dt_virt, false) ||
-			!early_init_dt_verify(dt_virt)) {
+			!early_init_dt_verify(dt_virt, __boot_pa(dt_virt))) {
 		pr_crit("Invalid DTB(built-in) at virtual address 0x%lx\n",
 				(unsigned long)dt_virt);
 		while (true)
@@ -605,7 +640,7 @@ static void __init device_tree_init(void)
 }
 
 #ifdef CONFIG_SUBARCH_C3B
-static void __init setup_run_mode(void)
+static void __init setup_run_mode_legacy(void)
 {
 	if (*(unsigned long *)MM_SIZE) {
 		static_branch_disable(&run_mode_host_key);
@@ -626,28 +661,6 @@ static void __init setup_run_mode(void)
 		static_branch_disable(&run_mode_emul_key);
 	}
 }
-#elif CONFIG_SUBARCH_C4
-static void __init setup_run_mode(void)
-{
-	if (rvpcr() >> VPCR_SHIFT) {
-		pr_info("run mode: guest\n");
-		static_branch_disable(&run_mode_host_key);
-		static_branch_disable(&run_mode_emul_key);
-		static_branch_enable(&run_mode_guest_key);
-	} else if (sunway_boot_magic == 0xA2024) {
-		pr_info("run mode: emul\n");
-		static_branch_disable(&run_mode_host_key);
-		static_branch_disable(&run_mode_guest_key);
-		static_branch_enable(&run_mode_emul_key);
-		sunway_boot_magic = 0xDEED2024;
-	} else {
-		pr_info("run mode: host\n");
-		static_branch_disable(&run_mode_guest_key);
-		static_branch_disable(&run_mode_emul_key);
-		static_branch_enable(&run_mode_host_key);
-	}
-
-}
 #endif
 
 void __init
@@ -660,13 +673,19 @@ setup_arch(char **cmdline_p)
 	trap_init();
 
 	jump_label_init();
-	setup_run_mode();
+
+#ifdef CONFIG_SUBARCH_C3B
+	setup_run_mode_legacy();
+#endif
 	setup_chip_ops();
 
 	setup_sched_clock();
 
 	/* Early initialization for device tree */
 	setup_firmware_fdt();
+
+	/* Now we know who we are, setup caps */
+	setup_cpu_caps();
 
 	/* Now we get the final boot_command_line */
 	*cmdline_p = boot_command_line;
@@ -745,6 +764,10 @@ setup_arch(char **cmdline_p)
 
 	/* Default root filesystem to sda2.  */
 	ROOT_DEV = MKDEV(SCSI_DISK0_MAJOR, 2);
+
+#ifdef CONFIG_PARAVIRT_SPINLOCKS
+	pv_qspinlock_init();
+#endif
 }
 
 static int

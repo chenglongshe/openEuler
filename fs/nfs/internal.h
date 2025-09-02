@@ -11,7 +11,7 @@
 #include <linux/nfs_page.h>
 #include <linux/wait_bit.h>
 
-#define NFS_SB_MASK (SB_NOSUID|SB_NODEV|SB_NOEXEC|SB_SYNCHRONOUS)
+#define NFS_SB_MASK (SB_RDONLY|SB_NOSUID|SB_NODEV|SB_NOEXEC|SB_SYNCHRONOUS)
 
 extern const struct export_operations nfs_export_ops;
 
@@ -84,6 +84,9 @@ struct nfs_client_initdata {
 	struct xprtsec_parms xprtsec;
 	unsigned long connect_timeout;
 	unsigned long reconnect_timeout;
+#if IS_ENABLED(CONFIG_ENFS)
+	void *enfs_option; /* struct multipath_mount_options */
+#endif
 };
 
 /*
@@ -151,6 +154,9 @@ struct nfs_fs_context {
 		struct nfs_fattr	*fattr;
 		unsigned int		inherited_bsize;
 	} clone_data;
+#if IS_ENABLED(CONFIG_ENFS)
+	void *enfs_option; /* struct multipath_mount_options */
+#endif
 };
 
 #define nfs_errorf(fc, fmt, ...) ((fc)->log.log ?		\

@@ -503,8 +503,6 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 	switch (new_state) {
 	case NVME_CTRL_LIVE:
 		switch (old_state) {
-		case NVME_CTRL_NEW:
-		case NVME_CTRL_RESETTING:
 		case NVME_CTRL_CONNECTING:
 			changed = true;
 			fallthrough;
@@ -4112,14 +4110,30 @@ static bool nvme_ctrl_pp_status(struct nvme_ctrl *ctrl)
 static void nvme_get_fw_slot_info(struct nvme_ctrl *ctrl)
 {
 	struct nvme_fw_slot_info_log *log;
+	u8 next_fw_slot, cur_fw_slot;
 
 	log = kmalloc(sizeof(*log), GFP_KERNEL);
 	if (!log)
 		return;
 
 	if (nvme_get_log(ctrl, NVME_NSID_ALL, NVME_LOG_FW_SLOT, 0, NVME_CSI_NVM,
-			log, sizeof(*log), 0))
+			 log, sizeof(*log), 0)) {
 		dev_warn(ctrl->device, "Get FW SLOT INFO log error\n");
+		goto out_free_log;
+	}
+
+	cur_fw_slot = log->afi & 0x7;
+	next_fw_slot = (log->afi & 0x70) >> 4;
+	if (!cur_fw_slot || (next_fw_slot && (cur_fw_slot != next_fw_slot))) {
+		dev_info(ctrl->device,
+			 "Firmware is activated after next Controller Level Reset\n");
+		goto out_free_log;
+	}
+
+	memcpy(ctrl->subsys->firmware_rev, &log->frs[cur_fw_slot - 1],
+		sizeof(ctrl->subsys->firmware_rev));
+
+out_free_log:
 	kfree(log);
 }
 
@@ -4149,7 +4163,8 @@ static void nvme_fw_act_work(struct work_struct *work)
 		msleep(100);
 	}
 
-	if (!nvme_change_ctrl_state(ctrl, NVME_CTRL_LIVE))
+	if (!nvme_change_ctrl_state(ctrl, NVME_CTRL_CONNECTING) ||
+	    !nvme_change_ctrl_state(ctrl, NVME_CTRL_LIVE))
 		return;
 
 	nvme_unquiesce_io_queues(ctrl);

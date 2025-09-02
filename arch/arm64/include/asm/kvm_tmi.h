@@ -32,6 +32,7 @@
 #define TMI_ERROR_CVM_POWEROFF		12
 #define TMI_ERROR_TTT_CREATED		13
 #define TMI_ERROR_TTT_DESTROY_AGAIN	14
+#define TMI_ERROR_STE_CREATED		15
 
 #define TMI_RETURN_STATUS(ret)		((ret) & 0xFF)
 #define TMI_RETURN_INDEX(ret)		(((ret) >> 8) & 0xFF)
@@ -69,25 +70,37 @@ struct tmi_tec_params {
 
 struct tmi_smmu_ste_params {
 	uint64_t sid;        /* stream id */
-	uint64_t smmu_id;    /* smmu id */
-	uint16_t smmu_vmid;  /* smmu vmid */
+	uint64_t smmu_id;    /* SMMU id */
+	uint16_t smmu_vmid;  /* SMMU vmid */
+};
+
+struct tmi_device_create_params {
+	uint64_t sid;        /* stream id */
+	uint64_t smmu_id;    /* SMMU id */
+	uint64_t s2ttb;      /* Address of Translation Table base */
+	int s2sl0;           /* Starting level of stage 2 translation table walk */
+	unsigned int s2t0sz; /* Size of IPA input region covered by stage 2 translation table */
+	uint16_t root_bd;    /* Root bd */
+	uint16_t s2vmid;     /* SMMU id */
+	bool host;           /* True: Device driver is binded to host */
+	bool new_vf;         /* True: Secure VF to be created */
 };
 
 struct tmi_smmu_cfg_params {
-	uint64_t smmu_id;    /* smmu id */
-	uint64_t ioaddr;     /* smmu base address */
+	uint64_t smmu_id;               /* SMMU id */
+	uint64_t ioaddr;                /* SMMU base address */
 	uint8_t strtab_base_RA_bit : 1; /* Read-Allocate hint */
-	uint8_t q_base_RA_WA_bit : 1; /* Write-Allocate hint*/
-	uint8_t is_cmd_queue : 1;    /* Whether to configure command queue */
+	uint8_t q_base_RA_WA_bit : 1;   /* Write-Allocate hint*/
+	uint8_t is_cmd_queue : 1;       /* Whether to configure command queue */
 };
 
 #define TMI_SMMU_CMD_QUEUE  1
 #define TMI_SMMU_EVT_QUEUE  2
 struct tmi_smmu_queue_params {
-	uint64_t smmu_base_addr;       /* smmu base address */
-	uint64_t size;       /* queue size */
-	uint64_t smmu_id;    /* smmu id */
-	uint64_t type;       /* cmdq or evtq */
+	uint64_t smmu_base_addr;       /* SMMU base address */
+	uint64_t size;                 /* queue size */
+	uint64_t smmu_id;              /* SMMU id */
+	uint64_t type;                 /* cmdq or evtq */
 };
 
 #define MAX_DEV_PER_PORT 256
@@ -97,6 +110,7 @@ struct tmi_dev_delegate_params {
 	uint16_t num_dev; /* number of attachable devices */
 	uint32_t _reserved; /* padding for 64-bit alignment */
 	uint16_t devs[MAX_DEV_PER_PORT]; /* BDF of each attachable device */
+	uint16_t last_batch; /* Is this the last batch in the sequence */
 };
 
 #define TEC_ENTRY_FLAG_EMUL_MMIO        (1UL << 0U)
@@ -146,8 +160,8 @@ struct tmi_tec_exit {
 };
 
 struct tmi_tec_run {
-	struct tmi_tec_entry tec_entry;
-	struct tmi_tec_exit tec_exit;
+	struct tmi_tec_entry enter;
+	struct tmi_tec_exit exit;
 };
 
 #define TMI_FNUM_MIN_VALUE	U(0x150)
@@ -235,6 +249,7 @@ struct tmi_tec_run {
 #define TMI_FNUM_INF_TEST               U(0x270)
 #define TMI_FNUM_KAE_INIT               U(0x273)
 #define TMI_FNUM_KAE_ENABLE             U(0x274)
+#define TMI_FNUM_INFO_SHOW              U(0x275)
 
 #define TMI_FNUM_SMMU_QUEUE_CREATE      U(0x277)
 #define TMI_FNUM_SMMU_QUEUE_WRITE       U(0x278)
@@ -251,6 +266,8 @@ struct tmi_tec_run {
 #define TMI_FNUM_SMMU_READ              U(0x283)
 #define TMI_FNUM_SMMU_PCIE_CORE_CHECK   U(0x284)
 #define TMI_FNUM_DEV_TTT_CREATE         U(0x285)
+#define TMI_FNUM_DEVICE_CREATE          U(0x286)
+#define TMI_FNUM_DEVICE_DESTROY         U(0x287)
 
 /* TMI SMC64 PIDs handled by the SPMD */
 #define TMI_TMM_VERSION_REQ             TMI_FID(SMC_64, TMI_FNUM_VERSION_REQ)
@@ -272,6 +289,7 @@ struct tmi_tec_run {
 #define TMI_TMM_INF_TEST                TMI_FID(SMC_64, TMI_FNUM_INF_TEST)
 #define TMI_TMM_KAE_INIT                TMI_FID(SMC_64, TMI_FNUM_KAE_INIT)
 #define TMI_TMM_KAE_ENABLE              TMI_FID(SMC_64, TMI_FNUM_KAE_ENABLE)
+#define TMI_TMM_INFO_SHOW               TMI_FID(SMC_64, TMI_FNUM_INFO_SHOW)
 
 #define TMI_TMM_SMMU_QUEUE_CREATE       TMI_FID(SMC_64, TMI_FNUM_SMMU_QUEUE_CREATE)
 #define TMI_TMM_SMMU_QUEUE_WRITE        TMI_FID(SMC_64, TMI_FNUM_SMMU_QUEUE_WRITE)
@@ -288,6 +306,8 @@ struct tmi_tec_run {
 #define TMI_TMM_SMMU_READ               TMI_FID(SMC_64, TMI_FNUM_SMMU_READ)
 #define TMI_TMM_SMMU_PCIE_CORE_CHECK    TMI_FID(SMC_64, TMI_FNUM_SMMU_PCIE_CORE_CHECK)
 #define TMI_TMM_DEV_TTT_CREATE          TMI_FID(SMC_64, TMI_FNUM_DEV_TTT_CREATE)
+#define TMI_TMM_DEV_CREATE              TMI_FID(SMC_64, TMI_FNUM_DEVICE_CREATE)
+#define TMI_TMM_DEV_DESTROY             TMI_FID(SMC_64, TMI_FNUM_DEVICE_DESTROY)
 
 #define TMI_ABI_VERSION_GET_MAJOR(_version) ((_version) >> 16)
 #define TMI_ABI_VERSION_GET_MINOR(_version) ((_version) & 0xFFFF)
@@ -415,8 +435,11 @@ u64 tmi_smmu_write(u64 smmu_base, u64 reg_offset, u64 val, u64 bits);
 u64 tmi_smmu_read(u64 smmu_base, u64 reg_offset, u64 bits);
 u64 tmi_kae_init(void);
 u64 tmi_kae_enable(u64 rd, u64 numa_set, u64 is_enable);
+u64 tmi_tmm_info_show(u64 option, u64 tmm_info_addr);
 
-u64 mmio_va_to_pa(void *addr);
+u64 tmi_dev_create(u64 params);
+u64 tmi_dev_destroy(u64 dev_num, u64 clean);
+u64 mmio_va_to_pa(const void __iomem *addr);
 int virtcca_io_mem_abort(struct kvm_vcpu *vcpu, unsigned long hva, phys_addr_t fault_ipa);
 void kvm_cvm_vcpu_put(struct kvm_vcpu *vcpu);
 int kvm_load_user_data(struct kvm *kvm, unsigned long arg);
@@ -429,5 +452,6 @@ int kvm_enable_virtcca_cvm(struct kvm *kvm);
 int kvm_cvm_map_ipa(struct kvm *kvm, phys_addr_t ipa, kvm_pfn_t pfn,
 	unsigned long map_size, enum kvm_pgtable_prot prot, int ret);
 void virtcca_cvm_set_secure_flag(void *vdev, void *info);
+bool is_virtcca_available(void);
 #endif
 #endif

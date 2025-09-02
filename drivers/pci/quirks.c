@@ -32,6 +32,9 @@
 #include <linux/suspend.h>
 #include <linux/switchtec.h>
 #include "pci.h"
+#ifdef CONFIG_PSWIOTLB
+#include <linux/pswiotlb.h>
+#endif
 
 /*
  * Retrain the link of a downstream PCIe port by hand if necessary.
@@ -4514,8 +4517,6 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_BROADCOM, 0x9000,
 				quirk_bridge_cavm_thrx2_pcie_root);
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_BROADCOM, 0x9084,
 				quirk_bridge_cavm_thrx2_pcie_root);
-DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_LOONGSON, 0x3c09,
-				quirk_bridge_cavm_thrx2_pcie_root);
 
 /*
  * Intersil/Techwell TW686[4589]-based video capture cards have an empty (zero)
@@ -4822,7 +4823,7 @@ static int pci_quirk_zhaoxin_pcie_ports_acs(struct pci_dev *dev, u16 acs_flags)
 	switch (dev->device) {
 	case 0x0710 ... 0x071e:
 	case 0x0721:
-	case 0x0723 ... 0x0752:
+	case 0x0723 ... 0x075e:
 		return pci_acs_ctrl_enabled(acs_flags,
 			PCI_ACS_SV | PCI_ACS_RR | PCI_ACS_CR | PCI_ACS_UF);
 	}
@@ -5085,6 +5086,18 @@ static int  pci_quirk_wangxun_nic_acs(struct pci_dev *dev, u16 acs_flags)
 	return false;
 }
 
+static int pci_quirk_loongson_acs(struct pci_dev *dev, u16 acs_flags)
+{
+	/*
+	 * Loongson PCIe Root Ports don't advertise an ACS capability, but
+	 * they do not allow peer-to-peer transactions between Root Ports.
+	 * Allow each Root Port to be in a separate IOMMU group by masking
+	 * SV/RR/CR/UF bits.
+	 */
+	return pci_acs_ctrl_enabled(acs_flags,
+		PCI_ACS_SV | PCI_ACS_RR | PCI_ACS_CR | PCI_ACS_UF);
+}
+
 static const struct pci_dev_acs_enabled {
 	u16 vendor;
 	u16 device;
@@ -5204,6 +5217,17 @@ static const struct pci_dev_acs_enabled {
 	{ PCI_VENDOR_ID_BROADCOM, 0x1762, pci_quirk_mf_endpoint_acs },
 	{ PCI_VENDOR_ID_BROADCOM, 0x1763, pci_quirk_mf_endpoint_acs },
 	{ PCI_VENDOR_ID_BROADCOM, 0xD714, pci_quirk_brcm_acs },
+	/* Loongson PCIe Root Ports */
+	{ PCI_VENDOR_ID_LOONGSON, 0x3C09, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x3C19, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x3C29, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x7A09, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x7A19, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x7A29, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x7A39, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x7A49, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x7A59, pci_quirk_loongson_acs },
+	{ PCI_VENDOR_ID_LOONGSON, 0x7A69, pci_quirk_loongson_acs },
 	/* Amazon Annapurna Labs */
 	{ PCI_VENDOR_ID_AMAZON_ANNAPURNA_LABS, 0x0031, pci_quirk_al_acs },
 	/* Zhaoxin multi-function devices */
@@ -5268,8 +5292,6 @@ static const struct pci_dev_acs_enabled {
 	{ PCI_VENDOR_ID_MUCSE, 0x1c61, pci_quirk_mf_endpoint_acs },
 	{ PCI_VENDOR_ID_MUCSE, 0x1083, pci_quirk_mf_endpoint_acs },
 	{ PCI_VENDOR_ID_MUCSE, 0x1c83, pci_quirk_mf_endpoint_acs },
-	{ PCI_VENDOR_ID_LOONGSON, 0x3c09, pci_quirk_xgene_acs},
-	{ PCI_VENDOR_ID_LOONGSON, 0x3c19, pci_quirk_xgene_acs},
 	{ 0 }
 };
 
@@ -6380,6 +6402,17 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0xa76e, dpc_log_size);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_XILINX, 0x5020, of_pci_make_dev_node);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_XILINX, 0x5021, of_pci_make_dev_node);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_REDHAT, 0x0005, of_pci_make_dev_node);
+
+void pci_configure_pswiotlb(struct pci_dev *dev, struct pci_bus *bus)
+{
+#ifdef CONFIG_PSWIOTLB
+	if ((pswiotlb_force_disable != true) &&
+		is_phytium_ps_socs()) {
+		pswiotlb_store_local_node(dev, bus);
+		dma_set_seg_boundary(&dev->dev, 0xffffffffffff);
+	}
+#endif
+}
 
 /*
  * Devices known to require a longer delay before first config space access

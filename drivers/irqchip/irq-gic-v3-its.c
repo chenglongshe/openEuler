@@ -12,12 +12,14 @@
 #include <linux/crash_dump.h>
 #include <linux/delay.h>
 #include <linux/efi.h>
+#include <linux/genalloc.h>
 #include <linux/interrupt.h>
 #include <linux/iommu.h>
 #include <linux/iopoll.h>
 #include <linux/irqdomain.h>
 #include <linux/list.h>
 #include <linux/log2.h>
+#include <linux/mem_encrypt.h>
 #include <linux/memblock.h>
 #include <linux/mm.h>
 #include <linux/msi.h>
@@ -27,13 +29,10 @@
 #include <linux/of_pci.h>
 #include <linux/of_platform.h>
 #include <linux/percpu.h>
+#include <linux/set_memory.h>
 #include <linux/slab.h>
 #include <linux/syscore_ops.h>
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-#include <linux/swiotlb.h>
-#include <asm/virtcca_cvm_guest.h>
 #include <linux/virtcca_cvm_domain.h>
-#endif
 
 #include <linux/irqchip.h>
 #include <linux/irqchip/arm-gic-v3.h>
@@ -50,6 +49,33 @@
 
 #ifdef CONFIG_VIRT_PLAT_DEV
 #include <linux/pci.h>
+
+static int iort_get_used_bus_bitmap(unsigned long **bus_bm, resource_size_t *len)
+{
+	resource_size_t idx;
+	/* PCIe bus has 8 bits */
+	const size_t BUS_MAX_NUM = 0x100;
+
+	if (bus_bm == NULL || len == NULL)
+		return -EINVAL;
+
+	*bus_bm = bitmap_zalloc(BUS_MAX_NUM, GFP_KERNEL);
+	if (*bus_bm == NULL)
+		return -ENOMEM;
+
+	*len = BUS_MAX_NUM;
+
+	if (iort_gen_used_DeviceID_bitmap(*bus_bm, *len)) {
+		bitmap_free(*bus_bm);
+		return -EINVAL;
+	}
+
+	pr_debug("generated bus bitmap :");
+	for (idx = 0; idx != BUS_MAX_NUM; ++idx)
+		pr_debug("idx[%llx] %x", idx, test_bit(idx, *bus_bm));
+
+	return 0;
+}
 
 /* a reserved bus id region */
 struct plat_rsv_buses {
@@ -75,56 +101,20 @@ struct rsv_devid_pool {
 static LIST_HEAD(rsv_devid_pools);
 static DEFINE_RAW_SPINLOCK(rsv_devid_pools_lock);
 
-/* Do we have usable rsv_devid_pool? Initialized to be true. */
-bool rsv_devid_pool_cap = true;
-static u8 rsv_buses_start, rsv_buses_count;
+/* Do we have usable rsv_devid_pool? Initialized to be false. */
+bool rsv_devid_pool_cap;
 
-static int __init rsv_buses_start_cfg(char *buf)
-{
-	return kstrtou8(buf, 0, &rsv_buses_start);
-}
-early_param("irqchip.gicv3_rsv_buses_start", rsv_buses_start_cfg);
-
-static int __init rsv_buses_count_cfg(char *buf)
-{
-	return kstrtou8(buf, 0, &rsv_buses_count);
-}
-early_param("irqchip.gicv3_rsv_buses_count", rsv_buses_count_cfg);
-
-static void get_rsv_buses_resource(struct plat_rsv_buses *buses)
-{
-	buses->start = rsv_buses_start;
-	buses->count = rsv_buses_count;
-
-	/*
-	 * FIXME: There is no architectural way to get the *correct*
-	 * reserved bus id info.
-	 *
-	 * The first thought is to increase the GITS_TYPER.Devbits for
-	 * the usage for virtualization, but this will break all
-	 * command layouts with DeviceID as an argument (e.g., INT).
-	 *
-	 * The second way is to decrease the GITS_TYPER.Devids so that
-	 * SW can pick the unused device IDs for use (these IDs should
-	 * actually be supported at HW level, though not exposed).
-	 * *Or* fetch the information with the help of firmware. They
-	 * are essentially the same way.
-	 */
-}
-
-static int probe_devid_pool_one(void)
+static int add_bus_range_to_pool(resource_size_t start_bus, resource_size_t end_bus)
 {
 	struct rsv_devid_pool *devid_pool;
 
 	devid_pool = kzalloc(sizeof(*devid_pool), GFP_KERNEL);
 	if (!devid_pool)
 		return -ENOMEM;
-
-	get_rsv_buses_resource(&devid_pool->buses);
 	raw_spin_lock_init(&devid_pool->devid_bm_lock);
 
-	devid_pool->start = PCI_DEVID(devid_pool->buses.start, 0);
-	devid_pool->end = PCI_DEVID(devid_pool->buses.start + devid_pool->buses.count, 0);
+	devid_pool->start = PCI_DEVID(start_bus, 0);
+	devid_pool->end = PCI_DEVID(end_bus, 0);
 
 	if (devid_pool->end == devid_pool->start) {
 		kfree(devid_pool);
@@ -132,16 +122,65 @@ static int probe_devid_pool_one(void)
 	}
 
 	devid_pool->devid_bm = bitmap_zalloc(devid_pool->end - devid_pool->start,
-					     GFP_KERNEL);
+										GFP_KERNEL);
 	if (!devid_pool->devid_bm) {
 		kfree(devid_pool);
 		return -ENOMEM;
 	}
-
-	raw_spin_lock(&rsv_devid_pools_lock);
+	/* here we need'nt get the rsv_devid_pools_lock. only the consumer needs. */
 	list_add(&devid_pool->entry, &rsv_devid_pools);
-	raw_spin_unlock(&rsv_devid_pools_lock);
 
+	pr_debug("ITS: add [%x-%x] to bus pool\n", devid_pool->start, devid_pool->end);
+	return 0;
+}
+
+static int probe_devid_pool_one(void)
+{
+	resource_size_t idx, begin_idx, end_idx, bm_len;
+	unsigned long *devid_bm;
+	bool found_begin = false, found_end = false;
+
+	if (iort_get_used_bus_bitmap(&devid_bm, &bm_len))
+		return -EINVAL;
+
+	for (idx = 0; idx != bm_len; ++idx) {
+		bool cur_bit_set = test_bit(idx, devid_bm);
+
+		if (!cur_bit_set && found_begin == false) {
+			/* found the empty bits begin */
+			begin_idx = idx;
+			found_begin = true;
+
+			/* for the case that first zero is last bit */
+			if (idx == bm_len - 1) {
+				/* found the empts bits end */
+				end_idx = bm_len;
+				found_end = true;
+			} else {
+				/* let's find the end */
+				continue;
+			}
+		} else if (cur_bit_set && found_begin == true) {
+			/* found the empts bits end */
+			end_idx = idx;
+			found_end = true;
+		} else if (idx == bm_len - 1 && found_begin == true) {
+			/* found the empts bits end */
+			end_idx = bm_len;
+			found_end = true;
+		} else {
+			/* nothing special found, all zero or all one, skip */
+			continue;
+		}
+
+		/* here we found the begin & end, let's build a pool and add to pool list */
+		add_bus_range_to_pool(begin_idx, end_idx);
+		found_begin = found_end = false;
+	}
+	bitmap_free(devid_bm);
+	/* here we need'nt get the rsv_devid_pools_lock. only the consumer needs. */
+	if (list_empty(&rsv_devid_pools))
+		return -EINVAL;
 	return 0;
 }
 #endif
@@ -293,6 +332,7 @@ struct its_device {
 	struct its_node		*its;
 	struct event_lpi_map	event_map;
 	void			*itt;
+	u32			itt_sz;
 	u32			nr_ites;
 	u32			device_id;
 	bool			shared;
@@ -388,109 +428,115 @@ static int alloc_devid_from_rsv_pools(struct rsv_devid_pool **devid_pool,
 #define gic_data_rdist_rd_base()	(gic_data_rdist()->rd_base)
 #define gic_data_rdist_vlpi_base()	(gic_data_rdist_rd_base() + SZ_128K)
 
-extern struct static_key_false ipiv_enable;
+static struct page *its_alloc_pages_node(int node, gfp_t gfp,
+					 unsigned int order)
+{
+	struct page *page;
+	int ret = 0;
+
+	if (virtcca_cvm_domain())
+		return virtcca_its_alloc_shared_pages_node(node, gfp, order);
+
+	page = alloc_pages_node(node, gfp, order);
+
+	if (!page)
+		return NULL;
+
+	ret = set_memory_decrypted((unsigned long)page_address(page),
+				   1 << order);
+	/*
+	 * If set_memory_decrypted() fails then we don't know what state the
+	 * page is in, so we can't free it. Instead we leak it.
+	 * set_memory_decrypted() will already have WARNed.
+	 */
+	if (ret)
+		return NULL;
+
+	return page;
+}
+
+static struct page *its_alloc_pages(gfp_t gfp, unsigned int order)
+{
+	return its_alloc_pages_node(NUMA_NO_NODE, gfp, order);
+}
+
+static void its_free_pages(void *addr, unsigned int order)
+{
+	if (virtcca_cvm_domain()) {
+		virtcca_its_free_shared_pages(addr, order);
+		return;
+	}
+
+	/*
+	 * If the memory cannot be encrypted again then we must leak the pages.
+	 * set_memory_encrypted() will already have WARNed.
+	 */
+	if (set_memory_encrypted((unsigned long)addr, 1 << order))
+		return;
+	free_pages((unsigned long)addr, order);
+}
+
+static struct gen_pool *itt_pool;
+
+static void *itt_alloc_pool(int node, int size)
+{
+	unsigned long addr;
+	struct page *page;
+
+	if (size >= PAGE_SIZE) {
+		page = its_alloc_pages_node(node, GFP_KERNEL | __GFP_ZERO, get_order(size));
+
+		return page ? page_address(page) : NULL;
+	}
+
+	do {
+		addr = gen_pool_alloc(itt_pool, size);
+		if (addr)
+			break;
+
+		page = its_alloc_pages_node(node, GFP_KERNEL | __GFP_ZERO, 0);
+		if (!page)
+			break;
+
+		gen_pool_add(itt_pool, (unsigned long)page_address(page), PAGE_SIZE, node);
+	} while (!addr);
+
+	return (void *)addr;
+}
+
+static void itt_free_pool(void *addr, int size)
+{
+	if (!addr)
+		return;
+
+	if (size >= PAGE_SIZE) {
+		its_free_pages(addr, get_order(size));
+		return;
+	}
+
+	gen_pool_free(itt_pool, (unsigned long)addr, size);
+}
+
+#ifdef CONFIG_ARM64_HISI_IPIV
+void __iomem *gic_data_rdist_get_vlpi_base(void)
+{
+	return gic_data_rdist_vlpi_base();
+}
+EXPORT_SYMBOL(gic_data_rdist_get_vlpi_base);
+#endif
 
 #ifdef CONFIG_VIRT_PLAT_DEV
 /*
  * Currently we only build *one* devid pool.
  */
-static int build_devid_pools(void)
+void build_devid_pools(void)
 {
-	struct its_node *its;
+	if (!probe_devid_pool_one())
+		rsv_devid_pool_cap = true;
 
-	its = list_first_entry(&its_nodes, struct its_node, entry);
-	if (readl_relaxed(its->base + GITS_IIDR) != 0x00051736)
-		return -EINVAL;
-
-	return probe_devid_pool_one();
+	if (rsv_devid_pool_cap)
+		pr_info("ITS: reserved device id pools enabled\n");
 }
-#endif
-
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-
-static struct device cvm_alloc_device;
-static LIST_HEAD(cvm_its_nodes);
-static raw_spinlock_t cvm_its_lock;
-
-struct its_device_order {
-	struct its_device *dev;
-	struct list_head entry;
-	int itt_order;
-};
-
-static inline struct page *its_alloc_shared_pages_node(int node, gfp_t gfp,
-			unsigned int order)
-{
-	return swiotlb_alloc(&cvm_alloc_device, (1 << order) * PAGE_SIZE);
-}
-
-static inline struct page *its_alloc_shared_pages(gfp_t gfp, unsigned int order)
-{
-	return its_alloc_shared_pages_node(NUMA_NO_NODE, gfp, order);
-}
-
-static void its_free_shared_pages(void *addr, int order)
-{
-	if (order < 0)
-		return;
-
-	swiotlb_free(&cvm_alloc_device, (struct page *)addr, (1 << order) * PAGE_SIZE);
-}
-
-static int add_its_device_order(struct its_device *dev, int itt_order)
-{
-	struct its_device_order *new;
-	unsigned long flags;
-
-	new = kmalloc(sizeof(struct its_device_order), GFP_KERNEL);
-	if (!new)
-		return -ENOMEM;
-	new->dev = dev;
-	new->itt_order = itt_order;
-	raw_spin_lock_irqsave(&cvm_its_lock, flags);
-	list_add_tail(&new->entry, &cvm_its_nodes);
-	raw_spin_unlock_irqrestore(&cvm_its_lock, flags);
-	return 0;
-}
-
-/* get its device order and then free its device order */
-static int get_its_device_order(struct its_device *dev)
-{
-	struct its_device_order *pos, *tmp;
-	unsigned long flags;
-	int itt_order = -1;
-
-	raw_spin_lock_irqsave(&cvm_its_lock, flags);
-	list_for_each_entry_safe(pos, tmp, &cvm_its_nodes, entry) {
-		if (pos->dev == dev) {
-			itt_order = pos->itt_order;
-			list_del(&pos->entry);
-			kfree(pos);
-			goto found;
-		}
-	}
-found:
-	raw_spin_unlock_irqrestore(&cvm_its_lock, flags);
-	return itt_order;
-}
-
-static void *its_alloc_shared_page_address(struct its_device *dev,
-			struct its_node *its, int sz)
-{
-	struct page *page;
-	int itt_order;
-
-	itt_order = get_order(sz);
-	if (add_its_device_order(dev, itt_order))
-		return NULL;
-
-	page = its_alloc_shared_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO,
-			   itt_order);
-	if (!page)
-		return NULL;
-	return (void *)page_address(page);
-}
-
 #endif
 
 /*
@@ -933,7 +979,6 @@ static struct its_collection *its_build_mapd_cmd(struct its_node *its,
 	u8 size = ilog2(desc->its_mapd_cmd.dev->nr_ites);
 
 	itt_addr = virt_to_phys(desc->its_mapd_cmd.dev->itt);
-	itt_addr = ALIGN(itt_addr, ITS_ITT_ALIGN);
 
 	its_encode_cmd(cmd, GITS_CMD_MAPD);
 	its_encode_devid(cmd, desc->its_mapd_cmd.dev->device_id);
@@ -2509,13 +2554,8 @@ static struct page *its_allocate_prop_table(gfp_t gfp_flags)
 {
 	struct page *prop_page;
 
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		prop_page = its_alloc_shared_pages(gfp_flags,
-			get_order(LPI_PROPBASE_SZ));
-	else
-#endif
-		prop_page = alloc_pages(gfp_flags, get_order(LPI_PROPBASE_SZ));
+	prop_page = its_alloc_pages(gfp_flags,
+				    get_order(LPI_PROPBASE_SZ));
 	if (!prop_page)
 		return NULL;
 
@@ -2526,14 +2566,7 @@ static struct page *its_allocate_prop_table(gfp_t gfp_flags)
 
 static void its_free_prop_table(struct page *prop_page)
 {
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		its_free_shared_pages(page_address(prop_page),
-			get_order(LPI_PROPBASE_SZ));
-	else
-#endif
-		free_pages((unsigned long)page_address(prop_page),
-			get_order(LPI_PROPBASE_SZ));
+	its_free_pages(page_address(prop_page), get_order(LPI_PROPBASE_SZ));
 }
 
 static bool gic_check_reserved_range(phys_addr_t addr, unsigned long size)
@@ -2655,13 +2688,7 @@ static int its_setup_baser(struct its_node *its, struct its_baser *baser,
 		order = get_order(GITS_BASER_PAGES_MAX * psz);
 	}
 
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		page = its_alloc_shared_pages_node(its->numa_node,
-			GFP_KERNEL | __GFP_ZERO, order);
-	else
-#endif
-		page = alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO, order);
+	page = its_alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO, order);
 	if (!page)
 		return -ENOMEM;
 
@@ -2674,12 +2701,7 @@ static int its_setup_baser(struct its_node *its, struct its_baser *baser,
 		/* 52bit PA is supported only when PageSize=64K */
 		if (psz != SZ_64K) {
 			pr_err("ITS: no 52bit PA support when psz=%d\n", psz);
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-			if (is_virtcca_cvm_world())
-				its_free_shared_pages(base, order);
-			else
-#endif
-				free_pages((unsigned long)base, order);
+			its_free_pages(base, order);
 			return -ENXIO;
 		}
 
@@ -2735,12 +2757,7 @@ retry_baser:
 		pr_err("ITS@%pa: %s doesn't stick: %llx %llx\n",
 		       &its->phys_base, its_base_type_string[type],
 		       val, tmp);
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-		if (is_virtcca_cvm_world())
-			its_free_shared_pages(base, order);
-		else
-#endif
-			free_pages((unsigned long)base, order);
+		its_free_pages(base, order);
 		return -ENXIO;
 	}
 
@@ -2879,14 +2896,7 @@ static void its_free_tables(struct its_node *its)
 
 	for (i = 0; i < GITS_BASER_NR_REGS; i++) {
 		if (its->tables[i].base) {
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-			if (is_virtcca_cvm_world())
-				its_free_shared_pages(its->tables[i].base,
-					its->tables[i].order);
-			else
-#endif
-				free_pages((unsigned long)its->tables[i].base,
-					   its->tables[i].order);
+			its_free_pages(its->tables[i].base, its->tables[i].order);
 			its->tables[i].base = NULL;
 		}
 	}
@@ -3156,13 +3166,7 @@ static bool allocate_vpe_l2_table(int cpu, u32 id)
 
 	/* Allocate memory for 2nd level table */
 	if (!table[idx]) {
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-		if (is_virtcca_cvm_world())
-			page = its_alloc_shared_pages(GFP_KERNEL | __GFP_ZERO,
-				get_order(psz));
-		else
-#endif
-			page = alloc_pages(GFP_KERNEL | __GFP_ZERO, get_order(psz));
+		page = its_alloc_pages(GFP_KERNEL | __GFP_ZERO, get_order(psz));
 		if (!page)
 			return false;
 
@@ -3285,13 +3289,7 @@ static int allocate_vpe_l1_table(void)
 
 	pr_debug("np = %d, npg = %lld, psz = %d, epp = %d, esz = %d\n",
 		 np, npg, psz, epp, esz);
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		page = its_alloc_shared_pages(GFP_ATOMIC | __GFP_ZERO,
-			get_order(np * PAGE_SIZE));
-	else
-#endif
-		page = alloc_pages(GFP_ATOMIC | __GFP_ZERO, get_order(np * PAGE_SIZE));
+	page = its_alloc_pages(GFP_ATOMIC | __GFP_ZERO, get_order(np * PAGE_SIZE));
 	if (!page)
 		return -ENOMEM;
 
@@ -3337,14 +3335,7 @@ static struct page *its_allocate_pending_table(gfp_t gfp_flags)
 {
 	struct page *pend_page;
 
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		pend_page = its_alloc_shared_pages(gfp_flags | __GFP_ZERO,
-			get_order(LPI_PENDBASE_SZ));
-	else
-#endif
-		pend_page = alloc_pages(gfp_flags | __GFP_ZERO,
-					get_order(LPI_PENDBASE_SZ));
+	pend_page = its_alloc_pages(gfp_flags | __GFP_ZERO, get_order(LPI_PENDBASE_SZ));
 	if (!pend_page)
 		return NULL;
 
@@ -3356,13 +3347,7 @@ static struct page *its_allocate_pending_table(gfp_t gfp_flags)
 
 static void its_free_pending_table(struct page *pt)
 {
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		its_free_shared_pages(page_address(pt),
-			get_order(LPI_PENDBASE_SZ));
-	else
-#endif
-		free_pages((unsigned long)page_address(pt), get_order(LPI_PENDBASE_SZ));
+	its_free_pages(page_address(pt), get_order(LPI_PENDBASE_SZ));
 }
 
 /*
@@ -3697,15 +3682,8 @@ static bool its_alloc_table_entry(struct its_node *its,
 
 	/* Allocate memory for 2nd level table */
 	if (!table[idx]) {
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-		if (is_virtcca_cvm_world())
-			page = its_alloc_shared_pages_node(its->numa_node,
-						GFP_KERNEL | __GFP_ZERO,
-						get_order(baser->psz));
-		else
-#endif
-			page = alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO,
-						get_order(baser->psz));
+		page = its_alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO,
+					    get_order(baser->psz));
 		if (!page)
 			return false;
 
@@ -3800,20 +3778,18 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 	if (WARN_ON(!is_power_of_2(nvecs)))
 		nvecs = roundup_pow_of_two(nvecs);
 
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	/*
 	 * Even if the device wants a single LPI, the ITT must be
 	 * sized as a power of two (and you need at least one bit...).
 	 */
 	nr_ites = max(2, nvecs);
 	sz = nr_ites * (FIELD_GET(GITS_TYPER_ITT_ENTRY_SIZE, its->typer) + 1);
-	sz = max(sz, ITS_ITT_ALIGN) + ITS_ITT_ALIGN - 1;
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		itt = its_alloc_shared_page_address(dev, its, sz);
-	else
-#endif
-		itt = kzalloc_node(sz, GFP_KERNEL, its->numa_node);
+	sz = max(sz, ITS_ITT_ALIGN);
+
+	itt = itt_alloc_pool(its->numa_node, sz);
+
+	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+
 	if (alloc_lpis) {
 		lpi_map = its_lpi_alloc(nvecs, &lpi_base, &nr_lpis);
 		if (lpi_map)
@@ -3825,14 +3801,9 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 		lpi_base = 0;
 	}
 
-	if (!dev || !itt ||  !col_map || (!lpi_map && alloc_lpis)) {
+	if (!dev || !itt || !col_map || (!lpi_map && alloc_lpis)) {
 		kfree(dev);
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-		if (is_virtcca_cvm_world())
-			its_free_shared_pages(itt, get_order(sz));
-		else
-#endif
-			kfree(itt);
+		itt_free_pool(itt, sz);
 		bitmap_free(lpi_map);
 		kfree(col_map);
 		return NULL;
@@ -3842,6 +3813,7 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 
 	dev->its = its;
 	dev->itt = itt;
+	dev->itt_sz = sz;
 	dev->nr_ites = nr_ites;
 	dev->event_map.lpi_map = lpi_map;
 	dev->event_map.col_map = col_map;
@@ -3869,12 +3841,7 @@ static void its_free_device(struct its_device *its_dev)
 	list_del(&its_dev->entry);
 	raw_spin_unlock_irqrestore(&its_dev->its->lock, flags);
 	kfree(its_dev->event_map.col_map);
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		its_free_shared_pages(its_dev->itt, get_its_device_order(its_dev));
-	else
-#endif
-		kfree(its_dev->itt);
+	itt_free_pool(its_dev->itt, its_dev->itt_sz);
 
 #ifdef CONFIG_VIRT_PLAT_DEV
 	if (its_dev->is_vdev) {
@@ -4564,6 +4531,7 @@ static void its_vpe_4_1_unmask_irq(struct irq_data *d)
 	its_vpe_4_1_send_inv(d);
 }
 
+#ifdef CONFIG_ARM64_HISI_IPIV
 /* IPIV private register */
 #define CPU_SYS_TRAP_EL2		sys_reg(3, 4, 15, 7, 2)
 #define CPU_SYS_TRAP_EL2_IPIV_ENABLE_SHIFT	0
@@ -4576,40 +4544,38 @@ static void its_vpe_4_1_unmask_irq(struct irq_data *d)
  */
 static void ipiv_disable_vsgi_trap(void)
 {
-#ifdef CONFIG_ARM64
 	u64 val;
 
 	/* disable guest access ICC_SGI1R_EL1 trap, enable ipiv */
 	val = read_sysreg_s(CPU_SYS_TRAP_EL2);
 	val |= CPU_SYS_TRAP_EL2_IPIV_ENABLE;
 	write_sysreg_s(val, CPU_SYS_TRAP_EL2);
-#endif
 }
 
 static void ipiv_enable_vsgi_trap(void)
 {
-#ifdef CONFIG_ARM64
 	u64 val;
 
 	/* enable guest access ICC_SGI1R_EL1 trap, disable ipiv */
 	val = read_sysreg_s(CPU_SYS_TRAP_EL2);
 	val &= ~CPU_SYS_TRAP_EL2_IPIV_ENABLE;
 	write_sysreg_s(val, CPU_SYS_TRAP_EL2);
-#endif
 }
+#endif /* CONFIG_ARM64_HISI_IPIV */
 
 static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 				 struct its_cmd_info *info)
 {
 	void __iomem *vlpi_base = gic_data_rdist_vlpi_base();
+	u64 val = 0;
+
+#ifdef CONFIG_ARM64_HISI_IPIV
 	struct its_vm *vm = vpe->its_vm;
 	unsigned long vpeid_page_addr;
 	u64 ipiv_val = 0;
-	u64 val = 0;
 	u32 nr_vpes;
 
-	if (static_branch_unlikely(&ipiv_enable) &&
-	    vm->nassgireq) {
+	if (vm->enable_ipiv_from_guest) {
 		/* wait gicr_ipiv_busy */
 		WARN_ON_ONCE(readl_relaxed_poll_timeout_atomic(vlpi_base + GICR_IPIV_ST,
 					ipiv_val, !(ipiv_val & GICR_IPIV_ST_IPIV_BUSY), 1, 500));
@@ -4627,6 +4593,7 @@ static void its_vpe_4_1_schedule(struct its_vpe *vpe,
 
 		ipiv_disable_vsgi_trap();
 	}
+#endif /* CONFIG_ARM64_HISI_IPIV */
 
 	/* Schedule the VPE */
 	val |= GICR_VPENDBASER_Valid;
@@ -4641,8 +4608,11 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 				   struct its_cmd_info *info)
 {
 	void __iomem *vlpi_base = gic_data_rdist_vlpi_base();
-	struct its_vm *vm = vpe->its_vm;
 	u64 val;
+
+#ifdef CONFIG_ARM64_HISI_IPIV
+	struct its_vm *vm = vpe->its_vm;
+#endif
 
 	if (info->req_db) {
 		unsigned long flags;
@@ -4674,8 +4644,8 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 		vpe->pending_last = true;
 	}
 
-	if (static_branch_unlikely(&ipiv_enable) &&
-	    vm->nassgireq) {
+#ifdef CONFIG_ARM64_HISI_IPIV
+	if (vm->enable_ipiv_from_guest) {
 		/* wait gicr_ipiv_busy */
 		WARN_ON_ONCE(readl_relaxed_poll_timeout_atomic(vlpi_base + GICR_IPIV_ST,
 					val, !(val & GICR_IPIV_ST_IPIV_BUSY), 1, 500));
@@ -4684,6 +4654,7 @@ static void its_vpe_4_1_deschedule(struct its_vpe *vpe,
 
 		ipiv_enable_vsgi_trap();
 	}
+#endif
 }
 
 static void its_vpe_4_1_invall(struct its_vpe *vpe)
@@ -5086,10 +5057,12 @@ static void its_vpe_irq_domain_free(struct irq_domain *domain,
 	if (bitmap_empty(vm->db_bitmap, vm->nr_db_lpis)) {
 		its_lpi_free(vm->db_bitmap, vm->db_lpi_base, vm->nr_db_lpis);
 		its_free_prop_table(vm->vprop_page);
-		if (static_branch_unlikely(&ipiv_enable)) {
+#ifdef CONFIG_ARM64_HISI_IPIV
+		if (vm->enable_ipiv_from_vmm) {
 			free_pages((unsigned long)page_address(vm->vpeid_page),
 				    get_order(nr_irqs * 2));
 		}
+#endif
 	}
 }
 
@@ -5099,10 +5072,14 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 	struct irq_chip *irqchip = &its_vpe_irq_chip;
 	struct its_vm *vm = args;
 	unsigned long *bitmap;
-	struct page *vprop_page, *vpeid_page;
+	struct page *vprop_page;
 	int base, nr_ids, i, err = 0;
+
+#ifdef CONFIG_ARM64_HISI_IPIV
+	struct page *vpeid_page;
 	void *vpeid_table_va;
 	u16 *vpeid_entry;
+#endif
 
 	bitmap = its_lpi_alloc(roundup_pow_of_two(nr_irqs), &base, &nr_ids);
 	if (!bitmap)
@@ -5127,7 +5104,8 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 
 	if (gic_rdists->has_rvpeid) {
 		irqchip = &its_vpe_4_1_irq_chip;
-		if (static_branch_unlikely(&ipiv_enable)) {
+#ifdef CONFIG_ARM64_HISI_IPIV
+		if (vm->enable_ipiv_from_vmm) {
 			/*
 			 * The vpeid's size is 2 bytes, so we need to allocate 2 *
 			 * (num of vcpus). nr_irqs is equal to the number of vCPUs.
@@ -5141,6 +5119,7 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 			vm->vpeid_page = vpeid_page;
 			vpeid_table_va = page_address(vpeid_page);
 		}
+#endif
 	}
 
 	for (i = 0; i < nr_irqs; i++) {
@@ -5148,10 +5127,12 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 		err = its_vpe_init(vm->vpes[i]);
 		if (err)
 			break;
-		if (static_branch_unlikely(&ipiv_enable)) {
+#ifdef CONFIG_ARM64_HISI_IPIV
+		if (vm->enable_ipiv_from_vmm) {
 			vpeid_entry = (u16 *)vpeid_table_va + i;
 			*vpeid_entry = vm->vpes[i]->vpe_id;
 		}
+#endif
 		err = its_irq_gic_domain_alloc(domain, virq + i,
 					       vm->vpes[i]->vpe_db_lpi);
 		if (err)
@@ -5738,15 +5719,9 @@ static int __init its_probe_one(struct its_node *its)
 		}
 	}
 
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		page = its_alloc_shared_pages_node(its->numa_node,
-					GFP_KERNEL | __GFP_ZERO,
-					get_order(ITS_CMD_QUEUE_SZ));
-	else
-#endif
-		page = alloc_pages_node(its->numa_node, GFP_KERNEL | __GFP_ZERO,
-					get_order(ITS_CMD_QUEUE_SZ));
+	page = its_alloc_pages_node(its->numa_node,
+				    GFP_KERNEL | __GFP_ZERO,
+				    get_order(ITS_CMD_QUEUE_SZ));
 	if (!page) {
 		err = -ENOMEM;
 		goto out_unmap_sgir;
@@ -5810,12 +5785,7 @@ static int __init its_probe_one(struct its_node *its)
 out_free_tables:
 	its_free_tables(its);
 out_free_cmd:
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world())
-		its_free_shared_pages(its->cmd_base, get_order(ITS_CMD_QUEUE_SZ));
-	else
-#endif
-		free_pages((unsigned long)its->cmd_base, get_order(ITS_CMD_QUEUE_SZ));
+	its_free_pages(its->cmd_base, get_order(ITS_CMD_QUEUE_SZ));
 out_unmap_sgir:
 	if (its->sgir_base)
 		iounmap(its->sgir_base);
@@ -6304,13 +6274,12 @@ int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
 #endif
 	int err;
 
-#ifdef CONFIG_HISI_VIRTCCA_GUEST
-	if (is_virtcca_cvm_world()) {
-		device_initialize(&cvm_alloc_device);
-		enable_swiotlb_for_cvm_dev(&cvm_alloc_device, true);
-		raw_spin_lock_init(&cvm_its_lock);
-	}
-#endif
+	virtcca_its_init();
+
+	itt_pool = gen_pool_create(get_order(ITS_ITT_ALIGN), -1);
+	if (!itt_pool)
+		return -ENOMEM;
+
 	gic_rdists = rdists;
 
 	its_parent = parent_domain;
@@ -6368,13 +6337,6 @@ int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
 			pr_err("ITS: Disabling GICv4 support\n");
 		}
 
-#ifdef CONFIG_VIRT_PLAT_DEV
-		if (build_devid_pools())
-			rsv_devid_pool_cap = false;
-
-		if (rsv_devid_pool_cap)
-			pr_info("ITS: reserved device id pools enabled\n");
-#endif
 	}
 
 	register_syscore_ops(&its_syscore_ops);

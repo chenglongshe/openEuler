@@ -101,18 +101,24 @@ bool resctrl_arch_get_cdp_enabled(enum resctrl_res_level rid)
 	}
 }
 
-int resctrl_arch_set_cdp_enabled(enum resctrl_res_level ignored, bool enable)
+int resctrl_arch_set_cdp_enabled(enum resctrl_res_level rid, bool enable)
 {
 	u64 regval;
+	struct rdt_resource *r;
 	u32 partid, partid_i, partid_d;
+
+	r = resctrl_arch_get_resource(rid);
+	r->num_rmid = resctrl_arch_system_num_rmid_idx();
+	if (enable)
+		r->num_rmid >>= 1;
 
 	cdp_enabled = enable;
 
 	partid = RESCTRL_RESERVED_CLOSID;
 
 	if (enable) {
-		partid_d = resctrl_get_config_index(partid, CDP_CODE);
-		partid_i = resctrl_get_config_index(partid, CDP_DATA);
+		partid_d = resctrl_get_config_index(partid, CDP_DATA);
+		partid_i = resctrl_get_config_index(partid, CDP_CODE);
 		regval = FIELD_PREP(MPAM_SYSREG_PARTID_D, partid_d) |
 			 FIELD_PREP(MPAM_SYSREG_PARTID_I, partid_i);
 
@@ -309,19 +315,8 @@ static void *resctrl_arch_mon_ctx_alloc_no_wait(struct rdt_resource *r,
 	if (!ret)
 		return ERR_PTR(-ENOMEM);
 
-	switch (evtid) {
-	case QOS_L3_OCCUP_EVENT_ID:
-	case QOS_L3_MBM_LOCAL_EVENT_ID:
-	case QOS_L3_MBM_TOTAL_EVENT_ID:
-	case QOS_L2_OCCUP_EVENT_ID:
-	case QOS_L2_MBM_CORE_EVENT_ID:
-		*ret = __mon_is_rmid_idx;
-		return ret;
-
-	default:
-		kfree(ret);
-		return ERR_PTR(-EOPNOTSUPP);
-	}
+	*ret = __mon_is_rmid_idx;
+	return ret;
 }
 
 void *resctrl_arch_mon_ctx_alloc(struct rdt_resource *r, int evtid)
@@ -371,7 +366,6 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 	struct mon_cfg cfg;
 	struct mpam_resctrl_dom *dom;
 	struct mpam_resctrl_res *res;
-	u32 mon = *(u32 *)arch_mon_ctx;
 	enum mpam_device_features type;
 
 	resctrl_arch_rmid_read_context_check();
@@ -392,20 +386,15 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 		return -EINVAL;
 	}
 
-	cfg.mon = mon;
-	if (cfg.mon == USE_RMID_IDX) {
-		/*
-		 * The number of mbwu monitors can't support free run mode,
-		 * adapt the remainder of rmid to the num_mon as compromise.
-		 */
-		res = container_of(r, struct mpam_resctrl_res, resctrl_res);
-		if (type == mpam_feat_msmon_mbwu)
-			num_mon = res->class->props.num_mbwu_mon;
-		else
-			num_mon = res->class->props.num_csu_mon;
-
-		cfg.mon = closid % num_mon;
-	}
+	/*
+	 * The number of mbwu monitors can't support free run mode,
+	 * adapt the remainder of rmid to the num_mon as compromise.
+	 */
+	res = container_of(r, struct mpam_resctrl_res, resctrl_res);
+	if (type == mpam_feat_msmon_mbwu)
+		num_mon = res->class->props.num_mbwu_mon;
+	else
+		num_mon = res->class->props.num_csu_mon;
 
 	cfg.match_pmg = true;
 	cfg.pmg = rmid;
@@ -413,11 +402,13 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 
 	if (cdp_enabled) {
 		cfg.partid = resctrl_get_config_index(closid, CDP_DATA);
+		cfg.mon = cfg.partid % num_mon;
 		err = mpam_msmon_read(dom->comp, &cfg, type, val);
 		if (err)
 			return err;
 
 		cfg.partid = resctrl_get_config_index(closid, CDP_CODE);
+		cfg.mon = cfg.partid % num_mon;
 		err = mpam_msmon_read(dom->comp, &cfg, type, &cdp_val);
 		if (!err) {
 			pr_debug("read monitor rmid %u %s:%u CODE/DATA: %lld/%lld\n",
@@ -427,6 +418,7 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 		}
 	} else {
 		cfg.partid = closid;
+		cfg.mon = cfg.partid % num_mon;
 		err = mpam_msmon_read(dom->comp, &cfg, type, val);
 	}
 
@@ -738,8 +730,10 @@ static void mpam_resctrl_pick_caches(void)
 			continue;
 		}
 
-		if (mpam_has_feature(mpam_feat_msmon_csu, cprops))
-			update_rmid_limits(cache_size);
+		if (mpam_has_feature(mpam_feat_msmon_csu, cprops)) {
+			if (class->level == 3)
+				update_rmid_limits(cache_size);
+		}
 
 		if (has_cpor) {
 			if (class->level == 2) {
@@ -966,10 +960,12 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->schema_fmt = RESCTRL_SCHEMA_RANGE;
 		r->fflags = RFTYPE_RES_MB;
 		r->default_ctrl = MAX_MBA_BW;
+		r->membw.max_bw = MAX_MBA_BW;
 		r->data_width = 3;
 
 		r->membw.delay_linear = true;
 		r->membw.throttle_mode = THREAD_THROTTLE_UNDEFINED;
+		r->membw.min_bw = 1;
 		r->membw.bw_gran = get_mba_granularity(cprops);
 
 		/* Round up to at least 1% */
@@ -993,13 +989,14 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->schema_fmt = RESCTRL_SCHEMA_RANGE;
 		r->fflags = RFTYPE_RES_CACHE;
 		r->default_ctrl = MAX_MBA_BW;
+		r->membw.max_bw = MAX_MBA_BW;
 		r->data_width = 3;
 		r->cache_level = class->level;
 
 		if (cache_has_usable_cmax(class))
 			r->alloc_capable = true;
 
-		r->membw.min_bw = 0;
+		r->membw.min_bw = 1;
 		r->membw.bw_gran = max(100 / (1 << cprops->cmax_wd), 1);
 		break;
 
@@ -1008,7 +1005,8 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->format_str = "%d=%0*u";
 		r->schema_fmt = RESCTRL_SCHEMA_RANGE;
 		r->fflags = RFTYPE_RES_CACHE;
-		r->default_ctrl = MAX_MBA_BW;
+		r->default_ctrl = 0;
+		r->membw.max_bw = MAX_MBA_BW;
 		r->data_width = 3;
 		r->cache_level = class->level;
 
@@ -1023,7 +1021,8 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->format_str = "%d=%0*u";
 		r->schema_fmt = RESCTRL_SCHEMA_RANGE;
 		r->fflags = RFTYPE_RES_MB;
-		r->default_ctrl = MAX_MBA_BW;
+		r->default_ctrl = 0;
+		r->membw.max_bw = MAX_MBA_BW;
 		r->data_width = 3;
 
 		r->membw.delay_linear = true;
@@ -1043,7 +1042,8 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->format_str = "%d=%0*u";
 		r->schema_fmt = RESCTRL_SCHEMA_RANGE;
 		r->fflags = RFTYPE_RES_CACHE;
-		r->default_ctrl = GENMASK(cprops->intpri_wd - 1, 0);
+		r->default_ctrl = 0;
+		r->membw.max_bw = GENMASK(cprops->intpri_wd - 1, 0);
 		r->data_width = 3;
 		r->cache_level = class->level;
 
@@ -1058,7 +1058,8 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->format_str = "%d=%0*u";
 		r->schema_fmt = RESCTRL_SCHEMA_RANGE;
 		r->fflags = RFTYPE_RES_MB;
-		r->default_ctrl = GENMASK(cprops->intpri_wd - 1, 0);
+		r->default_ctrl = 3;
+		r->membw.max_bw = GENMASK(cprops->intpri_wd - 1, 0);
 		r->data_width = 3;
 
 		r->membw.bw_gran = 1;
@@ -1072,6 +1073,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->schema_fmt = RESCTRL_SCHEMA_RANGE;
 		r->fflags = RFTYPE_RES_MB;
 		r->default_ctrl = 1;
+		r->membw.max_bw = 1;
 		r->data_width = 1;
 
 		r->membw.bw_gran = 1;
@@ -1095,7 +1097,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		 * For mpam, each control group has its own pmg/rmid
 		 * space.
 		 */
-		r->num_rmid = mpam_partid_max * mpam_pmg_max;
+		r->num_rmid = resctrl_arch_system_num_rmid_idx();
 	}
 
 	return 0;

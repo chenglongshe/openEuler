@@ -247,9 +247,6 @@ static struct cgroup_subsys_state *css_create(struct cgroup *cgrp,
 					      struct cgroup_subsys *ss);
 static void css_release(struct percpu_ref *ref);
 static void kill_css(struct cgroup_subsys_state *css);
-static int cgroup_addrm_files(struct cgroup_subsys_state *css,
-			      struct cgroup *cgrp, struct cftype cfts[],
-			      bool is_add);
 
 #ifdef CONFIG_DEBUG_CGROUP_REF
 #define CGROUP_REF_FN_ATTRS	noinline
@@ -1703,6 +1700,7 @@ static void css_clear_dir(struct cgroup_subsys_state *css)
 			if (cgroup_psi_enabled())
 				cgroup_addrm_files(css, cgrp,
 						   cgroup_psi_files, false);
+			cgroup_ifs_rm_files(css, cgrp);
 		} else {
 			cgroup_addrm_files(css, cgrp,
 					   cgroup1_base_files, false);
@@ -1741,6 +1739,10 @@ static int css_populate_dir(struct cgroup_subsys_state *css)
 				if (ret < 0)
 					return ret;
 			}
+
+			ret = cgroup_ifs_add_files(css, cgrp);
+			if (ret < 0)
+				return ret;
 		} else {
 			ret = cgroup_addrm_files(css, cgrp,
 						 cgroup1_base_files, true);
@@ -2323,9 +2325,37 @@ static struct file_system_type cgroup2_fs_type = {
 };
 
 #ifdef CONFIG_CPUSETS
+enum cpuset_param {
+	Opt_cpuset_v2_mode,
+};
+
+static const struct fs_parameter_spec cpuset_fs_parameters[] = {
+	fsparam_flag("cpuset_v2_mode", Opt_cpuset_v2_mode),
+	{}
+};
+
+static int cpuset_parse_param(struct fs_context *fc, struct fs_parameter *param)
+{
+	struct cgroup_fs_context *ctx = cgroup_fc2context(fc);
+	struct fs_parse_result result;
+	int opt;
+
+	opt = fs_parse(fc, cpuset_fs_parameters, param, &result);
+	if (opt < 0)
+		return opt;
+
+	switch (opt) {
+	case Opt_cpuset_v2_mode:
+		ctx->flags |= CGRP_ROOT_CPUSET_V2_MODE;
+		return 0;
+	}
+	return -EINVAL;
+}
+
 static const struct fs_context_operations cpuset_fs_context_ops = {
 	.get_tree	= cgroup1_get_tree,
 	.free		= cgroup_fs_context_free,
+	.parse_param	= cpuset_parse_param,
 };
 
 /*
@@ -2362,6 +2392,7 @@ static int cpuset_init_fs_context(struct fs_context *fc)
 static struct file_system_type cpuset_fs_type = {
 	.name			= "cpuset",
 	.init_fs_context	= cpuset_init_fs_context,
+	.parameters		= cpuset_fs_parameters,
 	.fs_flags		= FS_USERNS_MOUNT,
 };
 #endif
@@ -3986,14 +4017,16 @@ struct cftype cgroup_v1_psi_files[] = {
 		.release = cgroup_pressure_release,
 	},
 #endif
+#ifdef CONFIG_PSI_FINE_GRAINED
 	{
 		.name = "pressure.stat",
 		.flags = CFTYPE_NO_PREFIX,
 		.seq_show = cgroup_psi_stat_show,
 	},
+#endif /*CONFIG_PSI_FINE_GRAINED*/
 	{ }	/* terminate */
 };
-#endif
+#endif /*CONFIG_PSI_CGROUP_V1*/
 #else /* CONFIG_PSI */
 bool cgroup_psi_enabled(void)
 {
@@ -4331,9 +4364,9 @@ static int cgroup_add_file(struct cgroup_subsys_state *css, struct cgroup *cgrp,
  * Depending on @is_add, add or remove files defined by @cfts on @cgrp.
  * For removals, this function never fails.
  */
-static int cgroup_addrm_files(struct cgroup_subsys_state *css,
-			      struct cgroup *cgrp, struct cftype cfts[],
-			      bool is_add)
+int cgroup_addrm_files(struct cgroup_subsys_state *css,
+		       struct cgroup *cgrp, struct cftype cfts[],
+		       bool is_add)
 {
 	struct cftype *cft, *cft_end = NULL;
 	int ret = 0;
@@ -4414,7 +4447,7 @@ static void cgroup_exit_cftypes(struct cftype *cfts)
 	}
 }
 
-static int cgroup_init_cftypes(struct cgroup_subsys *ss, struct cftype *cfts)
+int cgroup_init_cftypes(struct cgroup_subsys *ss, struct cftype *cfts)
 {
 	struct cftype *cft;
 	int ret = 0;
@@ -5480,6 +5513,7 @@ static void css_free_rwork_fn(struct work_struct *work)
 			cgroup_put(cgroup_parent(cgrp));
 			kernfs_put(cgrp->kn);
 			psi_cgroup_free(cgrp);
+			cgroup_ifs_free(cgrp);
 			cgroup_rstat_exit(cgrp);
 			kfree(cgrp);
 		} else {
@@ -5727,10 +5761,14 @@ static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 	if (ret)
 		goto out_kernfs_remove;
 
+	ret = cgroup_ifs_alloc(cgrp);
+	if (ret)
+		goto out_psi_free;
+
 	if (cgrp->root == &cgrp_dfl_root) {
 		ret = cgroup_bpf_inherit(cgrp);
 		if (ret)
-			goto out_psi_free;
+			goto out_ifs_free;
 	}
 
 	/*
@@ -5791,6 +5829,8 @@ static struct cgroup *cgroup_create(struct cgroup *parent, const char *name,
 
 	return cgrp;
 
+out_ifs_free:
+	cgroup_ifs_free(cgrp);
 out_psi_free:
 	psi_cgroup_free(cgrp);
 out_kernfs_remove:
@@ -6198,6 +6238,8 @@ int __init cgroup_init(void)
 	BUG_ON(cgroup_init_cftypes(NULL, cgroup_psi_files));
 	BUG_ON(cgroup_init_cftypes(NULL, cgroup1_base_files));
 
+	cgroup_ifs_init();
+
 	cgroup_rstat_boot();
 
 	get_user_ns(init_cgroup_ns.user_ns);
@@ -6390,7 +6432,7 @@ int proc_cgroup_show(struct seq_file *m, struct pid_namespace *ns,
 	if (!buf)
 		goto out;
 
-	cgroup_lock();
+	rcu_read_lock();
 	spin_lock_irq(&css_set_lock);
 
 	for_each_root(root) {
@@ -6399,6 +6441,11 @@ int proc_cgroup_show(struct seq_file *m, struct pid_namespace *ns,
 		int ssid, count = 0;
 
 		if (root == &cgrp_dfl_root && !READ_ONCE(cgrp_dfl_visible))
+			continue;
+
+		cgrp = task_cgroup_from_root(tsk, root);
+		/* The root has already been unmounted. */
+		if (!cgrp)
 			continue;
 
 		seq_printf(m, "%d:", root->hierarchy_id);
@@ -6411,9 +6458,6 @@ int proc_cgroup_show(struct seq_file *m, struct pid_namespace *ns,
 			seq_printf(m, "%sname=%s", count ? "," : "",
 				   root->name);
 		seq_putc(m, ':');
-
-		cgrp = task_cgroup_from_root(tsk, root);
-
 		/*
 		 * On traditional hierarchies, all zombie tasks show up as
 		 * belonging to the root cgroup.  On the default hierarchy,
@@ -6445,7 +6489,7 @@ int proc_cgroup_show(struct seq_file *m, struct pid_namespace *ns,
 	retval = 0;
 out_unlock:
 	spin_unlock_irq(&css_set_lock);
-	cgroup_unlock();
+	rcu_read_unlock();
 	kfree(buf);
 out:
 	return retval;

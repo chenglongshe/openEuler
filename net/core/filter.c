@@ -2499,6 +2499,7 @@ int skb_do_redirect(struct sk_buff *skb)
 			goto out_drop;
 		skb->dev = dev;
 		dev_sw_netstats_rx_add(dev, skb->len);
+		skb_scrub_packet(skb, false);
 		return -EAGAIN;
 	}
 	return flags & BPF_F_NEIGH ?
@@ -3220,6 +3221,13 @@ static const struct bpf_func_proto bpf_skb_vlan_pop_proto = {
 	.arg1_type      = ARG_PTR_TO_CTX,
 };
 
+static void bpf_skb_change_protocol(struct sk_buff *skb, u16 proto)
+{
+	skb->protocol = htons(proto);
+	if (skb_valid_dst(skb))
+		skb_dst_drop(skb);
+}
+
 static int bpf_skb_generic_push(struct sk_buff *skb, u32 off, u32 len)
 {
 	/* Caller already did skb_cow() with len as headroom,
@@ -3316,7 +3324,7 @@ static int bpf_skb_proto_4_to_6(struct sk_buff *skb)
 		}
 	}
 
-	skb->protocol = htons(ETH_P_IPV6);
+	bpf_skb_change_protocol(skb, ETH_P_IPV6);
 	skb_clear_hash(skb);
 
 	return 0;
@@ -3346,7 +3354,7 @@ static int bpf_skb_proto_6_to_4(struct sk_buff *skb)
 		}
 	}
 
-	skb->protocol = htons(ETH_P_IP);
+	bpf_skb_change_protocol(skb, ETH_P_IP);
 	skb_clear_hash(skb);
 
 	return 0;
@@ -3537,10 +3545,10 @@ static int bpf_skb_net_grow(struct sk_buff *skb, u32 off, u32 len_diff,
 		/* Match skb->protocol to new outer l3 protocol */
 		if (skb->protocol == htons(ETH_P_IP) &&
 		    flags & BPF_F_ADJ_ROOM_ENCAP_L3_IPV6)
-			skb->protocol = htons(ETH_P_IPV6);
+			bpf_skb_change_protocol(skb, ETH_P_IPV6);
 		else if (skb->protocol == htons(ETH_P_IPV6) &&
 			 flags & BPF_F_ADJ_ROOM_ENCAP_L3_IPV4)
-			skb->protocol = htons(ETH_P_IP);
+			bpf_skb_change_protocol(skb, ETH_P_IP);
 	}
 
 	if (skb_is_gso(skb)) {
@@ -3593,10 +3601,10 @@ static int bpf_skb_net_shrink(struct sk_buff *skb, u32 off, u32 len_diff,
 	/* Match skb->protocol to new outer l3 protocol */
 	if (skb->protocol == htons(ETH_P_IP) &&
 	    flags & BPF_F_ADJ_ROOM_DECAP_L3_IPV6)
-		skb->protocol = htons(ETH_P_IPV6);
+		bpf_skb_change_protocol(skb, ETH_P_IPV6);
 	else if (skb->protocol == htons(ETH_P_IPV6) &&
 		 flags & BPF_F_ADJ_ROOM_DECAP_L3_IPV4)
-		skb->protocol = htons(ETH_P_IP);
+		bpf_skb_change_protocol(skb, ETH_P_IP);
 
 	if (skb_is_gso(skb)) {
 		struct skb_shared_info *shinfo = skb_shinfo(skb);
@@ -7926,42 +7934,37 @@ static const struct bpf_func_proto bpf_tcp_raw_check_syncookie_ipv6_proto = {
 
 #endif /* CONFIG_INET */
 
-bool bpf_helper_changes_pkt_data(void *func)
+bool bpf_helper_changes_pkt_data(enum bpf_func_id func_id)
 {
-	if (func == bpf_skb_vlan_push ||
-	    func == bpf_skb_vlan_pop ||
-	    func == bpf_skb_store_bytes ||
-	    func == bpf_skb_change_proto ||
-	    func == bpf_skb_change_head ||
-	    func == sk_skb_change_head ||
-	    func == bpf_skb_change_tail ||
-	    func == sk_skb_change_tail ||
-	    func == bpf_skb_adjust_room ||
-	    func == sk_skb_adjust_room ||
-	    func == bpf_skb_pull_data ||
-	    func == sk_skb_pull_data ||
-	    func == bpf_clone_redirect ||
-	    func == bpf_l3_csum_replace ||
-	    func == bpf_l4_csum_replace ||
-	    func == bpf_xdp_adjust_head ||
-	    func == bpf_xdp_adjust_meta ||
-	    func == bpf_msg_pull_data ||
-	    func == bpf_msg_push_data ||
-	    func == bpf_msg_pop_data ||
-	    func == bpf_xdp_adjust_tail ||
-#if IS_ENABLED(CONFIG_IPV6_SEG6_BPF)
-	    func == bpf_lwt_seg6_store_bytes ||
-	    func == bpf_lwt_seg6_adjust_srh ||
-	    func == bpf_lwt_seg6_action ||
-#endif
-#ifdef CONFIG_INET
-	    func == bpf_sock_ops_store_hdr_opt ||
-#endif
-	    func == bpf_lwt_in_push_encap ||
-	    func == bpf_lwt_xmit_push_encap)
+	switch (func_id) {
+	case BPF_FUNC_clone_redirect:
+	case BPF_FUNC_l3_csum_replace:
+	case BPF_FUNC_l4_csum_replace:
+	case BPF_FUNC_lwt_push_encap:
+	case BPF_FUNC_lwt_seg6_action:
+	case BPF_FUNC_lwt_seg6_adjust_srh:
+	case BPF_FUNC_lwt_seg6_store_bytes:
+	case BPF_FUNC_msg_pop_data:
+	case BPF_FUNC_msg_pull_data:
+	case BPF_FUNC_msg_push_data:
+	case BPF_FUNC_skb_adjust_room:
+	case BPF_FUNC_skb_change_head:
+	case BPF_FUNC_skb_change_proto:
+	case BPF_FUNC_skb_change_tail:
+	case BPF_FUNC_skb_pull_data:
+	case BPF_FUNC_skb_store_bytes:
+	case BPF_FUNC_skb_vlan_pop:
+	case BPF_FUNC_skb_vlan_push:
+	case BPF_FUNC_store_hdr_opt:
+	case BPF_FUNC_xdp_adjust_head:
+	case BPF_FUNC_xdp_adjust_meta:
+	case BPF_FUNC_xdp_adjust_tail:
+	/* tail-called program could call any of the above */
+	case BPF_FUNC_tail_call:
 		return true;
-
-	return false;
+	default:
+		return false;
+	}
 }
 
 const struct bpf_func_proto bpf_event_output_data_proto __weak;
@@ -8149,6 +8152,29 @@ cg_skb_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 		return sk_filter_func_proto(func_id, prog);
 	}
 }
+
+#ifdef CONFIG_HISOCK
+static const struct bpf_func_proto *
+hisock_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+{
+	switch (func_id) {
+	case BPF_FUNC_skb_store_bytes:
+		return &bpf_skb_store_bytes_proto;
+	case BPF_FUNC_skb_load_bytes:
+		return &bpf_skb_load_bytes_proto;
+	case BPF_FUNC_skb_pull_data:
+		return &bpf_skb_pull_data_proto;
+	case BPF_FUNC_skb_change_tail:
+		return &bpf_skb_change_tail_proto;
+	case BPF_FUNC_skb_change_head:
+		return &bpf_skb_change_head_proto;
+	case BPF_FUNC_skb_adjust_room:
+		return &bpf_skb_adjust_room_proto;
+	default:
+		return bpf_base_func_proto(func_id);
+	}
+}
+#endif
 
 static const struct bpf_func_proto *
 tc_cls_act_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
@@ -8738,6 +8764,33 @@ static bool cg_skb_is_valid_access(int off, int size,
 
 	return bpf_skb_is_valid_access(off, size, type, prog, info);
 }
+
+#ifdef CONFIG_HISOCK
+static bool hisock_is_valid_access(int off, int size,
+				   enum bpf_access_type type,
+				   const struct bpf_prog *prog,
+				   struct bpf_insn_access_aux *info)
+{
+	switch (off) {
+	case bpf_ctx_range(struct __sk_buff, tc_classid):
+	case bpf_ctx_range(struct __sk_buff, data_meta):
+	case bpf_ctx_range(struct __sk_buff, tstamp):
+	case bpf_ctx_range(struct __sk_buff, wire_len):
+		return false;
+	}
+
+	switch (off) {
+	case bpf_ctx_range(struct __sk_buff, data):
+		info->reg_type = PTR_TO_PACKET;
+		break;
+	case bpf_ctx_range(struct __sk_buff, data_end):
+		info->reg_type = PTR_TO_PACKET_END;
+		break;
+	}
+
+	return bpf_skb_is_valid_access(off, size, type, prog, info);
+}
+#endif
 
 static bool lwt_is_valid_access(int off, int size,
 				enum bpf_access_type type,
@@ -11084,6 +11137,18 @@ const struct bpf_prog_ops cg_skb_prog_ops = {
 	.test_run		= bpf_prog_test_run_skb,
 };
 
+#ifdef CONFIG_HISOCK
+const struct bpf_verifier_ops hisock_verifier_ops = {
+	.get_func_proto		= hisock_func_proto,
+	.is_valid_access	= hisock_is_valid_access,
+	.convert_ctx_access	= bpf_convert_ctx_access,
+	.gen_prologue		= bpf_noop_prologue,
+};
+
+const struct bpf_prog_ops hisock_prog_ops = {
+};
+#endif
+
 const struct bpf_verifier_ops lwt_in_verifier_ops = {
 	.get_func_proto		= lwt_in_func_proto,
 	.is_valid_access	= lwt_is_valid_access,
@@ -11993,6 +12058,81 @@ __bpf_kfunc int bpf_sock_addr_set_sun_path(struct bpf_sock_addr_kern *sa_kern,
 
 	return 0;
 }
+
+#ifdef CONFIG_HISOCK
+__bpf_kfunc struct dst_entry *
+bpf_skops_get_ingress_dst(struct bpf_sock_ops *skops_ctx)
+{
+	struct bpf_sock_ops_kern *skops = (struct bpf_sock_ops_kern *)skops_ctx;
+	struct sock *sk = skops->sk;
+	struct dst_entry *dst;
+
+	WARN_ON_ONCE(!rcu_read_lock_held());
+
+	if (!sk || !sk_fullsock(sk))
+		return NULL;
+
+	dst = rcu_dereference(sk->sk_rx_dst);
+	if (dst)
+		dst = dst_check(dst, 0);
+
+	return dst;
+}
+
+__bpf_kfunc int bpf_xdp_set_ingress_dst(struct xdp_md *xdp_ctx, void *dst__ign)
+{
+	struct xdp_buff *xdp = (struct xdp_buff *)xdp_ctx;
+	struct hisock_xdp_buff *hxdp = (struct hisock_xdp_buff *)xdp;
+	struct dst_entry *_dst = (struct dst_entry *)dst__ign;
+
+	if (!hxdp->skb)
+		return -EOPNOTSUPP;
+
+	if (!_dst || !virt_addr_valid(_dst))
+		return -EFAULT;
+
+	/* same as skb_valid_dst */
+	if (_dst->flags & DST_METADATA)
+		return -EINVAL;
+
+	skb_dst_set_noref(hxdp->skb, _dst);
+	return 0;
+}
+
+__bpf_kfunc int bpf_xdp_change_dev(struct xdp_md *xdp_ctx, u32 ifindex)
+{
+	struct xdp_buff *xdp = (struct xdp_buff *)xdp_ctx;
+	struct hisock_xdp_buff *hxdp = (void *)xdp;
+	struct net_device *dev;
+
+	WARN_ON_ONCE(!rcu_read_lock_held());
+
+	if (!hxdp->skb)
+		return -EOPNOTSUPP;
+
+	dev = dev_get_by_index_rcu(&init_net, ifindex);
+	if (!dev)
+		return -ENODEV;
+
+	hxdp->skb->dev = dev;
+	return 0;
+}
+
+__bpf_kfunc int bpf_skb_change_dev(struct __sk_buff *skb_ctx, u32 ifindex)
+{
+	struct sk_buff *skb = (struct sk_buff *)skb_ctx;
+	struct net_device *dev;
+
+	WARN_ON_ONCE(!rcu_read_lock_held());
+
+	dev = dev_get_by_index_rcu(&init_net, ifindex);
+	if (!dev)
+		return -ENODEV;
+
+	skb->dev = dev;
+	return 0;
+}
+#endif
 __diag_pop();
 
 int bpf_dynptr_from_skb_rdonly(struct sk_buff *skb, u64 flags,
@@ -12015,11 +12155,25 @@ BTF_SET8_END(bpf_kfunc_check_set_skb)
 
 BTF_SET8_START(bpf_kfunc_check_set_xdp)
 BTF_ID_FLAGS(func, bpf_dynptr_from_xdp)
+#ifdef CONFIG_HISOCK
+BTF_ID_FLAGS(func, bpf_xdp_set_ingress_dst)
+BTF_ID_FLAGS(func, bpf_xdp_change_dev)
+#endif
 BTF_SET8_END(bpf_kfunc_check_set_xdp)
 
 BTF_SET8_START(bpf_kfunc_check_set_sock_addr)
 BTF_ID_FLAGS(func, bpf_sock_addr_set_sun_path)
 BTF_SET8_END(bpf_kfunc_check_set_sock_addr)
+
+#ifdef CONFIG_HISOCK
+BTF_SET8_START(bpf_kfunc_check_set_sock_ops)
+BTF_ID_FLAGS(func, bpf_skops_get_ingress_dst, KF_RET_NULL)
+BTF_SET8_END(bpf_kfunc_check_set_sock_ops)
+
+BTF_SET8_START(bpf_kfunc_check_set_hisock)
+BTF_ID_FLAGS(func, bpf_skb_change_dev)
+BTF_SET8_END(bpf_kfunc_check_set_hisock)
+#endif
 
 static const struct btf_kfunc_id_set bpf_kfunc_set_skb = {
 	.owner = THIS_MODULE,
@@ -12036,6 +12190,18 @@ static const struct btf_kfunc_id_set bpf_kfunc_set_sock_addr = {
 	.set = &bpf_kfunc_check_set_sock_addr,
 };
 
+#ifdef CONFIG_HISOCK
+static const struct btf_kfunc_id_set bpf_kfunc_set_sock_ops = {
+	.owner = THIS_MODULE,
+	.set = &bpf_kfunc_check_set_sock_ops,
+};
+
+static const struct btf_kfunc_id_set bpf_kfunc_set_hisock = {
+	.owner = THIS_MODULE,
+	.set = &bpf_kfunc_check_set_hisock,
+};
+#endif
+
 static int __init bpf_kfunc_init(void)
 {
 	int ret;
@@ -12051,6 +12217,10 @@ static int __init bpf_kfunc_init(void)
 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_LWT_SEG6LOCAL, &bpf_kfunc_set_skb);
 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_NETFILTER, &bpf_kfunc_set_skb);
 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_XDP, &bpf_kfunc_set_xdp);
+#ifdef CONFIG_HISOCK
+	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_SOCK_OPS, &bpf_kfunc_set_sock_ops);
+	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_HISOCK, &bpf_kfunc_set_hisock);
+#endif
 	return ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
 						&bpf_kfunc_set_sock_addr);
 }

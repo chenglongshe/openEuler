@@ -61,6 +61,10 @@ SCHED_FEAT(SIS_UTIL, true)
 SCHED_FEAT(STEAL, false)
 #endif
 
+#ifdef CONFIG_SCHED_PARAL
+SCHED_FEAT(PARAL, false)
+#endif
+
 /*
  * Issue a WARN when we do multiple update_rq_clock() calls
  * in a single rq->lock section. Default disabled because the
@@ -98,10 +102,19 @@ SCHED_FEAT(UTIL_EST_FASTUP, true)
 SCHED_FEAT(LATENCY_WARN, false)
 
 SCHED_FEAT(HZ_BW, true)
+SCHED_FEAT(IRQ_AVG, false)
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
 /*
  * Use util_avg of bottom-Level taskgroup
  */
 SCHED_FEAT(DA_UTIL_TASKGROUP, true)
+#endif
+
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+SCHED_FEAT(SOFT_DOMAIN, false)
+#endif
+
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+SCHED_FEAT(SOFT_QUOTA, false)
 #endif

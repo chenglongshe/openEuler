@@ -34,7 +34,7 @@ obj-y			:= debug-monitors.o entry.o irq.o fpsimd.o		\
 			   cpufeature.o alternative.o cacheinfo.o		\
 			   smp.o smp_spin_table.o topology.o smccc-call.o	\
 			   syscall.o proton-pack.o idreg-override.o idle.o	\
-			   patching.o
+			   patching.o rsi.o
 
 obj-$(CONFIG_AARCH32_EL0)		+= binfmt_elf32.o sys32.o signal32.o			\
 					   sys_compat.o
@@ -79,11 +79,14 @@ obj-$(CONFIG_ARM64_MTE)			+= mte.o
 obj-y					+= vdso-wrap.o
 obj-$(CONFIG_COMPAT_VDSO)		+= vdso32-wrap.o
 obj-$(CONFIG_ARM64_ILP32)		+= vdso-ilp32/
+obj-$(CONFIG_FAST_SYSCALL)		+= xcall/
 obj-$(CONFIG_UNWIND_PATCH_PAC_INTO_SCS)	+= patch-scs.o
 obj-$(CONFIG_IPI_AS_NMI)		+= ipi_nmi.o
 obj-$(CONFIG_HISI_VIRTCCA_GUEST)	+= virtcca_cvm_guest.o virtcca_cvm_tsi.o
 obj-$(CONFIG_HISI_VIRTCCA_HOST)		+= virtcca_cvm_host.o
 CFLAGS_patch-scs.o			+= -mbranch-protection=none
+obj-$(CONFIG_SCHED_PARAL)		+= prefer_numa.o
+obj-$(CONFIG_BPF_RVI)			+= bpf-rvi.o
 
 # Force dependency (vdso*-wrap.S includes vdso.so through incbin)
 $(obj)/vdso-wrap.o: $(obj)/vdso/vdso.so

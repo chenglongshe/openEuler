@@ -75,6 +75,9 @@
 #include "internal.h"
 
 #include <trace/events/sched.h>
+#ifndef __GENKSYMS__
+#include <linux/bpf_sched.h>
+#endif
 
 static int bprm_creds_from_file(struct linux_binprm *bprm);
 
@@ -714,7 +717,6 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 				       vma, new_start, length, false))
 		return -ENOMEM;
 
-	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm);
 	next = vma_next(&vmi);
 	if (new_end > old_start) {
@@ -1847,6 +1849,12 @@ static int exec_binprm(struct linux_binprm *bprm)
 	trace_sched_process_exec(current, old_pid, bprm);
 	ptrace_event(PTRACE_EVENT_EXEC, old_vpid);
 	proc_exec_connector(current);
+
+#ifdef CONFIG_BPF_SCHED
+	if (bpf_sched_enabled())
+		bpf_sched_cfs_exec_init(current);
+#endif
+
 	return 0;
 }
 

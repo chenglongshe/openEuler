@@ -80,19 +80,24 @@ void __init reserve_crashkernel(void)
 		pr_warn("size of crash kernel memory unspecified, no memory reserved for crash kernel\n");
 		return;
 	}
-	if (!crash_base) {
-		pr_warn("base of crash kernel memory unspecified, no memory reserved for crash kernel\n");
-		return;
-	}
 
-	if (!memblock_is_region_memory(crash_base, crash_size))
-		memblock_add(crash_base, crash_size);
+	if (crash_base == 0) {
+		crash_base = memblock_phys_alloc_range(crash_size, SZ_8M, 0, SZ_4G);
+		if (crash_base == 0) {
+			pr_warn("cannot allocate crashkernel (size:0x%llx)\n",
+				crash_size);
+			return;
+		}
+	} else {
+		if (!memblock_is_region_memory(crash_base, crash_size))
+			memblock_add(crash_base, crash_size);
 
-	ret = memblock_reserve(crash_base, crash_size);
-	if (ret < 0) {
-		pr_warn("crashkernel reservation failed - memory is in use [mem %#018llx-%#018llx]\n",
-				crash_base, crash_base + crash_size - 1);
-		return;
+		ret = memblock_reserve(crash_base, crash_size);
+		if (ret < 0) {
+			pr_warn("crashkernel reservation failed - memory is in use [mem %#018llx-%#018llx]\n",
+					crash_base, crash_base + crash_size - 1);
+			return;
+		}
 	}
 
 	pr_info("Reserving %ldMB of memory at %ldMB for crashkernel (System RAM: %ldMB)\n",
@@ -104,9 +109,6 @@ void __init reserve_crashkernel(void)
 	if (ret)
 		pr_warn("Add crash kernel area [mem %#018llx-%#018llx] to memmap region failed.\n",
 				crash_base, crash_base + crash_size - 1);
-
-	if (crash_base < PCI_LEGACY_IO_SIZE)
-		pr_warn("Crash base should be greater than or equal to %#lx\n", PCI_LEGACY_IO_SIZE);
 
 	crashk_res.start = crash_base;
 	crashk_res.end = crash_base + crash_size - 1;
@@ -153,8 +155,10 @@ static void machine_crash_nonpanic_core(void *unused)
 	atomic_dec(&waiting_for_crash_ipi);
 	while (READ_ONCE(smp_rcb->ready) != 0)
 		mdelay(1);
-	if (cpu != 0)
-		reset_cpu(cpu);
+	if (cpu != 0) {
+		while (1)
+			cpu_relax();
+	}
 	else
 		machine_kexec(kexec_crash_image);
 }
@@ -207,8 +211,10 @@ void machine_crash_shutdown(struct pt_regs *regs)
 	pr_info("Loading crashdump kernel...\n");
 #ifdef CONFIG_SMP
 	WRITE_ONCE(smp_rcb->ready, 0);
-	if (cpu != 0)
-		reset_cpu(cpu);
+	if (cpu != 0) {
+		while (1)
+			cpu_relax();
+	}
 #endif
 }
 

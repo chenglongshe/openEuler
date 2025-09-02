@@ -376,8 +376,8 @@ static void record_stat_times(struct psi_group_cpu *groupc, u32 delta)
 #ifdef CONFIG_QOS_SCHED
 		else if (groupc->prev_throttle == QOS_THROTTLED)
 			groupc->fine_grained_times[PSI_CPU_QOS_FULL] += delta;
-	}
 #endif
+	}
 #endif
 }
 
@@ -2006,7 +2006,7 @@ static int __init psi_proc_init(void)
 		proc_create("pressure/irq", 0666, NULL, &psi_irq_proc_ops);
 #endif
 #ifdef CONFIG_PSI_FINE_GRAINED
-		proc_create("pressure/stat", 0666, NULL, &psi_stat_proc_ops);
+		proc_create("pressure/stat", 0444, NULL, &psi_stat_proc_ops);
 #endif
 	}
 	return 0;

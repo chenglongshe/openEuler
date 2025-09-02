@@ -27,8 +27,8 @@ endif
 
 CHECKFLAGS	+= -D__sw__
 cflags-y	:= -pipe -ffixed-8 -mno-fp-regs #-msmall-data
-ifeq ($(CONFIG_SUBARCH_C4),y)
-	cflags-y += -fsw-rev -fno-sw-unalign-byte
+ifneq ($(CONFIG_SUBARCH_C3B),y)
+	cflags-y += -fsw-rev -fsw-unalign-byte
 endif
 cflags-y	+= $(call cc-option, -fno-jump-tables)
 
@@ -42,6 +42,7 @@ head-y := arch/sw_64/kernel/head.o
 core-y				+= arch/sw_64/
 drivers-$(CONFIG_PCI)           += arch/sw_64/pci/
 libs-y				+= arch/sw_64/lib/
+drivers-y			+= arch/sw_64/crypto/
 
 # export what is needed by arch/sw_64/boot/Makefile
 LIBS_Y := $(patsubst %/, %/lib.a, $(libs-y))
@@ -51,7 +52,7 @@ boot := arch/sw_64/boot
 
 PHONY += vdso_install
 vdso_install:
-	$(Q)$(MAKE) $(build)=arch/sw64/kernel/vdso $@
+	$(Q)$(MAKE) $(build)=arch/sw_64/kernel/vdso $@
 
 #Default target when executing make with no arguments
 all: $(boot)/vmlinux.bin.gz

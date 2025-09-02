@@ -64,6 +64,7 @@
 #include <linux/vtime.h>
 #include <linux/wait_api.h>
 #include <linux/workqueue_api.h>
+#include <linux/mem_sampling.h>
 
 #ifdef CONFIG_PREEMPT_DYNAMIC
 # ifdef CONFIG_GENERIC_ENTRY
@@ -152,6 +153,16 @@ __read_mostly int sysctl_resched_latency_warn_once = 1;
 const_debug unsigned int sysctl_sched_nr_migrate = SCHED_NR_MIGRATE_BREAK;
 
 __read_mostly int scheduler_running;
+
+#if defined(CONFIG_SCHED_CORE) || defined(CONFIG_CGROUP_IFS)
+int sched_task_is_throttled(struct task_struct *p, int cpu)
+{
+	if (p->sched_class->task_is_throttled)
+		return p->sched_class->task_is_throttled(p, cpu);
+
+	return 0;
+}
+#endif
 
 #ifdef CONFIG_SCHED_CORE
 
@@ -265,14 +276,6 @@ void sched_core_dequeue(struct rq *rq, struct task_struct *p, int flags)
 	if (!(flags & DEQUEUE_SAVE) && rq->nr_running == 1 &&
 	    rq->core->core_forceidle_count && rq->curr == rq->idle)
 		resched_curr(rq);
-}
-
-static int sched_task_is_throttled(struct task_struct *p, int cpu)
-{
-	if (p->sched_class->task_is_throttled)
-		return p->sched_class->task_is_throttled(p, cpu);
-
-	return 0;
 }
 
 static struct task_struct *sched_core_next(struct task_struct *p, unsigned long cookie)
@@ -1023,9 +1026,10 @@ void wake_up_q(struct wake_q_head *head)
 		struct task_struct *task;
 
 		task = container_of(node, struct task_struct, wake_q);
-		/* Task can safely be re-inserted now: */
 		node = node->next;
-		task->wake_q.next = NULL;
+		/* pairs with cmpxchg_relaxed() in __wake_q_add() */
+		WRITE_ONCE(task->wake_q.next, NULL);
+		/* Task can safely be re-inserted now. */
 
 		/*
 		 * wake_up_process() executes a full barrier, which pairs with
@@ -3814,7 +3818,12 @@ ttwu_do_activate(struct rq *rq, struct task_struct *p, int wake_flags,
 	}
 
 	if (rq->idle_stamp) {
-		u64 delta = rq_clock(rq) - rq->idle_stamp;
+		u64 delta;
+
+		if (sched_feat(IRQ_AVG))
+			delta = rq_clock_task(rq) - rq->idle_stamp;
+		else
+			delta = rq_clock(rq) - rq->idle_stamp;
 		u64 max = 2*rq->max_idle_balance_cost;
 
 		update_avg(&rq->avg_idle, delta);
@@ -4243,6 +4252,7 @@ int try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 
 		trace_sched_waking(p);
 		ttwu_do_wakeup(p);
+		ifs_task_waking(p);
 		goto out;
 	}
 
@@ -4258,6 +4268,7 @@ int try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 			break;
 
 		trace_sched_waking(p);
+		ifs_task_waking(p);
 
 		/*
 		 * Ensure we load p->on_rq _after_ p->state, otherwise it would
@@ -4666,6 +4677,7 @@ static void set_schedstats(bool enabled)
 {
 	if (enabled) {
 		compute_skid();
+		cgroup_ifs_enable_sleep_account();
 		static_branch_enable(&sched_schedstats);
 	} else {
 		static_branch_disable(&sched_schedstats);
@@ -4931,6 +4943,7 @@ void wake_up_new_task(struct task_struct *p)
 
 	activate_task(rq, p, ENQUEUE_NOCLOCK);
 	trace_sched_wakeup_new(p);
+	ifs_task_waking(p);
 	check_preempt_curr(rq, p, WF_FORK);
 #ifdef CONFIG_SMP
 	if (p->sched_class->task_woken) {
@@ -5307,6 +5320,7 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 	prev_state = READ_ONCE(prev->__state);
 	vtime_task_switch(prev);
 	perf_event_task_sched_in(prev, current);
+	mem_sampling_sched_in(prev, current);
 	finish_task(prev);
 	tick_nohz_task_switch();
 	finish_lock_switch(rq);
@@ -6748,6 +6762,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 
 		migrate_disable_switch(rq, prev);
 		psi_sched_switch(prev, next, !task_on_rq_queued(prev));
+		cgroup_ifs_account_smttime(prev, next, rq->idle);
 
 		trace_sched_switch(sched_mode & SM_MASK_PREEMPT, prev, next, prev_state);
 
@@ -7587,6 +7602,14 @@ static void __setscheduler_params(struct task_struct *p,
 		__setparam_dl(p, attr);
 	else if (fair_policy(policy))
 		p->static_prio = NICE_TO_PRIO(attr->sched_nice);
+
+	/* rt-policy tasks do not have a timerslack */
+	if (task_is_realtime(p)) {
+		p->timer_slack_ns = 0;
+	} else if (p->timer_slack_ns == 0) {
+		/* when switching back to non-rt policy, restore timerslack */
+		p->timer_slack_ns = p->default_timer_slack_ns;
+	}
 
 	/*
 	 * __sched_setscheduler() ensures attr->sched_priority == 0 when
@@ -9963,6 +9986,7 @@ void __init sched_init_smp(void)
 	sched_smp_initialized = true;
 
 	sched_grid_zone_init();
+	build_soft_domain();
 
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 	init_auto_affinity(&root_task_group);
@@ -10783,6 +10807,14 @@ static int cpu_cgroup_css_online(struct cgroup_subsys_state *css)
 #endif
 
 	return 0;
+}
+
+static void cpu_cgroup_css_offline(struct cgroup_subsys_state *css)
+{
+	struct task_group *tg = css_tg(css);
+
+	offline_auto_affinity(tg);
+	offline_soft_domain(tg);
 }
 
 static void cpu_cgroup_css_released(struct cgroup_subsys_state *css)
@@ -11650,6 +11682,30 @@ static inline s64 cpu_qos_read(struct cgroup_subsys_state *css,
 }
 #endif
 
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+static int cpu_soft_quota_write(struct cgroup_subsys_state *css,
+			 struct cftype *cftype, s64 soft_quota)
+{
+	struct task_group *tg = css_tg(css);
+
+	if (soft_quota != 1 && soft_quota != 0)
+		return -EINVAL;
+
+	if (tg->soft_quota == soft_quota)
+		return 0;
+
+	tg->soft_quota = soft_quota;
+
+	return 0;
+}
+
+static inline s64 cpu_soft_quota_read(struct cgroup_subsys_state *css,
+			       struct cftype *cft)
+{
+	return css_tg(css)->soft_quota;
+}
+#endif
+
 #ifdef CONFIG_BPF_SCHED
 void sched_settag(struct task_struct *tsk, s64 tag)
 {
@@ -11724,6 +11780,62 @@ static inline s64 cpu_tag_read(struct cgroup_subsys_state *css,
 }
 #endif
 
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+
+static int cpu_soft_domain_write_s64(struct cgroup_subsys_state *css,
+				     struct cftype *cftype,
+				     s64 val)
+{
+	return sched_group_set_soft_domain(css_tg(css), val);
+}
+
+static s64 cpu_soft_domain_read_s64(struct cgroup_subsys_state *css,
+				     struct cftype *cftype)
+{
+	struct task_group *tg = css_tg(css);
+
+	if (!tg->sf_ctx)
+		return 0;
+
+	return (s64)tg->sf_ctx->policy;
+}
+
+static int cpu_soft_domain_quota_write_u64(struct cgroup_subsys_state *css,
+					struct cftype *cftype, u64 val)
+{
+	struct task_group *tg = css_tg(css);
+
+	if (val > cpumask_weight(cpumask_of_node(0)))
+		return -EINVAL;
+
+	return sched_group_set_soft_domain_quota(tg, val);
+}
+
+static u64 cpu_soft_domain_quota_read_u64(struct cgroup_subsys_state *css,
+					  struct cftype *cftype)
+{
+	struct task_group *tg = css_tg(css);
+
+	if (!tg->sf_ctx)
+		return 0;
+
+	return (u64)tg->sf_ctx->nr_cpus;
+}
+
+static int soft_domain_cpu_list_seq_show(struct seq_file *sf, void *v)
+{
+	struct task_group *tg = css_tg(seq_css(sf));
+
+	if (!tg->sf_ctx)
+		return 0;
+
+	seq_printf(sf, "%*pbl\n", cpumask_pr_args(to_cpumask(tg->sf_ctx->span)));
+
+	return 0;
+}
+
+#endif
+
 static struct cftype cpu_legacy_files[] = {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	{
@@ -11760,6 +11872,25 @@ static struct cftype cpu_legacy_files[] = {
 	{
 		.name = "rebuild_affinity_domain",
 		.write_u64 = cpu_rebuild_affinity_domain_u64,
+	},
+#endif
+#ifdef CONFIG_SCHED_SOFT_DOMAIN
+	{
+		.name = "soft_domain",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_s64 = cpu_soft_domain_read_s64,
+		.write_s64 = cpu_soft_domain_write_s64,
+	},
+	{
+		.name = "soft_domain_nr_cpu",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = cpu_soft_domain_quota_read_u64,
+		.write_u64 = cpu_soft_domain_quota_write_u64,
+	},
+	{
+		.name = "soft_domain_cpu_list",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = soft_domain_cpu_list_seq_show,
 	},
 #endif
 #ifdef CONFIG_CFS_BANDWIDTH
@@ -11816,8 +11947,17 @@ static struct cftype cpu_legacy_files[] = {
 #ifdef CONFIG_QOS_SCHED
 	{
 		.name = "qos_level",
+		.flags = CFTYPE_NOT_ON_ROOT,
 		.read_s64 = cpu_qos_read,
 		.write_s64 = cpu_qos_write,
+	},
+#endif
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	{
+		.name = "soft_quota",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_s64 = cpu_soft_quota_read,
+		.write_s64 = cpu_soft_quota_write,
 	},
 #endif
 #ifdef CONFIG_BPF_SCHED
@@ -12034,9 +12174,6 @@ static int __set_prefer_cpus_ptr(struct task_struct *p,
 	struct rq *rq;
 	int ret = 0;
 
-	if (!dynamic_affinity_enabled())
-		return -EPERM;
-
 	if (unlikely(!p->prefer_cpus))
 		return -EINVAL;
 
@@ -12144,12 +12281,21 @@ static struct cftype cpu_files[] = {
 		.write = cpu_uclamp_max_write,
 	},
 #endif
+#ifdef CONFIG_SCHED_SOFT_QUOTA
+	{
+		.name = "soft_quota",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_s64 = cpu_soft_quota_read,
+		.write_s64 = cpu_soft_quota_write,
+	},
+#endif
 	{ }	/* terminate */
 };
 
 struct cgroup_subsys cpu_cgrp_subsys = {
 	.css_alloc	= cpu_cgroup_css_alloc,
 	.css_online	= cpu_cgroup_css_online,
+	.css_offline	= cpu_cgroup_css_offline,
 	.css_released	= cpu_cgroup_css_released,
 	.css_free	= cpu_cgroup_css_free,
 	.css_extra_stat_show = cpu_extra_stat_show,
@@ -12678,7 +12824,9 @@ void task_tick_mm_cid(struct rq *rq, struct task_struct *curr)
 		return;
 	if (time_before(now, READ_ONCE(curr->mm->mm_cid_next_scan)))
 		return;
-	task_work_add(curr, work, TWA_RESUME);
+
+	/* No page allocation under rq lock */
+	task_work_add(curr, work, TWA_RESUME | TWAF_NO_ALLOC);
 }
 
 void sched_mm_cid_exit_signals(struct task_struct *t)

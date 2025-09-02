@@ -23,6 +23,7 @@ extern int smp_num_siblings;
 extern int num_processors;
 extern int disabled_cpus;
 extern cpumask_t cpu_sibling_map[];
+extern cpumask_t cpu_llc_shared_map[];
 extern cpumask_t cpu_core_map[];
 extern cpumask_t cpu_foreign_map[];
 
@@ -101,8 +102,5 @@ static inline void __cpu_die(unsigned int cpu)
 	loongson_cpu_die(cpu);
 }
 #endif
-
-int topo_add_cpu(int physid);
-int topo_get_cpu(int physid);
 
 #endif /* __ASM_SMP_H */

@@ -4,6 +4,7 @@
 #include <linux/pci-ecam.h>
 #include <linux/acpi.h>
 #include <linux/reboot.h>
+#include <linux/delay.h>
 
 #include <asm/pci.h>
 #include <asm/sw64_init.h>
@@ -31,6 +32,24 @@ int raw_pci_write(unsigned int domain, unsigned int bus, unsigned int devfn,
 		return bus_tmp->ops->write(bus_tmp, devfn, reg, len, val);
 
 	return -EINVAL;
+}
+
+void pcibios_reset_secondary_bus(struct pci_dev *dev)
+{
+	if (dev->bus->self) {
+		pci_reset_secondary_bus(dev);
+	} else {
+		if (IS_ENABLED(CONFIG_UNCORE_XUELANG)) {
+			pr_warn("The chip does not support secondary bus reset! \
+					No further action is required.\n");
+			return;
+		}
+
+		save_rc_piu(dev);
+		pci_reset_secondary_bus(dev);
+		ssleep(1);
+		restore_rc_piu(dev);
+	}
 }
 
 resource_size_t pcibios_default_alignment(void)
@@ -217,19 +236,6 @@ static void fixup_root_complex(struct pci_dev *dev)
 
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_JN, PCI_DEVICE_ID_SW64_ROOT_BRIDGE, fixup_root_complex);
 
-static int setup_bus_dma_cb(struct pci_dev *pdev, void *data)
-{
-	pdev->dev.bus_dma_limit = DMA_BIT_MASK(32);
-	return 0;
-}
-
-static void fix_bus_dma_limit(struct pci_dev *dev)
-{
-	pci_walk_bus(dev->subordinate, setup_bus_dma_cb, NULL);
-	pr_info("Set zx200 bus_dma_limit to 32-bit\n");
-}
-DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_ZHAOXIN, 0x071f, fix_bus_dma_limit);
-
 #ifdef CONFIG_DCA
 static void enable_sw_dca(struct pci_dev *dev)
 {
@@ -364,8 +370,10 @@ static void sunway_pci_root_bridge_prepare(struct pci_host_bridge *bridge)
 	bridge->swizzle_irq = pci_common_swizzle;
 	bridge->map_irq = sunway_pci_map_irq;
 
-	init_busnr = (0xff << 16) + ((last_bus + 1) << 8) + (last_bus);
-	writel(init_busnr, (hose->rc_config_space_base + RC_PRIMARY_BUS));
+	if (!is_guest_or_emul()) {
+		init_busnr = (0xff << 16) + ((last_bus + 1) << 8) + (last_bus);
+		writel(init_busnr, (hose->rc_config_space_base + RC_PRIMARY_BUS));
+	}
 
 	hose->first_busno = last_bus + (is_in_host() ? 1 : 0);
 
@@ -393,10 +401,12 @@ void sunway_pci_root_bridge_scan_finish(struct pci_host_bridge *bridge)
 	hose->last_busno = last_bus;
 	hose->busn_space->end = last_bus;
 
-	init_busnr = readl(hose->rc_config_space_base + RC_PRIMARY_BUS);
-	init_busnr &= ~(0xff << 16);
-	init_busnr |= last_bus << 16;
-	writel(init_busnr, (hose->rc_config_space_base + RC_PRIMARY_BUS));
+	if (!is_guest_or_emul()) {
+		init_busnr = readl(hose->rc_config_space_base + RC_PRIMARY_BUS);
+		init_busnr &= ~(0xff << 16);
+		init_busnr |= last_bus << 16;
+		writel(init_busnr, (hose->rc_config_space_base + RC_PRIMARY_BUS));
+	}
 
 	pci_bus_update_busn_res_end(bus, last_bus);
 	last_bus++;

@@ -390,7 +390,12 @@ struct sched_info {
 	/* When were we last queued to run? */
 	unsigned long long		last_queued;
 
+#ifdef CONFIG_CGROUP_IFS
+	/* When were we last waking to run? */
+	KABI_USE(1, unsigned long long last_waking)
+#else
 	KABI_RESERVE(1)
+#endif
 	KABI_RESERVE(2)
 #endif /* CONFIG_SCHED_INFO */
 };
@@ -993,6 +998,10 @@ struct task_struct {
 #ifdef CONFIG_TASK_DELAY_ACCT
 	/* delay due to memory thrashing */
 	unsigned                        in_thrashing:1;
+#endif
+#ifdef CONFIG_CGROUP_IFS
+	/* Run delayed due to bandwidth throttling */
+	KABI_FILL_HOLE(unsigned	in_throttle:1)
 #endif
 
 	unsigned long			atomic_flags; /* Flags requiring atomic access. */
@@ -1606,7 +1615,7 @@ struct task_struct {
 	randomized_struct_fields_end
 
 #if defined(CONFIG_FAST_SYSCALL)
-	KABI_USE(1, unsigned long *xcall_enable)
+	KABI_USE(1, void *xinfo)
 #else
 	KABI_RESERVE(1)
 #endif
@@ -2618,6 +2627,12 @@ static inline bool dynamic_affinity_enabled(void)
 {
 	return static_branch_unlikely(&__dynamic_affinity_switch);
 }
+
+#ifdef CONFIG_SCHED_PARAL
+bool sched_paral_used(void);
+#else
+static inline bool sched_paral_used(void) { return false; }
+#endif
 #endif
 
 #ifdef CONFIG_QOS_SCHED_SMART_GRID

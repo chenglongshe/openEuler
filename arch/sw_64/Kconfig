@@ -12,6 +12,7 @@ config SW64
 	select ARCH_CLOCKSOURCE_INIT
 	select ARCH_HAS_ACPI_TABLE_UPGRADE if ACPI
 	select ARCH_HAS_ELF_RANDOMIZE
+	select ARCH_HAS_NON_OVERLAPPING_ADDRESS_SPACE
 	select ARCH_HAS_PHYS_TO_DMA
 	select ARCH_HAS_PMEM_API
 	select ARCH_HAS_PTE_DEVMAP
@@ -66,6 +67,8 @@ config SW64
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_CPU_DEVICES
 	select GENERIC_GETTIMEOFDAY if HAVE_GENERIC_VDSO
+	select GENERIC_IOREMAP if SUBARCH_C4
+	select GENERIC_IRQ_EFFECTIVE_AFF_MASK if SMP
 	select GENERIC_IRQ_LEGACY
 	select GENERIC_IRQ_MIGRATION if SMP
 	select GENERIC_IRQ_PROBE
@@ -75,9 +78,12 @@ config SW64
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
 	select GENERIC_TIME_VSYSCALL
+	select GENERIC_VDSO_TIME_NS if HAVE_GENERIC_VDSO
 	select GPIOLIB if ACPI
 	select HANDLE_DOMAIN_IRQ
 	select HARDIRQS_SW_RESEND
+	select HAS_IOPORT
+	select HAVE_ACPI_APEI if ACPI
 	select HAVE_ARCH_AUDITSYSCALL
 	select HAVE_ARCH_JUMP_LABEL
 	select HAVE_ARCH_KGDB
@@ -88,13 +94,19 @@ config SW64
 	select HAVE_C_RECORDMCOUNT
 	select HAVE_DEBUG_BUGVERBOSE
 	select HAVE_DYNAMIC_FTRACE
+	select HAVE_DYNAMIC_FTRACE_WITH_ARGS
+	select HAVE_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
 	select HAVE_DYNAMIC_FTRACE_WITH_REGS
 	select HAVE_EBPF_JIT
+	select HAVE_EFFICIENT_UNALIGNED_ACCESS if !SUBARCH_C3B
 	select HAVE_FAST_GUP
 	select HAVE_FTRACE_MCOUNT_RECORD
+	select HAVE_FUNCTION_ERROR_INJECTION
+	select HAVE_FUNCTION_GRAPH_RETVAL if HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_FUNCTION_TRACER
 	select HAVE_GENERIC_VDSO if MMU && 64BIT
+	select HAVE_HARDLOCKUP_DETECTOR_PERF if PERF_EVENTS && HAVE_PERF_EVENTS_NMI
 	select HAVE_IDE
 	select HAVE_KPROBES
 	select HAVE_KPROBES_ON_FTRACE
@@ -107,12 +119,14 @@ config SW64
 	select HAVE_PCSPKR_PLATFORM
 	select HAVE_PERF_EVENTS
 	select HAVE_PERF_EVENTS_NMI if SUBARCH_C4
-	select HAVE_HARDLOCKUP_DETECTOR_PERF if PERF_EVENTS && HAVE_PERF_EVENTS_NMI
 	select HAVE_PERF_REGS
 	select HAVE_PERF_USER_STACK_DUMP
 	select HAVE_REGS_AND_STACK_ACCESS_API
 	select HAVE_RELIABLE_STACKTRACE if STACKTRACE
+	select HAVE_RETHOOK
 	select HAVE_RSEQ
+	select HAVE_SAMPLE_FTRACE_DIRECT
+	select HAVE_SAMPLE_FTRACE_DIRECT_MULTI
 	select HAVE_SYSCALL_TRACEPOINTS
 	select IRQ_DOMAIN
 	select IRQ_FORCED_THREADING
@@ -134,6 +148,7 @@ config SW64
 	select SW64_TIMER
 	select SWIOTLB
 	select THREAD_INFO_IN_TASK
+	select CRYPTO_CRC32_SW64 if !SUBARCH_C3B
 
 config LOCKDEP_SUPPORT
 	def_bool y
@@ -318,34 +333,6 @@ config PHYSICAL_START
 	  (the "X" value as specified in the "crashkernel=YM@XM" command
 	  line boot parameter passed to the panic-ed kernel).
 
-config KEXEC
-	bool "Kexec system call (EXPERIMENTAL)"
-	select KEXEC_CORE
-	help
-	  kexec is a system call that implements the ability to shutdown your
-	  current kernel, and to start another kernel. It is like a reboot
-	  but it is independent of the system firmware. And like a reboot
-	  you can start any kernel with it, not just Linux.
-
-	  The name comes from the similarity to the exec system call.
-
-	  It is an ongoing process to be certain the hardware in a machine
-	  is properly shutdown, so do not be surprised if this code does not
-	  initially work for you. As of this writing the exact hardware
-	  interface is strongly in flux, so no good recommendation can be
-	  made.
-
-config CRASH_DUMP
-	bool "Kernel crash dumps (EXPERIMENTAL)"
-	help
-	  Generate crash dump after being started by kexec.
-	  This should be normally only set in special crash dump kernels
-	  which are loaded in the main kernel with kexec-tools into
-	  a specially reserved region and then later executed after
-	  a crash by kdump/kexec. The crash dump kernel must be compiled
-	  to a memory address not used by the main kernel or firmware using
-	  PHYSICAL_START.
-
 config SECCOMP
 	def_bool y
 	prompt "Enable seccomp to safely compute untrusted bytecode"
@@ -400,6 +387,12 @@ config TRACE_IRQFLAGS_SUPPORT
 config ARCH_SUPPORTS_UPROBES
 	def_bool y
 
+config ARCH_SUPPORTS_KEXEC
+	def_bool y
+
+config ARCH_SUPPORTS_CRASH_DUMP
+	def_bool y
+
 config SCHED_SMT
 	bool "SMT scheduler support"
 	depends on SMP && SUBARCH_C4
@@ -444,13 +437,51 @@ config NUMA
 	  Access). This option is for configuring high-end multiprocessor
 	  server machines. If in doubt, say N.
 
+config NUMA_AWARE_SPINLOCKS
+	bool "Numa-aware spinlocks"
+	depends on NUMA
+	depends on QUEUED_SPINLOCKS
+	depends on 64BIT
+	depends on PARAVIRT_SPINLOCKS
+	default y
+	help
+	  Introduce NUMA (Non Uniform Memory Access) awareness into
+	  the slow path of spinlocks.
+
+	  In this variant of qspinlock, the kernel will try to keep the lock
+	  on the same node, thus reducing the number of remote cache misses,
+	  while trading some of the short term fairness for better performance.
+
+	  Say N if you want absolute first come first serve fairness.
+
+config PARAVIRT_SPINLOCKS
+	bool "Paravirtualization layer for spinlocks"
+	depends on PARAVIRT && SMP
+	help
+	  Paravirtualized spinlocks allow a pvops backend to replace the
+	  spinlock implementation with something virtualization-friendly
+	  (for example, block the virtual CPU rather than spinning).
+
+	  It has a minimal impact on native kernels and gives a nice performance
+	  benefit on paravirtualized KVM kernels.
+
+	  If you are unsure how to answer this question, answer Y.
+
+config PARAVIRT
+	bool "Enable paravirtualization code"
+	select PARAVIRT_SPINLOCKS
+	help
+	  This changes the kernel so it can modify itself when it is run
+	  under a hypervisor, potentially improving performance significantly
+	  over full virtualization.
+
 config USE_PERCPU_NUMA_NODE_ID
 	def_bool y
 	depends on NUMA
 
 config NODES_SHIFT
 	int
-	default "7"
+	default "3"
 	depends on NUMA
 
 config RELOCATABLE
@@ -651,6 +682,14 @@ config ARCH_HIBERNATION_POSSIBLE
 	depends on SW64
 	def_bool y
 
+config SW64_POWERCAP
+	bool "Sunway powercap driver"
+	select IPMI_SI
+	depends on SW64 && CPU_FREQ && ACPI && IPMI_HANDLER
+	help
+	  This enables support for the sunway powercap driver
+	  based on BMC and IPMI system interface.
+
 source "drivers/cpuidle/Kconfig"
 
 source "drivers/idle/Kconfig"
@@ -658,3 +697,5 @@ source "drivers/idle/Kconfig"
 endmenu
 
 source "arch/sw_64/kvm/Kconfig"
+
+source "arch/sw_64/mm/Kconfig"

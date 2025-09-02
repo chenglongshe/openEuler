@@ -66,7 +66,7 @@
 #include "callback.h"
 #include "delegation.h"
 #include "iostat.h"
-#include "internal.h"
+#include "enfs_adapter.h"
 #include "fscache.h"
 #include "nfs4session.h"
 #include "pnfs.h"
@@ -559,6 +559,7 @@ int nfs_show_options(struct seq_file *m, struct dentry *root)
 	seq_printf(m, ",addr=%s",
 			rpc_peeraddr2str(nfss->nfs_client->cl_rpcclient,
 							RPC_DISPLAY_ADDR));
+	nfs_multipath_show_client_info(m, nfss);
 	rcu_read_unlock();
 
 	return 0;
@@ -663,6 +664,7 @@ int nfs_show_stats(struct seq_file *m, struct dentry *root)
 	seq_puts(m, root->d_sb->s_flags & SB_NOATIME ? ",noatime" : "");
 	seq_puts(m, root->d_sb->s_flags & SB_NODIRATIME ? ",nodiratime" : "");
 	nfs_show_mount_options(m, nfss, 1);
+	nfs_multipath_show_client_info(m, nfss);
 
 	seq_printf(m, "\n\tage:\t%lu", (jiffies - nfss->mount_time) / HZ);
 
@@ -1021,6 +1023,16 @@ int nfs_reconfigure(struct fs_context *fc)
 	sync_filesystem(sb);
 
 	/*
+	 * The SB_RDONLY flag has been removed from the superblock during
+	 * mounts to prevent interference between different filesystems.
+	 * Similarly, it is also necessary to ignore the SB_RDONLY flag
+	 * during reconfiguration; otherwise, it may also result in the
+	 * creation of redundant superblocks when mounting a directory with
+	 * different rw and ro flags multiple times.
+	 */
+	fc->sb_flags_mask &= ~SB_RDONLY;
+
+	/*
 	 * Userspace mount programs that send binary options generally send
 	 * them populated with default values. We have no way to know which
 	 * ones were explicitly specified. Fall back to legacy behavior and
@@ -1028,7 +1040,17 @@ int nfs_reconfigure(struct fs_context *fc)
 	 */
 	if (ctx->skip_reconfig_option_check)
 		return 0;
+#if IS_ENABLED(CONFIG_ENFS)
+	if (ctx->enfs_option) {
+		int error = nfs_remount_iplist(nfss->nfs_client, ctx->enfs_option);
 
+		if (error) {
+			/* release remount option member */
+			enfs_free_mount_options(ctx);
+			return error;
+		}
+	}
+#endif
 	/*
 	 * noac is a special case. It implies -o sync, but that's not
 	 * necessarily reflected in the mtab options. reconfigure_super
@@ -1277,8 +1299,17 @@ int nfs_get_tree_common(struct fs_context *fc)
 	if (IS_ERR(server))
 		return PTR_ERR(server);
 
+	/*
+	 * When NFS_MOUNT_UNSHARED is not set, NFS forces the sharing of a
+	 * superblock among each filesystem that mounts sub-directories
+	 * belonging to a single exported root path.
+	 * To prevent interference between different filesystems, the
+	 * SB_RDONLY flag should be removed from the superblock.
+	 */
 	if (server->flags & NFS_MOUNT_UNSHARED)
 		compare_super = NULL;
+	else
+		fc->sb_flags &= ~SB_RDONLY;
 
 	/* -o noac implies -o sync */
 	if (server->flags & NFS_MOUNT_NOAC)
@@ -1332,6 +1363,10 @@ int nfs_get_tree_common(struct fs_context *fc)
 	s->s_flags |= SB_ACTIVE;
 	error = 0;
 
+#if IS_ENABLED(CONFIG_ENFS)
+	if (server)
+		enfs_trigger_get_server_capability(server);
+#endif
 out:
 	return error;
 
