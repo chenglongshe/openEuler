@@ -2396,7 +2396,8 @@ static const struct sys_reg_desc sys_reg_descs[] = {
 					ID_AA64MMFR2_EL1_CCIDX)),
 	ID_WRITABLE(ID_AA64MMFR3_EL1, (ID_AA64MMFR3_EL1_TCRX	|
 				       ID_AA64MMFR3_EL1_S1PIE   |
-				       ID_AA64MMFR3_EL1_S1POE)),
+				       ID_AA64MMFR3_EL1_S1POE   |
+					   ID_AA64MMFR3_EL1_Spec_FPACC)),
 	ID_UNALLOCATED(7,4),
 	ID_UNALLOCATED(7,5),
 	ID_UNALLOCATED(7,6),
