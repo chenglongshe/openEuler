@@ -13,6 +13,7 @@
 #include "blk-mq-sched.h"
 #include "blk-rq-qos.h"
 #include "blk-io-hierarchy/stats.h"
+#include "blk-glitch-detection.h"
 
 static int queue_poll_stat_show(void *data, struct seq_file *m)
 {
@@ -700,6 +701,7 @@ void blk_mq_debugfs_register(struct request_queue *q)
 	}
 
 	blk_mq_debugfs_register_hierarchy_stats(q);
+	blk_glitch_detection_debugfs_register(q);
 }
 
 static void blk_mq_debugfs_register_ctx(struct blk_mq_hw_ctx *hctx,
