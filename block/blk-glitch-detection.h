@@ -22,6 +22,10 @@ struct blk_glitch_detection_stats {
 	unsigned long threshold_us;
 };
 
+void blk_glitch_get_bio_stats(struct bio *bio);
+void blk_glitch_put_bio_stats(struct bio *bio);
+void blk_glitch_get_rq_stats(struct request *rq);
+void blk_glitch_init_rq_stats(struct request *rq);
 void
 blk_glitch_detection_bio_acct(struct bio *bio, enum stage_io_latency_group stage);
 void blk_glitch_detection_debugfs_register(struct request_queue *q);

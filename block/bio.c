@@ -233,10 +233,7 @@ void bio_uninit(struct bio *bio)
 	}
 #endif
 #ifdef CONFIG_BLK_IO_GLITCH_DETECTION
-	if (bio->time_ns) {
-		kfree(bio->time_ns);
-		bio->time_ns = NULL;
-	}
+	blk_glitch_put_bio_stats(bio);
 #endif
 	bio_hierarchy_end(bio);
 }
@@ -313,11 +310,7 @@ void bio_init(struct bio *bio, struct block_device *bdev, struct bio_vec *table,
 #endif
 
 #ifdef CONFIG_BLK_IO_GLITCH_DETECTION
-	/* When memory allocation fails, recording time_ns information
-	 * is unnecessary;  thus, handling the allocation failure
-	 * status can be omitted. */
-	bio->time_ns = kzalloc(STAGE_BIO_NR * sizeof(u64), GFP_KERNEL);
-	blk_glitch_detection_bio_acct(bio, STAGE_BIO_ALLOC);
+	blk_glitch_get_bio_stats(bio);
 #endif
 }
 EXPORT_SYMBOL(bio_init);

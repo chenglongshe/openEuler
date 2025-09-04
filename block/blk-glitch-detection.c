@@ -16,6 +16,13 @@
 #include "blk-glitch-detection.h"
 #include "blk-mq-debugfs.h"
 
+static bool io_glitch_enable = false;
+
+static bool blk_glitch_is_enable(u64 *time_ns)
+{
+	return io_glitch_enable && time_ns ? true : false;
+}
+
 static u64 get_duration(u64 a, u64 b)
 {
 	return a > b ? a - b : 0;
@@ -23,7 +30,7 @@ static u64 get_duration(u64 a, u64 b)
 
 void blk_glitch_detection_bio_acct(struct bio *bio, enum stage_io_latency_group stage)
 {
-	if (unlikely(!bio->time_ns))
+	if (!blk_glitch_is_enable(bio->time_ns))
 		return;
 
 	/*
@@ -37,9 +44,37 @@ void blk_glitch_detection_bio_acct(struct bio *bio, enum stage_io_latency_group 
 	bio->time_ns[stage] = ktime_get_ns();
 }
 
+void blk_glitch_get_bio_stats(struct bio *bio)
+{
+	if (!io_glitch_enable)
+		return;
+
+	bio->time_ns = kzalloc(STAGE_BIO_NR * sizeof(u64), GFP_KERNEL);
+	if (!bio->time_ns) {
+		WARN_ONCE(true, "%s: Failed to get bio stats.\n", __func__);
+		return;
+	}
+
+	bio->time_ns[STAGE_BIO_ALLOC] = ktime_get_ns();
+}
+
+void blk_glitch_put_bio_stats(struct bio *bio)
+{
+	if (!blk_glitch_is_enable(bio->time_ns))
+		return;
+
+	kfree(bio->time_ns);
+	bio->time_ns = NULL;
+
+	return;
+}
+
 void blk_glitch_detection_rq_acct(struct request *rq, enum stage_io_latency_group stage,
 				  struct bio *bio)
 {
+	if (!blk_glitch_is_enable(rq->time_ns))
+		return;
+
 	/*
 	 * Reordering may occur, causing the runqueue (RQ) to be
 	 * reinserted into the scheduling queue and redispatched.
@@ -53,11 +88,36 @@ void blk_glitch_detection_rq_acct(struct request *rq, enum stage_io_latency_grou
 	case STAGE_RQ_GETRQ:
 		if (bio && bio->time_ns)
 			memcpy(rq->time_ns, bio->time_ns, STAGE_BIO_NR * sizeof(u64));
+
+		fallthrough;
 	default:
 		rq->time_ns[stage] = ktime_get_ns();
 	}
 }
 EXPORT_SYMBOL_GPL(blk_glitch_detection_rq_acct);
+
+void blk_glitch_get_rq_stats(struct request *rq)
+{
+	if (!io_glitch_enable)
+		return;
+
+	rq->time_ns = kzalloc(STAGE_TOTAL_NR * sizeof(u64), GFP_KERNEL);
+	if (!rq->time_ns) {
+		WARN_ONCE(true, "%s: Failed to get rq stats.\n", __func__);
+		return;
+	}
+
+	return;
+}
+
+void blk_glitch_init_rq_stats(struct request *rq)
+{
+	if (!blk_glitch_is_enable(rq->time_ns))
+		return;
+
+	memset(rq->time_ns, 0, STAGE_TOTAL_NR * sizeof(u64));
+	return;
+}
 
 void blk_glitch_detection_rq_complete(struct request *rq, blk_status_t error,
 				      unsigned int nr_bytes)
@@ -66,6 +126,9 @@ void blk_glitch_detection_rq_complete(struct request *rq, blk_status_t error,
 	u64 now = blk_time_get_ns();
 	u64 duration;
 	u64 q2c_us;
+
+	if (!blk_glitch_is_enable(rq->time_ns))
+		return;
 
 	if (unlikely((!rq->time_ns[STAGE_BIO_ALLOC])))
 		return;
@@ -83,6 +146,21 @@ void blk_glitch_detection_rq_complete(struct request *rq, blk_status_t error,
 	trace_block_io_glitch_detection(rq, error, nr_bytes);
 }
 EXPORT_SYMBOL_GPL(blk_glitch_detection_rq_complete);
+
+static int __init
+setup_io_glitch(char *str)
+{
+	unsigned long val = 0;
+
+	if (isdigit(*str))
+		val = simple_strtoul(str, &str, 0);
+
+	if (!strcmp(str, "on") || val == 1)
+		io_glitch_enable = true;
+
+	return 0;
+}
+early_param("ioglitch", setup_io_glitch);
 
 static int blk_threshold_show(void *data, struct seq_file *m)
 {
@@ -138,10 +216,13 @@ void blk_glitch_detection_debugfs_unregister(struct request_queue *q)
 
 	lockdep_assert_held(&q->debugfs_mutex);
 
-	if (stats == NULL)
+	if (!blk_mq_debugfs_enabled(q))
 		return;
 
-	if (!blk_mq_debugfs_enabled(q))
+	if (!io_glitch_enable)
+		return;
+
+	if (stats == NULL)
 		return;
 
 	debugfs_remove_recursive(stats->debugfs_dir);
@@ -156,12 +237,15 @@ void blk_glitch_detection_debugfs_register(struct request_queue *q)
 
 	lockdep_assert_held(&q->debugfs_mutex);
 
+	if (!blk_mq_debugfs_enabled(q))
+		return;
+
+	if (!io_glitch_enable)
+		return;
+
 	stats = kzalloc(sizeof(struct blk_glitch_detection_stats),
 			GFP_KERNEL);
 	if (!stats)
-		return;
-
-	if (!blk_mq_debugfs_enabled(q))
 		return;
 
 	stats->debugfs_dir = debugfs_create_dir("blk_glitch_detection",

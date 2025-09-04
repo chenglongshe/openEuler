@@ -389,7 +389,7 @@ static struct request *blk_mq_rq_ctx_init(struct blk_mq_alloc_data *data,
 	rq->nr_integrity_segments = 0;
 #endif
 #ifdef CONFIG_BLK_IO_GLITCH_DETECTION
-	memset(rq->time_ns, 0, STAGE_TOTAL_NR * sizeof(u64));
+	blk_glitch_init_rq_stats(rq);
 #endif
 	rq->end_io = NULL;
 	rq->end_io_data = NULL;
@@ -3498,9 +3498,7 @@ static int blk_mq_init_request(struct blk_mq_tag_set *set, struct request *rq,
 	int ret;
 
 #ifdef CONFIG_BLK_IO_GLITCH_DETECTION
-	rq->time_ns = kzalloc(STAGE_TOTAL_NR * sizeof(u64), GFP_KERNEL);
-	if (!rq->time_ns)
-		return -ENOMEM;
+	blk_glitch_get_rq_stats(rq);
 #endif
 
 	if (set->ops->init_request) {
