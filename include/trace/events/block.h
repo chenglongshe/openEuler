@@ -169,6 +169,53 @@ DEFINE_EVENT(block_rq_completion, block_rq_error,
 	TP_ARGS(rq, error, nr_bytes)
 );
 
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+#define STAGE_IO_NR 11
+
+/**
+ * block_io_glitch_detection - block IO operation completed by device driver
+ * @rq: block operations request
+ * @error: status code
+ * @nr_bytes: number of completed bytes
+ *
+ * This block_io_glitch_detection is created to capture the timestamps of
+ * each I/O phase recorded in the request.
+ */
+TRACE_EVENT(block_io_glitch_detection,
+
+	TP_PROTO(struct request *rq, int error, unsigned int nr_bytes),
+
+	TP_ARGS(rq, error, nr_bytes),
+
+	TP_STRUCT__entry(
+		__field(  unsigned int,	 dev			)
+		__field(  unsigned long, sector			)
+		__field(  unsigned int,	 nr_sector		)
+		__field(  int,           error                  )
+		__array(  unsigned long, time,	STAGE_IO_NR	)
+		__array(  char,		 rwbs,	RWBS_LEN	)
+		__dynamic_array( char,	 cmd,	1		)
+	),
+
+	TP_fast_assign(
+		__entry->dev	   = rq->q->disk ? disk_devt(rq->q->disk) : 0;
+		__entry->sector    = blk_rq_pos(rq);
+		__entry->nr_sector = nr_bytes >> 9;
+		__entry->error     = error;
+
+		memcpy(__entry->time, rq->time_ns, STAGE_IO_NR * sizeof(u64));
+		blk_fill_rwbs(__entry->rwbs, rq->cmd_flags);
+		__get_str(cmd)[0] = '\0';
+	),
+
+	TP_printk("%d,%d %s (%s) %llu + %u [%d]",
+		  MAJOR(__entry->dev), MINOR(__entry->dev),
+		  __entry->rwbs, __get_str(cmd),
+		  (unsigned long long)__entry->sector,
+		  __entry->nr_sector, __entry->error)
+);
+#endif
+
 DECLARE_EVENT_CLASS(block_rq,
 
 	TP_PROTO(struct request *rq),

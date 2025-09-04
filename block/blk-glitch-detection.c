@@ -72,5 +72,7 @@ void blk_glitch_detection_rq_complete(struct request *rq, blk_status_t error,
 
 	if (q2c_us < DEFAULT_THRESHOLD_US)
 		return;
+
+	trace_block_io_glitch_detection(rq, error, nr_bytes);
 }
 EXPORT_SYMBOL_GPL(blk_glitch_detection_rq_complete);
