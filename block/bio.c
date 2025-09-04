@@ -25,6 +25,7 @@
 #include "blk-rq-qos.h"
 #include "blk-cgroup.h"
 #include "blk-io-hierarchy/stats.h"
+#include "blk-glitch-detection.h"
 
 #define ALLOC_CACHE_THRESHOLD	16
 #define ALLOC_CACHE_MAX		256
@@ -316,6 +317,7 @@ void bio_init(struct bio *bio, struct block_device *bdev, struct bio_vec *table,
 	 * is unnecessary;  thus, handling the allocation failure
 	 * status can be omitted. */
 	bio->time_ns = kzalloc(STAGE_BIO_NR * sizeof(u64), GFP_KERNEL);
+	blk_glitch_detection_bio_acct(bio, STAGE_BIO_ALLOC);
 #endif
 }
 EXPORT_SYMBOL(bio_init);

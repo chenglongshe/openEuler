@@ -1716,6 +1716,7 @@ static void scsi_done_internal(struct scsi_cmnd *cmd, bool complete_directly)
 	if (unlikely(test_and_set_bit(SCMD_STATE_COMPLETE, &cmd->state)))
 		return;
 	trace_scsi_dispatch_cmd_done(cmd);
+	blk_glitch_detection_rq_acct(req, STAGE_RQ_DONE, NULL);
 
 	if (complete_directly)
 		blk_mq_complete_request_direct(req, scsi_complete);

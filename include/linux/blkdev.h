@@ -374,6 +374,27 @@ typedef int (*report_zones_cb)(struct blk_zone *zone, unsigned int idx,
 
 void disk_set_zoned(struct gendisk *disk, enum blk_zoned_model model);
 
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+void
+blk_glitch_detection_rq_acct(struct request *rq, enum stage_io_latency_group stage,
+			     struct bio *bio);
+void
+blk_glitch_detection_rq_complete(struct request *rq, blk_status_t error,
+				 unsigned int nr_bytes);
+
+#else /* CONFIG_BLK_IO_GLITCH_DETECTION */
+static inline void
+blk_glitch_detection_rq_acct(struct request *rq, enum stage_io_latency_group stage,
+			     struct bio *bio)
+{
+}
+static inline void
+blk_glitch_detection_rq_complete(struct request *rq, blk_status_t error,
+				 unsigned int nr_bytes)
+{
+}
+#endif /* CONFIG_BLK_IO_GLITCH_DETECTION */
+
 #ifdef CONFIG_BLK_DEV_ZONED
 #define BLK_ALL_ZONES  ((unsigned int)-1)
 int blkdev_report_zones(struct block_device *bdev, sector_t sector,

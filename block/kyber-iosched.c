@@ -605,6 +605,8 @@ static void kyber_insert_requests(struct blk_mq_hw_ctx *hctx,
 
 		spin_lock(&kcq->lock);
 		trace_block_rq_insert(rq);
+		blk_glitch_detection_rq_acct(rq, STAGE_RQ_SCHED, NULL);
+
 		if (flags & BLK_MQ_INSERT_AT_HEAD)
 			list_move(&rq->queuelist, head);
 		else

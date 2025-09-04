@@ -51,6 +51,7 @@
 #include "blk-throttle.h"
 #include "blk-ioprio.h"
 #include "blk-io-hierarchy/stats.h"
+#include "blk-glitch-detection.h"
 
 struct dentry *blk_debugfs_root;
 
@@ -726,6 +727,7 @@ void submit_bio_noacct_nocheck(struct bio *bio)
 	blk_cgroup_bio_start(bio);
 	blkcg_bio_issue_init(bio);
 
+	blk_glitch_detection_bio_acct(bio, STAGE_BIO_TH_END);
 	if (!bio_flagged(bio, BIO_TRACE_COMPLETION)) {
 		trace_block_bio_queue(bio);
 		/*
@@ -842,6 +844,7 @@ void submit_bio_noacct(struct bio *bio)
 	 * be accounted separately.
 	 */
 	bio_hierarchy_start(bio);
+	blk_glitch_detection_bio_acct(bio, STAGE_BIO_THROTTLE);
 	if (blk_throtl_bio(bio))
 		return;
 	submit_bio_noacct_nocheck(bio);

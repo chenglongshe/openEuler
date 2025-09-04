@@ -33,7 +33,6 @@ void blk_glitch_detection_bio_acct(struct bio *bio, enum stage_io_latency_group 
 
 	bio->time_ns[stage] = ktime_get_ns();
 }
-EXPORT_SYMBOL_GPL(blk_glitch_detection_bio_acct);
 
 void blk_glitch_detection_rq_acct(struct request *rq, enum stage_io_latency_group stage,
 				  struct bio *bio)

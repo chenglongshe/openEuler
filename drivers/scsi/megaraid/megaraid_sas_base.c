@@ -1767,6 +1767,7 @@ megasas_build_and_issue_cmd(struct megasas_instance *instance,
 	 */
 	atomic_inc(&instance->fw_outstanding);
 
+	blk_glitch_detection_rq_acct(scsi_cmd_to_rq(scmd), STAGE_RQ_HARD, NULL);
 	instance->instancet->fire_cmd(instance, cmd->frame_phys_addr,
 				cmd->frame_count-1, instance->reg_set);
 
