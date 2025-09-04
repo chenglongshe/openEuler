@@ -3482,6 +3482,12 @@ static int blk_mq_init_request(struct blk_mq_tag_set *set, struct request *rq,
 {
 	int ret;
 
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	rq->time_ns = kzalloc(STAGE_TOTAL_NR * sizeof(u64), GFP_KERNEL);
+	if (!rq->time_ns)
+		return -ENOMEM;
+#endif
+
 	if (set->ops->init_request) {
 		ret = set->ops->init_request(set, rq, hctx_idx, node);
 		if (ret)

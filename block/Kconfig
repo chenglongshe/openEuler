@@ -281,6 +281,15 @@ config BLK_IO_HUNG_TASK_CHECK
 	  if this is set, hungtask will complain about slow io even if such
 	  io is not hanged. Be careful to enable hungtask panic in this case.
 
+config BLK_IO_GLITCH_DETECTION
+	bool "Enable I/O Glitch Detection Timestamp Statistics"
+	default n
+	help
+	Block layer I/O Glitch Detection timestamp statistics function,
+	used to collect timestamps of I/O at each stage in the block layer,
+	and analyze I/O Glitch Detection through timestamps.
+	If unsure, say N.
+
 source "block/blk-io-hierarchy/Kconfig"
 source "block/partitions/Kconfig"
 

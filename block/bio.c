@@ -231,6 +231,12 @@ void bio_uninit(struct bio *bio)
 		bio->pid = NULL;
 	}
 #endif
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	if (bio->time_ns) {
+		kfree(bio->time_ns);
+		bio->time_ns = NULL;
+	}
+#endif
 	bio_hierarchy_end(bio);
 }
 EXPORT_SYMBOL(bio_uninit);
@@ -303,6 +309,13 @@ void bio_init(struct bio *bio, struct block_device *bdev, struct bio_vec *table,
 #ifdef CONFIG_BLK_IO_HIERARCHY_STATS
 	bio->hierarchy_time = 0;
 	INIT_LIST_HEAD(&bio->hierarchy_list);
+#endif
+
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	/* When memory allocation fails, recording time_ns information
+	 * is unnecessary;  thus, handling the allocation failure
+	 * status can be omitted. */
+	bio->time_ns = kzalloc(STAGE_BIO_NR * sizeof(u64), GFP_KERNEL);
 #endif
 }
 EXPORT_SYMBOL(bio_init);
