@@ -15,6 +15,9 @@
 #include "hinic3_common.h"
 #include "hinic3_hwdev.h"
 #include "hinic3_hwif.h"
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+#include <asm/virtcca_io_hook.h>
+#endif
 
 #ifndef CONFIG_MODULE_PROF
 #define WAIT_HWIF_READY_TIMEOUT				10000
@@ -168,22 +171,42 @@
 
 u32 hinic3_hwif_read_reg(struct hinic3_hwif *hwif, u32 reg)
 {
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	if (HINIC3_GET_REG_FLAG(reg) == HINIC3_MGMT_REGS_FLAG)
+		return be32_to_cpu(readl_hook(hwif->mgmt_regs_base +
+					 HINIC3_GET_REG_ADDR(reg), (struct pci_dev *)hwif->pdev));
+	else
+		return be32_to_cpu(readl_hook(hwif->cfg_regs_base +
+					 HINIC3_GET_REG_ADDR(reg), (struct pci_dev *)hwif->pdev));
+#else
 	if (HINIC3_GET_REG_FLAG(reg) == HINIC3_MGMT_REGS_FLAG)
 		return be32_to_cpu(readl(hwif->mgmt_regs_base +
 					 HINIC3_GET_REG_ADDR(reg)));
 	else
 		return be32_to_cpu(readl(hwif->cfg_regs_base +
 					 HINIC3_GET_REG_ADDR(reg)));
+#endif
 }
 
 void hinic3_hwif_write_reg(struct hinic3_hwif *hwif, u32 reg, u32 val)
 {
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	if (HINIC3_GET_REG_FLAG(reg) == HINIC3_MGMT_REGS_FLAG)
+		writel_hook(cpu_to_be32(val),
+			    hwif->mgmt_regs_base + HINIC3_GET_REG_ADDR(reg),
+				(struct pci_dev *)hwif->pdev);
+	else
+		writel_hook(cpu_to_be32(val),
+			    hwif->cfg_regs_base + HINIC3_GET_REG_ADDR(reg),
+				(struct pci_dev *)hwif->pdev);
+#else
 	if (HINIC3_GET_REG_FLAG(reg) == HINIC3_MGMT_REGS_FLAG)
 		writel(cpu_to_be32(val),
 		       hwif->mgmt_regs_base + HINIC3_GET_REG_ADDR(reg));
 	else
 		writel(cpu_to_be32(val),
 		       hwif->cfg_regs_base + HINIC3_GET_REG_ADDR(reg));
+#endif
 }
 
 bool get_card_present_state(struct hinic3_hwdev *hwdev)

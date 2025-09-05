@@ -7,6 +7,9 @@
 #include "hinic3_crm.h"
 #include "hinic3_common.h"
 #include "hinic3_wq.h"
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+#include <asm/virtcca_io_hook.h>
+#endif
 
 #define HINIC3_MAX_TX_QUEUE_DEPTH	65536
 #define HINIC3_MAX_RX_QUEUE_DEPTH	16384
@@ -317,7 +320,12 @@ static inline void hinic3_write_db(struct hinic3_io_queue *queue, int cos,
 
 	wmb(); /* Write all before the doorbell */
 
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	writeq_hook(*((u64 *)(u8 *)&db), DB_ADDR(queue, pi),
+		    to_pci_dev((struct device *)queue->wq.dev_hdl));
+#else
 	writeq(*((u64 *)(u8 *)&db), DB_ADDR(queue, pi));
+#endif
 }
 
 struct hinic3_dyna_qp_params {

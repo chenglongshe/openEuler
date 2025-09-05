@@ -19,6 +19,9 @@
 #include "cqm_object_intern.h"
 #include "cqm_main.h"
 #include "cqm_db.h"
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+#include <asm/virtcca_io_hook.h>
+#endif
 
 /**
  * cqm_db_addr_alloc - Apply for a page of hardware doorbell and dwqe.
@@ -244,7 +247,12 @@ s32 cqm_ring_hardware_db(void *ex_handle, u32 service_type, u8 db_count, u64 db)
 	 * the parameter is not checked.
 	 */
 	wmb();
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	writeq_hook(db, (u64 *)service->hardware_db_vaddr + db_count,
+		    (struct pci_dev *)handle->pcidev_hdl);
+#else
 	*((u64 *)service->hardware_db_vaddr + db_count) = db;
+#endif
 	return CQM_SUCCESS;
 }
 EXPORT_SYMBOL(cqm_ring_hardware_db);
@@ -276,7 +284,11 @@ s32 cqm_ring_hardware_db_fc(void *ex_handle, u32 service_type, u8 db_count,
 	wmb();
 	dbaddr = (u8 *)service->hardware_db_vaddr +
 		 ((pagenum + HIFC_DB_FAKE_VF_OFFSET) * HINIC3_DB_PAGE_SIZE);
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	writeq_hook(db, (u64 *)dbaddr + db_count, (struct pci_dev *)handle->pcidev_hdl);
+#else
 	*((u64 *)dbaddr + db_count) = db;
+#endif
 	return CQM_SUCCESS;
 }
 
@@ -315,8 +327,14 @@ s32 cqm_ring_direct_wqe_db(void *ex_handle, u32 service_type, u8 db_count,
 	 * the parameter is not checked.
 	 */
 	wmb();
-	for (i = 0; i < 0x80 / 0x8; i++)
+	for (i = 0; i < 0x80 / 0x8; i++) {
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+		writeq_hook(*tmp++, (u64 *)service->dwqe_vaddr + 0x40 + i,
+			    (struct pci_dev *)handle->pcidev_hdl);
+#else
 		*((u64 *)service->dwqe_vaddr + 0x40 + i) = *tmp++;
+#endif
+	}
 
 	return CQM_SUCCESS;
 }
@@ -339,17 +357,34 @@ s32 cqm_ring_direct_wqe_db_fc(void *ex_handle, u32 service_type,
 	 * the parameter is not checked.
 	 */
 	wmb();
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	writeq_hook(tmp[0x2], (u64 *)service->dwqe_vaddr + 0x0,
+		    (struct pci_dev *)handle->pcidev_hdl);
+	writeq_hook(tmp[0x3], (u64 *)service->dwqe_vaddr + 0x1,
+		    (struct pci_dev *)handle->pcidev_hdl);
+	writeq_hook(tmp[0x0], (u64 *)service->dwqe_vaddr + 0x2,
+		    (struct pci_dev *)handle->pcidev_hdl);
+	writeq_hook(tmp[0x1], (u64 *)service->dwqe_vaddr + 0x3,
+		    (struct pci_dev *)handle->pcidev_hdl);
+#else
 	*((u64 *)service->dwqe_vaddr + 0x0) = tmp[0x2];
 	*((u64 *)service->dwqe_vaddr + 0x1) = tmp[0x3];
 	*((u64 *)service->dwqe_vaddr + 0x2) = tmp[0x0];
 	*((u64 *)service->dwqe_vaddr + 0x3) = tmp[0x1];
+#endif
 	tmp += 0x4;
 
 	/* The FC use 256B WQE. The directwqe is written at block0,
 	 * and the length is 256B
 	 */
-	for (i = 0x4; i < 0x20; i++)
+	for (i = 0x4; i < 0x20; i++) {
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+		writeq_hook(*tmp++, (u64 *)service->dwqe_vaddr + i,
+			    (struct pci_dev *)handle->pcidev_hdl);
+#else
 		*((u64 *)service->dwqe_vaddr + i) = *tmp++;
+#endif
+	}
 
 	return CQM_SUCCESS;
 }
@@ -387,7 +422,12 @@ s32 cqm_ring_hardware_db_update_pri(void *ex_handle, u32 service_type,
 	 * the parameter is not checked.
 	 */
 	wmb();
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	writeq_hook(db, (u64 *)service->hardware_db_vaddr + db_count,
+		    (struct pci_dev *)handle->pcidev_hdl);
+#else
 	*((u64 *)service->hardware_db_vaddr + db_count) = db;
+#endif
 
 	return CQM_SUCCESS;
 }
