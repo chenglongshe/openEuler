@@ -222,8 +222,6 @@ extern void arch_kexec_pre_free_pages(void *vaddr, unsigned int pages);
 
 #endif
 
-typedef void crash_vmclear_fn(void);
-extern crash_vmclear_fn __rcu *crash_vmclear_loaded_vmcss;
 extern void kdump_nmi_shootdown_cpus(void);
 
 #endif /* __ASSEMBLY__ */

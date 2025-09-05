@@ -50,7 +50,7 @@
 #include <asm/fpu/internal.h>
 #include <asm/perf_event.h>
 #include <asm/debugreg.h>
-#include <asm/kexec.h>
+#include <asm/reboot.h>
 #include <asm/apic.h>
 #include <asm/irq_remapping.h>
 #include <asm/mmu_context.h>
@@ -2225,7 +2225,6 @@ static void vmcs_load(struct vmcs *vmcs)
 		       vmcs, phys_addr);
 }
 
-#ifdef CONFIG_KEXEC_CORE
 /*
  * This bitmap is used to indicate whether the vmclear
  * operation is enabled on all cpus. All disabled by
@@ -2260,10 +2259,6 @@ static void crash_vmclear_local_loaded_vmcss(void)
 			    loaded_vmcss_on_cpu_link)
 		vmcs_clear(v->vmcs);
 }
-#else
-static inline void crash_enable_local_vmclear(int cpu) { }
-static inline void crash_disable_local_vmclear(int cpu) { }
-#endif /* CONFIG_KEXEC_CORE */
 
 static void __loaded_vmcs_clear(void *arg)
 {
@@ -14670,10 +14665,8 @@ static void vmx_cleanup_l1d_flush(void)
 
 static void vmx_exit(void)
 {
-#ifdef CONFIG_KEXEC_CORE
 	RCU_INIT_POINTER(crash_vmclear_loaded_vmcss, NULL);
 	synchronize_rcu();
-#endif
 
 	kvm_exit();
 
@@ -14758,10 +14751,9 @@ static int __init vmx_init(void)
 
 	vmx_setup_fb_clear_ctrl();
 
-#ifdef CONFIG_KEXEC_CORE
 	rcu_assign_pointer(crash_vmclear_loaded_vmcss,
 			   crash_vmclear_local_loaded_vmcss);
-#endif
+
 	vmx_check_vmcs12_offsets();
 
 	return 0;
