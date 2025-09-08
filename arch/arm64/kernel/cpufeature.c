@@ -2445,16 +2445,27 @@ DEFINE_STATIC_KEY_FALSE(xcall_enable);
 
 static bool is_arch_xcall_xint_support(void)
 {
+	u64 old, new;
+
 	/* List of CPUs that support Xcall/Xint */
 	static const struct midr_range xcall_xint_cpus[] = {
 		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
 		{ /* sentinel */ }
 	};
 
-	if (is_midr_in_range_list(read_cpuid_id(), xcall_xint_cpus))
-		return true;
+	if (!is_midr_in_range_list(read_cpuid_id(), xcall_xint_cpus))
+		return false;
 
-	return false;
+	old = read_sysreg(actlr_el1);
+	write_sysreg(old | (ACTLR_ELx_XCALL | ACTLR_ELx_XINT), actlr_el1);
+	isb();
+	new = read_sysreg(actlr_el1);
+	if (!(new & ACTLR_ELx_XCALL) || !(new & ACTLR_ELx_XINT))
+		return false;
+
+	write_sysreg(old, actlr_el1);
+
+	return true;
 }
 
 static int __init xcall_setup(char *str)
@@ -2527,30 +2538,10 @@ static void enable_xcall_xint_vectors(void)
 
 static void cpu_enable_arch_xcall_xint(const struct arm64_cpu_capabilities *__unused)
 {
-	int cpu = smp_processor_id();
-	u64 actlr_el1, actlr_el2;
-	u64 el;
-
-	el = read_sysreg(CurrentEL);
-	if (el == CurrentEL_EL2) {
-		/*
-		 * Enable EL2 trap when access ACTLR_EL1 in guest kernel.
-		 */
-		write_sysreg_s(read_sysreg_s(SYS_HCR_EL2) | HCR_TACR, SYS_HCR_EL2);
-		actlr_el2 = read_sysreg(actlr_el2);
-		actlr_el2 |= ACTLR_ELx_XINT;
-		write_sysreg(actlr_el2, actlr_el2);
-		isb();
-		actlr_el2 = read_sysreg(actlr_el2);
-		pr_info("actlr_el2: %llx, cpu:%d\n", actlr_el2, cpu);
-	} else {
-		actlr_el1 = read_sysreg(actlr_el1);
-		actlr_el1 |= ACTLR_ELx_XINT;
-		write_sysreg(actlr_el1, actlr_el1);
-		isb();
-		actlr_el1 = read_sysreg(actlr_el1);
-		pr_info("actlr_el1: %llx, cpu:%d\n", actlr_el1, cpu);
-	}
+	if (read_sysreg(CurrentEL) == CurrentEL_EL2)
+		write_sysreg(read_sysreg(actlr_el2) | ACTLR_ELx_XINT, actlr_el2);
+	else
+		write_sysreg(read_sysreg(actlr_el1) | ACTLR_ELx_XINT, actlr_el1);
 
 	enable_xcall_xint_vectors();
 }

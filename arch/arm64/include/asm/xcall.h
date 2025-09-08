@@ -10,6 +10,7 @@
 
 #include <asm/actlr.h>
 #include <asm/cpufeature.h>
+#include <asm/unistd.h>
 
 DECLARE_STATIC_KEY_FALSE(xcall_enable);
 
