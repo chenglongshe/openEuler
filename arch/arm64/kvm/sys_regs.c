@@ -281,8 +281,10 @@ static bool access_actlr(struct kvm_vcpu *vcpu,
 {
 	u64 mask, shift;
 
-	if (p->is_write)
-		return ignore_write(vcpu, p);
+	if (p->is_write) {
+		vcpu_write_sys_reg(vcpu, p->regval, r->reg);
+		return true;
+	}
 
 	get_access_mask(r, &mask, &shift);
 	p->regval = (vcpu_read_sys_reg(vcpu, r->reg) & mask) >> shift;
