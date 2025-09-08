@@ -846,7 +846,7 @@ int hmadvise_inner(int hnid, unsigned long start, size_t len_in, int behavior)
 		return error;
 	}
 
-	if (!is_hnode(hnid) || !is_hnode_allowed(hnid)) {
+	if (!is_hnode(hnid)) {
 		gmem_err("hmadvise: can't find hnode by hnid:%d or hnode is not allowed\n", hnid);
 		return error;
 	}
@@ -1026,7 +1026,7 @@ int hmemcpy(int hnid, unsigned long dest, unsigned long src, size_t size)
 			gmem_err("hmemcpy: invalid hnid %d < 0\n", hnid);
 			return -EINVAL;
 		}
-	} else if (!is_hnode(hnid) || !is_hnode_allowed(hnid)) {
+	} else if (!is_hnode(hnid)) {
 		gmem_err("hmemcpy: can't find hnode by hnid:%d or hnode is not allowed\n", hnid);
 		return -EINVAL;
 	}

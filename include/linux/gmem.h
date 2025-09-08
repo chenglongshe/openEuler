@@ -326,12 +326,6 @@ static inline bool is_hnode(int node)
 	       node_isset(node, hnode_map);
 }
 
-static inline bool is_hnode_allowed(int node)
-{
-	return (node < MAX_NUMNODES) && is_hnode(node) &&
-	       node_isset(node, current->mems_allowed);
-}
-
 static inline int get_hnuma_id(struct gm_dev *gm_dev)
 {
 	return first_node(gm_dev->registered_hnodes);
