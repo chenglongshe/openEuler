@@ -13,6 +13,8 @@ void vm_object_drop_locked(struct vm_area_struct *vma);
 void dup_vm_object(struct vm_area_struct *dst, struct vm_area_struct *src, bool dst_peer_shared);
 void vm_object_adjust(struct vm_area_struct *vma, unsigned long start,
 	unsigned long end);
+void vm_object_merge(struct vm_area_struct *vma, unsigned long addr);
+void vm_object_split(struct vm_area_struct *old_vma, struct vm_area_struct *new_vma);
 void dup_peer_shared_vma(struct vm_area_struct *vma);
 
 struct gm_mapping *alloc_gm_mapping(void);

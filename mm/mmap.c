@@ -704,6 +704,13 @@ int vma_expand(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	/* Only handles expanding */
 	VM_WARN_ON(vma->vm_start < start || vma->vm_end > end);
 
+	if (vma_is_peer_shared(vma)) {
+		if (!remove_next)
+			vm_object_adjust(vma, start, end);
+		else
+			vm_object_merge(vma, next->vm_end);
+	}
+
 	/* Note: vma iterator must be pointing to 'start' */
 	vma_iter_config(vmi, start, end);
 	if (vma_iter_prealloc(vmi, vma))
@@ -754,6 +761,10 @@ int vma_shrink(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	init_vma_prep(&vp, vma);
 	vma_prepare(&vp);
 	vma_adjust_trans_huge(vma, start, end, 0);
+
+	if (vma_is_peer_shared(vma)) {
+		vm_object_adjust(vma, start, end);
+	}
 
 	vma_iter_clear(vmi);
 	vma->vm_start = start;
@@ -1001,6 +1012,11 @@ struct vm_area_struct *vma_merge(struct vma_iterator *vmi, struct mm_struct *mm,
 			if (!next->anon_vma)
 				err = dup_anon_vma(prev, curr, &anon_dup);
 		}
+#ifdef CONFIG_GMEM
+		if (vma_is_peer_shared(prev)) {
+			vm_object_merge(prev, next->vm_end);
+		}
+#endif
 	} else if (merge_prev) {			/* case 2 */
 		if (curr) {
 			vma_start_write(curr);
@@ -1019,6 +1035,9 @@ struct vm_area_struct *vma_merge(struct vma_iterator *vmi, struct mm_struct *mm,
 			}
 			if (!err)
 				err = dup_anon_vma(prev, curr, &anon_dup);
+			if (vma_is_peer_shared(prev)) {
+				vm_object_merge(prev, end);
+			}
 		}
 	} else { /* merge_next */
 		vma_start_write(next);
@@ -1029,6 +1048,9 @@ struct vm_area_struct *vma_merge(struct vma_iterator *vmi, struct mm_struct *mm,
 			adjust = next;
 			adj_start = -(prev->vm_end - addr);
 			err = dup_anon_vma(next, prev, &anon_dup);
+			if (vma_is_peer_shared(prev)) {
+				vm_object_merge(prev, addr);
+			}
 		} else {
 			/*
 			 * Note that cases 3 and 8 are the ONLY ones where prev
@@ -1043,6 +1065,9 @@ struct vm_area_struct *vma_merge(struct vma_iterator *vmi, struct mm_struct *mm,
 				vma_start_write(curr);
 				remove = curr;
 				err = dup_anon_vma(next, curr, &anon_dup);
+			}
+			if (vma_is_peer_shared(curr)) {
+				vm_object_merge(vma, next->vm_end);
 			}
 		}
 	}
@@ -1079,11 +1104,11 @@ struct vm_area_struct *vma_merge(struct vma_iterator *vmi, struct mm_struct *mm,
 		vma_iter_store(vmi, vma);
 
 	if (adj_start) {
-#ifdef CONFIG_GMEM
-		if (vma_is_peer_shared(adjust))
-			vm_object_adjust(adjust, adjust->vm_start + adj_start,
-				adjust->vm_end);
-#endif
+// #ifdef CONFIG_GMEM
+// 		if (vma_is_peer_shared(adjust)) {
+// 			vm_object_merge(adjust, adjust->vm_end);
+// 		}
+// #endif
 		adjust->vm_start += adj_start;
 		adjust->vm_pgoff += adj_start >> PAGE_SHIFT;
 		if (adj_start < 0) {
@@ -2553,13 +2578,7 @@ int __split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 
 #ifdef CONFIG_GMEM
 	if (vma_is_peer_shared(vma)) {
-		if (new_below) {
-			vm_object_adjust(new, new->vm_start, addr);
-			vm_object_adjust(vma, addr, vma->vm_end);
-		} else {
-			vm_object_adjust(vma, vma->vm_start, addr);
-			vm_object_adjust(new, addr, new->vm_end);
-		}
+		vm_object_split(vma, new);
 	}
 #endif
 

@@ -180,6 +180,123 @@ void dup_peer_shared_vma(struct vm_area_struct *vma)
 	}
 }
 
+/* new_vma is part of old_vma, so old_vma->vm_start <= new_vma->vm_start and new_vma->vm_end < old_vma->vm_end */
+void vm_object_split(struct vm_area_struct *old_vma, struct vm_area_struct *new_vma)
+{
+	unsigned long index;
+	struct gm_mapping *page;
+	unsigned long transferred_pages = 0;
+
+	XA_STATE(xas, old_vma->vm_obj->logical_page_table, linear_page_index(old_vma, new_vma->vm_start));
+
+	xa_lock(old_vma->vm_obj->logical_page_table);
+	xa_lock(new_vma->vm_obj->logical_page_table);
+	xas_for_each(&xas, page, linear_page_index(old_vma, new_vma->vm_end - SZ_2M)) {
+		index = xas.xa_index - old_vma->vm_pgoff + new_vma->vm_pgoff - ((new_vma->vm_start - old_vma->vm_start) >> PAGE_SHIFT);
+		__xa_store(new_vma->vm_obj->logical_page_table, index, page, GFP_KERNEL);
+		xas_store(&xas, NULL);
+		transferred_pages++;
+	}
+
+	atomic_sub(transferred_pages, &old_vma->vm_obj->nr_pages);
+	atomic_add(transferred_pages, &new_vma->vm_obj->nr_pages);
+	xa_unlock(new_vma->vm_obj->logical_page_table);
+	xa_unlock(old_vma->vm_obj->logical_page_table);
+}
+
+void vm_object_merge(struct vm_area_struct *vma, unsigned long addr)
+{
+	unsigned long index;
+	struct gm_mapping *page;
+	struct vm_area_struct *next, *n_next;
+	unsigned long moved_pages = 0;
+
+	VMA_ITERATOR(vmi, vma->vm_mm, vma->vm_start);
+	next = vma_next(&vmi);
+	next = vma_next(&vmi);
+	if (!next)
+		return;
+
+	if (addr < vma->vm_end) {
+		/* case 4: move logical mapping in [end, vma->vm_end) from vma to next */
+		XA_STATE(xas, vma->vm_obj->logical_page_table, linear_page_index(vma, addr));
+
+		xa_lock(vma->vm_obj->logical_page_table);
+		xa_lock(next->vm_obj->logical_page_table);
+		xas_for_each(&xas, page, linear_page_index(vma, vma->vm_end - SZ_2M)) {
+			index = xas.xa_index - vma->vm_pgoff + next->vm_pgoff - ((next->vm_start - vma->vm_start) >> PAGE_SHIFT);
+			__xa_store(next->vm_obj->logical_page_table, index, page, GFP_KERNEL);
+			xas_store(&xas, NULL);
+			moved_pages++;
+		}
+		atomic_sub(moved_pages, &vma->vm_obj->nr_pages);
+		atomic_add(moved_pages, &next->vm_obj->nr_pages);
+		xa_unlock(next->vm_obj->logical_page_table);
+		xa_unlock(vma->vm_obj->logical_page_table);
+	} else {
+		n_next = vma_next(&vmi);
+
+		if (addr == next->vm_end) {
+			/* case 1, 7, 8: copy all logical mappings from next to vma */
+			XA_STATE(xas, next->vm_obj->logical_page_table, linear_page_index(next, next->vm_start));
+
+			xa_lock(vma->vm_obj->logical_page_table);
+			rcu_read_lock();
+			xas_for_each(&xas, page, linear_page_index(next, next->vm_end - SZ_2M)) {
+				index = xas.xa_index - next->vm_pgoff + vma->vm_pgoff + ((next->vm_start - vma->vm_start) >> PAGE_SHIFT);
+				__xa_store(vma->vm_obj->logical_page_table, index, page, GFP_KERNEL);
+				xas_store(&xas, NULL);
+				moved_pages++;
+			}
+			rcu_read_unlock();
+			atomic_add(moved_pages, &vma->vm_obj->nr_pages);
+			xa_unlock(vma->vm_obj->logical_page_table);
+		} else if (next->vm_start < addr && addr < next->vm_end) {
+			/* case 5: move logical mapping in [next->vm_start, end) from next to vma */
+			XA_STATE(xas, next->vm_obj->logical_page_table, linear_page_index(next, next->vm_start));
+
+			xa_lock(vma->vm_obj->logical_page_table);
+			xa_lock(next->vm_obj->logical_page_table);
+			xas_for_each(&xas, page, linear_page_index(next, addr - SZ_2M)) {
+				index = xas.xa_index - next->vm_pgoff + vma->vm_pgoff + ((next->vm_start - vma->vm_start) >> PAGE_SHIFT);
+				__xa_store(vma->vm_obj->logical_page_table, index, page, GFP_KERNEL);
+				xas_store(&xas, NULL);
+				moved_pages++;
+			}
+			atomic_add(moved_pages, &vma->vm_obj->nr_pages);
+			atomic_sub(moved_pages, &next->vm_obj->nr_pages);
+			xa_unlock(next->vm_obj->logical_page_table);
+			xa_unlock(vma->vm_obj->logical_page_table);
+		} else if (n_next && addr == n_next->vm_end) {
+			/* case 6: copy all logical mappings from next and n_next to vma */
+			XA_STATE(xas_next, next->vm_obj->logical_page_table, linear_page_index(next, next->vm_start));
+			XA_STATE(xas_n_next, n_next->vm_obj->logical_page_table, linear_page_index(n_next, n_next->vm_start));
+
+			xa_lock(vma->vm_obj->logical_page_table);
+			rcu_read_lock();
+			
+			xas_for_each(&xas_next, page, linear_page_index(next, next->vm_end - SZ_2M)) {
+				index = xas_next.xa_index - next->vm_pgoff + vma->vm_pgoff + ((next->vm_start - vma->vm_start) >> PAGE_SHIFT);
+				__xa_store(vma->vm_obj->logical_page_table, index, page, GFP_KERNEL);
+				xas_store(&xas_next, NULL);
+				moved_pages++;
+			}
+
+			xas_for_each(&xas_n_next, page, linear_page_index(n_next, n_next->vm_end - SZ_2M)) {
+				index = xas_n_next.xa_index - n_next->vm_pgoff + vma->vm_pgoff + ((n_next->vm_start - vma->vm_start) >> PAGE_SHIFT);
+				__xa_store(vma->vm_obj->logical_page_table, index, page, GFP_KERNEL);
+				xas_store(&xas_n_next, NULL);
+				moved_pages++;
+			}
+
+			rcu_read_unlock();
+			atomic_add(moved_pages, &vma->vm_obj->nr_pages);
+			xa_unlock(vma->vm_obj->logical_page_table);
+		}
+	}
+	/* case 2, 3: do nothing */
+}
+
 void vm_object_adjust(struct vm_area_struct *vma, unsigned long start, unsigned long end)
 {
 	/* remove logical mapping in [vma->vm_start, start) and [end, vm->vm_end) */
