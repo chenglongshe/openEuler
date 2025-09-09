@@ -53,6 +53,7 @@
 #define LPFC_RESET_WAIT  2
 #define LPFC_ABORT_WAIT  2
 
+
 static char *dif_op_str[] = {
 	"PROT_NORMAL",
 	"PROT_READ_INSERT",
