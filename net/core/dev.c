@@ -154,6 +154,7 @@
 #include <linux/once_lite.h>
 #include <net/netdev_rx_queue.h>
 #include <linux/if_caqm.h>
+#include <trace/hooks/oenetcls.h>
 
 #include "dev.h"
 #include "net-sysfs.h"
@@ -4542,7 +4543,7 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 	 * we have to raise NET_RX_SOFTIRQ.
 	 */
 	if (!sd->in_net_rx_action)
-		__raise_softirq_irqoff(NET_RX_SOFTIRQ);
+		raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 
 #ifdef CONFIG_RPS
@@ -4727,6 +4728,11 @@ bool rps_may_expire_flow(struct net_device *dev, u16 rxq_index,
 	bool expire = true;
 	unsigned int cpu;
 
+#if IS_ENABLED(CONFIG_OENETCLS_HOOKS)
+	trace_oecls_timeout(dev, rxq_index, flow_id, filter_id, &expire);
+	if (expire)
+		return true;
+#endif
 	rcu_read_lock();
 	flow_table = rcu_dereference(rxqueue->rps_flow_table);
 	if (flow_table && flow_id <= flow_table->mask) {
@@ -5029,6 +5035,9 @@ static u32 netif_receive_generic_xdp(struct sk_buff *skb,
 	case XDP_REDIRECT:
 	case XDP_TX:
 	case XDP_PASS:
+#ifdef CONFIG_HISOCK
+	case XDP_HISOCK_REDIRECT:
+#endif
 		break;
 	default:
 		bpf_warn_invalid_xdp_action(skb->dev, xdp_prog, act);
@@ -5074,27 +5083,94 @@ void generic_xdp_tx(struct sk_buff *skb, struct bpf_prog *xdp_prog)
 	}
 }
 
+#ifdef CONFIG_HISOCK
+static int generic_xdp_hisock_redirect(struct sk_buff *skb)
+{
+	const struct iphdr *iph;
+	u32 len;
+
+	skb = skb_share_check(skb, GFP_ATOMIC);
+	if (!skb)
+		goto out;
+
+	if (!pskb_may_pull(skb, sizeof(struct iphdr)))
+		goto free_skb;
+
+	iph = ip_hdr(skb);
+	if (iph->ihl < 5 || iph->version != 4 ||
+	    ip_is_fragment(iph))
+		return -EOPNOTSUPP;
+
+	if (!pskb_may_pull(skb, iph->ihl * 4))
+		goto free_skb;
+
+	iph = ip_hdr(skb);
+	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
+		goto free_skb;
+
+	len = ntohs(iph->tot_len);
+	if (skb->len < len || len < (iph->ihl * 4))
+		goto free_skb;
+
+	if (pskb_trim_rcsum(skb, len))
+		goto free_skb;
+
+	iph = ip_hdr(skb);
+	skb->transport_header = skb->network_header + iph->ihl * 4;
+
+	skb_orphan(skb);
+
+	if (!skb_valid_dst(skb)) {
+		if (ip_route_input_noref(skb, iph->daddr, iph->saddr,
+					 iph->tos, skb->dev))
+			goto free_skb;
+	}
+
+	__skb_pull(skb, skb_network_header_len(skb));
+
+	rcu_read_lock();
+	ip_protocol_deliver_rcu(dev_net(skb->dev), skb, iph->protocol);
+	rcu_read_unlock();
+
+	return 0;
+
+free_skb:
+	kfree_skb(skb);
+out:
+	return -EFAULT;
+}
+#endif
+
 static DEFINE_STATIC_KEY_FALSE(generic_xdp_needed_key);
 
 int do_xdp_generic(struct bpf_prog *xdp_prog, struct sk_buff *skb)
 {
 	if (xdp_prog) {
-		struct xdp_buff xdp;
+		struct hisock_xdp_buff hxdp;
+		struct xdp_buff *xdp = &hxdp.xdp;
 		u32 act;
 		int err;
 
-		act = netif_receive_generic_xdp(skb, &xdp, xdp_prog);
+		hxdp.skb = skb;
+		act = netif_receive_generic_xdp(skb, xdp, xdp_prog);
 		if (act != XDP_PASS) {
 			switch (act) {
 			case XDP_REDIRECT:
 				err = xdp_do_generic_redirect(skb->dev, skb,
-							      &xdp, xdp_prog);
+							      xdp, xdp_prog);
 				if (err)
 					goto out_redir;
 				break;
 			case XDP_TX:
 				generic_xdp_tx(skb, xdp_prog);
 				break;
+#ifdef CONFIG_HISOCK
+			case XDP_HISOCK_REDIRECT:
+				err = generic_xdp_hisock_redirect(skb);
+				if (err == -EOPNOTSUPP)
+					return XDP_PASS;
+				break;
+#endif
 			}
 			return XDP_DROP;
 		}
@@ -5814,6 +5890,11 @@ static int netif_receive_skb_internal(struct sk_buff *skb)
 		}
 	}
 #endif
+
+#if IS_ENABLED(CONFIG_OENETCLS_HOOKS)
+	trace_oecls_set_cpu(skb);
+#endif
+
 	ret = __netif_receive_skb(skb);
 	rcu_read_unlock();
 	return ret;
@@ -5848,6 +5929,12 @@ void netif_receive_skb_list_internal(struct list_head *head)
 		}
 	}
 #endif
+
+#if IS_ENABLED(CONFIG_OENETCLS_HOOKS)
+	list_for_each_entry_safe(skb, next, head, list)
+		trace_oecls_set_cpu(skb);
+#endif
+
 	__netif_receive_skb_list(head);
 	rcu_read_unlock();
 }
@@ -9960,6 +10047,9 @@ sync_lower:
 
 	return err < 0 ? 0 : 1;
 }
+#if IS_ENABLED(CONFIG_OENETCLS)
+EXPORT_SYMBOL(__netdev_update_features);
+#endif
 
 /**
  *	netdev_update_features - recalculate device features

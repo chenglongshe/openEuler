@@ -16,7 +16,7 @@
  * physical address of the virtual address of the mmio space
  * @addr:	MMIO virtual address
  */
-u64 mmio_va_to_pa(void *addr)
+u64 mmio_va_to_pa(const void __iomem *addr)
 {
 	uint64_t pa, par_el1;
 
@@ -81,10 +81,12 @@ u64 tmi_cvm_activate(u64 rd)
 	return res.a1;
 }
 
-u64 tmi_cvm_create(u64 params_ptr, u64 numa_set)
+u64 tmi_cvm_create(u64 params_ptr, u64 numa_set, bool vtimer_adjust)
 {
 	struct arm_smccc_res res;
 
+	/* vtimer_adjust enable to reduce vtimer irq */
+	params_ptr = params_ptr | (vtimer_adjust ? 1UL : 0UL);
 	arm_smccc_1_1_smc(TMI_TMM_CVM_CREATE, params_ptr, numa_set, &res);
 	return res.a1;
 }
@@ -375,5 +377,30 @@ u64 tmi_kae_enable(u64 rd, u64 numa_set, u64 is_enable)
 	struct arm_smccc_res res;
 
 	arm_smccc_1_1_smc(TMI_TMM_KAE_ENABLE, rd, numa_set, is_enable, &res);
+	return res.a1;
+}
+
+u64 tmi_tmm_info_show(u64 option, u64 tmm_info_addr)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_INFO_SHOW, option, tmm_info_addr, &res);
+	return res.a1;
+}
+EXPORT_SYMBOL_GPL(tmi_tmm_info_show);
+
+u64 tmi_dev_create(u64 params)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_DEV_CREATE, params, &res);
+	return res.a1;
+}
+
+u64 tmi_dev_destroy(u64 dev_num, u64 clean)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_DEV_DESTROY, dev_num, clean, &res);
 	return res.a1;
 }

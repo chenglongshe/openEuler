@@ -14,23 +14,11 @@
 #include <linux/nfs_mount.h>
 #include "enfs_adapter.h"
 #include "iostat.h"
+#include "enfs/enfs_log.h"
 
-struct enfs_adapter_ops __rcu *enfs_adapter;
+static struct enfs_adapter_ops __rcu *enfs_adapter;
 
 static DEFINE_MUTEX(enfs_module_mutex);
-static void *enfs_adapter_data;
-
-void *enfs_adapter_get_data(void)
-{
-	return enfs_adapter_data;
-}
-EXPORT_SYMBOL_GPL(enfs_adapter_get_data);
-
-void enfs_adapter_set_data(void *data)
-{
-	enfs_adapter_data = data;
-}
-EXPORT_SYMBOL_GPL(enfs_adapter_set_data);
 
 int enfs_adapter_register(struct enfs_adapter_ops *ops)
 {
@@ -39,8 +27,7 @@ int enfs_adapter_register(struct enfs_adapter_ops *ops)
 	old = cmpxchg((struct enfs_adapter_ops **)&enfs_adapter, NULL, ops);
 	if (old == NULL || old == ops)
 		return 0;
-	pr_err("ENFS: regist enfs_adapter ops %p fail. old %p\n",
-		ops, old);
+	enfs_log_error("regist enfs_adapter ops %p fail. old %p\n", ops, old);
 	return -EPERM;
 }
 EXPORT_SYMBOL_GPL(enfs_adapter_register);
@@ -52,9 +39,7 @@ int enfs_adapter_unregister(struct enfs_adapter_ops *ops)
 	old = cmpxchg((struct enfs_adapter_ops **)&enfs_adapter, ops, NULL);
 	if (old == ops || old == NULL)
 		return 0;
-	pr_err("ENFS: unregist enfs_adapter ops %p fail. old %p\n",
-		ops,
-	       old);
+	enfs_log_error("unregist enfs_adapter ops %p fail. old %p\n", ops, old);
 	return -EPERM;
 }
 EXPORT_SYMBOL_GPL(enfs_adapter_unregister);
@@ -101,16 +86,13 @@ int enfs_parse_mount_options(enum nfsmultipathoptions option, char *str,
 	// whether insert enfs.ko or not
 	ops = nfs_multipath_router_get();
 	if (ops == NULL) {
-		dfprintk(MOUNT, "eNFS:   prepare loading eNFS module[%s]\n",
-			 __func__);
+		enfs_log_debug("prepare loading eNFS module\n");
 		mutex_lock(&enfs_module_mutex);
 		rc = request_module("enfs");
 		mutex_unlock(&enfs_module_mutex);
 
 		if (rc) {
-			dfprintk(MOUNT,
-				 "eNFS:   failed loading eNFS module[%s]\n",
-				 __func__);
+			enfs_log_debug("failed loading eNFS module\n");
 			return -EOPNOTSUPP;
 		}
 
@@ -120,14 +102,11 @@ int enfs_parse_mount_options(enum nfsmultipathoptions option, char *str,
 	if ((ops == NULL) || (ops->parse_mount_options == NULL) ||
 	    !is_valid_option(option)) {
 		nfs_multipath_router_put(ops);
-		dfprintk(MOUNT,
-			 "NFS:   parsing nfs mount option enfs not load[%s]\n",
-			 __func__);
+		enfs_log_debug("parsing nfs mount option enfs not load\n");
 		return -EOPNOTSUPP;
 	}
 	// nfs_multipath_parse_options
-	dfprintk(MOUNT, "NFS:   parsing nfs mount option '%s' type: %d[%s]\n",
-		 str, option, __func__);
+	enfs_log_debug("parsing nfs mount option '%s' type: %d\n", str, option);
 	rc = ops->parse_mount_options(option, str, &mnt->enfs_option,
 				      fc->net_ns);
 	nfs_multipath_router_put(ops);

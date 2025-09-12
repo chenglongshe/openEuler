@@ -120,6 +120,11 @@ static int acpi_mpam_parse_resource(struct acpi_mpam_msc_node *tbl_msc,
 	off_t offset;
 	int level;
 
+	if (mpam_only_enable_mb()) {
+		if (res->locator_type != ACPI_MPAM_LOCATION_TYPE_MEMORY)
+			return 0;
+	}
+
 	/*
 	 * Class IDs are somewhat arbitrary, but need to be co-ordinated.
 	 * 0-N are caches,
@@ -306,8 +311,8 @@ static int __init _parse_table(struct acpi_table_header *table)
 		memset(props, 0, sizeof(props));
 
 		pdev = platform_device_alloc("mpam_msc", tbl_msc->identifier);
-		if (IS_ERR(pdev)) {
-			err = PTR_ERR(pdev);
+		if (!pdev) {
+			err = -ENOMEM;
 			break;
 		}
 

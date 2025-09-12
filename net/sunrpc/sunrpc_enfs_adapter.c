@@ -129,19 +129,6 @@ void xprt_set_reserve_context(struct rpc_xprt *xprt, void *context)
 }
 EXPORT_SYMBOL_GPL(xprt_set_reserve_context);
 
-void rpc_task_release_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt)
-{
-	struct rpc_xprt_switch *xps;
-
-	atomic_long_dec(&xprt->queuelen);
-	rcu_read_lock();
-	xps = rcu_dereference(clnt->cl_xpi.xpi_xpswitch);
-	atomic_long_dec(&xps->xps_queuelen);
-	rcu_read_unlock();
-
-	xprt_put(xprt);
-}
-
 void rpc_multipath_ops_create_clnt(struct rpc_create_args *args,
 				   struct rpc_clnt *clnt)
 {
@@ -229,11 +216,7 @@ void rpc_multipath_ops_update_rpc_program(struct rpc_task *task, u32 *cl_prog, u
 
 bool rpc_clnt_has_multipath(struct rpc_clnt *clnt)
 {
-	struct rpc_clnt_reserve *clnt_reserve;
-
-	clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-
-	return clnt_reserve->cl_enfs ? true : false;
+	return clnt->cl_enfs ? true : false;
 }
 
 void rpc_multipath_ops_xprt_iostat(struct rpc_task *task)

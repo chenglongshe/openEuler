@@ -3488,7 +3488,8 @@ static void cpuset_attach_task(struct cpuset *cs, struct task_struct *task)
 	WARN_ON_ONCE(set_cpus_allowed_ptr(task, cpus_attach));
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
 	cpumask_copy(prefer_cpus_attach, cs->prefer_cpus);
-	set_prefer_cpus_ptr(task, prefer_cpus_attach);
+	if (!sched_paral_used() || !cpumask_empty(prefer_cpus_attach))
+		set_prefer_cpus_ptr(task, prefer_cpus_attach);
 #endif
 
 	cpuset_change_task_nodemask(task, &cpuset_attach_nodemask_to);
@@ -4073,6 +4074,17 @@ static struct cftype dfl_files[] = {
 		.flags = CFTYPE_ONLY_ON_ROOT | CFTYPE_DEBUG,
 	},
 
+#ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
+	{
+		.name = "preferred_cpus",
+		.seq_show = cpuset_common_seq_show,
+		.write = cpuset_write_resmask,
+		.max_write_len = (100U + 6 * NR_CPUS),
+		.private = FILE_DYNAMIC_CPULIST,
+		.flags = CFTYPE_NOT_ON_ROOT,
+	},
+#endif
+
 	{ }	/* terminate */
 };
 
@@ -4348,7 +4360,8 @@ static void cpuset_fork(struct task_struct *task)
 
 		set_cpus_allowed_ptr(task, current->cpus_ptr);
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
-		set_prefer_cpus_ptr(task, current->prefer_cpus);
+		if (!sched_paral_used() || !cpumask_empty(cs->prefer_cpus))
+			set_prefer_cpus_ptr(task, current->prefer_cpus);
 #endif
 		task->mems_allowed = current->mems_allowed;
 		return;
@@ -5212,8 +5225,10 @@ void task_effective_cpumask(struct task_struct *tsk, struct cpumask *pmask)
 {
 	struct cpuset *cs;
 
-	if (!tsk)
+	if (!tsk) {
 		cpumask_clear(pmask);
+		return;
+	}
 
 	rcu_read_lock();
 	cs = task_cs(tsk);

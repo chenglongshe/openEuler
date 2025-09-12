@@ -558,7 +558,7 @@ static int gic_irq_get_irqchip_state(struct irq_data *d,
 	return 0;
 }
 
-static void gic_irq_set_prio(struct irq_data *d, u8 prio)
+void gic_irq_set_prio(struct irq_data *d, u8 prio)
 {
 	void __iomem *base = gic_dist_base(d);
 	u32 offset, index;
@@ -1030,11 +1030,9 @@ static bool xint_transform(int irqno, enum xint_op op)
 	switch (op) {
 	case IRQ_TO_XINT:
 		set_bit(hwirq, irqnr_xint_map);
-		xint_add_debugfs_entry(irqno);
 		return true;
 	case XINT_TO_IRQ:
 		clear_bit(hwirq, irqnr_xint_map);
-		xint_remove_debugfs_entry(irqno);
 		return false;
 	case XINT_SET_CHECK:
 		return test_bit(hwirq, irqnr_xint_map);
@@ -1049,6 +1047,7 @@ static ssize_t xint_proc_write(struct file *file,
 		const char __user *buffer, size_t count, loff_t *pos)
 {
 	int irq = (int)(long)pde_data(file_inode(file));
+	enum xint_op switch_type;
 	bool xint_state = false;
 	unsigned long val;
 	char *buf = NULL;
@@ -1071,13 +1070,21 @@ static ssize_t xint_proc_write(struct file *file,
 		return -EBUSY;
 	}
 
-	local_irq_disable();
+	if (xint_state) {
+		switch_type = XINT_TO_IRQ;
+		xint_remove_debugfs_entry(irq);
+	} else {
+		switch_type = IRQ_TO_XINT;
+		xint_add_debugfs_entry(irq);
+	}
+
 	disable_irq(irq);
+	local_irq_disable();
 
-	xint_transform(irq, xint_state ? XINT_TO_IRQ : IRQ_TO_XINT);
+	xint_transform(irq, switch_type);
 
-	enable_irq(irq);
 	local_irq_enable();
+	enable_irq(irq);
 
 	kfree(buf);
 
@@ -1109,7 +1116,7 @@ void register_irqchip_proc(struct irq_desc *desc, void *irqp)
 		return;
 
 	/* create /proc/irq/<irq>/xint */
-	proc_create_data("xint", 0644, desc->dir, &xint_proc_ops, irqp);
+	proc_create_data("xint", 0640, desc->dir, &xint_proc_ops, irqp);
 }
 
 void unregister_irqchip_proc(struct irq_desc *desc)

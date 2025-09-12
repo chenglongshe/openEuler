@@ -23,11 +23,7 @@
 #include "dns_internal.h"
 #include "shard.h"
 
-unsigned int enfs_debug;
-module_param_named(enfs_debug, enfs_debug, uint, 0600);
-MODULE_PARM_DESC(enfs_debug, "enfs debugging mask");
-
-struct enfs_adapter_ops enfs_adapter = {
+static struct enfs_adapter_ops enfs_adapter = {
 	.name = "enfs",
 	.owner = THIS_MODULE,
 	.parse_mount_options = nfs_multipath_parse_options,
@@ -92,28 +88,17 @@ static struct enfs_init_entry init_entry[] = {
 	{ "dns", enfs_dns_init, enfs_dns_exit },
 };
 
-int32_t enfs_init(void)
-{
-	return init_helper_init(init_entry, ARRAY_SIZE(init_entry));
-}
-
-void enfs_fini(void)
-{
-	init_helper_finalize(init_entry, ARRAY_SIZE(init_entry));
-}
-
 static int __init init_enfs(void)
 {
 	int ret;
 
 	ret = enfs_adapter_register(&enfs_adapter);
 	if (ret) {
-		pr_err("ENFS: regist enfs_adapter fail. ret %d\n",
-			ret);
+		enfs_log_error("regist enfs_adapter fail. ret %d\n", ret);
 		return -1;
 	}
 
-	ret = enfs_init();
+	ret = init_helper_init(init_entry, ARRAY_SIZE(init_entry));
 	if (ret) {
 		enfs_adapter_unregister(&enfs_adapter);
 		return -1;
@@ -131,7 +116,7 @@ static int __init init_enfs(void)
 static void __exit exit_enfs(void)
 {
 	enfs_lookupcache_fini();
-	enfs_fini();
+	init_helper_finalize(init_entry, ARRAY_SIZE(init_entry));
 	enfs_adapter_unregister(&enfs_adapter);
 }
 

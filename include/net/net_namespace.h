@@ -75,7 +75,6 @@ struct net {
 	spinlock_t		nsid_lock;
 	atomic_t		fnhe_genid;
 
-	KABI_FILL_HOLE(struct llist_node defer_free_list)
 	struct list_head	list;		/* list of network namespaces */
 	struct list_head	exit_list;	/* To linked to call pernet exit
 						 * methods on dead net (
@@ -161,6 +160,7 @@ struct net {
 
 	/* Used to store attached BPF programs */
 	struct netns_bpf	bpf;
+	KABI_FILL_HOLE(struct llist_node defer_free_list)
 
 	/* Note : following structs are cache line aligned */
 #ifdef CONFIG_XFRM
@@ -293,6 +293,7 @@ static inline int check_net(const struct net *net)
 }
 
 void net_drop_ns(void *);
+void net_passive_dec(struct net *net);
 
 #else
 
@@ -322,8 +323,17 @@ static inline int check_net(const struct net *net)
 }
 
 #define net_drop_ns NULL
+
+static inline void net_passive_dec(struct net *net)
+{
+	refcount_dec(&net->passive);
+}
 #endif
 
+static inline void net_passive_inc(struct net *net)
+{
+	refcount_inc(&net->passive);
+}
 
 static inline void __netns_tracker_alloc(struct net *net,
 					 netns_tracker *tracker,

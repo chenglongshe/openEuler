@@ -376,11 +376,14 @@ static int __init kvm_core3_init(void)
 	for (i = 0; i < NR_CPUS; i++)
 		last_vpn(i) = VPN_FIRST_VERSION;
 
+	kvm_register_perf_callbacks(NULL);
+
 	ret = kvm_init(sizeof(struct kvm_vcpu), 0, THIS_MODULE);
 
 	if (likely(!ret))
 		return 0;
 
+	kvm_unregister_perf_callbacks();
 	vmem_exit();
 out:
 	bind_vcpu_exit();
@@ -390,6 +393,7 @@ out:
 static void __exit kvm_core3_exit(void)
 {
 	kvm_exit();
+	kvm_unregister_perf_callbacks();
 	vmem_exit();
 	bind_vcpu_exit();
 }

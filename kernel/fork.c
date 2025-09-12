@@ -110,6 +110,9 @@
 #include <asm/mmu_context.h>
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
+#ifdef CONFIG_FAST_SYSCALL
+#include <asm/xcall.h>
+#endif
 
 #include <trace/events/sched.h>
 
@@ -631,16 +634,14 @@ void free_task(struct task_struct *tsk)
 		free_kthread_struct(tsk);
 	bpf_task_storage_free(tsk);
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
-	if (dynamic_affinity_enabled())
-		sched_prefer_cpus_free(tsk);
+	sched_prefer_cpus_free(tsk);
 #endif
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 	if (smart_grid_enabled())
 		sched_grid_qos_free(tsk);
 #endif
 #ifdef CONFIG_FAST_SYSCALL
-	if (tsk->xcall_enable)
-		bitmap_free(tsk->xcall_enable);
+	xcall_task_free(tsk);
 #endif
 	free_task_struct(tsk);
 }
@@ -1273,7 +1274,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 #endif
 
 #ifdef CONFIG_FAST_SYSCALL
-	tsk->xcall_enable = NULL;
+	tsk->xinfo = NULL;
 #endif
 	return tsk;
 
@@ -2442,20 +2443,15 @@ __latent_entropy struct task_struct *copy_process(
 	rt_mutex_init_task(p);
 
 #ifdef CONFIG_FAST_SYSCALL
-	p->xcall_enable = bitmap_zalloc(__NR_syscalls, GFP_KERNEL);
-	if (!p->xcall_enable)
+	retval = xcall_init_task(p, current);
+	if (retval)
 		goto bad_fork_free;
-
-	if (current->xcall_enable)
-		bitmap_copy(p->xcall_enable, current->xcall_enable, __NR_syscalls);
 #endif
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
-	if (dynamic_affinity_enabled()) {
-		retval = sched_prefer_cpus_fork(p, current->prefer_cpus);
-		if (retval)
-			goto bad_fork_free;
-	}
+	retval = sched_prefer_cpus_fork(p, current->prefer_cpus);
+	if (retval)
+		goto bad_fork_free;
 #endif
 
 	lockdep_assert_irqs_enabled();

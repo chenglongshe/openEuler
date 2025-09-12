@@ -19,6 +19,8 @@
 #define CLK_LV1_SEL_MUXB	(0x1UL << 3)
 
 #define OFFSET_CLU_LV1_SEL	0x3a80UL
+#define OFFSET_CLU_LV2_SEL_H	0x3a00UL
+#define OFFSET_CLU_LV2_SEL_L	0x3b00UL
 #define OFFSET_CLK_CTL		0x3b80UL
 
 /*
@@ -31,16 +33,20 @@
 		.driver_data = (mv)					\
 	}
 
+enum sunway_cpu_pll {
+	SUNWAY_CPU_PLL0 = 0,
+	SUNWAY_CPU_PLL1 = 1,
+	SUNWAY_CPU_PLL2 = 2
+};
+
 #ifdef CONFIG_PLATFORM_JUNZHANG
-#define CLK0_PROTECT		(0x1UL << 0)
-#define CLK2_PROTECT		(0x1UL << 32)
-#define CORE_CLK2_VALID		(0x1UL << 33)
-#define CORE_CLK2_RESET		(0x1UL << 34)
-#define CORE_CLK2_LOCK		(0x1UL << 35)
-#define CORE_PLL0_CFG_SHIFT     4
-#define CORE_PLL1_CFG_SHIFT     20
-#define CORE_PLL2_CFG_SHIFT     36
-#define CORE_PLL2_CFG_MASK	0x1f
+
+#define CLK_PROTECT(pll)	(0x1UL << (16 * (pll)))
+#define CLK_VALID(pll)		(0x1UL << (1 + 16 * (pll)))
+#define CLK_RESET(pll)		(0x1UL << (2 + 16 * (pll)))
+#define CLK_LOCK(pll)		(0x1UL << (3 + 16 * (pll)))
+#define PLL_CFG_SHIFT(pll)	(4 + 16 * (pll))
+#define CORE_PLL_CFG_MASK	0x1f
 
 struct cpufreq_frequency_table freq_table[] = {
 	{0, 0, CPUFREQ_ENTRY_INVALID}, /* 200Mhz is ignored */
@@ -77,22 +83,17 @@ struct cpufreq_frequency_table freq_table[] = {
 	FV(2850, 0),
 	{0, 0, CPUFREQ_TABLE_END},
 };
-static void __init fill_freq_table(struct cpufreq_frequency_table *ft)
-{
-}
+
 #endif
 
 #ifdef CONFIG_PLATFORM_XUELANG
-#define CLK_PROTECT		(0x1UL << 0)
-#define CLK0_PROTECT		CLK_PROTECT
-#define CLK2_PROTECT		CLK_PROTECT
-#define CORE_CLK2_VALID         (0x1UL << 15)
-#define CORE_CLK2_RESET         (0x1UL << 16)
-#define CORE_CLK2_LOCK		(0x1UL << 17)
-#define CORE_PLL0_CFG_SHIFT     4
-#define CORE_PLL1_CFG_SHIFT     11
-#define CORE_PLL2_CFG_SHIFT     18
-#define CORE_PLL2_CFG_MASK	0xf
+
+#define CLK_PROTECT(pll)	(0x1UL << 0)
+#define CLK_VALID(pll)		(0x1UL << (1 + 7 * (pll)))
+#define CLK_RESET(pll)		(0x1UL << (2 + 7 * (pll)))
+#define CLK_LOCK(pll)		(0x1UL << (3 + 7 * (pll)))
+#define PLL_CFG_SHIFT(pll)	(4 + 7 * (pll))
+#define CORE_PLL_CFG_MASK	0xf
 
 struct cpufreq_frequency_table freq_table[] = {
 	{0, 0, CPUFREQ_ENTRY_INVALID}, /* 200Mhz is ignored */
@@ -131,67 +132,86 @@ static void __init fill_freq_table(struct cpufreq_frequency_table *ft)
 	for (i = 3; freq_table[i].frequency != CPUFREQ_TABLE_END; i++)
 		freq_table[i].frequency = freq_off * 38 + ((i - 3) * freq_off);
 }
+
 #endif
 
 static unsigned int sunway_get_rate(struct cpufreq_policy *policy)
 {
-	int i, clu_lv1_sel;
+	int i, node;
 	u64 val;
-	void __iomem *spbu_base = misc_platform_get_spbu_base(0);
+	void __iomem *spbu_base;
 	struct cpufreq_frequency_table *ft = policy->freq_table;
 
-	clu_lv1_sel = (readq(spbu_base + OFFSET_CLU_LV1_SEL) >> 2) & 0x3;
+	node = per_cpu(hard_node_id, policy->cpu);
+	spbu_base = misc_platform_get_spbu_base(node);
 
-	if (clu_lv1_sel == 0)
-		val = readq(spbu_base + OFFSET_CLK_CTL) >> CORE_PLL0_CFG_SHIFT;
-	else if (clu_lv1_sel == 2)
-		val = readq(spbu_base + OFFSET_CLK_CTL) >> CORE_PLL1_CFG_SHIFT;
-	else
-		val = readq(spbu_base + OFFSET_CLK_CTL) >> CORE_PLL2_CFG_SHIFT;
-
-	val &= CORE_PLL2_CFG_MASK;
+	/* PLL2 provides working frequency for core */
+	val = readq(spbu_base + OFFSET_CLK_CTL) >> PLL_CFG_SHIFT(SUNWAY_CPU_PLL2);
+	val &= CORE_PLL_CFG_MASK;
 
 	for (i = 0; ft[i].frequency != CPUFREQ_TABLE_END; i++) {
-		if (val == i)
+		if (val == i) {
+			if (ft[i].frequency == CPUFREQ_ENTRY_INVALID)
+				return sunway_max_cpu_freq() / KHZ;
 			return ft[i].frequency;
+		}
 	}
+
 	return 0;
 }
 
-static int sunway_set_rate(unsigned int index)
+static int sunway_update_pll_cfg(struct cpufreq_policy *policy,
+		enum sunway_cpu_pll pll, unsigned long pll_cfg)
 {
-	int i, retry, cpu_num;
+	int retry = 0, node;
 	void __iomem *spbu_base;
 
-	cpu_num = sw64_chip->get_cpu_num();
-	for (i = 0; i < cpu_num; i++) {
-		spbu_base = misc_platform_get_spbu_base(i);
+	node = per_cpu(hard_node_id, policy->cpu);
+	spbu_base = misc_platform_get_spbu_base(node);
 
-		/* select PLL0/PLL1 */
-		writeq(CLK_LV1_SEL_PROTECT, spbu_base + OFFSET_CLU_LV1_SEL);
-		/* reset PLL2 */
-		writeq(CLK2_PROTECT | CORE_CLK2_RESET | CORE_CLK2_VALID, spbu_base + OFFSET_CLK_CTL);
-		/* configure PLL2_CFG */
-		writeq(CLK2_PROTECT | CORE_CLK2_VALID | (unsigned long)index << CORE_PLL2_CFG_SHIFT,
-				spbu_base + OFFSET_CLK_CTL);
-		udelay(1);
-		/* reset over */
-		writeq(CORE_CLK2_VALID, spbu_base + OFFSET_CLK_CTL);
-		retry = 0;
-		while (retry < MAX_RETRY) {
-			if (readq(spbu_base + OFFSET_CLK_CTL) & CORE_CLK2_LOCK)
-				break;
-			retry++;
-			udelay(100);
-		}
-		if (retry == MAX_RETRY)
-			return -ETIME;
-		/* configure over */
-		writeq(0, spbu_base + OFFSET_CLK_CTL);
-		/* select PLL2/PLL2 */
+	/* PLL1 should keep stable */
+	if (WARN_ON(pll == SUNWAY_CPU_PLL1))
+		return -EINVAL;
+
+	if (pll == SUNWAY_CPU_PLL0) {
+		/* LV1 MUXA select PLL2, LV1 MUXB select PLL2 */
 		writeq(CLK_LV1_SEL_MUXA | CLK_LV1_SEL_MUXB | CLK_LV1_SEL_PROTECT,
 				spbu_base + OFFSET_CLU_LV1_SEL);
+	} else if (pll == SUNWAY_CPU_PLL2) {
+		/* LV1 MUXA keep PLL0 selected, LV1 MUXB select PLL1 */
+		writeq(CLK_LV1_SEL_PROTECT, spbu_base + OFFSET_CLU_LV1_SEL);
 	}
+
+	/* Reset PLL */
+	writeq(CLK_PROTECT(pll) | CLK_RESET(pll) | CLK_VALID(pll),
+			spbu_base + OFFSET_CLK_CTL);
+
+	/* Configure PLL */
+	writeq(CLK_PROTECT(pll) | CLK_VALID(pll) | pll_cfg << PLL_CFG_SHIFT(pll),
+			spbu_base + OFFSET_CLK_CTL);
+
+	udelay(2);
+
+	/* Reset over */
+	writeq(CLK_VALID(pll), spbu_base + OFFSET_CLK_CTL);
+
+	/* Wait until PLL stable */
+	while (retry < MAX_RETRY) {
+		if (readq(spbu_base + OFFSET_CLK_CTL) & CLK_LOCK(pll))
+			break;
+		retry++;
+		udelay(100);
+	}
+
+	if (pll_cfg && (retry == MAX_RETRY))
+		return -ETIME;
+
+	/* Configure over */
+	writeq(0, spbu_base + OFFSET_CLK_CTL);
+
+	/* LV1 MUXA select PLL0, LV1 MUXB select PLL2 */
+	writeq(CLK_LV1_SEL_MUXB | CLK_LV1_SEL_PROTECT, spbu_base + OFFSET_CLU_LV1_SEL);
+
 	return 0;
 }
 
@@ -208,37 +228,42 @@ static unsigned int sunway_cpufreq_get(unsigned int cpu)
 	return sunway_get_rate(policy);
 }
 
-/*
- * Here we notify other drivers of the proposed change and the final change.
- */
 static int sunway_cpufreq_target(struct cpufreq_policy *policy,
 				     unsigned int index)
 {
-	int ret;
 	unsigned int cpu = policy->cpu;
 
 	if (!cpu_online(cpu))
 		return -ENODEV;
 
-	/* setting the cpu frequency */
-	ret = sunway_set_rate(index);
-	if (ret)
-		return ret;
-	update_cpu_freq(freq_table[index].frequency);
-
-	return 0;
+	return sunway_update_pll_cfg(policy, SUNWAY_CPU_PLL2, index);
 }
 
 static int sunway_cpufreq_init(struct cpufreq_policy *policy)
 {
-	cpufreq_generic_init(policy, freq_table, 0);
+	int cpu, node;
+	void __iomem *spbu_base;
+
+	node = per_cpu(hard_node_id, policy->cpu);
+
+	for_each_possible_cpu(cpu) {
+		if (per_cpu(hard_node_id, cpu) == node)
+			cpumask_set_cpu(cpu, policy->cpus);
+	}
+
+	policy->freq_table = freq_table;
+
+	spbu_base = misc_platform_get_spbu_base(node);
+
+	/* LV2 MUX select the clock output by LV1 MUXB as working freq */
+	writeq(~0ULL, spbu_base + OFFSET_CLU_LV2_SEL_L);
+	if (is_junzhang_v1() || is_junzhang_v2())
+		writeq(~0ULL, spbu_base + OFFSET_CLU_LV2_SEL_H);
+
+	/* Set PLL0 to the lowest freq */
+	sunway_update_pll_cfg(policy, SUNWAY_CPU_PLL0, 0);
 
 	return 0;
-}
-
-static int sunway_cpufreq_verify(struct cpufreq_policy_data *policy)
-{
-	return cpufreq_frequency_table_verify(policy, freq_table);
 }
 
 static int sunway_cpufreq_exit(struct cpufreq_policy *policy)
@@ -252,8 +277,9 @@ static struct freq_attr *sunway_table_attr[] = {
 
 static struct cpufreq_driver sunway_cpufreq_driver = {
 	.name = "sunway-cpufreq",
+	.flags = CPUFREQ_NEED_INITIAL_FREQ_CHECK,
 	.init = sunway_cpufreq_init,
-	.verify = sunway_cpufreq_verify,
+	.verify = cpufreq_generic_frequency_table_verify,
 	.target_index = sunway_cpufreq_target,
 	.get = sunway_cpufreq_get,
 	.exit = sunway_cpufreq_exit,
@@ -263,14 +289,17 @@ static struct cpufreq_driver sunway_cpufreq_driver = {
 static int __init cpufreq_init(void)
 {
 	int i, ret;
-	unsigned long max_rate = get_cpu_freq() / 1000;
+	unsigned long max_rate = sunway_max_cpu_freq() / KHZ; /* KHz */
 
 	if (!is_in_host()) {
 		pr_warn("cpufreq driver of Sunway platforms is only supported in host mode\n");
 		return -ENODEV;
 	}
 
+#ifdef CONFIG_PLATFORM_XUELANG
 	fill_freq_table(freq_table);
+#endif
+
 	for (i = 0; freq_table[i].frequency != CPUFREQ_TABLE_END; i++) {
 		if (max_rate == freq_table[i].frequency)
 			freq_table[i+1].frequency = CPUFREQ_TABLE_END;

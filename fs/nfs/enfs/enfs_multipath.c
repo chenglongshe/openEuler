@@ -245,7 +245,7 @@ void print_enfs_multipath_addr(struct sockaddr *local, struct sockaddr *remote)
 	sockaddr_ip_to_str(local, buf1, sizeof(buf1));
 	sockaddr_ip_to_str(remote, buf2, sizeof(buf2));
 
-	pr_info("local:%s remote:%s\n", buf1, buf2);
+	enfs_log_info("local:%s remote:%s\n", buf1, buf2);
 }
 
 static int enfs_servername(char *servername, unsigned long long len,
@@ -267,8 +267,7 @@ static int enfs_servername(char *servername, unsigned long long len,
 		snprintf(servername, len, "%pI6", &sin6->sin6_addr);
 		break;
 	default:
-		pr_info("ENFS: invalid family:%d\n",
-		       args->address->sa_family);
+		enfs_log_info("invalid family:%d\n", args->address->sa_family);
 		return -EINVAL;
 	}
 	return 0;
@@ -519,9 +518,10 @@ static void enfs_combine_addr(struct xprt_create *xprtargs,
 
 	atomic_set(&wait_queue_condition, total_combinations);
 
-	pr_debug("local count:%d remote count:%d\n", local_total, remote_total);
+	enfs_log_debug("local count:%d remote count:%d\n",
+		       local_total, remote_total);
 	if (local_total == 0 || remote_total == 0) {
-		pr_debug("no ip list is present.\n");
+		enfs_log_debug("no ip list is present.\n");
 		return;
 	}
 
@@ -564,7 +564,7 @@ static void enfs_combine_addr(struct xprt_create *xprtargs,
 		err = enfs_configure_xprt_to_clnt(xprtargs, clnt,
 						  &attach_infos[i]);
 		if (err) {
-			pr_err("add xprt ippair err:%d\n", err);
+			enfs_log_error("add xprt ippair err:%d\n", err);
 			atomic_dec(&wait_queue_condition);
 		}
 		link_count++;
@@ -598,9 +598,10 @@ static void enfs_combine_addr_with_no_local(struct xprt_create *xprtargs,
 
 	atomic_set(&wait_queue_condition, total_combinations);
 
-	pr_debug("local count:%d remote count:%d\n", local_total, remote_total);
+	enfs_log_debug("local count:%d remote count:%d\n",
+		       local_total, remote_total);
 	if (remote_total == 0) {
-		pr_debug("no ip list is present.\n");
+		enfs_log_debug("no ip list is present.\n");
 		return;
 	}
 
@@ -626,7 +627,7 @@ static void enfs_combine_addr_with_no_local(struct xprt_create *xprtargs,
 		err = enfs_configure_xprt_to_clnt(xprtargs, clnt,
 						  &attach_infos[i]);
 		if (err) {
-			pr_err("add xprt ippair err:%d\n", err);
+			enfs_log_error("add xprt ippair err:%d\n", err);
 			atomic_dec(&wait_queue_condition);
 		}
 		link_count++;
@@ -647,7 +648,7 @@ void enfs_xprt_ippair_create(struct xprt_create *xprtargs,
 	struct multipath_mount_options *mopt =
 		(struct multipath_mount_options *)data;
 	if (mopt == NULL) {
-		pr_err("ip list is NULL.\n");
+		enfs_log_error("ip list is NULL.\n");
 		return;
 	}
 	if (xprtargs->ident == XPRT_TRANSPORT_RDMA ||
@@ -667,13 +668,6 @@ struct xprts_options_and_clnt {
 	struct rpc_clnt *clnt;
 	void *data;
 };
-
-static void set_clnt_enfs_flag(struct rpc_clnt *clnt)
-{
-	struct rpc_clnt_reserve *clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-
-	clnt_reserve->cl_enfs = 1;
-}
 
 int enfs_config_xprt_create_args(struct xprt_create *xprtargs,
 				 struct rpc_create_args *args, char *servername,
@@ -879,9 +873,9 @@ int enfs_multipath_create_thread(void *data)
 
 	errno = enfs_proc_create_clnt(create_args->clnt);
 	if (errno != 0)
-		pr_err("create clnt proc failed.\n");
+		enfs_log_error("create clnt proc failed.\n");
 
-	set_clnt_enfs_flag(create_args->clnt);
+	create_args->clnt->cl_enfs = 1;
 	enfs_xprt_ippair_create(&xprtargs, create_args->clnt, mount_options);
 
 	kfree(create_args->args);
@@ -1003,15 +997,11 @@ static void enfs_create_xprt_ctx(struct rpc_xprt *xprt)
 
 static void enfs_set_transport(struct rpc_task *task, struct rpc_clnt *clnt)
 {
-	if (enfs_is_singularr_route(clnt) && clnt->cl_vers == 4) {
-		failover_reselect_transport(task, clnt);
+	if (clnt->cl_vers == 4)
 		return;
-	}
 
-	if (enfs_is_rr_route(clnt) && clnt->cl_vers == 3) {
+	if (enfs_is_rr_route(clnt))
 		shard_set_transport(task, clnt);
-		return;
-	}
 }
 
 static void enfs_inc_queuelen(struct rpc_xprt *xprt)

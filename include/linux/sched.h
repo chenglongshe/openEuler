@@ -1615,7 +1615,7 @@ struct task_struct {
 	randomized_struct_fields_end
 
 #if defined(CONFIG_FAST_SYSCALL)
-	KABI_USE(1, unsigned long *xcall_enable)
+	KABI_USE(1, void *xinfo)
 #else
 	KABI_RESERVE(1)
 #endif
@@ -2627,6 +2627,12 @@ static inline bool dynamic_affinity_enabled(void)
 {
 	return static_branch_unlikely(&__dynamic_affinity_switch);
 }
+
+#ifdef CONFIG_SCHED_PARAL
+bool sched_paral_used(void);
+#else
+static inline bool sched_paral_used(void) { return false; }
+#endif
 #endif
 
 #ifdef CONFIG_QOS_SCHED_SMART_GRID

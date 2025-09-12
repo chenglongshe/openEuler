@@ -5,8 +5,7 @@
 #ifndef __VIRTCCA_CODA_H
 #define __VIRTCCA_CODA_H
 
-#include <linux/iommu.h>
-#include <linux/vfio_pci_core.h>
+#include <asm/virtcca_io_hook.h>
 
 #include "../../../drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.h"
 #include "../../../drivers/iommu/arm/arm-smmu-v3/arm-s-smmu-v3.h"
@@ -34,6 +33,9 @@ enum cc_dev_type {
 int virtcca_attach_dev(struct iommu_domain *domain, struct iommu_group *group,
 	bool iommu_secure);
 void virtcca_detach_dev(struct iommu_domain *domain, struct iommu_group *group);
+
+int virtcca_vdev_create(struct pci_dev *pci_dev);
+int add_coda_pci_dev(struct pci_dev *pdev);
 
 u64 virtcca_get_iommu_device_msi_addr(struct iommu_group *iommu_group);
 int virtcca_iommu_group_set_dev_msi_addr(struct iommu_group *iommu_group, unsigned long *iova);
@@ -81,9 +83,7 @@ struct iommu_group *cvm_vfio_file_iommu_group(struct file *file);
 
 struct iommu_group *virtcca_vfio_file_iommu_group(struct file *file);
 
-bool is_cc_vmid(u32 vmid);
-/* Has the root bus device number switched to secure */
-bool is_cc_dev(u32 sid);
+bool is_cc_vmid(u32 vmid, u64 s_smmu_id);
 
 u64 get_g_cc_dev_msi_addr(u32 sid);
 
@@ -91,7 +91,9 @@ void set_g_cc_dev_msi_addr(u32 sid, u64 msi_addr);
 
 u32 get_g_coda_dev_vm_type(u32 sid);
 
-void g_cc_dev_table_init(void);
+u32 get_g_coda_dev_vm_type(u32 sid);
+
+void g_coda_dev_table_init(void);
 
 u32 virtcca_tmi_dev_attach(struct arm_smmu_domain *arm_smmu_domain, struct kvm *kvm);
 
@@ -113,7 +115,14 @@ static inline u32 virtcca_readl(void __iomem *addr, struct pci_dev *pdev)
 {
 	return tmi_mmio_read(mmio_va_to_pa(addr), CVM_RW_32_BIT, pci_dev_id(pdev));
 }
+
 size_t virtcca_pci_get_rom_size(void *pdev, void __iomem *rom,
 			       size_t size);
-#endif
-#endif
+bool is_virtcca_cc_dev(u32 sid);
+int virtcca_add_coda_pci_dev(struct pci_dev *pdev);
+void virtcca_dev_destroy(u64 dev_num, u64 clean);
+bool is_virtcca_pci_cc_dev(struct device *dev);
+int virtcca_create_vdev(struct device *dev);
+
+#endif /* CONFIG_HISI_VIRTCCA_CODA */
+#endif /* __VIRTCCA_CODA_H */

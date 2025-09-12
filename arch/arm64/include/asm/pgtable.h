@@ -568,6 +568,11 @@ static inline void set_pud_at(struct mm_struct *mm, unsigned long addr,
 #define pgprot_nx(prot) \
 	__pgprot_modify(prot, PTE_MAYBE_GP, PTE_PXN)
 
+#define pgprot_decrypted(prot) \
+	__pgprot_modify(prot, PROT_NS_SHARED, PROT_NS_SHARED)
+#define pgprot_encrypted(prot) \
+	__pgprot_modify(prot, PROT_NS_SHARED, 0)
+
 /*
  * Mark the prot value as uncacheable and unbufferable.
  */
@@ -1510,6 +1515,8 @@ void vmemmap_update_pmd(unsigned long addr, pmd_t *pmdp, pte_t *ptep);
 #define vmemmap_update_pmd vmemmap_update_pmd
 void vmemmap_update_pte(unsigned long addr, pte_t *ptep, pte_t pte);
 #define vmemmap_update_pte vmemmap_update_pte
+#define vmemmap_split_lock(lock)	spin_lock_irq(lock)
+#define vmemmap_split_unlock(lock)	spin_unlock_irq(lock)
 #endif
 
 #endif /* !__ASSEMBLY__ */

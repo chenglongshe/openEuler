@@ -89,25 +89,23 @@ static int debug_show_xprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
 
 	lsid = ctx ? ctx->lsid : 0;
 
-	pr_info("	   xprt:%p ctx:%p main:%d queue_len:%lu lsid:%llu.\n",
-		xprt, ctx, ctx ? ctx->main : false,
-		ctx ? atomic_long_read(&ctx->queuelen) : 0, lsid);
+	enfs_log_info("xprt:%p ctx:%p main:%d queue_len:%lu lsid:%llu.\n",
+		      xprt, ctx, ctx ? ctx->main : false,
+		      ctx ? atomic_long_read(&ctx->queuelen) : 0, lsid);
 	return 0;
 }
 
 static int debug_show_clnt(struct rpc_clnt *clnt, void *data)
 {
-	struct rpc_clnt_reserve *clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-
-	pr_info("	clnt %d addr:%p enfs:%d\n", clnt->cl_clid, clnt,
-		clnt_reserve->cl_enfs);
+	enfs_log_info("clnt %d addr:%p enfs:%d\n", clnt->cl_clid, clnt,
+		      clnt->cl_enfs);
 	rpc_clnt_iterate_for_each_xprt(clnt, debug_show_xprt, NULL);
 	return 0;
 }
 
 static void debug_print_all_xprt(void)
 {
-	if (enfs_debug != 0)
+	ifdebug(ENFS)
 		enfs_iter_rpc_clnt(debug_show_clnt, NULL);
 }
 
@@ -481,7 +479,7 @@ static void enfs_proc_delete_file(struct rpc_clnt *clnt)
 
 	err = clnt_proc_name(clnt, buf, sizeof(buf));
 	if (err) {
-		pr_err("gen clnt name failed.\n");
+		enfs_log_error("gen clnt name failed.\n");
 		return;
 	}
 	remove_proc_subtree(buf, enfs_proc_parent);
@@ -494,7 +492,7 @@ int enfs_proc_create_clnt(struct rpc_clnt *clnt)
 
 	err = enfs_proc_create_file(clnt);
 	if (err) {
-		pr_err("ENFS: create client %d\n",
+		enfs_log_error("create client %d\n",
 			err);
 		return err;
 	}
@@ -504,9 +502,7 @@ int enfs_proc_create_clnt(struct rpc_clnt *clnt)
 
 void enfs_proc_delete_clnt(struct rpc_clnt *clnt)
 {
-	struct rpc_clnt_reserve *clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-
-	if (clnt_reserve->cl_enfs == 1) {
+	if (clnt->cl_enfs == 1) {
 		enfs_proc_delete_file(clnt);
 		enfs_clnt_release_linkcap(clnt);
 	}
@@ -573,7 +569,7 @@ static int enfs_proc_create_parent(void)
 	enfs_proc_parent = proc_mkdir(ENFS_PROC_DIR, NULL);
 	LVOS_TP_END;
 	if (enfs_proc_parent == NULL) {
-		pr_err("ENFS: create proc dir err\n");
+		enfs_log_error("create proc dir err\n");
 		return -ENOMEM;
 	}
 #ifdef NFS_CLIENT_DEBUG
@@ -598,9 +594,7 @@ static void enfs_proc_delete_parent(void)
 
 static int enfs_proc_init_create_clnt(struct rpc_clnt *clnt, void *data)
 {
-	struct rpc_clnt_reserve *clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-
-	if (clnt_reserve->cl_enfs == 1) {
+	if (clnt->cl_enfs == 1) {
 		enfs_proc_create_file(clnt);
 		enfs_clnt_get_linkcap(clnt);
 	}
@@ -609,9 +603,7 @@ static int enfs_proc_init_create_clnt(struct rpc_clnt *clnt, void *data)
 
 static int enfs_proc_destroy_clnt(struct rpc_clnt *clnt, void *data)
 {
-	struct rpc_clnt_reserve *clnt_reserve = (struct rpc_clnt_reserve *)clnt;
-
-	if (clnt_reserve->cl_enfs == 1)
+	if (clnt->cl_enfs == 1)
 		enfs_proc_delete_file(clnt);
 	return 0;
 }

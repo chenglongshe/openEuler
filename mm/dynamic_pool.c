@@ -919,6 +919,9 @@ struct folio *dynamic_pool_alloc_hugepage(struct hugetlbfs_inode_info *p,
 	if (!dpool->online)
 		goto unlock;
 
+	if (!pool->free_huge_pages)
+		goto unlock;
+
 	list_for_each_entry(folio, &pool->freelist, lru) {
 		if (folio_test_hwpoison(folio))
 			continue;
@@ -1701,7 +1704,7 @@ int dpool_init(struct dpool_info *arg)
 
 	dpool = dpool_create(arg->memcg, &pagelist_dpool_ops);
 	if (!dpool) {
-		pr_err("init failed, create failed. ret: %d\n", ret);
+		pr_err("init failed, create failed.\n");
 		ret = -ENOMEM;
 		goto unlock;
 	}

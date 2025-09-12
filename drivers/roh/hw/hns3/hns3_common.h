@@ -40,8 +40,8 @@ struct hns3_roh_cmdq_ring {
 
 	u16 buf_size;
 	u16 desc_num;
-	int next_to_use;
-	int next_to_clean;
+	u32 next_to_use;
+	u32 next_to_clean;
 	u8 flag;
 	spinlock_t lock; /* CMDq lock */
 };
@@ -75,7 +75,6 @@ struct hns3_roh_device {
 	struct roh_device roh_dev;
 	struct pci_dev *pdev;
 	struct device *dev;
-	bool active;
 	struct net_device *netdev;
 
 	u8 __iomem *reg_base;

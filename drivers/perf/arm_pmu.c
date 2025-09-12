@@ -422,6 +422,15 @@ validate_group(struct perf_event *event)
 	 */
 	memset(&fake_pmu.used_mask, 0, sizeof(fake_pmu.used_mask));
 
+
+#ifdef CONFIG_HISILICON_HW_METRIC
+	/*
+	 * Make percpu_pmu null so that PMU might get a chance to know if
+	 * get_event_idx is called for validation.
+	 */
+	fake_pmu.percpu_pmu = NULL;
+#endif
+
 	if (!validate_event(event->pmu, &fake_pmu, leader))
 		return -EINVAL;
 
@@ -770,7 +779,6 @@ static int arm_perf_teardown_cpu(unsigned int cpu, struct hlist_node *node)
 	return 0;
 }
 
-#ifdef CONFIG_HISI_VIRTCCA_HOST
 void arm_pmu_set_phys_irq(bool enable)
 {
 	int cpu = get_cpu();
@@ -785,7 +793,6 @@ void arm_pmu_set_phys_irq(bool enable)
 
 	put_cpu();
 }
-#endif
 
 #ifdef CONFIG_CPU_PM
 static void cpu_pm_pmu_setup(struct arm_pmu *armpmu, unsigned long cmd)

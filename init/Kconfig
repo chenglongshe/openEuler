@@ -1028,6 +1028,20 @@ config MEMCG_KMEM
 	depends on MEMCG
 	default y
 
+config MEMCG_KMEM_STOCK
+	bool "Enable kmem stock"
+	depends on MEMCG_KMEM
+	default n
+	help
+	This option enables a per-CPU cache (stock) for kernel memory (kmem)
+	charge/uncharge operations. When multiple memory cgroups (memcgs)
+	frequently charge/uncharge kernel memory, they may contend on atomic
+	operations in shared parent memcgs, causing performance degradation.
+
+	The per-CPU stock reduces contention by batching charges locally
+	before flushing to the shared parent, improving scalability for
+	high-frequency kmem allocations.
+
 config BLK_CGROUP
 	bool "IO controller"
 	depends on BLOCK
@@ -1159,6 +1173,24 @@ config SCHED_SOFT_DOMAIN
 	  resource allocation and enhances cache locality.
 
 	  If in doubt, say N.
+
+#
+# For architectures that want to enable the support for SCHED_SOFT_QUOTA
+#
+config ARCH_SUPPORTS_SCHED_SOFT_QUOTA
+	bool
+
+config SCHED_SOFT_QUOTA
+	bool "More flexible use of CPU quota"
+	depends on ARCH_SUPPORTS_SCHED_SOFT_QUOTA
+	depends on CFS_BANDWIDTH
+	default n
+	help
+	  This option allows users to use CPU quota more flexibly when CPU
+	  is idle. It is better for users to have some understanding of
+	  CFS_BANDWIDTH. It cannot be used in scenarios where there are strict
+	  restrictions on the use of the CPU quota, such as some commercial
+	  scenarios that charge based on the use of CPU quota.
 
 config SCHED_MM_CID
 	def_bool n
@@ -1469,6 +1501,28 @@ config SCHED_STEAL
 	  order of next to run.
 
 	  If unsure, say N here.
+
+#
+# For architectures that want to enable the support for SCHED_PARAL
+#
+config ARCH_SUPPORTS_SCHED_PARAL
+	bool
+
+config SCHED_PARAL
+	bool "Parallelly schedule processes on different NUMA nodes"
+	depends on ARCH_SUPPORTS_SCHED_PARAL
+	depends on QOS_SCHED_DYNAMIC_AFFINITY
+	default n
+	help
+	  By enabling this feature, processes can be scheduled in parallel
+	  on various NUMA nodes to better utilize the cache in NUMA node.
+	  The usage is restricted to the following scenarios:
+	  1. No CPU binding is performed for user-space processes;
+	  2. It is applicable to distributed applications, such as business
+	     architectures with one master and multiple slaves running in
+	     parallel;
+	  3. The existing "qos dynamic affinity" and "qos smart grid"
+	     features must not be used simultaneously.
 
 config CHECKPOINT_RESTORE
 	bool "Checkpoint/restore support"

@@ -32,6 +32,9 @@
 #include <linux/suspend.h>
 #include <linux/switchtec.h>
 #include "pci.h"
+#ifdef CONFIG_PSWIOTLB
+#include <linux/pswiotlb.h>
+#endif
 
 /*
  * Retrain the link of a downstream PCIe port by hand if necessary.
@@ -4820,7 +4823,7 @@ static int pci_quirk_zhaoxin_pcie_ports_acs(struct pci_dev *dev, u16 acs_flags)
 	switch (dev->device) {
 	case 0x0710 ... 0x071e:
 	case 0x0721:
-	case 0x0723 ... 0x0752:
+	case 0x0723 ... 0x075e:
 		return pci_acs_ctrl_enabled(acs_flags,
 			PCI_ACS_SV | PCI_ACS_RR | PCI_ACS_CR | PCI_ACS_UF);
 	}
@@ -6399,6 +6402,17 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0xa76e, dpc_log_size);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_XILINX, 0x5020, of_pci_make_dev_node);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_XILINX, 0x5021, of_pci_make_dev_node);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_REDHAT, 0x0005, of_pci_make_dev_node);
+
+void pci_configure_pswiotlb(struct pci_dev *dev, struct pci_bus *bus)
+{
+#ifdef CONFIG_PSWIOTLB
+	if ((pswiotlb_force_disable != true) &&
+		is_phytium_ps_socs()) {
+		pswiotlb_store_local_node(dev, bus);
+		dma_set_seg_boundary(&dev->dev, 0xffffffffffff);
+	}
+#endif
+}
 
 /*
  * Devices known to require a longer delay before first config space access

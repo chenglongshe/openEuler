@@ -5645,7 +5645,7 @@ leapioraid_scsihost_inquiry_vpd_sn(
 			len = strlen(&inq_data[4]) + 1;
 			*serial_number = kmalloc(len, GFP_KERNEL);
 			if (*serial_number)
-				strscpy(*serial_number, &inq_data[4], sizeof(*serial_number));
+				strscpy(*serial_number, &inq_data[4], len);
 		}
 		break;
 	case -EAGAIN:
@@ -9685,6 +9685,8 @@ static const struct pci_device_id leapioraid_pci_table[] = {
 	{ 0x1556, 0x1111, PCI_ANY_ID, PCI_ANY_ID },
 	{ LEAPIORAID_VENDOR_ID, LEAPIORAID_DEVICE_ID_1, PCI_ANY_ID, PCI_ANY_ID },
 	{ LEAPIORAID_VENDOR_ID, LEAPIORAID_DEVICE_ID_2, PCI_ANY_ID, PCI_ANY_ID },
+	{ LEAPIORAID_VENDOR_ID, LEAPIORAID_HBA, PCI_ANY_ID, PCI_ANY_ID },
+	{ LEAPIORAID_VENDOR_ID, LEAPIORAID_RAID, PCI_ANY_ID, PCI_ANY_ID },
 	{ 0 }
 };
 

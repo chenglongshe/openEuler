@@ -97,6 +97,8 @@ long kvm_sw64_set_vcb(struct file *filp, unsigned long arg)
 		set_timer(vcpu, 200000000);
 		vcpu->arch.vcb.migration_mark = 0;
 	}
+
+	vcpu->arch.vcb.irqs_addr = (unsigned long)&vcpu->arch.vcb.irqs_pending;
 	return 0;
 }
 
@@ -126,6 +128,7 @@ int kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu)
 
 static int feat_vcpu_interrupt_line(struct kvm_vcpu *vcpu, int number)
 {
+	int rcid;
 	int cpu = vcpu->cpu;
 	int me = smp_processor_id();
 
@@ -136,7 +139,9 @@ static int feat_vcpu_interrupt_line(struct kvm_vcpu *vcpu, int number)
 				&& cpu_online(cpu)) {
 			if (vcpu->arch.vcb.vcpu_irq_disabled)
 				return 0;
-			send_ipi(cpu, II_II1);
+			/* send_ipi */
+			rcid = cpu_to_rcid(cpu);
+			sendii(rcid, II_II1, 0);
 		}
 	} else
 		kvm_vcpu_kick(vcpu);
@@ -217,17 +222,22 @@ static int __init kvm_core4_init(void)
 	for (i = 0; i < NR_CPUS; i++)
 		last_vpn(i) = VPN_FIRST_VERSION;
 
+	kvm_register_perf_callbacks(NULL);
+
 	ret = kvm_init(sizeof(struct kvm_vcpu), 0, THIS_MODULE);
 
-	if (ret)
-		return ret;
+	if (likely(!ret))
+		return 0;
 
-	return 0;
+	kvm_unregister_perf_callbacks();
+
+	return ret;
 }
 
 static void __exit kvm_core4_exit(void)
 {
 	kvm_exit();
+	kvm_unregister_perf_callbacks();
 }
 
 module_init(kvm_core4_init);

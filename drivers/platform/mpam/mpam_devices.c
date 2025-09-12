@@ -928,6 +928,14 @@ bool resctrl_arch_would_mbm_overflow(void)
 	return read_cpuid_implementor() != ARM_CPU_IMP_HISI;
 }
 
+static bool mpam_ris_has_nrdy_bit(struct mpam_msc_ris *ris)
+{
+	if (ris->comp->class->type == MPAM_CLASS_MEMORY)
+		return read_cpuid_implementor() != ARM_CPU_IMP_HISI;
+
+	return true;
+}
+
 static void __ris_msmon_read(void *arg)
 {
 	bool nrdy = false;
@@ -1002,6 +1010,9 @@ static void __ris_msmon_read(void *arg)
 			now = FIELD_GET(MSMON___VALUE, now);
 		}
 
+		if (config_mismatch && !mpam_ris_has_nrdy_bit(ris))
+			nrdy = true;
+
 		if (nrdy)
 			break;
 
@@ -1046,7 +1057,7 @@ static void __ris_msmon_read(void *arg)
 
 static int _msmon_read(struct mpam_component *comp, struct mon_read *arg)
 {
-	int err, idx;
+	int err = 0, idx;
 	bool read_again;
 	u64 wait_jiffies;
 	struct mpam_msc *msc;
@@ -1595,7 +1606,8 @@ static int __setup_ppi(struct mpam_msc *msc)
 	for_each_cpu(cpu, &msc->accessibility) {
 		struct mpam_msc *empty = *per_cpu_ptr(msc->error_dev_id, cpu);
 		if (empty != NULL) {
-			pr_err_once("%s shares PPI with %s!\n", 				    dev_name(&msc->pdev->dev),
+			pr_err_once("%s shares PPI with %s!\n",
+				    dev_name(&msc->pdev->dev),
 				    dev_name(&empty->pdev->dev));
 			return -EBUSY;
 		}
@@ -1615,7 +1627,6 @@ static int mpam_msc_setup_error_irq(struct mpam_msc *msc)
 
 	/* Allocate and initialise the percpu device pointer for PPI */
 	if (irq_is_percpu(irq))
-
 		return __setup_ppi(msc);
 
 	/* sanity check: shared interrupts can be routed anywhere? */
@@ -1685,7 +1696,7 @@ static int mpam_dt_parse_resource(struct mpam_msc *msc, struct device_node *np,
 
 static int mpam_dt_parse_resources(struct mpam_msc *msc, void *ignored)
 {
-	int err, num_ris = 0;
+	int err = 0, num_ris = 0;
 	const u32 *ris_idx_p;
 	struct device_node *iter, *np;
 
@@ -1935,14 +1946,14 @@ static void mpam_enable_init_class_features(struct mpam_class *class)
 	struct mpam_msc_ris *ris;
 	struct mpam_component *comp;
 
-	comp = list_first_entry_or_null(&class->components,
-					struct mpam_component, class_list);
-	if (WARN_ON(!comp))
-		return;
+	list_for_each_entry(comp, &class->components, class_list) {
+		list_for_each_entry(ris, &comp->ris, comp_list) {
+			if (ris->msc->probed)
+				break;
+		}
+	}
 
-	ris = list_first_entry_or_null(&comp->ris,
-				       struct mpam_msc_ris, comp_list);
-	if (WARN_ON(!ris))
+	if (WARN_ON(!comp) || WARN_ON(!ris))
 		return;
 
 	class->props = ris->props;
@@ -1962,6 +1973,9 @@ static void mpam_enable_merge_features(void)
 
 		list_for_each_entry(comp, &class->components, class_list) {
 			list_for_each_entry(ris, &comp->ris, comp_list) {
+				if (!ris->msc->probed)
+					continue;
+
 				__resource_props_mismatch(ris, class);
 
 				class->nrdy_usec = max(class->nrdy_usec,
@@ -2335,6 +2349,7 @@ void mpam_disable(struct work_struct *ignored)
  */
 void mpam_enable(struct work_struct *work)
 {
+	cpumask_t mask;
 	static atomic_t once;
 	struct mpam_msc *msc;
 	bool all_devices_probed = true;
@@ -2342,8 +2357,11 @@ void mpam_enable(struct work_struct *work)
 	mutex_lock(&mpam_list_lock);
 	list_for_each_entry(msc, &mpam_all_msc, glbl_list) {
 		mutex_lock(&msc->lock);
-		if (!msc->probed)
-			all_devices_probed = false;
+		if (!msc->probed) {
+			cpumask_and(&mask, &msc->accessibility, cpu_online_mask);
+			if (!cpumask_empty(&mask))
+				all_devices_probed = false;
+		}
 		mutex_unlock(&msc->lock);
 
 		if (!all_devices_probed)

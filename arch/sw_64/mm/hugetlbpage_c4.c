@@ -28,6 +28,7 @@ int pmd_huge(pmd_t pmd)
 	return !pmd_none(pmd) &&
 		(pmd_val(pmd) & (_PAGE_PRESENT|_PAGE_LEAF)) != _PAGE_PRESENT;
 }
+EXPORT_SYMBOL(pmd_huge);
 
 int pud_huge(pud_t pud)
 {
@@ -280,7 +281,8 @@ void huge_ptep_set_wrprotect(struct mm_struct *mm,
 }
 
 pte_t huge_ptep_get_and_clear(struct mm_struct *mm,
-		unsigned long addr, pte_t *ptep)
+			      unsigned long addr, pte_t *ptep,
+			      unsigned long sz)
 {
 	int ncontig;
 	size_t pgsize;

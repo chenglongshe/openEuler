@@ -3,6 +3,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2025. All rights reserved.
  */
 #include <linux/kthread.h>
+#include <linux/lockd/lockd.h>
 #include <linux/nfs3.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_xdr.h>
@@ -11,7 +12,6 @@
 #include <linux/sunrpc/types.h>
 #include <linux/sunrpc/xprt.h>
 #include <linux/moduleparam.h>
-#include <linux/lockd/lockd.h>
 #include "../../../net/sunrpc/netns.h"
 #include "../../../fs/nfs/nfs4_fs.h"
 #include "../../../fs/nfs/netns.h"
@@ -25,20 +25,11 @@
 #include "pm_state.h"
 #include "shard.h"
 
-unsigned int enfs_uuid_debug;
-module_param_named(uuid, enfs_uuid_debug, uint, 0600);
-MODULE_PARM_DESC(uuid, "print nfsv3 req uuid debugging mask");
-
 #define MAX_SHARD_COUNT_TIME 5	// 5 second
 #define FAULT_DETECTED 1
 
 #define SHARD_VIEW_UPDATE_INTERVAL_UNDER_LOCK 10
 #define SECOND_TO_MILLISECOND 1000
-
-/*
- * Set the shard_should_stop to true so that the work can be quickly returned.
- */
-static bool shard_should_stop;
 
 // TODO: replace the rwlock with RCU
 struct shard_view_ctrl {
@@ -63,7 +54,6 @@ struct view_table {
 	rwlock_t lock;
 	struct list_head fs_head;
 	struct list_head shard_head;
-	struct list_head lif_head;
 	struct list_head ls_head;
 	uint64_t devId;
 };
@@ -117,65 +107,62 @@ struct clnt_uuid_info {
 	struct list_head next;
 	struct rpc_clnt *clnt;
 	struct enfs_file_uuid root_uuid;
-	bool updateing;
+	bool updating;
 };
 
 static bool delete_view_table(uint64_t devId);
-static void enfs_delete_fs_info(struct view_table *table, uint32_t fsId);
-static void viewtable_delete_all_shard(struct view_table *table);
 
-int enfs_find_clnt_root(struct rpc_clnt *clnt, struct enfs_file_uuid *root_uuid)
+static int enfs_find_clnt_root(struct rpc_clnt *clnt, struct enfs_file_uuid *root_uuid)
 {
+	int ret = 0;
 	struct clnt_uuid_info *info;
 
 	read_lock(&shard_ctrl->clnt_info_lock);
 	list_for_each_entry(info, &shard_ctrl->clnt_info_list, next) {
-		if (info->clnt == clnt)
-			break;
+		if (info->clnt == clnt) {
+			*root_uuid = info->root_uuid;
+			goto out;
+		}
 	}
-	if (!list_entry_is_head(info, &shard_ctrl->clnt_info_list, next)) {
-		*root_uuid = info->root_uuid;
-		read_unlock(&shard_ctrl->clnt_info_lock);
-		return 0;
-	}
+	ret = -1;
 
+out:
 	read_unlock(&shard_ctrl->clnt_info_lock);
-	return -1;
+	return ret;
 }
 
-int enfs_insert_clnt_root(struct rpc_clnt *clnt, struct enfs_file_uuid *root_uuid)
+static int enfs_insert_clnt_root(struct rpc_clnt *clnt, struct enfs_file_uuid *root_uuid)
 {
+	int ret = 0;
 	struct clnt_uuid_info *info;
 
 	write_lock(&shard_ctrl->clnt_info_lock);
 	list_for_each_entry(info, &shard_ctrl->clnt_info_list, next) {
-		if (info->clnt == clnt)
-			break;
-	}
-
-	if (!list_entry_is_head(info, &shard_ctrl->clnt_info_list, next)) {
-		info->root_uuid = *root_uuid;
-		write_unlock(&shard_ctrl->clnt_info_lock);
-		return 0;
+		if (info->clnt == clnt) {
+			info->root_uuid = *root_uuid;
+			goto out;
+		}
 	}
 
 	info = kmalloc(sizeof(*info), GFP_KERNEL);
 	if (!info) {
-		write_unlock(&shard_ctrl->clnt_info_lock);
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	info->clnt = clnt;
 	info->root_uuid = *root_uuid;
 	list_add_tail(&info->next, &shard_ctrl->clnt_info_list);
-	info->updateing = false;
+	info->updating = false;
 
+out:
 	write_unlock(&shard_ctrl->clnt_info_lock);
-	return 0;
+	return ret;
 }
 
 int enfs_delete_clnt_shard_cache(struct rpc_clnt *clnt)
 {
+	int ret = 0;
 	struct clnt_uuid_info *info;
 	uint64_t devId = 0;
 
@@ -188,10 +175,8 @@ int enfs_delete_clnt_shard_cache(struct rpc_clnt *clnt)
 			break;
 		}
 	}
-	if (devId == 0) {
-		write_unlock(&shard_ctrl->clnt_info_lock);
-		return 0;
-	}
+	if (devId == 0)
+		goto out;
 
 	list_for_each_entry(info, &shard_ctrl->clnt_info_list, next) {
 		if (devId == GET_DEVID_FROM_UUID(&info->root_uuid)) {
@@ -206,8 +191,9 @@ int enfs_delete_clnt_shard_cache(struct rpc_clnt *clnt)
 		write_unlock(&shard_ctrl->view_lock);
 	}
 
+out:
 	write_unlock(&shard_ctrl->clnt_info_lock);
-	return 0;
+	return ret;
 }
 
 static struct view_table *create_view_table(uint64_t devId)
@@ -216,11 +202,8 @@ static struct view_table *create_view_table(uint64_t devId)
 
 	list_for_each_entry(table, &shard_ctrl->view_list, next) {
 		if (table->devId == devId)
-			break;
+			return table;
 	}
-
-	if (!list_entry_is_head(table, &shard_ctrl->view_list, next))
-		return table;
 
 	table = kmalloc(sizeof(*table), GFP_KERNEL);
 	if (!table)
@@ -229,7 +212,6 @@ static struct view_table *create_view_table(uint64_t devId)
 	rwlock_init(&table->lock);
 	INIT_LIST_HEAD(&table->fs_head);
 	INIT_LIST_HEAD(&table->shard_head);
-	INIT_LIST_HEAD(&table->lif_head);
 	INIT_LIST_HEAD(&table->ls_head);
 	table->devId = devId;
 	list_add_tail(&table->next, &shard_ctrl->view_list);
@@ -243,16 +225,44 @@ static struct view_table *get_view_table(uint64_t devId, bool create)
 
 	list_for_each_entry(table, &shard_ctrl->view_list, next) {
 		if (table->devId == devId)
-			break;
+			return table;
 	}
 
 	// Note use write_lock when creating a view tabel.
-	if (list_entry_is_head(table, &shard_ctrl->view_list, next)) {
-		if (create)
-			return create_view_table(devId);
-		return NULL;
-	}
-	return table;
+	if (create)
+		return create_view_table(devId);
+	return NULL;
+}
+
+/**
+ * enfs_clear_ ## __struct_name() - delete and free all __struct_name from view_table
+ * @table: view table
+ *
+ * Context: protected by view_table write lock
+ * Return: None
+ */
+#define DEFINE_CLEAR_LIST_FUNC(__struct_name, __list_name)		\
+static void enfs_clear_ ## __struct_name(struct view_table *table)	\
+{									\
+	struct __struct_name *item, *tmp;				\
+									\
+	list_for_each_entry_safe(item, tmp, &table->__list_name, next) {\
+		list_del(&item->next);					\
+		kfree(item);						\
+	}								\
+}
+
+DEFINE_CLEAR_LIST_FUNC(fs_info, fs_head);
+DEFINE_CLEAR_LIST_FUNC(shard_view, shard_head);
+DEFINE_CLEAR_LIST_FUNC(ls_info, ls_head);
+
+static void enfs_free_view_table(struct view_table *table)
+{
+	enfs_clear_fs_info(table);
+	enfs_clear_shard_view(table);
+	enfs_clear_ls_info(table);
+	list_del(&table->next);
+	kfree(table);
 }
 
 /*
@@ -260,21 +270,17 @@ static struct view_table *get_view_table(uint64_t devId, bool create)
  */
 static bool delete_view_table(uint64_t devId)
 {
-	struct view_table *table;
+	struct view_table *table, *tmp;
 
-	list_for_each_entry(table, &shard_ctrl->view_list, next) {
-		if (table->devId == devId)
-			break;
+	list_for_each_entry_safe(table, tmp, &shard_ctrl->view_list, next) {
+		if (table->devId == devId) {
+			enfs_free_view_table(table);
+			return true;
+		}
 	}
 
-	if (list_entry_is_head(table, &shard_ctrl->view_list, next))
-		return false;
+	return false;
 
-	enfs_delete_fs_info(table, 0);
-	viewtable_delete_all_shard(table);
-	list_del(&table->next);
-	kfree(table);
-	return true;
 }
 
 static struct fs_info *get_fsinfo(struct view_table *table, uint32_t fsId)
@@ -283,13 +289,10 @@ static struct fs_info *get_fsinfo(struct view_table *table, uint32_t fsId)
 
 	list_for_each_entry(info, &table->fs_head, next) {
 		if (info->fsId == fsId)
-			break;
+			return info;
 	}
 
-	if (list_entry_is_head(info, &table->fs_head, next))
-		return NULL;
-
-	return info;
+	return NULL;
 }
 
 static int get_ls_and_cpu_id(struct view_table *table, uint64_t clusterId,
@@ -297,15 +300,16 @@ static int get_ls_and_cpu_id(struct view_table *table, uint64_t clusterId,
 				 uint64_t *lsid, uint32_t *cpuId)
 {
 	struct shard_view *view;
+	bool matched;
 
 	list_for_each_entry(view, &table->shard_head, next) {
-		if (view->clusterId == clusterId &&
-			view->storagePoolId == storagePoolId) {
+		matched = (view->clusterId == clusterId &&
+			   view->storagePoolId == storagePoolId);
+		if (matched)
 			break;
-		}
 	}
 
-	if (list_entry_is_head(view, &table->shard_head, next))
+	if (!matched)
 		return -1;
 
 	if (shardId >= view->num) {
@@ -324,10 +328,10 @@ static int get_ls_and_cpu_id(struct view_table *table, uint64_t clusterId,
 /**
  * @return:0 for success,otherwise for failed
  */
-int enfs_query_lif_info(struct rpc_clnt *clnt, struct enfs_file_uuid *file_uuid,
+static int enfs_query_lif_info(struct rpc_clnt *clnt, struct enfs_file_uuid *file_uuid,
 			uint64_t *lsid, uint32_t *cpuId)
 {
-	int ret;
+	int ret = 0;
 	struct view_table *table;
 	struct fs_info *info;
 	uint32_t shardId;
@@ -335,25 +339,25 @@ int enfs_query_lif_info(struct rpc_clnt *clnt, struct enfs_file_uuid *file_uuid,
 	read_lock(&shard_ctrl->view_lock);
 	table = get_view_table(GET_DEVID_FROM_UUID(file_uuid), false);
 	if (!table) {
-		read_unlock(&shard_ctrl->view_lock);
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	info = get_fsinfo(table, GET_FSID_FROM_UUID(file_uuid));
 	if (!info) {
-		read_unlock(&shard_ctrl->view_lock);
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	shardId = get_shardid_from_uuid(file_uuid);
-	ret =
-		get_ls_and_cpu_id(table, info->clusterId, info->storagePoolId,
-				  shardId, lsid, cpuId);
+	ret = get_ls_and_cpu_id(table, info->clusterId, info->storagePoolId,
+				shardId, lsid, cpuId);
 	if (ret) {
-		read_unlock(&shard_ctrl->view_lock);
 		enfs_log_error("get lsid failed.\n");
-		return ret;
+		goto out;
 	}
+
+out:
 	read_unlock(&shard_ctrl->view_lock);
 	return ret;
 }
@@ -364,14 +368,11 @@ static int update_fs_info(struct view_table *table,
 	struct fs_info *info;
 
 	list_for_each_entry(info, &table->fs_head, next) {
-		if (info->fsId == fs_shard_view->fsId)
-			break;
-	}
-
-	if (!list_entry_is_head(info, &table->fs_head, next)) {
-		info->clusterId = fs_shard_view->clusterId;
-		info->storagePoolId = fs_shard_view->storagePoolId;
-		return 0;
+		if (info->fsId == fs_shard_view->fsId) {
+			info->clusterId = fs_shard_view->clusterId;
+			info->storagePoolId = fs_shard_view->storagePoolId;
+			return 0;
+		}
 	}
 
 	info = kmalloc(sizeof(*info), GFP_KERNEL);
@@ -406,14 +407,10 @@ static int update_shard_view(struct view_table *table,
 
 	list_for_each_entry(view, &table->shard_head, next) {
 		if (view->clusterId == fs_shard_view->clusterId &&
-			view->storagePoolId == fs_shard_view->storagePoolId) {
-			break;
+		    view->storagePoolId == fs_shard_view->storagePoolId) {
+			copy_shard_entry(view, fs_shard_view, flag);
+			return 0;
 		}
-	}
-
-	if (!list_entry_is_head(view, &table->shard_head, next)) {
-		copy_shard_entry(view, fs_shard_view, flag);
-		return 0;
 	}
 
 	view = kmalloc(sizeof(*view), GFP_KERNEL);
@@ -431,35 +428,34 @@ static int update_shard_view(struct view_table *table,
 	return 0;
 }
 
-int enfs_update_fsshard(uint64_t devId, struct enfs_shard_view *fs_shard_view, int *flag)
+static int enfs_update_fsshard(uint64_t devId, struct enfs_shard_view *fs_shard_view, int *flag)
 {
-	int ret;
+	int ret = 0;
 	struct view_table *table;
 
 	write_lock(&shard_ctrl->view_lock);
 	table = get_view_table(devId, true);
 	if (!table) {
-		write_unlock(&shard_ctrl->view_lock);
 		enfs_log_error("get view table failed.\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	ret = update_fs_info(table, fs_shard_view);
 	if (ret) {
-		write_unlock(&shard_ctrl->view_lock);
 		enfs_log_error("update fs info err:%d\n", ret);
-		return ret;
+		goto out;
 	}
 
 	ret = update_shard_view(table, fs_shard_view, flag);
 	if (ret) {
-		write_unlock(&shard_ctrl->view_lock);
 		enfs_log_error("update shard view err:%d\n", ret);
-		return ret;
+		goto out;
 	}
 
+out:
 	write_unlock(&shard_ctrl->view_lock);
-	return 0;
+	return ret;
 }
 
 static int find_same_lsid(struct ls_info *info, int size, int target_lsId)
@@ -504,13 +500,10 @@ static int update_ls_info(struct view_table *table,
 	struct ls_info *info;
 
 	list_for_each_entry(info, &table->ls_head, next) {
-		if (info->clusterId == ls_view->clusterId)
-			break;
-	}
-
-	if (!list_entry_is_head(info, &table->ls_head, next)) {
-		copy_ls_entry(info, ls_view, flag);
-		return 0;
+		if (info->clusterId == ls_view->clusterId) {
+			copy_ls_entry(info, ls_view, flag);
+			return 0;
+		}
 	}
 
 	info = kmalloc(sizeof(*info), GFP_KERNEL);
@@ -527,136 +520,29 @@ static int update_ls_info(struct view_table *table,
 	return 0;
 }
 
-int enfs_update_lsinfo(uint64_t devId, struct enfs_get_ls_version_rsp *ls_view,
+static int enfs_update_lsinfo(uint64_t devId, struct enfs_get_ls_version_rsp *ls_view,
 			   int *flag)
 {
-	int ret;
+	int ret = 0;
 	struct view_table *table;
 
 	write_lock(&shard_ctrl->view_lock);
 	table = get_view_table(devId, true);
 	if (!table) {
-		write_unlock(&shard_ctrl->view_lock);
 		enfs_log_error("get view table failed.\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	ret = update_ls_info(table, ls_view, flag);
 	if (ret) {
-		write_unlock(&shard_ctrl->view_lock);
 		enfs_log_error("update ls info err:%d\n", ret);
-		return ret;
+		goto out;
 	}
 
+out:
 	write_unlock(&shard_ctrl->view_lock);
-	return 0;
-}
-
-int enfs_update_lif_info(uint64_t devId, const char *ipaddr,
-			 struct enfs_lif_port_info_single *lif_info)
-{
-	struct view_table *table;
-	struct lif_info *lif;
-
-	if (strlen(ipaddr) >= IP_ADDRESS_LEN_MAX || lif_info->isfound == 1)
-		return -EINVAL;
-
-	write_lock(&shard_ctrl->view_lock);
-	table = get_view_table(devId, true);
-	if (!table) {
-		write_unlock(&shard_ctrl->view_lock);
-		enfs_log_error("get view table failed.\n");
-		return -ENOMEM;
-	}
-
-	list_for_each_entry(lif, &table->lif_head, next) {
-		if (strcmp(lif->ipAddr, ipaddr) == 0)
-			break;
-	}
-
-	if (!list_entry_is_head(lif, &table->lif_head, next)) {
-		lif->workStatus = lif_info->workStatus;
-		lif->lsId = lif_info->lsId;
-		lif->tenantId = lif_info->tenantId;
-		lif->homeSiteWwn = lif_info->homeSiteWwn;
-		write_unlock(&shard_ctrl->view_lock);
-		return 0;
-	}
-
-	lif = kmalloc(sizeof(*lif), GFP_KERNEL);
-	if (!lif) {
-		write_unlock(&shard_ctrl->view_lock);
-		return -ENOMEM;
-	}
-	strscpy(lif->ipAddr, ipaddr, IP_ADDRESS_LEN_MAX);
-	lif->workStatus = lif_info->workStatus;
-	lif->lsId = lif_info->lsId;
-	lif->tenantId = lif_info->tenantId;
-	lif->homeSiteWwn = lif_info->homeSiteWwn;
-	list_add_tail(&lif->next, &table->lif_head);
-
-	write_unlock(&shard_ctrl->view_lock);
-	return 0;
-}
-
-/*
- * view_lock need write_lock
- */
-static void enfs_delete_fs_info(struct view_table *table, uint32_t fsId)
-{
-	struct fs_info *info;
-	struct fs_info *next_ptr;
-
-	list_for_each_entry_safe(info, next_ptr, &table->fs_head, next) {
-		/* storage fsid range 1-65535 */
-		if (info->fsId == 0) {
-			list_del(&info->next);
-			kfree(info);
-			continue;
-		}
-
-		if (info->fsId == fsId) {
-			list_del(&info->next);
-			kfree(info);
-			break;
-		}
-	}
-
-}
-
-static void viewtable_delete_all_shard(struct view_table *table)
-{
-	struct shard_view *view;
-	struct shard_view *next_ptr;
-
-	list_for_each_entry_safe(view, next_ptr, &table->shard_head, next) {
-		list_del(&view->next);
-		kfree(view);
-	}
-
-}
-
-int enfs_delete_shard(uint64_t devId, uint64_t clusterId,
-			  uint32_t storagePoolId)
-{
-	struct view_table *table;
-	struct shard_view *view;
-
-	write_lock(&shard_ctrl->view_lock);
-	table = get_view_table(devId, false);
-	if (!table) {
-		write_unlock(&shard_ctrl->view_lock);
-		return 0;
-	}
-	list_for_each_entry(view, &table->shard_head, next) {
-		if (view->clusterId == clusterId &&
-			view->storagePoolId == storagePoolId) {
-			list_del(&view->next);
-			kfree(view);
-		}
-	}
-	write_unlock(&shard_ctrl->view_lock);
-	return 0;
+	return ret;
 }
 
 // getattr,fsstat,fsinfo,pathconf
@@ -666,106 +552,28 @@ static const struct nfs_fh *parse_msg_fh(struct rpc_message *msg)
 	return fh;
 }
 
-static const struct nfs_fh *parse_msg_setattr(struct rpc_message *msg)
-{
-	struct nfs3_sattrargs *args = msg->rpc_argp;
-
-	return args->fh;
+#define DEFINE_PARSE_FH_FUNC(__name, __struct_name, __return_member)	\
+static const struct nfs_fh *						\
+parse_ ## __name ## _fh(struct rpc_message *msg)			\
+{									\
+	struct __struct_name *args = msg->rpc_argp;			\
+	return args->__return_member;					\
 }
 
-// lookup,rmdir
-static const struct nfs_fh *parse_msg_dirop(struct rpc_message *msg)
-{
-	struct nfs3_diropargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_access(struct rpc_message *msg)
-{
-	struct nfs3_accessargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_readlink(struct rpc_message *msg)
-{
-	struct nfs3_readlinkargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_io(struct rpc_message *msg)
-{
-	struct nfs_pgio_args *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_create(struct rpc_message *msg)
-{
-	struct nfs3_createargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_mkdir(struct rpc_message *msg)
-{
-	struct nfs3_mkdirargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_symlink(struct rpc_message *msg)
-{
-	struct nfs3_symlinkargs *args = msg->rpc_argp;
-
-	return args->fromfh;
-}
-
-static const struct nfs_fh *parse_msg_mknode(struct rpc_message *msg)
-{
-	struct nfs3_mknodargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_remove(struct rpc_message *msg)
-{
-	struct nfs_removeargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-static const struct nfs_fh *parse_msg_rename(struct rpc_message *msg)
-{
-	struct nfs_renameargs *args = msg->rpc_argp;
-
-	return args->old_dir;
-}
-
-static const struct nfs_fh *parse_msg_link(struct rpc_message *msg)
-{
-	struct nfs3_linkargs *args = msg->rpc_argp;
-
-	return args->fromfh;
-}
-
-// readdir,readdirplus
-static const struct nfs_fh *parse_msg_readdir(struct rpc_message *msg)
-{
-	struct nfs3_readdirargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
-
-// readdir,readdirplus
-static const struct nfs_fh *parse_msg_commit(struct rpc_message *msg)
-{
-	struct nfs_commitargs *args = msg->rpc_argp;
-
-	return args->fh;
-}
+DEFINE_PARSE_FH_FUNC(sattr, nfs3_sattrargs, fh);
+DEFINE_PARSE_FH_FUNC(dirop, nfs3_diropargs, fh);
+DEFINE_PARSE_FH_FUNC(access, nfs3_accessargs, fh);
+DEFINE_PARSE_FH_FUNC(readlink, nfs3_readlinkargs, fh);
+DEFINE_PARSE_FH_FUNC(pgio, nfs_pgio_args, fh);
+DEFINE_PARSE_FH_FUNC(create, nfs3_createargs, fh);
+DEFINE_PARSE_FH_FUNC(mkdir, nfs3_mkdirargs, fh);
+DEFINE_PARSE_FH_FUNC(symlink, nfs3_symlinkargs, fromfh);
+DEFINE_PARSE_FH_FUNC(mknod, nfs3_mknodargs, fh);
+DEFINE_PARSE_FH_FUNC(remove, nfs_removeargs, fh);
+DEFINE_PARSE_FH_FUNC(rename, nfs_renameargs, old_dir);
+DEFINE_PARSE_FH_FUNC(link, nfs3_linkargs, fromfh);
+DEFINE_PARSE_FH_FUNC(readdir, nfs3_readdirargs, fh);
+DEFINE_PARSE_FH_FUNC(commit, nfs_commitargs, fh);
 
 struct nfs3_cmd_ops {
 	int cmd;
@@ -776,26 +584,26 @@ struct nfs3_cmd_ops {
 struct nfs3_cmd_ops nfs3_parse_ops[] = {
 	{ NFS3PROC_NULL, NULL, "NFS3PROC_NULL" },
 	{ NFS3PROC_GETATTR, parse_msg_fh, "NFS3PROC_GETATTR" },
-	{ NFS3PROC_SETATTR, parse_msg_setattr, "NFS3PROC_SETATTR" },
-	{ NFS3PROC_LOOKUP, parse_msg_dirop, "NFS3PROC_LOOKUP" },
-	{ NFS3PROC_ACCESS, parse_msg_access, "NFS3PROC_ACCESS" },
-	{ NFS3PROC_READLINK, parse_msg_readlink, "NFS3PROC_READLINK" },
-	{ NFS3PROC_READ, parse_msg_io, "NFS3PROC_READ" },
-	{ NFS3PROC_WRITE, parse_msg_io, "NFS3PROC_WRITE" },
-	{ NFS3PROC_CREATE, parse_msg_create, "NFS3PROC_CREATE" },
-	{ NFS3PROC_MKDIR, parse_msg_mkdir, "NFS3PROC_MKDIR" },
-	{ NFS3PROC_SYMLINK, parse_msg_symlink, "NFS3PROC_SYMLINK" },
-	{ NFS3PROC_MKNOD, parse_msg_mknode, "NFS3PROC_MKNOD" },
-	{ NFS3PROC_REMOVE, parse_msg_remove, "NFS3PROC_REMOVE" },
-	{ NFS3PROC_RMDIR, parse_msg_dirop, "NFS3PROC_RMDIR" },
-	{ NFS3PROC_RENAME, parse_msg_rename, "NFS3PROC_RENAME" },
-	{ NFS3PROC_LINK, parse_msg_link, "NFS3PROC_LINK" },
-	{ NFS3PROC_READDIR, parse_msg_readdir, "NFS3PROC_READDIR" },
-	{ NFS3PROC_READDIRPLUS, parse_msg_readdir, "NFS3PROC_READDIRPLUS" },
+	{ NFS3PROC_SETATTR, parse_sattr_fh, "NFS3PROC_SETATTR" },
+	{ NFS3PROC_LOOKUP, parse_dirop_fh, "NFS3PROC_LOOKUP" },
+	{ NFS3PROC_ACCESS, parse_access_fh, "NFS3PROC_ACCESS" },
+	{ NFS3PROC_READLINK, parse_readlink_fh, "NFS3PROC_READLINK" },
+	{ NFS3PROC_READ, parse_pgio_fh, "NFS3PROC_READ" },
+	{ NFS3PROC_WRITE, parse_pgio_fh, "NFS3PROC_WRITE" },
+	{ NFS3PROC_CREATE, parse_create_fh, "NFS3PROC_CREATE" },
+	{ NFS3PROC_MKDIR, parse_mkdir_fh, "NFS3PROC_MKDIR" },
+	{ NFS3PROC_SYMLINK, parse_symlink_fh, "NFS3PROC_SYMLINK" },
+	{ NFS3PROC_MKNOD, parse_mknod_fh, "NFS3PROC_MKNOD" },
+	{ NFS3PROC_REMOVE, parse_remove_fh, "NFS3PROC_REMOVE" },
+	{ NFS3PROC_RMDIR, parse_dirop_fh, "NFS3PROC_RMDIR" },
+	{ NFS3PROC_RENAME, parse_rename_fh, "NFS3PROC_RENAME" },
+	{ NFS3PROC_LINK, parse_link_fh, "NFS3PROC_LINK" },
+	{ NFS3PROC_READDIR, parse_readdir_fh, "NFS3PROC_READDIR" },
+	{ NFS3PROC_READDIRPLUS, parse_readdir_fh, "NFS3PROC_READDIRPLUS" },
 	{ NFS3PROC_FSSTAT, parse_msg_fh, "NFS3PROC_FSSTAT" },
 	{ NFS3PROC_FSINFO, parse_msg_fh, "NFS3PROC_FSINFO" },
 	{ NFS3PROC_PATHCONF, parse_msg_fh, "NFS3PROC_PATHCONF" },
-	{ NFS3PROC_COMMIT, parse_msg_commit, "NFS3PROC_COMMIT" },
+	{ NFS3PROC_COMMIT, parse_commit_fh, "NFS3PROC_COMMIT" },
 };
 
 int nfs3_parse_ops_size = sizeof(nfs3_parse_ops) / sizeof(struct nfs3_cmd_ops);
@@ -828,62 +636,6 @@ static int sockaddr_ip_to_str(struct sockaddr *addr, char *buf, int len)
 	return 1;
 }
 
-static void update_server_enfs_capability(struct rpc_clnt *clnt, int flag)
-{
-	int ret = 0;
-	struct nfs_net *nn = NULL;
-	struct net *net;
-	struct nfs_server *pos = NULL;
-	char remoteip[64] = { "*" };
-	char serverip[64] = { "*" };
-
-	rcu_read_lock();
-	for_each_net_rcu(net) {
-		nn = net_generic(net, nfs_net_id);
-		if (nn == NULL)
-			continue;
-
-		spin_lock(&nn->nfs_client_lock);
-		list_for_each_entry(pos, &nn->nfs_volume_list, master_link) {
-			if (!pos->nlm_host)
-				continue;
-
-			if (!pos->client)
-				continue;
-
-			if (pos->nlm_host == NULL)
-				continue;
-
-			ret = sockaddr_ip_to_str(
-				(struct sockaddr *)&clnt->cl_xprt->addr,
-				remoteip, sizeof(remoteip));
-			if (ret != 0) {
-				enfs_log_error("remoteip to str err:%d.\n",
-						   ret);
-				continue;
-			}
-
-			ret = sockaddr_ip_to_str(
-				(struct sockaddr *)&pos->client->cl_xprt->addr,
-				serverip, sizeof(serverip));
-			if (ret != 0) {
-				enfs_log_error("remoteip to str err:%d.\n",
-						   ret);
-				continue;
-			}
-
-			if (!strcmp(remoteip, serverip)) {
-				pos->nlm_host->enfs_flag |= flag;
-				pos->nlm_host->enfs_flag &= flag;
-			}
-		}
-		spin_unlock(&nn->nfs_client_lock);
-		break;
-	}
-	rcu_read_unlock();
-
-}
-
 static int query_and_update_shard(struct rpc_clnt *clnt, struct enfs_file_uuid *file_uuid,
 				  struct shard_work *work)
 {
@@ -901,18 +653,11 @@ static int query_and_update_shard(struct rpc_clnt *clnt, struct enfs_file_uuid *
 	kfree(fsshard_view);
 
 	ret = dorado_query_lsId(clnt, &ls_view);
-	if (ret == -EOPNOTSUPP || ret == -ENFS_NOT_SUPPORT) {
-		update_server_enfs_capability(clnt,
-						  ENFS_CAPABILITY_LSID_NOTSUPPORT);
-		return 0;
-	}
-
 	if (ret) {
 		enfs_log_error("update lsId err:%d.\n", ret);
 		return ret;
 	}
 
-	update_server_enfs_capability(clnt, ENFS_CAPABILITY_LSID_SUPPORT);
 	enfs_update_lsinfo(GET_DEVID_FROM_UUID(file_uuid), ls_view, &flag);
 	kfree(ls_view);
 
@@ -936,20 +681,19 @@ void enfs_print_uuid(struct enfs_file_uuid *file_uuid)
 	char buf[80];		/* 80 uuid buf */
 	uint8_t *uuid = file_uuid->data;
 
-	if (enfs_uuid_debug == 0)
+	ifdebug(ENFS)
 		return;
 
-	pr_info("ENFS: dev:%llu fs:%u dtree:%u snap:%u pfid:%llu fid:%llu\n",
-		   *(uint64_t *) (uuid + UUID_DEVID_OFFSET),
-		   *(uint32_t *) (uuid + UUID_FSID_OFFSET),
-		   *(uint32_t *) (uuid + UUID_DTREEID_OFFSET),
-		   *(uint32_t *) (uuid + UUID_SNAPID_OFFSET),
-		   *(uint64_t *) (uuid + UUID_PFID_OFFSET),
-		   *(uint64_t *) (uuid + UUID_FID_OFFSET));
+	enfs_log_debug("dev:%llu fs:%u dtree:%u snap:%u pfid:%llu fid:%llu\n",
+		      *(uint64_t *) (uuid + UUID_DEVID_OFFSET),
+		      *(uint32_t *) (uuid + UUID_FSID_OFFSET),
+		      *(uint32_t *) (uuid + UUID_DTREEID_OFFSET),
+		      *(uint32_t *) (uuid + UUID_SNAPID_OFFSET),
+		      *(uint64_t *) (uuid + UUID_PFID_OFFSET),
+		      *(uint64_t *) (uuid + UUID_FID_OFFSET));
 
 	sprint_uuid(buf, 80, file_uuid);
-	pr_info("ENFS: UUID:%s\n",
-		buf);
+	enfs_log_debug("UUID:%s\n", buf);
 }
 
 static int get_uuid_from_task(struct rpc_clnt *clnt, struct rpc_task *task,
@@ -1032,7 +776,7 @@ struct route_rule {
 			  struct enfs_xprt_context *context);
 };
 
-bool check_cpuid_invalid(uint32_t cpuId)
+static bool check_cpuid_invalid(uint32_t cpuId)
 {
 	return cpuId == INVALID_CPU_ID;
 }
@@ -1105,7 +849,7 @@ static bool match_default(uint64_t wwn, uint64_t lsid, uint32_t cpuId,
 	return true;
 }
 
-struct rpc_xprt *enfs_choose_shard_xport(struct rpc_xprt_switch *xps,
+static struct rpc_xprt *enfs_choose_shard_xport(struct rpc_xprt_switch *xps,
 					 const struct rpc_xprt *cur,
 					 uint64_t lsid, struct rpc_clnt *clnt,
 					 uint32_t cpuId)
@@ -1184,22 +928,20 @@ struct rpc_xprt *enfs_choose_shard_xport(struct rpc_xprt_switch *xps,
 	return choose_port;
 }
 
-struct rpc_xprt *enfs_get_shard_xport(struct rpc_clnt *clnt,
+static struct rpc_xprt *enfs_get_shard_xport(struct rpc_clnt *clnt,
 					  struct rpc_task *task, uint64_t lsid,
 					  uint32_t cpuId)
 {
 	struct rpc_xprt *old;
-	struct rpc_xprt *xprt;
+	struct rpc_xprt *xprt = NULL;
 	struct rpc_xprt_switch *xps;
 	struct rpc_xprt_iter *xpi = &clnt->cl_xpi;
 	struct enfs_xprt_context *context;
 
 	rcu_read_lock();
 	xps = rcu_dereference(xpi->xpi_xpswitch);
-	if (xps == NULL) {
-		rcu_read_unlock();
-		return NULL;
-	}
+	if (xps == NULL)
+		goto out;
 	old = smp_load_acquire(&xpi->xpi_cursor); // multi thread access
 	xprt = enfs_choose_shard_xport(xps, old, lsid, clnt, cpuId);
 	smp_store_release(&xpi->xpi_cursor, xprt); // multi thread access
@@ -1210,17 +952,16 @@ struct rpc_xprt *enfs_get_shard_xport(struct rpc_clnt *clnt,
 		rpc_task_release_transport(task);
 	}
 
-	if (xprt == NULL) {
-		rcu_read_unlock();
-		return NULL;
-	}
+	if (xprt == NULL)
+		goto out;
 
 	xprt = xprt_get(xprt);
 	context = xprt_get_reserve_context(xprt);
 	if (context)
 		atomic_long_inc(&context->queuelen);
-	rcu_read_unlock();
 
+out:
+	rcu_read_unlock();
 	return xprt;
 }
 
@@ -1290,23 +1031,21 @@ static void debug_show_uuidinfo(int argc, char *argv[])
 		return;
 	}
 
-	pr_info("ENFS: fsidinfo devId:%llu",
-		   GET_DEVID_FROM_UUID(&file_uuid));
+	enfs_log_info("fsidinfo devId:%llu",
+		      GET_DEVID_FROM_UUID(&file_uuid));
 	read_lock(&shard_ctrl->view_lock);
 	list_for_each_entry(table, &shard_ctrl->view_list, next) {
-		if (table->devId != GET_DEVID_FROM_UUID(&file_uuid)) {
+		if (table->devId != GET_DEVID_FROM_UUID(&file_uuid))
 			continue;
-			;
-		}
+
 		list_for_each_entry(info, &table->fs_head, next) {
 			if (info->fsId != GET_FSID_FROM_UUID(&file_uuid))
 				continue;
 			clusterId = info->clusterId;
 			storagePoolId = info->storagePoolId;
-			pr_info(
-				   "ENFS: fsidinfo fsid:%u clusterId:%llu storagePoolId:%u tenantId:%u.\n",
-				   GET_FSID_FROM_UUID(&file_uuid), info->clusterId,
-				   info->storagePoolId, info->tenantId);
+			enfs_log_info("fsidinfo fsid:%u clusterId:%llu storagePoolId:%u tenantId:%u.\n",
+				      GET_FSID_FROM_UUID(&file_uuid), info->clusterId,
+				      info->storagePoolId, info->tenantId);
 			break;
 		}
 
@@ -1320,11 +1059,10 @@ static void debug_show_uuidinfo(int argc, char *argv[])
 				enfs_log_error("shardNum:%u shardId:%u",
 						   view->num, shardId);
 			}
-			pr_info(
-				   "ENFS: fsidinfo clusterId:%llu storagePoolId:%u shardNum:%u shard:%u lsid:%llu cpuId:%u.\n",
-				   view->clusterId, view->storagePoolId, view->num,
-				   shardId, view->entry[shardId].lsid,
-				   view->entry[shardId].cpuid);
+			enfs_log_info("fsidinfo clusterId:%llu storagePoolId:%u shardNum:%u shard:%u lsid:%llu cpuId:%u.\n",
+				      view->clusterId, view->storagePoolId, view->num,
+				      shardId, view->entry[shardId].lsid,
+				      view->entry[shardId].cpuid);
 			break;
 		}
 		break;
@@ -1351,12 +1089,11 @@ static void debug_show_fsinfo(int argc, char *argv[])
 	read_lock(&shard_ctrl->view_lock);
 	list_for_each_entry(table, &shard_ctrl->view_list, next) {
 		list_for_each_entry(info, &table->fs_head, next) {
-			if (fsid == info->fsId) {
-				pr_info(
-					   "ENFS: fsid(%u) clusterId(%llu) storagePoolId(%u) tenantId(%u).\n",
-					   fsid, info->clusterId,
-					   info->storagePoolId, info->tenantId);
-			}
+			if (fsid != info->fsId)
+				continue;
+			enfs_log_info("fsid(%u) clusterId(%llu) storagePoolId(%u) tenantId(%u).\n",
+				      fsid, info->clusterId,
+				      info->storagePoolId, info->tenantId);
 		}
 	}
 	read_unlock(&shard_ctrl->view_lock);
@@ -1370,6 +1107,7 @@ static void debug_show_shardinfo(int argc, char *argv[])
 	uint32_t storagePoolId;
 	uint32_t startIndex;
 	uint32_t count;
+	bool matched;
 
 	if (argc != 3) {
 		enfs_log_info("argc number is wrong.\n");
@@ -1389,30 +1127,24 @@ static void debug_show_shardinfo(int argc, char *argv[])
 		return;
 	}
 
-	pr_info("ENFS: clusterId(%llu) storagePoolId(%u) startIndex(%u).\n",
-		   clusterId, storagePoolId, startIndex);
+	enfs_log_info("clusterId(%llu) storagePoolId(%u) startIndex(%u).\n",
+		      clusterId, storagePoolId, startIndex);
 
 	read_lock(&shard_ctrl->view_lock);
 	list_for_each_entry(table, &shard_ctrl->view_list, next) {
 		list_for_each_entry(view, &table->shard_head, next) {
-			if (view->clusterId == clusterId &&
-				view->storagePoolId == storagePoolId) {
-				for (count = 0; count < 100; count++) {
-					if (count + startIndex < view->num) {
-						pr_info(
-							   "ENFS: shardid(%d) lsid(0x%llx) vnodeid(%u) cpuId(%u).\n",
-							   count + startIndex,
-							   view->entry[count +
-								   startIndex].
-							   lsid,
-							   view->entry[count +
-								   startIndex].
-							   vnodeid,
-							   view->entry[count +
-								   startIndex].
-							   cpuid);
-					}
-				}
+			matched = (view->clusterId == clusterId &&
+				   view->storagePoolId == storagePoolId);
+			if (!matched)
+				continue;
+			for (count = 0; count < 100; count++) {
+				if (count + startIndex >= view->num)
+					continue;
+				enfs_log_info("shardid(%d) lsid(0x%llx) vnodeid(%u) cpuId(%u).\n",
+					      count + startIndex,
+					      view->entry[count + startIndex].lsid,
+					      view->entry[count + startIndex].vnodeid,
+					      view->entry[count + startIndex].cpuid);
 			}
 		}
 	}
@@ -1421,19 +1153,18 @@ static void debug_show_shardinfo(int argc, char *argv[])
 
 static int get_ip_to_str(struct sockaddr *addr, char *buf, int len)
 {
+	struct sockaddr_in *sin;
+	struct sockaddr_in6 *sin6;
+
 	switch (addr->sa_family) {
-	case AF_INET:{
-			struct sockaddr_in *sin = (struct sockaddr_in *)addr;
-
-			snprintf(buf, len, "%pI4", &sin->sin_addr);
-			return 0;
-		}
-	case AF_INET6:{
-			struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
-
-			snprintf(buf, len, "%pI6c", &sin6->sin6_addr);
-			return 0;
-		}
+	case AF_INET:
+		sin = (struct sockaddr_in *)addr;
+		snprintf(buf, len, "%pI4", &sin->sin_addr);
+		return 0;
+	case AF_INET6:
+		sin6 = (struct sockaddr_in6 *)addr;
+		snprintf(buf, len, "%pI6c", &sin6->sin6_addr);
+		return 0;
 	default:
 		break;
 	}
@@ -1448,6 +1179,7 @@ static void debug_show_lifinfo(int argc, char *argv[])
 	struct rpc_xprt *pos;
 	struct enfs_xprt_context *context;
 	char buf[128];
+	bool matched;
 
 	if (argc > 1) {
 		enfs_log_info("argc number is wrong.\n");
@@ -1462,15 +1194,15 @@ static void debug_show_lifinfo(int argc, char *argv[])
 		list_for_each_entry_rcu(pos, &xps->xps_xprt_list, xprt_switch) {
 			get_ip_to_str((struct sockaddr *)&(pos->addr), buf,
 					  sizeof(buf));
-			if (argc == 0 || strcmp(buf, argv[0]) == 0) {
-				context =
-					(struct enfs_xprt_context *)
-					xprt_get_reserve_context(pos);
-				pr_info(
-					   "ENFS: ipaddr(%s) lsId(0x%llx) wwn(0x%llx) cpuId(%u).\n",
-					   buf, context->lsid, context->wwn,
-					   context->cpuId);
-			}
+			matched = (argc == 0 || strcmp(buf, argv[0]) == 0);
+			if (!matched)
+				continue;
+			context =
+				(struct enfs_xprt_context *)
+				xprt_get_reserve_context(pos);
+			enfs_log_info("ipaddr(%s) lsId(0x%llx) wwn(0x%llx) cpuId(%u).\n",
+				      buf, context->lsid, context->wwn,
+				      context->cpuId);
 		}
 		rcu_read_unlock();
 	}
@@ -1486,19 +1218,17 @@ static void debug_show_shardview(int argc, char *argv[])
 
 	read_lock(&shard_ctrl->view_lock);
 	list_for_each_entry(table, &shard_ctrl->view_list, next) {
-		pr_info("ENFS: shardivew  devid:%llu.\n", table->devId);
+		enfs_log_info("shardivew  devid:%llu.\n", table->devId);
 
 		list_for_each_entry(info, &table->fs_head, next) {
-			pr_info(
-			       "ENFS: shardview  fsid:%u clusterId:%llu storagePoolId:%u tenantId:%u.\n",
-			       info->fsId, info->clusterId, info->storagePoolId,
-			       info->tenantId);
+			enfs_log_info("shardview  fsid:%u clusterId:%llu storagePoolId:%u tenantId:%u.\n",
+				      info->fsId, info->clusterId, info->storagePoolId,
+				      info->tenantId);
 		}
 
 		list_for_each_entry(view, &table->shard_head, next) {
-			pr_info(
-			       "ENFS: shardview  clusterId:%llu storagePoolId:%u shardNum:%u.\n",
-			       view->clusterId, view->storagePoolId, view->num);
+			enfs_log_info("shardview  clusterId:%llu storagePoolId:%u shardNum:%u.\n",
+				      view->clusterId, view->storagePoolId, view->num);
 		}
 	}
 	read_unlock(&shard_ctrl->view_lock);
@@ -1535,8 +1265,8 @@ static char *parse_cmd_args(char *str, int *argc, char *argv[10])
 
 static void debug_show_linkcount(int argc, char *argv[])
 {
-	pr_info("ENFS: enfs link count:%d mount count:%d\n",
-		   enfs_link_count_num(), enfs_mount_count());
+	enfs_log_info("enfs link count:%d mount count:%d\n",
+		      enfs_link_count_num(), enfs_mount_count());
 }
 
 int enfs_debug_match_cmd(char *str, size_t len)
@@ -1676,37 +1406,33 @@ static int EnfsChooseNewNlmXprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
 	return -1;
 }
 
-static int TraverseNlmXprt(struct rpc_clnt *clnt, struct rpc_xprt *xprt,
-			   void *data)
+static int enfs_traverse_nlm_xprt(struct nfs_server *server)
 {
 	char remoteip[IP_ADDRESS_LEN_MAX] = { "*" };
-	struct nfs_server *server = (struct nfs_server *)data;
+	struct rpc_xprt *xprt = server->nlm_host->h_rpcclnt->cl_xprt;
 	struct enfs_xprt_context *ctx = NULL;
 
-	if (pm_get_path_state(xprt) == PM_STATE_FAULT) {
-		rpc_clnt_iterate_for_each_xprt(server->nfs_client->cl_rpcclient,
-						   EnfsChooseNewNlmXprt,
-						   (void *)xprt);
+	server->nlm_host->enfs_flag |= ENFS_NEED_REBUILD_NLM_XPRT;
+	rpc_clnt_iterate_for_each_xprt(server->nfs_client->cl_rpcclient,
+						EnfsChooseNewNlmXprt,
+						(void *)xprt);
 
-		sockaddr_ip_to_str((struct sockaddr *)&xprt->addr, remoteip,
-				   sizeof(remoteip));
-		strscpy(server->nlm_host->h_name, remoteip, IP_ADDRESS_LEN_MAX);
-		strscpy(server->nlm_host->h_addrbuf, remoteip, NSM_ADDRBUF);
+	sockaddr_ip_to_str((struct sockaddr *)&xprt->addr, remoteip,
+				sizeof(remoteip));
+	strscpy(server->nlm_host->h_name, remoteip, IP_ADDRESS_LEN_MAX);
+	strscpy(server->nlm_host->h_addrbuf, remoteip, NSM_ADDRBUF);
 
-		ctx =
-			(struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
-		if (ctx == NULL) {
-			enfs_log_error
-				("The xprt multipath ctx is not valid.\n");
-			return 0;
-		}
-		memcpy((struct sockaddr *)&server->nlm_host->h_addr,
-			   (struct sockaddr *)&xprt->addr, sizeof(xprt->addr));
-		memcpy((struct sockaddr *)&server->nlm_host->h_srcaddr,
-			   (struct sockaddr *)&ctx->srcaddr, sizeof(ctx->srcaddr));
-
-		return -1;
+	ctx =
+		(struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
+	if (ctx == NULL) {
+		enfs_log_error
+			("The xprt multipath ctx is not valid.\n");
+		return 0;
 	}
+	memcpy((struct sockaddr *)&server->nlm_host->h_addr,
+			(struct sockaddr *)&xprt->addr, sizeof(xprt->addr));
+	memcpy((struct sockaddr *)&server->nlm_host->h_srcaddr,
+			(struct sockaddr *)&ctx->srcaddr, sizeof(ctx->srcaddr));
 
 	return 0;
 }
@@ -1756,11 +1482,20 @@ static int enfs_recovery_nlm_lock(struct rpc_clnt *clnt)
 			}
 
 			if (!strcmp(remoteip, serverip)) {
-				rpc_clnt_iterate_for_each_xprt(pos->nlm_host->h_rpcclnt,
-								   TraverseNlmXprt,
-								   (void *)pos);
+				enfs_traverse_nlm_xprt(pos);
+				if (!list_empty(&pos->nlm_host->h_lockowners)) {
+					if (pos->nlm_host->h_last_reclaim_time != 0 &&
+					    (ktime_to_ms(ktime_get()) -
+						     pos->nlm_host
+							     ->h_last_reclaim_time <
+					     (SHARD_VIEW_UPDATE_INTERVAL_UNDER_LOCK *
+					      SECOND_TO_MILLISECOND)))
+						continue;
 
-				nlmclnt_recovery(pos->nlm_host);
+					enfs_log_info("reclaiming lock:%s.\n",
+						      serverip);
+					nlmclnt_recovery(pos->nlm_host);
+				}
 			}
 		}
 		spin_unlock(&nn->nfs_client_lock);
@@ -1785,22 +1520,19 @@ static void shard_update_done(struct rpc_clnt *clnt)
 	write_lock(&shard_ctrl->clnt_info_lock);
 	list_for_each_entry(info, &shard_ctrl->clnt_info_list, next) {
 		if (info->clnt == clnt) {
-			info->updateing = false;
+			info->updating = false;
 			break;
 		}
 	}
 	write_unlock(&shard_ctrl->clnt_info_lock);
 }
 
-static void do_shared_update(struct work_struct *work)
+static void do_shard_update(struct work_struct *work)
 {
 	int error;
 	struct shard_work *shard_work =
 		container_of(work, struct shard_work, work);
 	struct clnt_uuid_info *info = &shard_work->info;
-
-	if (shard_should_stop)
-		goto stop_work;
 
 	error =
 		query_and_update_shard(info->clnt, &info->root_uuid, shard_work);
@@ -1815,7 +1547,6 @@ static void do_shared_update(struct work_struct *work)
 		enfs_recovery_nlm_lock(info->clnt);
 	}
 
-stop_work:
 	rpc_release_client(shard_work->info.clnt);
 	xprt_switch_put(shard_work->xps);
 	shard_update_done(info->clnt);
@@ -1850,7 +1581,7 @@ static int shard_update_work(struct clnt_uuid_info *info,
 		return -EAGAIN;
 	}
 
-	INIT_WORK(&shard_work->work, do_shared_update);
+	INIT_WORK(&shard_work->work, do_shard_update);
 	shard_work->info = *info;
 	if (!refcount_inc_not_zero(&shard_work->info.clnt->cl_count)) {
 		xprt_switch_put(shard_work->xps);
@@ -1880,14 +1611,14 @@ static void query_update_all_clnt(void)
 
 	write_lock(&shard_ctrl->clnt_info_lock);
 	list_for_each_entry(info, &shard_ctrl->clnt_info_list, next) {
-		if (info->updateing)
+		if (info->updating)
 			continue;
 
-		info->updateing = true;
+		info->updating = true;
 		ret = shard_update_work(info, &free_list);
 		if (ret) {
 			enfs_log_error("update all err:%d.\n", ret);
-			info->updateing = false;
+			info->updating = false;
 		}
 	}
 	write_unlock(&shard_ctrl->clnt_info_lock);
@@ -1951,19 +1682,35 @@ static int shard_update_loop(void *data)
 	return 0;
 }
 
-struct shard_view_ctrl *enfs_shard_ctrl_init(void)
+static void enfs_shard_ctrl_clear(void)
+{
+	struct clnt_uuid_info *info, *tmp_info;
+	struct view_table *table, *tmp_table;
+
+	write_lock(&shard_ctrl->clnt_info_lock);
+	list_for_each_entry_safe(info, tmp_info, &shard_ctrl->clnt_info_list, next) {
+		list_del(&info->next);
+		kfree(info);
+	}
+	write_unlock(&shard_ctrl->clnt_info_lock);
+
+	write_lock(&shard_ctrl->view_lock);
+	list_for_each_entry_safe(table, tmp_table, &shard_ctrl->view_list, next) {
+		enfs_free_view_table(table);
+	}
+	write_unlock(&shard_ctrl->view_lock);
+
+	kfree(shard_ctrl);
+	shard_ctrl = NULL;
+}
+
+static struct shard_view_ctrl *enfs_shard_ctrl_init(void)
 {
 	struct shard_view_ctrl *ctrl;
 
-	ctrl = enfs_adapter_get_data();
-	if (ctrl) {
-		enfs_log_info("existing shard ctrl is obtained.\n");
-		return ctrl;
-	}
-
 	ctrl = kmalloc(sizeof(*ctrl), GFP_KERNEL);
 	if (!ctrl) {
-		enfs_log_error("shard view cltr alloc failed.\n");
+		enfs_log_error("shard view ctrl alloc failed.\n");
 		return NULL;
 	}
 
@@ -1971,7 +1718,6 @@ struct shard_view_ctrl *enfs_shard_ctrl_init(void)
 	rwlock_init(&ctrl->view_lock);
 	INIT_LIST_HEAD(&ctrl->clnt_info_list);
 	rwlock_init(&ctrl->clnt_info_lock);
-	enfs_adapter_set_data((void *)ctrl);
 	return ctrl;
 }
 
@@ -1979,7 +1725,7 @@ int enfs_shard_init(void)
 {
 	shard_ctrl = enfs_shard_ctrl_init();
 	if (!shard_ctrl) {
-		enfs_log_error("create shard view cltr failed.\n");
+		enfs_log_error("create shard view ctrl failed.\n");
 		return -ENOMEM;
 	}
 
@@ -1988,8 +1734,6 @@ int enfs_shard_init(void)
 		enfs_log_error("create workqueue failed.\n");
 		return -ENOMEM;
 	}
-
-	shard_should_stop = false;
 
 	shard_thread =
 		kthread_run(shard_update_loop, NULL, "enfs_shard_update");
@@ -2005,10 +1749,11 @@ void enfs_shard_exit(void)
 	if (shard_thread)
 		kthread_stop(shard_thread);
 
-	shard_should_stop = true;
-
 	if (shard_workq) {
 		flush_workqueue(shard_workq);
 		destroy_workqueue(shard_workq);
 	}
+
+	if (shard_ctrl)
+		enfs_shard_ctrl_clear();
 }

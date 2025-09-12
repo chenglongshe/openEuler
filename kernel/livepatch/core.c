@@ -21,6 +21,7 @@
 #include <linux/completion.h>
 #include <linux/memory.h>
 #include <linux/rcupdate.h>
+#include <linux/jump_label.h>
 #include <asm/cacheflush.h>
 #include "core.h"
 #ifdef CONFIG_LIVEPATCH_FTRACE
@@ -233,6 +234,7 @@ static int klp_resolve_symbols(Elf_Shdr *sechdrs, const char *strtab,
 #endif
 	Elf_Sym *sym;
 	unsigned long sympos, addr;
+	long ref_offset;
 	bool sym_vmlinux;
 	bool sec_vmlinux = !strcmp(sec_objname, "vmlinux");
 
@@ -266,10 +268,19 @@ static int klp_resolve_symbols(Elf_Shdr *sechdrs, const char *strtab,
 			return -EINVAL;
 		}
 
+		ref_offset = 0;
 		/* Format: .klp.sym.sym_objname.sym_name,sympos */
 		cnt = sscanf(strtab + sym->st_name,
 			     ".klp.sym.%55[^.].%511[^,],%lu",
 			     sym_objname, sym_name, &sympos);
+		if (IS_ENABLED(CONFIG_LIVEPATCH_LONG_SYMBOL_SUPPORT) && cnt != 3) {
+			/* Format: .klp.sym.objname-ref_name,ref_offset*/
+			cnt = sscanf(strtab + sym->st_name,
+					".klp.sym.%55[^-]-%127[^,],%ld",
+					sym_objname, sym_name, &ref_offset);
+			if (cnt == 3)
+				sympos = 1;
+		}
 		if (cnt != 3) {
 			pr_err("symbol %s has an incorrectly formatted name\n",
 			       strtab + sym->st_name);
@@ -297,6 +308,8 @@ static int klp_resolve_symbols(Elf_Shdr *sechdrs, const char *strtab,
 			return ret;
 
 		sym->st_value = addr;
+		if (IS_ENABLED(CONFIG_LIVEPATCH_LONG_SYMBOL_SUPPORT))
+			sym->st_value += ref_offset;
 	}
 
 	return 0;
@@ -1602,18 +1615,11 @@ static int check_address_conflict(struct klp_patch *patch)
 {
 	struct klp_object *obj;
 	struct klp_func *func;
-	int ret;
+	int ret = 0;
 	void *start;
 	void *end;
 
-	/*
-	 * Locks seem required as comment of jump_label_text_reserved() said:
-	 *   Caller must hold jump_label_mutex.
-	 * But looking into implementation of jump_label_text_reserved() and
-	 * static_call_text_reserved(), call sites of every jump_label or static_call
-	 * are checked, and they won't be changed after corresponding module inserted,
-	 * so no need to take jump_label_lock and static_call_lock here.
-	 */
+	jump_label_lock();
 	klp_for_each_object(patch, obj) {
 		klp_for_each_func(obj, func) {
 			start = func->old_func;
@@ -1622,17 +1628,21 @@ static int check_address_conflict(struct klp_patch *patch)
 			if (ret) {
 				pr_err("'%s' has static key in first %zu bytes, ret=%d\n",
 				       func->old_name, KLP_MAX_REPLACE_SIZE, ret);
-				return -EINVAL;
+				ret = -EINVAL;
+				goto out;
 			}
 			ret = static_call_text_reserved(start, end);
 			if (ret) {
 				pr_err("'%s' has static call in first %zu bytes, ret=%d\n",
 				       func->old_name, KLP_MAX_REPLACE_SIZE, ret);
-				return -EINVAL;
+				ret = -EINVAL;
+				goto out;
 			}
 		}
 	}
-	return 0;
+out:
+	jump_label_unlock();
+	return ret;
 }
 
 static int state_show(struct seq_file *m, void *v)
