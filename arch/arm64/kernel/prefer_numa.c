@@ -44,7 +44,7 @@ void set_task_paral_node(struct task_struct *p)
 {
 	int nid;
 	int i = 0;
-	const cpumask_t *cpus_mask;
+	cpumask_t cpus_mask;
 
 	if (is_global_init(current))
 		return;
@@ -54,15 +54,13 @@ void set_task_paral_node(struct task_struct *p)
 
 	while (i < nr_node_ids) {
 		nid = update_sched_paral_nid() % nr_node_ids;
-		cpus_mask = cpumask_of_node(nid);
 
-		if (cpumask_empty(cpus_mask) ||
-			!cpumask_subset(cpus_mask, p->cpus_ptr)) {
+    if (!cpumask_and(&cpus_mask, cpumask_of_node(nid), p->cpus_ptr)) {
 			i++;
 			continue;
 		}
 
-		cpumask_copy(p->prefer_cpus, cpus_mask);
+		cpumask_copy(p->prefer_cpus, &cpus_mask);
 		break;
 	}
 }
