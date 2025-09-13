@@ -684,7 +684,6 @@ static struct attribute *hisi_l3c_pmu_v3_events_attr[] = {
 	HISI_PMU_EVENT_ATTR(io_wr_hit_spipe,	0x1f),
 	HISI_PMU_EVENT_ATTR(cycles,		0x7f),
 	HISI_PMU_EVENT_ATTR(l3c_ref,		0xbc),
-	HISI_PMU_EVENT_ATTR(l3c2ring,		0xbd),
 	NULL
 };
 
