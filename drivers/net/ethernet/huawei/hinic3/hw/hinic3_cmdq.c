@@ -27,6 +27,9 @@
 #include "hinic3_hwif.h"
 #include "npu_cmdq_base_defs.h"
 #include "hinic3_cmdq.h"
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+#include <asm/virtcca_io_hook.h>
+#endif
 
 #define CMDQ_CMD_TIMEOUT				5000 /* millisecond */
 #define CMDQ_CMD_RETRY_TIMEOUT				1000U
@@ -336,7 +339,13 @@ static void cmdq_set_db(struct hinic3_cmdq *cmdq,
 	db.db_head = hinic3_hw_be32(db.db_head);
 
 	wmb();    /* write all before the doorbell */
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+	writeq_hook(*((u64 *)&db), CMDQ_DB_ADDR(db_base, prod_idx),
+		    (struct pci_dev *)cmdq->hwdev->pcidev_hdl);
+#else
 	writeq(*((u64 *)&db), CMDQ_DB_ADDR(db_base, prod_idx));
+#endif
+
 }
 
 static void cmdq_wqe_fill(void *dst, const void *src, int wqe_size)

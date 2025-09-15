@@ -19,6 +19,9 @@
 #include "hinic3_prof_adap.h"
 #include "hinic3_common.h"
 #include "hinic3_mbox.h"
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+#include <asm/virtcca_io_hook.h>
+#endif
 
 #define HINIC3_MBOX_USEC_50	50
 
@@ -903,8 +906,14 @@ static void mbox_copy_header(struct hinic3_hwdev *hwdev,
 	u32 i, idx_max = MBOX_HEADER_SZ / sizeof(u32);
 
 	for (i = 0; i < idx_max; i++) {
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+		__raw_writel_hook(cpu_to_be32(*(data + i)),
+				  mbox->data + i * sizeof(u32),
+			     (struct pci_dev *)hwdev->hwif->pdev);
+#else
 		__raw_writel(cpu_to_be32(*(data + i)),
 			     mbox->data + i * sizeof(u32));
+#endif
 	}
 }
 
@@ -926,8 +935,14 @@ static int mbox_copy_send_data(struct hinic3_hwdev *hwdev,
 	idx_max = ALIGN(data_len, chk_sz) / chk_sz;
 
 	for (i = 0; i < idx_max; i++) {
+#ifdef CONFIG_HISI_VIRTCCA_CODA
+		__raw_writel_hook(cpu_to_be32(*(data + i)),
+				  mbox->data + MBOX_HEADER_SZ + i * sizeof(u32),
+				  (struct pci_dev *)hwdev->hwif->pdev);
+#else
 		__raw_writel(cpu_to_be32(*(data + i)),
 			     mbox->data + MBOX_HEADER_SZ + i * sizeof(u32));
+#endif
 	}
 
 	return 0;
