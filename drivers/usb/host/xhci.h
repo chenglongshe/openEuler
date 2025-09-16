@@ -918,6 +918,8 @@ struct xhci_bw_info {
 #define SS_BW_RESERVED		10
 
 struct xhci_virt_ep {
+	struct xhci_virt_device		*vdev;	/* parent */
+	unsigned int			ep_index;
 	struct xhci_ring		*ring;
 	/* Related to endpoints that are configured to use stream IDs only */
 	struct xhci_stream_info		*stream_info;
@@ -936,6 +938,8 @@ struct xhci_virt_ep {
 #define EP_GETTING_NO_STREAMS	(1 << 5)
 #define EP_HARD_CLEAR_TOGGLE	(1 << 6)
 #define EP_SOFT_CLEAR_TOGGLE	(1 << 7)
+/* usb_hub_clear_tt_buffer is in progress */
+#define EP_CLEARING_TT		(1 << 8)
 	/* ----  Related to URB cancellation ---- */
 	struct list_head	cancelled_td_list;
 	/* Watchdog timer for stop endpoint command to cancel URBs */
@@ -991,8 +995,10 @@ struct xhci_interval_bw_table {
 	unsigned int		ss_bw_out;
 };
 
+#define EP_CTX_PER_DEV		31
 
 struct xhci_virt_device {
+	int				slot_id;
 	struct usb_device		*udev;
 	/*
 	 * Commands to the hardware are passed an "input context" that
@@ -1005,7 +1011,7 @@ struct xhci_virt_device {
 	struct xhci_container_ctx       *out_ctx;
 	/* Used for addressing devices and configuration changes */
 	struct xhci_container_ctx       *in_ctx;
-	struct xhci_virt_ep		eps[31];
+	struct xhci_virt_ep		eps[EP_CTX_PER_DEV];
 	u8				fake_port;
 	u8				real_port;
 	struct xhci_interval_bw_table	*bw_table;
@@ -1312,6 +1318,8 @@ enum xhci_setup_dev {
 #define TRB_IOC			(1<<5)
 /* The buffer pointer contains immediate data */
 #define TRB_IDT			(1<<6)
+/* TDs smaller than this might use IDT */
+#define TRB_IDT_MAX_SIZE	8
 
 /* Block Event Interrupt */
 #define	TRB_BEI			(1<<9)
@@ -1513,6 +1521,7 @@ static inline const char *xhci_trb_type_string(u8 type)
 /* How much data is left before the 64KB boundary? */
 #define TRB_BUFF_LEN_UP_TO_BOUNDARY(addr)	(TRB_MAX_BUFF_SIZE - \
 					(addr & (TRB_MAX_BUFF_SIZE - 1)))
+#define MAX_SOFT_RETRY		3
 
 struct xhci_segment {
 	union xhci_trb		*trbs;
@@ -1529,13 +1538,17 @@ struct xhci_segment {
 struct xhci_td {
 	struct list_head	td_list;
 	struct list_head	cancelled_td_list;
+	int			status;
 	struct urb		*urb;
 	struct xhci_segment	*start_seg;
 	union xhci_trb		*first_trb;
 	union xhci_trb		*last_trb;
+	struct xhci_segment	*last_trb_seg;
 	struct xhci_segment	*bounce_seg;
 	/* actual_length of the URB has already been set */
 	bool			urb_length_set;
+	bool			error_mid_td;
+	unsigned int		num_trbs;
 };
 
 /* xHCI command default timeout value */
@@ -1600,6 +1613,7 @@ struct xhci_ring {
 	 * if we own the TRB (if we are the consumer).  See section 4.9.1.
 	 */
 	u32			cycle_state;
+	unsigned int            err_count;
 	unsigned int		stream_id;
 	unsigned int		num_segs;
 	unsigned int		num_trbs_free;
@@ -1874,6 +1888,7 @@ struct xhci_hcd {
 #define XHCI_SNPS_BROKEN_SUSPEND    BIT_ULL(35)
 #define XHCI_ZHAOXIN_HOST       BIT_ULL(36)
 #define XHCI_ZHAOXIN_TRB_FETCH	BIT_ULL(39)
+#define XHCI_NO_SOFT_RETRY	BIT_ULL(40)
 
 	unsigned int		num_active_eps;
 	unsigned int		limit_active_eps;
@@ -2121,13 +2136,17 @@ void xhci_find_new_dequeue_state(struct xhci_hcd *xhci,
 void xhci_queue_new_dequeue_state(struct xhci_hcd *xhci,
 		unsigned int slot_id, unsigned int ep_index,
 		struct xhci_dequeue_state *deq_state);
-void xhci_cleanup_stalled_ring(struct xhci_hcd *xhci, unsigned int ep_index,
-		unsigned int stream_id, struct xhci_td *td);
+void xhci_cleanup_stalled_ring(struct xhci_hcd *xhci, unsigned int slot_id,
+			       unsigned int ep_index, unsigned int stream_id,
+			       struct xhci_td *td);
 void xhci_stop_endpoint_command_watchdog(struct timer_list *t);
 void xhci_handle_command_timeout(struct work_struct *work);
 
 void xhci_ring_ep_doorbell(struct xhci_hcd *xhci, unsigned int slot_id,
 		unsigned int ep_index, unsigned int stream_id);
+void xhci_ring_doorbell_for_active_rings(struct xhci_hcd *xhci,
+		unsigned int slot_id,
+		unsigned int ep_index);
 void xhci_cleanup_command_queue(struct xhci_hcd *xhci);
 void inc_deq(struct xhci_hcd *xhci, struct xhci_ring *ring);
 unsigned int count_trbs(u64 addr, u64 len);
@@ -2175,6 +2194,22 @@ static inline struct xhci_ring *xhci_urb_to_transfer_ring(struct xhci_hcd *xhci,
 	return xhci_triad_to_transfer_ring(xhci, urb->dev->slot_id,
 					xhci_get_endpoint_index(&urb->ep->desc),
 					urb->stream_id);
+}
+
+/*
+ * TODO: As per spec Isochronous IDT transmissions are supported. We bypass
+ * them anyways as we where unable to find a device that matches the
+ * constraints.
+ */
+static inline bool xhci_urb_suitable_for_idt(struct urb *urb)
+{
+	if (!usb_endpoint_xfer_isoc(&urb->ep->desc) && usb_urb_dir_out(urb) &&
+	    usb_endpoint_maxp(&urb->ep->desc) >= TRB_IDT_MAX_SIZE &&
+	    urb->transfer_buffer_length <= TRB_IDT_MAX_SIZE &&
+	    !(urb->transfer_flags & URB_NO_TRANSFER_DMA_MAP))
+		return true;
+
+	return false;
 }
 
 static inline char *xhci_slot_state_string(u32 state)
