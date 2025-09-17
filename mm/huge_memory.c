@@ -1539,18 +1539,13 @@ vm_fault_t do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 		return ret;
 	}
 	gfp = vma_thp_gfp_mask(vma);
-
 	folio = vma_alloc_folio(gfp, HPAGE_PMD_ORDER, vma, haddr, true);
-
 	if (unlikely(!folio)) {
 		count_vm_event(THP_FAULT_FALLBACK);
 		count_mthp_stat(HPAGE_PMD_ORDER, MTHP_STAT_ANON_FAULT_FALLBACK);
-		ret = VM_FAULT_FALLBACK;
-		goto gm_mapping_release;
+		return VM_FAULT_FALLBACK;
 	}
 	return __do_huge_pmd_anonymous_page(vmf, &folio->page, gfp);
-gm_mapping_release:
-	return ret;
 }
 
 #ifdef CONFIG_GMEM

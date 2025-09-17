@@ -53,9 +53,6 @@ static DEFINE_XARRAY_ALLOC(gm_dev_id_pool);
 
 static bool enable_gmem;
 
-DEFINE_SPINLOCK(hnode_lock);
-struct hnode *hnodes[MAX_NUMNODES];
-
 static inline unsigned long pe_mask(unsigned int order)
 {
 	if (order == 0)
@@ -143,9 +140,17 @@ static int __init gmem_init(void)
 	if (!gm_region_cache)
 		goto free_ctx;
 
-	err = vm_object_init();
+	err = gm_page_cachep_init();
 	if (err)
 		goto free_region;
+
+	err = gm_init_sysfs();
+	if (err)
+		goto free_gm_page;
+
+	err = vm_object_init();
+	if (err)
+		goto free_gm_sysfs;
 
 	err = gmem_stats_init();
 	if (err)
@@ -167,6 +172,10 @@ static int __init gmem_init(void)
 
 	return 0;
 
+free_gm_sysfs:
+	gm_deinit_sysfs();
+free_gm_page:
+	gm_page_cachep_destroy();
 free_region:
 	kmem_cache_destroy(gm_region_cache);
 free_ctx:
@@ -228,10 +237,12 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 {
 	enum gm_ret ret = GM_RET_SUCCESS;
 	struct gm_mmu *mmu = dev->mmu;
+	struct hnode *hnode;
 	struct device *dma_dev = dev->dma_dev;
 	struct vm_area_struct *vma;
 	struct vm_object *obj;
 	struct gm_mapping *gm_mapping;
+	struct gm_page *gm_page;
 	unsigned long size = HPAGE_SIZE;
 	struct gm_fault_t gmf = {
 		.mm = mm,
@@ -243,16 +254,22 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 	};
 	struct page *page = NULL;
 
+	hnode = get_hnode(get_hnuma_id(dev));
+	if (!hnode) {
+		gmem_err("gmem device should correspond to a hnuma node");
+		ret = -EINVAL;
+		goto out;
+	}
+
 	vma = find_vma(mm, addr);
 	if (!vma || vma->vm_start > addr) {
-		gmem_err("%s failed to find vma\n", __func__);
-		pr_info("gmem: %s no vma\n", __func__);
+		gmem_err("%s failed to find vma", __func__);
 		ret = GM_RET_FAILURE_UNKNOWN;
 		goto out;
 	}
 	obj = vma->vm_obj;
 	if (!obj) {
-		gmem_err("%s no vm_obj\n", __func__);
+		gmem_err("%s no vm_obj", __func__);
 		ret = GM_RET_FAILURE_UNKNOWN;
 		goto out;
 	}
@@ -266,7 +283,7 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 	xa_unlock(obj->logical_page_table);
 
 	if (unlikely(!gm_mapping)) {
-		gmem_err("OOM when creating vm_obj!\n");
+		gmem_err("OOM when creating vm_obj!");
 		ret = GM_RET_NOMEM;
 		goto out;
 	}
@@ -274,8 +291,9 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 	if (gm_mapping_nomap(gm_mapping)) {
 		goto peer_map;
 	} else if (gm_mapping_device(gm_mapping)) {
-		if (behavior == MADV_WILLNEED || behavior == MADV_PINNED) {
-			goto peer_map;
+		if (behavior == MADV_WILLNEED) {
+			mark_gm_page_active(gm_mapping->gm_page);
+			goto unlock;
 		} else {
 			ret = 0;
 			goto unlock;
@@ -283,7 +301,7 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 	} else if (gm_mapping_cpu(gm_mapping)) {
 		page = gm_mapping->page;
 		if (!page) {
-			gmem_err("host gm_mapping page is NULL. Set nomap\n");
+			gmem_err("host gm_mapping page is NULL. Set nomap");
 			gm_mapping_flags_set(gm_mapping, GM_PAGE_NOMAP);
 			goto unlock;
 		}
@@ -293,12 +311,21 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 		gmf.dma_addr =
 			dma_map_page(dma_dev, page, 0, size, DMA_BIDIRECTIONAL);
 		if (dma_mapping_error(dma_dev, gmf.dma_addr))
-			gmem_err("dma map failed\n");
+			gmem_err("dma map failed");
 
 		gmf.copy = true;
 	}
 
 peer_map:
+	gm_page = gm_alloc_page(mm, hnode);
+	if (!gm_page) {
+		gmem_err("Alloc gm_page for device fault failed.");
+		ret = -ENOMEM;
+		goto unlock;
+	}
+
+	gmf.pfn = gm_page->dev_pfn;
+
 	ret = mmu->peer_map(&gmf);
 	if (ret != GM_RET_SUCCESS) {
 		if (ret == GM_RET_MIGRATING) {
@@ -310,7 +337,7 @@ peer_map:
 			gmem_stats_counter(NR_PAGE_MIGRATING_D2H, 1);
 			ret = GM_RET_SUCCESS;
 		} else {
-			gmem_err("peer map failed\n");
+			gmem_err("peer map failed");
 			if (page) {
 				gm_mapping_flags_set(gm_mapping, GM_PAGE_NOMAP);
 				put_page(page);
@@ -321,11 +348,16 @@ peer_map:
 
 	if (page) {
 		dma_unmap_page(dma_dev, gmf.dma_addr, size, DMA_BIDIRECTIONAL);
-		put_page(page);
+		folio_put(page_folio(page));
 	}
 
 	gm_mapping_flags_set(gm_mapping, GM_PAGE_DEVICE);
 	gm_mapping->dev = dev;
+	gm_page->va = addr;
+	gm_page->mm = mm;
+	gm_mapping->gm_page = gm_page;
+	hnode_activelist_add(hnode, gm_page);
+	hnode_active_pages_inc(hnode);
 unlock:
 	mutex_unlock(&gm_mapping->lock);
 out:
@@ -343,6 +375,7 @@ vm_fault_t gm_host_fault_locked(struct vm_fault *vmf,
 	struct gm_mapping *gm_mapping;
 	unsigned long size = HPAGE_SIZE;
 	struct gm_dev *dev;
+	struct hnode *hnode;
 	struct device *dma_dev;
 	struct gm_fault_t gmf = {
 		.mm = vma->vm_mm,
@@ -359,6 +392,7 @@ vm_fault_t gm_host_fault_locked(struct vm_fault *vmf,
 
 	dev = gm_mapping->dev;
 	gmf.dev = dev;
+	gmf.pfn = gm_mapping->gm_page->dev_pfn;
 	dma_dev = dev->dma_dev;
 	gmf.dma_addr =
 		dma_map_page(dma_dev, vmf->page, 0, size, DMA_BIDIRECTIONAL);
@@ -373,112 +407,12 @@ vm_fault_t gm_host_fault_locked(struct vm_fault *vmf,
 	}
 
 	dma_unmap_page(dma_dev, gmf.dma_addr, size, DMA_BIDIRECTIONAL);
+	hnode = get_hnode(gm_mapping->gm_page->hnid);
+	hnode_activelist_del(hnode, gm_mapping->gm_page);
+	hnode_active_pages_dec(hnode);
+	put_gm_page(gm_mapping->gm_page);
 	return ret;
 }
-
-static inline struct hnode *get_hnode(unsigned int hnid)
-{
-	return hnodes[hnid];
-}
-
-static struct gm_dev *get_gm_dev(unsigned int nid)
-{
-	struct hnode *hnode;
-	struct gm_dev *dev = NULL;
-
-	spin_lock(&hnode_lock);
-	hnode = get_hnode(nid);
-	if (hnode)
-		dev =  hnode->dev;
-	spin_unlock(&hnode_lock);
-	return dev;
-}
-
-/*
- * Register the local physical memory of a gmem device.
- * This implies dynamically creating
- * the struct page data structures.
- */
-enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin, unsigned long end)
-{
-	struct gm_mapping *mapping;
-	unsigned long addr = PAGE_ALIGN(begin);
-	unsigned int nid;
-	int i, page_num = (end - addr) >> PAGE_SHIFT;
-	struct hnode *hnode = kmalloc(sizeof(struct hnode), GFP_KERNEL);
-
-	if (!hnode)
-		goto err;
-
-	mapping = kvmalloc_array(page_num, sizeof(struct gm_mapping), GFP_KERNEL);
-	if (!mapping)
-		goto free_hnode;
-
-	spin_lock(&hnode_lock);
-	nid = alloc_hnode_id();
-	if (nid == MAX_NUMNODES)
-		goto unlock_hnode;
-	hnode_init(hnode, nid, dev);
-
-	for (i = 0; i < page_num; i++, addr += PAGE_SIZE) {
-		mapping[i].pfn = addr >> PAGE_SHIFT;
-		mapping[i].flag = 0;
-	}
-
-	xa_lock(&hnode->pages);
-	for (i = 0; i < page_num; i++) {
-		if (xa_err(__xa_store(&hnode->pages, i, mapping + i,
-				      GFP_KERNEL))) {
-			/* Probably nomem */
-			kvfree(mapping);
-			xa_unlock(&hnode->pages);
-			goto deinit_hnode;
-		}
-		__xa_set_mark(&hnode->pages, i, XA_MARK_0);
-	}
-	xa_unlock(&hnode->pages);
-
-	spin_unlock(&hnode_lock);
-	return GM_RET_SUCCESS;
-
-deinit_hnode:
-	hnode_deinit(nid, dev);
-	free_hnode_id(nid);
-unlock_hnode:
-	spin_unlock(&hnode_lock);
-free_hnode:
-	kfree(hnode);
-err:
-	return -ENOMEM;
-}
-EXPORT_SYMBOL_GPL(gm_dev_register_physmem);
-
-void gm_dev_unregister_physmem(struct gm_dev *dev, unsigned int nid)
-{
-	struct hnode *hnode = NULL;
-	struct gm_mapping *mapping = NULL;
-
-	spin_lock(&hnode_lock);
-
-	if (!node_isset(nid, dev->registered_hnodes))
-		goto unlock;
-
-	hnode = get_hnode(nid);
-
-	if (!hnode)
-		goto unlock;
-	mapping = xa_load(&hnode->pages, 0);
-
-	if (mapping)
-		kvfree(mapping);
-
-	hnode_deinit(nid, dev);
-	free_hnode_id(nid);
-	kfree(hnode);
-unlock:
-	spin_unlock(&hnode_lock);
-}
-EXPORT_SYMBOL_GPL(gm_dev_unregister_physmem);
 
 /* GMEM Virtual Address Space API */
 enum gm_ret gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
@@ -564,50 +498,6 @@ enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev, enum gm_mmu_mode 
 	return GM_RET_SUCCESS;
 }
 EXPORT_SYMBOL_GPL(gm_as_attach);
-
-void __init hnuma_init(void)
-{
-	unsigned int node;
-	spin_lock(&hnode_lock);
-	for_each_node(node)
-		node_set(node, hnode_map);
-	spin_unlock(&hnode_lock);
-}
-
-unsigned int alloc_hnode_id(void)
-{
-	unsigned int node;
-
-	node = first_unset_node(hnode_map);
-	node_set(node, hnode_map);
-
-	return node;
-}
-
-void free_hnode_id(unsigned int nid)
-{
-	spin_lock(&hnode_lock);
-	node_clear(nid, hnode_map);
-	spin_unlock(&hnode_lock);
-}
-
-void hnode_init(struct hnode *hnode, unsigned int hnid, struct gm_dev *dev)
-{
-	hnodes[hnid] = hnode;
-	hnodes[hnid]->id = hnid;
-	hnodes[hnid]->dev = dev;
-	node_set(hnid, dev->registered_hnodes);
-	xa_init(&hnodes[hnid]->pages);
-}
-
-void hnode_deinit(unsigned int hnid, struct gm_dev *dev)
-{
-	hnodes[hnid]->id = 0;
-	hnodes[hnid]->dev = NULL;
-	node_clear(hnid, dev->registered_hnodes);
-	xa_destroy(&hnodes[hnid]->pages);
-	hnodes[hnid] = NULL;
-}
 
 struct prefetch_data {
 	struct mm_struct *mm;
@@ -725,6 +615,7 @@ static int gmem_unmap_vma_pages(struct vm_area_struct *vma, unsigned long start,
 	};
 	struct gm_mapping *gm_mapping;
 	struct vm_object *obj;
+	struct hnode *hnode;
 	int ret;
 
 	obj = vma->vm_obj;
@@ -756,6 +647,10 @@ static int gmem_unmap_vma_pages(struct vm_area_struct *vma, unsigned long start,
 				mutex_unlock(&gm_mapping->lock);
 				continue;
 			}
+			hnode = get_hnode(gm_mapping->gm_page->hnid);
+			hnode_activelist_del(hnode, gm_mapping->gm_page);
+			hnode_active_pages_dec(hnode);
+			put_gm_page(gm_mapping->gm_page);
 		}
 		gm_mapping_flags_set(gm_mapping, GM_PAGE_NOMAP);
 		mutex_unlock(&gm_mapping->lock);
@@ -946,15 +841,17 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 			goto unlock_gm_mmaping;
 		} else { // device to host
 			dev = gm_mapping_src->dev;
-			gmc.dma_addr = phys_to_dma(dev->dma_dev,
+			gmc.dest = phys_to_dma(dev->dma_dev,
 				page_to_phys(gm_mapping_dest->page) + (dest & (page_size - 1)));
-			gmc.src = src;
+			gmc.src = gm_mapping_src->gm_page->dev_dma_addr + (src & (page_size - 1));
+			gmc.kind = GM_MEMCPY_D2H;
 		}
 	} else {
 		if (gm_mapping_cpu(gm_mapping_src)) { // host to device
-			gmc.dest = dest;
-			gmc.dma_addr = phys_to_dma(dev->dma_dev,
+			gmc.dest = gm_mapping_dest->gm_page->dev_dma_addr + (dest & (page_size - 1));;
+			gmc.src = phys_to_dma(dev->dma_dev,
 				page_to_phys(gm_mapping_src->page) + (src & (page_size - 1)));
+			gmc.kind = GM_MEMCPY_H2D;
 		} else { // device to device
 			gmem_err("hmemcpy: device to device is unimplemented\n");
 			goto unlock_gm_mmaping;
@@ -1062,3 +959,4 @@ unlock:
 	return -EINVAL;
 }
 EXPORT_SYMBOL_GPL(hmemcpy);
+
