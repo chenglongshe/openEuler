@@ -2624,7 +2624,7 @@ static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_ar
 	enum gm_ret ret;
 	struct gm_context *ctx, *tmp;
 	struct gm_mapping *gm_mapping;
-
+	struct hnode *hnode;
 	struct gm_fault_t gmf = {
 		.mm = mm,
 		.copy = false,
@@ -2663,11 +2663,21 @@ static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_ar
 		gmf.size = HPAGE_SIZE;
 		gmf.dev = gm_mapping->dev;
 		ret = gm_mapping->dev->mmu->peer_unmap(&gmf);
-		if (ret != GM_RET_SUCCESS) {
-			gmem_err("%s: call dev peer_unmap error %d\n", __func__, ret);
+		if (ret != GM_RET_SUCCESS)
+			gmem_err("%s: call dev peer_unmap error %d", __func__, ret);
+
+		/*
+		 * Regardless of whether the gm_page is unmapped, we should release it.
+		 */
+		hnode = get_hnode(gm_mapping->gm_page->hnid);
+		if (!hnode) {
 			mutex_unlock(&gm_mapping->lock);
 			continue;
 		}
+		hnode_activelist_del(hnode, gm_mapping->gm_page);
+		hnode_active_pages_dec(hnode);
+		put_gm_page(gm_mapping->gm_page);
+		gm_mapping->gm_page = NULL;
 		mutex_unlock(&gm_mapping->lock);
 	} while (addr += HPAGE_SIZE, addr != end);
 
@@ -2805,10 +2815,6 @@ do_vmi_align_munmap(struct vma_iterator *vmi, struct vm_area_struct *vma,
 			locked_vm += vma_pages(next);
 
 		count++;
-#ifdef CONFIG_GMEM
-	if (gmem_is_enabled())
-		munmap_single_vma_in_peer_devices(mm, vma, start, end);
-#endif
 		if (unlikely(uf)) {
 			/*
 			 * If userfaultfd_unmap_prep returns an error the vmas

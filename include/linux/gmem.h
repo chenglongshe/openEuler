@@ -80,6 +80,7 @@ enum gm_mmu_mode {
 struct gm_fault_t {
 	struct mm_struct *mm;
 	struct gm_dev *dev;
+	unsigned long pfn;
 	unsigned long va;
 	unsigned long size;
 	unsigned long prot;
@@ -88,13 +89,23 @@ struct gm_fault_t {
 	int behavior;
 };
 
+enum gm_memcpy_kind {
+	GM_MEMCPY_INIT,
+	GM_MEMCPY_H2H,
+	GM_MEMCPY_H2D,
+	GM_MEMCPY_D2H,
+	GM_MEMCPY_D2D,
+	GM_MEMCPY_KIND_INVALID,
+};
+
 struct gm_memcpy_t {
 	struct mm_struct *mm;
 	struct gm_dev *dev;
-	unsigned long src;
-	unsigned long dest;
-	dma_addr_t dma_addr;
+	dma_addr_t src;
+	dma_addr_t dest;
+
 	size_t size;
+	enum gm_memcpy_kind kind;
 };
 
 /**
@@ -133,6 +144,8 @@ struct gm_mmu {
 	 * If copy is set, copy data back to [dma_addr, dma_addr + size]
 	 */
 	enum gm_ret (*peer_unmap)(struct gm_fault_t *gmf);
+
+	enum gm_ret (*import_phys_mem)(struct mm_struct *mm, int hnid, unsigned long page_cnt);
 
 	/* Create or destroy a device's physical page table. */
 	enum gm_ret (*pmap_create)(struct gm_dev *dev, void **pmap);
@@ -225,11 +238,11 @@ struct gm_mapping {
 	unsigned int flag;
 
 	union {
-		struct page *page;	/* CPU node */
-		struct gm_dev *dev;	/* hetero-node */
-		unsigned long pfn;
+		struct page *page;		/* CPU node */
+		struct gm_page *gm_page;	/* hetero-node */
 	};
 
+	struct gm_dev *dev;
 	struct mutex lock;
 };
 
@@ -280,16 +293,12 @@ extern enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned lo
 				struct gm_dev **new_dev);
 extern enum gm_ret gm_dev_switch(struct gm_dev *dev, struct gm_as *as);
 extern enum gm_ret gm_dev_detach(struct gm_dev *dev, struct gm_as *as);
-extern enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin,
-					unsigned long end);
+extern int gm_dev_register_hnode(struct gm_dev *dev);
 enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long addr,
 				struct gm_dev *dev, int behavior);
 vm_fault_t gm_host_fault_locked(struct vm_fault *vmf, unsigned int order);
 
 /* GMEM address space KPI */
-extern enum gm_ret gm_dev_register_physmem(struct gm_dev *dev, unsigned long begin,
-					unsigned long end);
-extern void gm_dev_unregister_physmem(struct gm_dev *dev, unsigned int nid);
 extern enum gm_ret gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
 				unsigned long cache_quantum, struct gm_as **new_as);
 extern enum gm_ret gm_as_destroy(struct gm_as *as);
@@ -314,11 +323,41 @@ extern void gmem_stats_counter_show(void);
 /* h-NUMA topology */
 struct hnode {
 	unsigned int id;
-
 	struct gm_dev *dev;
 
-	struct xarray pages;
+	struct task_struct *swapd_task;
+
+	struct list_head freelist;
+	struct list_head activelist;
+	spinlock_t freelist_lock;
+	spinlock_t activelist_lock;
+	atomic_t nr_free_pages;
+	atomic_t nr_active_pages;
+
+	unsigned long max_memsize;
+
+	bool import_failed;
 };
+
+static inline void hnode_active_pages_inc(struct hnode *hnode)
+{
+	atomic_inc(&hnode->nr_active_pages);
+}
+
+static inline void hnode_active_pages_dec(struct hnode *hnode)
+{
+	atomic_dec(&hnode->nr_active_pages);
+}
+
+static inline void hnode_free_pages_inc(struct hnode *hnode)
+{
+	atomic_inc(&hnode->nr_free_pages);
+}
+
+static inline void hnode_free_pages_dec(struct hnode *hnode)
+{
+	atomic_dec(&hnode->nr_free_pages);
+}
 
 static inline bool is_hnode(int node)
 {
@@ -334,8 +373,57 @@ static inline int get_hnuma_id(struct gm_dev *gm_dev)
 void __init hnuma_init(void);
 unsigned int alloc_hnode_id(void);
 void free_hnode_id(unsigned int nid);
+struct hnode *get_hnode(unsigned int hnid);
+struct gm_dev *get_gm_dev(unsigned int nid);
 void hnode_init(struct hnode *hnode, unsigned int hnid, struct gm_dev *dev);
 void hnode_deinit(unsigned int hnid, struct gm_dev *dev);
+
+struct gm_page {
+	struct list_head gm_page_list;
+
+	unsigned long flags;
+	unsigned long dev_pfn;
+	unsigned long dev_dma_addr;
+	unsigned int hnid;
+
+	/*
+	* The same functionality as rmap, we need know which process
+	* maps to this gm_page with which virtual address.
+	* */
+	unsigned long va;
+	struct mm_struct *mm;
+
+	atomic_t refcount;
+};
+
+#define NUM_IMPORT_PAGES   16
+
+int __init gm_page_cachep_init(void);
+void gm_page_cachep_destroy(void);
+struct gm_page *alloc_gm_page_struct(void);
+void hnode_freelist_add(struct hnode *hnode, struct gm_page *gm_page);
+void hnode_activelist_add(struct hnode *hnode, struct gm_page *gm_page);
+void hnode_activelist_del(struct hnode *hnode, struct gm_page *gm_page);
+void hnode_activelist_del_and_add(struct hnode *hnode, struct gm_page *gm_page);
+void mark_gm_page_active(struct gm_page *gm_page);
+int gm_add_pages(unsigned int hnid, struct list_head *pages);
+void gm_free_page(struct gm_page *gm_page);
+struct gm_page *gm_alloc_page(struct mm_struct *mm, struct hnode *hnode);
+
+static inline void get_gm_page(struct gm_page *gm_page)
+{
+	atomic_inc(&gm_page->refcount);
+}
+
+static inline void put_gm_page(struct gm_page *gm_page)
+{
+	if (atomic_dec_and_test(&gm_page->refcount))
+		gm_free_page(gm_page);
+}
+
+int hnode_init_sysfs(unsigned int hnid);
+int __init gm_init_sysfs(void);
+void gm_deinit_sysfs(void);
 
 #define gmem_err(fmt, ...) \
 	((void)pr_err("[gmem]" fmt "\n", ##__VA_ARGS__))
