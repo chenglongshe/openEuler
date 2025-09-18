@@ -190,6 +190,11 @@ static inline int kvm_arm_set_default_pmu(struct kvm *kvm)
 	return -ENODEV;
 }
 
+static inline int kvm_arm_set_default_pmu(struct kvm *kvm)
+{
+	return -ENODEV;
+}
+
 static inline u8 kvm_arm_pmu_get_max_counters(struct kvm *kvm)
 {
 	return 0;
