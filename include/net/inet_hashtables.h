@@ -88,6 +88,7 @@ struct inet_bind_bucket {
 	bool			fast_ipv6_only;
 	struct hlist_node	node;
 	struct hlist_head	owners;
+	struct rcu_head		rcu;
 };
 
 static inline struct net *ib_net(struct inet_bind_bucket *ib)
@@ -201,8 +202,7 @@ struct inet_bind_bucket *
 inet_bind_bucket_create(struct kmem_cache *cachep, struct net *net,
 			struct inet_bind_hashbucket *head,
 			const unsigned short snum, int l3mdev);
-void inet_bind_bucket_destroy(struct kmem_cache *cachep,
-			      struct inet_bind_bucket *tb);
+void inet_bind_bucket_destroy(struct inet_bind_bucket *tb);
 
 static inline u32 inet_bhashfn(const struct net *net, const __u16 lport,
 			       const u32 bhash_size)
@@ -404,9 +404,12 @@ static inline void sk_rcv_saddr_set(struct sock *sk, __be32 addr)
 
 int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 			struct sock *sk, u64 port_offset,
+			u32 hash_port0,
 			int (*check_established)(struct inet_timewait_death_row *,
 						 struct sock *, __u16,
-						 struct inet_timewait_sock **));
+						 struct inet_timewait_sock **,
+						 bool rcu_lookup,
+						 u32 hash));
 
 int inet_hash_connect(struct inet_timewait_death_row *death_row,
 		      struct sock *sk);
