@@ -35,6 +35,16 @@ struct ioinf_params {
 	u32 inflight;
 };
 
+struct ioinf_io_stat {
+	u64 nr;
+	u64 lat;
+};
+
+struct ioinf_lat_stat {
+	struct ioinf_io_stat read;
+	struct ioinf_io_stat write;
+};
+
 struct ioinf_rq_wait {
 	struct rq_wait rqw;
 	u32 hinflight;
@@ -62,6 +72,10 @@ struct ioinf {
 	struct ioinf_rq_wait	offline;
 	/* for online cgroups */
 	struct ioinf_rq_wait	online;
+
+	struct ioinf_lat_stat	last_stat;
+	struct ioinf_lat_stat	delta_stat;
+	struct ioinf_lat_stat __percpu *stat;
 };
 
 /* per disk-cgroup pair structure */
@@ -298,6 +312,27 @@ static void ioinf_rqos_track(struct rq_qos *rqos, struct request *rq,
 	rq->blkg = blkg;
 }
 
+static void ioinf_record_lat(struct ioinf *inf, struct request *rq)
+{
+	u64 lat;
+
+	lat = rq->io_end_time_ns ? rq->io_end_time_ns : blk_time_get_ns();
+	lat -= rq->alloc_time_ns;
+
+	switch(req_op(rq)) {
+	case REQ_OP_READ:
+		this_cpu_inc(inf->stat->read.nr);
+		this_cpu_add(inf->stat->read.lat, lat);
+		break;
+	case REQ_OP_WRITE:
+		this_cpu_inc(inf->stat->write.nr);
+		this_cpu_add(inf->stat->write.lat, lat);
+		break;
+	default:
+		break;
+	}
+}
+
 static void ioinf_rqos_done(struct rq_qos *rqos, struct request *rq)
 {
 	struct blkcg_gq *blkg = rq->blkg;
@@ -309,10 +344,12 @@ static void ioinf_rqos_done(struct rq_qos *rqos, struct request *rq)
 
 	infg = blkg_to_infg(blkg);
 	inf = infg->inf;
-	if (infg_offline(infg))
+	if (infg_offline(infg)) {
 		ioinf_done(&inf->offline);
-	else
+	} else {
 		ioinf_done(&inf->online);
+		ioinf_record_lat(inf, rq);
+	}
 
 	rq->blkg = NULL;
 }
@@ -324,6 +361,7 @@ static void ioinf_rqos_exit(struct rq_qos *rqos)
 	blkcg_deactivate_policy(rqos->disk, &blkcg_policy_ioinf);
 
 	timer_shutdown_sync(&inf->inf_timer);
+	free_percpu(inf->stat);
 	kfree(inf);
 }
 
@@ -348,8 +386,21 @@ static int ioinf_stat_show(void *data, struct seq_file *m)
 	return 0;
 }
 
+static int ioinf_lat_show(void *data, struct seq_file *m)
+{
+	struct rq_qos *rqos = data;
+	struct ioinf *inf = rqos_to_inf(rqos);
+	struct ioinf_lat_stat *stat = &inf->delta_stat;
+
+	seq_printf(m, "online average latency: (%llu-%llu) (%llu-%llu)\n",
+		stat->read.nr, stat->read.lat, stat->write.nr, stat->write.lat);
+
+	return 0;
+}
+
 static const struct blk_mq_debugfs_attr ioinf_debugfs_attrs[] = {
 	{"stat", 0400, ioinf_stat_show},
+	{"lat", 0400, ioinf_lat_show},
 	{},
 };
 
@@ -376,6 +427,46 @@ u32 ioinf_calc_budget(struct ioinf_rq_wait *ioinf_rqw)
 		new_budget += exhausted * new_budget / issued;
 
 	return new_budget;
+}
+
+static void ioinf_sample_cpu_lat(struct ioinf_lat_stat *cur, int cpu,
+				 struct ioinf_lat_stat __percpu *stat)
+{
+	struct ioinf_lat_stat *pstat = per_cpu_ptr(stat, cpu);
+
+	cur->read.nr += pstat->read.nr;
+	cur->read.lat += pstat->read.lat;
+	cur->write.nr += pstat->write.nr;
+	cur->write.lat += pstat->write.lat;
+}
+
+static struct ioinf_lat_stat ioinf_calc_stat(struct ioinf_lat_stat *cur,
+					     struct ioinf_lat_stat *last)
+{
+	struct ioinf_lat_stat delta = {0};
+
+	delta.read.nr = cur->read.nr - last->read.nr;
+	delta.read.lat = cur->read.lat - last->read.lat;
+	if (delta.read.nr > 0)
+		delta.read.lat = delta.read.lat / delta.read.nr;
+
+	delta.write.nr = cur->write.nr - last->write.nr;
+	delta.write.lat = cur->write.lat - last->write.lat;
+	if (delta.write.nr > 0)
+		delta.write.lat = delta.write.lat / delta.write.nr;
+
+	return delta;
+}
+
+static void ioinf_sample_lat(struct ioinf *inf)
+{
+	struct ioinf_lat_stat cur = {0};
+	int cpu;
+
+	for_each_possible_cpu(cpu)
+		ioinf_sample_cpu_lat(&cur, cpu, inf->stat);
+	inf->delta_stat = ioinf_calc_stat(&cur, &inf->last_stat);
+	inf->last_stat = cur;
 }
 
 static
@@ -408,6 +499,7 @@ static void ioinf_timer_fn(struct timer_list *timer)
 	unsigned long flags;
 	u32 online_budget, offline_budget;
 
+	ioinf_sample_lat(inf);
 	spin_lock_irqsave(&inf->lock, flags);
 
 	online_budget = ioinf_calc_budget(online);
@@ -432,6 +524,12 @@ static int blk_ioinf_init(struct gendisk *disk)
 	if (!inf)
 		return -ENOMEM;
 
+	inf->stat = alloc_percpu(struct ioinf_lat_stat);
+	if (!inf->stat) {
+		kfree(inf);
+		return -ENOMEM;
+	}
+
 	spin_lock_init(&inf->lock);
 	inf->params.inflight = ioinf_default_inflight(disk);
 	inf->inflight = inf->params.inflight;
@@ -455,6 +553,7 @@ err_del_qos:
 	rq_qos_del(&inf->rqos);
 err_free_inf:
 	timer_shutdown_sync(&inf->inf_timer);
+	free_percpu(inf->stat);
 	kfree(inf);
 	return ret;
 }
@@ -611,7 +710,9 @@ static ssize_t ioinf_qos_write(struct kernfs_open_file *of, char *input,
 		inf = q_to_inf(disk->queue);
 		if (!params.inflight)
 			params.inflight = inf->params.inflight;
+		blk_queue_flag_set(QUEUE_FLAG_RQ_ALLOC_TIME, disk->queue);
 	} else if (inf && !params.enabled) {
+		blk_queue_flag_clear(QUEUE_FLAG_RQ_ALLOC_TIME, disk->queue);
 		timer_shutdown_sync(&inf->inf_timer);
 		blkcg_deactivate_policy(inf->rqos.disk, &blkcg_policy_ioinf);
 		rq_qos_del(&inf->rqos);
