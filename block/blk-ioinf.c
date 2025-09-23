@@ -9,6 +9,7 @@
 #include <linux/time64.h>
 #include <linux/parser.h>
 #include <linux/blk-cgroup.h>
+#include <linux/list_sort.h>
 
 #include "blk-cgroup.h"
 #include "blk-rq-qos.h"
@@ -22,6 +23,10 @@
 #define IOINF_TIMER_PERID	500
 /* minimal number of samples for congestion control */
 #define IOINF_MIN_SAMPLES	100
+
+bool online_weight = false;
+module_param(online_weight, bool, 0);
+MODULE_PARM_DESC(online_weight, "True if you want online weight, false if not");
 
 /* scale inflight from 1/1000 to 100 */
 enum {
@@ -93,6 +98,10 @@ struct ioinf {
 
 	/* global lock */
 	spinlock_t		lock;
+	/* list of active infgs */
+	struct list_head	active_infgs;
+	/* The total user weight of all active online cgroups */
+	u32 			total_weights;
 
 	/* for offline cgroups */
 	struct ioinf_rq_wait	offline;
@@ -112,6 +121,27 @@ struct ioinf_gq {
 
 	/* configured by user */
 	u32			user_weight;
+	/* original weight ratio */
+	u32			weight;
+	/* normalized weight ratio */
+	u32			hweight;
+	/* normalized inflight */
+	u32			hinflight;
+	/* normalized goal inflight */
+	u32			goal;
+	/* accumulated precision loss or inflight spikes. */
+	int			deficit;
+
+	/* head of the list is inf->active_infgs */
+	struct list_head	active;
+	/* for each cgroup, IO beyond budget will wait here */
+	struct ioinf_rq_wait	cg_rqw;
+
+	/* to calculate avgqu size */
+	struct ioinf_lat_stat	last_stat;
+	struct ioinf_lat_stat	cur_stat;
+	struct ioinf_lat_stat	delta_stat;
+	struct ioinf_lat_stat __percpu *stat;
 };
 
 /* per cgroup structure, used to record default weight for all disks */
@@ -239,7 +269,7 @@ static void ioinf_set_hinflight(struct ioinf_rq_wait *ioinf_rqw, u32 new)
 	ioinf_rqw->hinflight = new;
 	ioinf_rqw->last_max = max(ioinf_rqw->last_max >> 1,
 				  ioinf_rqw->max_inflight);
-	ioinf_rqw->max_inflight = new >> 1;
+	ioinf_rqw->max_inflight = IOINFG_MIN_INFLIGHT;
 
 	if (new > old && wq_has_sleeper(&ioinf_rqw->rqw.wait))
 		wake_up_all(&ioinf_rqw->rqw.wait);
@@ -256,6 +286,65 @@ void ioinf_done(struct ioinf_rq_wait *ioinf_rqw)
 		wake_up_all(&ioinf_rqw->rqw.wait);
 }
 
+/* Sort the active list by deficit, in descending order. */
+static int infgs_deficit_compare(void *priv, const struct list_head *a,
+				 const struct list_head *b)
+{
+	struct ioinf_gq *infg1;
+	struct ioinf_gq *infg2;
+
+	infg1 = container_of(a, struct ioinf_gq, active);
+	infg2 = container_of(b, struct ioinf_gq, active);
+	if (infg1->deficit < infg2->deficit)
+		return 1;
+	else if (infg1->deficit > infg2->deficit)
+		return -1;
+	return 0;
+}
+
+static void infgs_propagate_weights(struct ioinf *inf)
+{
+	struct ioinf_gq *infg;
+	struct ioinf_rq_wait *online;
+	int total, left;
+	int hinflight;
+
+	if (!online_weight || list_empty(&inf->active_infgs))
+		return;
+
+	online = &inf->online;
+	total = online->hinflight;
+	left = online->hinflight;
+	list_for_each_entry(infg, &inf->active_infgs, active) {
+		infg->weight = infg_user_weight(infg) * SCALE_GRAN /
+			       inf->total_weights;
+		hinflight = total * infg->weight / SCALE_GRAN;
+
+		/* Record the precision loss. */
+		infg->deficit += total * infg->weight - hinflight * SCALE_GRAN;
+		/* Distribute some of the overused budget to others. */
+		while (hinflight > IOINFG_MIN_INFLIGHT &&
+		       infg->deficit < -SCALE_GRAN) {
+			hinflight--;
+			infg->deficit += SCALE_GRAN;
+		}
+
+		infg->hinflight = hinflight;
+		left -= hinflight;
+	}
+
+	list_sort(NULL, &inf->active_infgs, infgs_deficit_compare);
+	list_for_each_entry(infg, &inf->active_infgs, active) {
+		if (left > 0 && infg->deficit > 0) {
+			left--;
+			infg->deficit -= SCALE_GRAN;
+			infg->hinflight++;
+		}
+		infg->hweight = infg->hinflight * SCALE_GRAN / online->hinflight;
+		ioinf_set_hinflight(&infg->cg_rqw, infg->hinflight);
+	}
+}
+
 static bool ioinf_inflight_cb(struct rq_wait *rqw, void *private_data)
 {
 	struct ioinf_rq_wait *ioinf_rqw = rqw_to_ioinf_rqw(rqw);
@@ -268,6 +357,7 @@ retry:
 	inflight = atomic_inc_below_return(&rqw->inflight, limit);
 	if (inflight > ioinf_rqw->max_inflight)
 		ioinf_rqw->max_inflight = inflight;
+
 	if (inflight <= limit) {
 		ioinf_rqw->issued++;
 		return true;
@@ -285,13 +375,23 @@ retry:
 				    inf->offline.hinflight >> 1);
 		ioinf_set_hinflight(&inf->online,
 				    inf->inflight - inf->offline.hinflight);
+
+		/* Distribute the reclaimed inflight. */
+		infgs_propagate_weights(inf);
 		spin_unlock_irq(&inf->lock);
 	}
 
 	if (ioinf_rqw->hinflight > limit)
 		goto retry;
 
+	/*
+	* Once a cgroup successfully acquires an inflight, subsequent online
+	* inflight acquisitions are guaranteed to succeed. Therefore, we count
+	* online.exhausted here.
+	*/
 	ioinf_rqw->exhausted++;
+	if (ioinf_rqw != &inf->online)
+		inf->online.exhausted++;
 	/* wake up ioinf_timer_fn() immediately to adjust scale */
 	if (inf->scale < inf->max_scale)
 		timer_reduce(&inf->inf_timer, jiffies + 1);
@@ -303,6 +403,32 @@ static void ioinf_cleanup_cb(struct rq_wait *rqw, void *private_data)
 	struct ioinf_rq_wait *ioinf_rqw = rqw_to_ioinf_rqw(rqw);
 
 	ioinf_done(ioinf_rqw);
+}
+
+static void ioinf_activate_infg(struct ioinf_gq *infg)
+{
+	struct ioinf *inf = infg->inf;
+
+	spin_lock_irq(&inf->lock);
+	if (list_empty(&infg->active)) {
+		list_add(&infg->active, &inf->active_infgs);
+		inf->total_weights += infg_user_weight(infg);
+		infgs_propagate_weights(inf);
+	}
+	spin_unlock_irq(&inf->lock);
+}
+
+static void ioinf_deactivate_infg(struct ioinf_gq *infg)
+{
+	struct ioinf *inf = infg->inf;
+
+	spin_lock_irq(&inf->lock);
+	if (!list_empty(&infg->active)) {
+		list_del_init(&infg->active);
+		inf->total_weights -= infg_user_weight(infg);
+		infgs_propagate_weights(inf);
+	}
+	spin_unlock_irq(&inf->lock);
 }
 
 static void ioinf_throttle(struct ioinf *inf, struct ioinf_rq_wait *ioinf_rqw)
@@ -325,10 +451,17 @@ static void ioinf_rqos_throttle(struct rq_qos *rqos, struct bio *bio)
 	if (!inf->params.enabled || !infg)
 		return;
 
-	if (infg_offline(infg))
+	if (infg_offline(infg)) {
 		ioinf_throttle(inf, &inf->offline);
-	else
-		ioinf_throttle(inf, &inf->online);
+		return;
+	}
+
+	if (online_weight) {
+		if (list_empty_careful(&infg->active))
+			ioinf_activate_infg(infg);
+		ioinf_throttle(inf, &infg->cg_rqw);
+	}
+	ioinf_throttle(inf, &inf->online);
 }
 
 static void ioinf_rqos_track(struct rq_qos *rqos, struct request *rq,
@@ -342,9 +475,10 @@ static void ioinf_rqos_track(struct rq_qos *rqos, struct request *rq,
 	rq->blkg = blkg;
 }
 
-static void ioinf_record_lat(struct ioinf *inf, struct request *rq)
+static void ioinf_record_lat(struct ioinf_gq *infg, struct request *rq)
 {
 	u64 lat;
+	struct ioinf *inf = infg->inf;
 
 	lat = rq->io_end_time_ns ? rq->io_end_time_ns : blk_time_get_ns();
 	lat -= rq->alloc_time_ns;
@@ -353,14 +487,22 @@ static void ioinf_record_lat(struct ioinf *inf, struct request *rq)
 	case REQ_OP_READ:
 		this_cpu_inc(inf->stat->read.nr);
 		this_cpu_add(inf->stat->read.lat, lat);
-		if (inf->params.qos_enabled && lat <= inf->params.rlat)
+		this_cpu_inc(infg->stat->read.nr);
+		this_cpu_add(infg->stat->read.lat, lat);
+		if (inf->params.qos_enabled && lat <= inf->params.rlat) {
 			this_cpu_inc(inf->stat->read.met);
+			this_cpu_inc(infg->stat->read.met);
+		}
 		break;
 	case REQ_OP_WRITE:
 		this_cpu_inc(inf->stat->write.nr);
 		this_cpu_add(inf->stat->write.lat, lat);
-		if (inf->params.qos_enabled && lat <= inf->params.wlat)
+		this_cpu_inc(infg->stat->write.nr);
+		this_cpu_add(infg->stat->write.lat, lat);
+		if (inf->params.qos_enabled && lat <= inf->params.wlat) {
 			this_cpu_inc(inf->stat->write.met);
+			this_cpu_inc(infg->stat->write.met);
+		}
 		break;
 	default:
 		break;
@@ -376,16 +518,34 @@ static void ioinf_rqos_done(struct rq_qos *rqos, struct request *rq)
 	if (!blkg)
 		return;
 
+	rq->blkg = NULL;
 	infg = blkg_to_infg(blkg);
 	inf = infg->inf;
+
 	if (infg_offline(infg)) {
 		ioinf_done(&inf->offline);
-	} else {
-		ioinf_done(&inf->online);
-		ioinf_record_lat(inf, rq);
+		return;
 	}
 
-	rq->blkg = NULL;
+	ioinf_done(&inf->online);
+	if (online_weight)
+		ioinf_done(&infg->cg_rqw);
+	ioinf_record_lat(infg, rq);
+}
+
+static void ioinf_rqos_cleanup(struct rq_qos *rqos, struct bio *bio)
+{
+	struct ioinf_gq *infg;
+
+	if (!online_weight)
+		return;
+
+	infg = ioinf_bio_infg(bio);
+	if (!infg || infg->inf->params.enabled ||
+	    list_empty_careful(&infg->active))
+		return;
+
+	ioinf_done(&infg->cg_rqw);
 }
 
 static void ioinf_rqos_exit(struct rq_qos *rqos)
@@ -397,6 +557,26 @@ static void ioinf_rqos_exit(struct rq_qos *rqos)
 	timer_shutdown_sync(&inf->inf_timer);
 	free_percpu(inf->stat);
 	kfree(inf);
+}
+
+static void infgs_stat_show(struct ioinf *inf, struct seq_file *m)
+{
+	struct ioinf_gq *infg;
+	char path[32];
+	struct ioinf_rq_wait *cg_rqw;
+
+	list_for_each_entry(infg, &inf->active_infgs, active) {
+		blkg_path(infg_to_blkg(infg), path, sizeof(path));
+		seq_printf(m, "%s: weight (%u->(%u->%u)/%d %d)", path,
+			   infg_user_weight(infg), infg->weight, infg->hweight,
+			   SCALE_GRAN, infg->deficit);
+
+		cg_rqw = &infg->cg_rqw;
+		seq_printf(m, " inflight %d/(%u->%u) %u->%u\n",
+			   atomic_read(&cg_rqw->rqw.inflight),
+			   infg->hinflight, cg_rqw->hinflight,
+			   cg_rqw->last_max, cg_rqw->max_inflight);
+	}
 }
 
 static int ioinf_stat_show(void *data, struct seq_file *m)
@@ -417,6 +597,7 @@ static int ioinf_stat_show(void *data, struct seq_file *m)
 		   atomic_read(&inf->offline.rqw.inflight),
 		   inf->offline.hinflight);
 
+	infgs_stat_show(inf, m);
 	spin_unlock_irq(&inf->lock);
 
 	return 0;
@@ -426,11 +607,24 @@ static int ioinf_lat_show(void *data, struct seq_file *m)
 {
 	struct rq_qos *rqos = data;
 	struct ioinf *inf = rqos_to_inf(rqos);
-	struct ioinf_lat_stat *stat = &inf->delta_stat;
+	struct ioinf_lat_stat *stat;
+	struct ioinf_gq *infg;
+	char path[32];
 
+	spin_lock_irq(&inf->lock);
+	stat = &inf->delta_stat;
 	seq_printf(m, "online average latency: (%llu/%llu-%llu) (%llu/%llu-%llu)\n",
 		   stat->read.met, stat->read.nr, stat->read.lat,
 		   stat->write.met, stat->write.nr, stat->write.lat);
+
+	list_for_each_entry(infg, &inf->active_infgs, active) {
+		stat = &infg->delta_stat;
+		blkg_path(infg_to_blkg(infg), path, sizeof(path));
+		seq_printf(m, "%s average latency: (%llu/%llu-%llu) (%llu/%llu-%llu)\n",
+			path, stat->read.met, stat->read.nr, stat->read.lat,
+			stat->write.met, stat->write.nr, stat->write.lat);
+	}
+	spin_unlock_irq(&inf->lock);
 
 	return 0;
 }
@@ -445,6 +639,7 @@ static struct rq_qos_ops ioinf_rqos_ops = {
 	.throttle	= ioinf_rqos_throttle,
 	.done		= ioinf_rqos_done,
 	.track		= ioinf_rqos_track,
+	.cleanup	= ioinf_rqos_cleanup,
 	.exit		= ioinf_rqos_exit,
 
 #ifdef CONFIG_BLK_DEBUG_FS
@@ -522,6 +717,70 @@ u32 ioinf_calc_budget(struct ioinf_rq_wait *ioinf_rqw)
 	return new_budget;
 }
 
+static u32 adjust_budget_by_primary(struct ioinf *inf, struct ioinf_gq *infg)
+{
+	u32 online_budget = ioinf_calc_budget(&inf->online);
+
+	if (!infg->cg_rqw.exhausted) {
+		u32 inflight;
+
+		infg->weight = infg_user_weight(infg) * SCALE_GRAN /
+					inf->total_weights;
+		inflight = DIV_ROUND_UP(infg->goal * SCALE_GRAN, infg->weight);
+		inf->max_scale = DIV_ROUND_UP(inflight * SCALE_GRAN,
+					      inf->params.inflight);
+		inf->max_scale = clamp(inf->max_scale, MIN_SCALE, MAX_SCALE);
+		inflight = inf->params.inflight * inf->max_scale / SCALE_GRAN;
+		online_budget = min(online_budget, inflight);
+	}
+	if (infg->cg_rqw.exhausted || inf->old_scale < inf->scale) {
+		online_budget = inf->online.hinflight * infg->goal /
+				infg->hinflight;
+		inf->max_scale = inf->max_scale * infg->goal / infg->hinflight;
+		inf->max_scale = clamp(inf->max_scale, MIN_SCALE, MAX_SCALE);
+	}
+
+	return online_budget;
+}
+
+u32 ioinf_calc_online_budget(struct ioinf *inf, u32 *exhausted)
+{
+	struct ioinf_gq *infg, *tmp, *primary = NULL;
+	u32 max_weight = 0;
+
+	if (!online_weight || list_empty(&inf->active_infgs))
+		return ioinf_calc_budget(&inf->online);
+
+	list_for_each_entry_safe(infg, tmp, &inf->active_infgs, active) {
+		int max_inflight = infg->cg_rqw.max_inflight;
+
+		infg->goal = ioinf_calc_budget(&infg->cg_rqw);
+		if (!infg->goal && !wq_has_sleeper(&infg->cg_rqw.rqw.wait)) {
+			list_del_init(&infg->active);
+			inf->total_weights -= infg_user_weight(infg);
+			infg->deficit = 0;
+			continue;
+		}
+
+		/* Some high-priority I/Os may exceed the budget. */
+		if (max_inflight > infg->hinflight + 1) {
+			int deficit = (int)infg->hinflight + 1 - max_inflight;
+			infg->deficit += deficit * SCALE_GRAN;
+		}
+
+		if (infg->weight < max_weight)
+			continue;
+
+		if (infg->weight > max_weight || infg->goal > primary->goal) {
+			primary = infg;
+			max_weight = infg->weight;
+			*exhausted = primary->cg_rqw.exhausted;
+		}
+	}
+
+	return adjust_budget_by_primary(inf, primary);
+}
+
 static void ioinf_sample_cpu_lat(struct ioinf_lat_stat *cur, int cpu,
 				 struct ioinf_lat_stat __percpu *stat)
 {
@@ -558,36 +817,70 @@ static struct ioinf_lat_stat ioinf_calc_stat(struct ioinf_lat_stat *cur,
 static void ioinf_sample_lat(struct ioinf *inf)
 {
 	int cpu;
+	struct ioinf_gq *infg;
 
-	for_each_possible_cpu(cpu)
+	for_each_possible_cpu(cpu) {
 		ioinf_sample_cpu_lat(&inf->cur_stat, cpu, inf->stat);
+		list_for_each_entry(infg, &inf->active_infgs, active) {
+			ioinf_sample_cpu_lat(&infg->cur_stat, cpu, infg->stat);
+		}
+	}
+
 	inf->delta_stat = ioinf_calc_stat(&inf->cur_stat, &inf->last_stat);
+	list_for_each_entry(infg, &inf->active_infgs, active) {
+		infg->delta_stat = ioinf_calc_stat(&infg->cur_stat,
+						   &infg->last_stat);
+	}
 }
 
 static int ioinf_online_busy(struct ioinf *inf)
 {
 	struct ioinf_lat_stat *stat;
 	int met_percent, unmet_percent = 0;
+	struct ioinf_gq *infg;
 
 	if (!inf->params.qos_enabled) {
 		inf->last_stat = inf->cur_stat;
+		list_for_each_entry(infg, &inf->active_infgs, active) {
+			infg->last_stat = infg->cur_stat;
+		}
 		return unmet_percent;
 	}
 
 	stat = &inf->delta_stat;
 	if (stat->read.nr >= IOINF_MIN_SAMPLES) {
 		inf->last_stat.read = inf->cur_stat.read;
+		list_for_each_entry(infg, &inf->active_infgs, active) {
+			infg->last_stat.read = infg->cur_stat.read;
+		}
 		met_percent = stat->read.met * 100 / stat->read.nr;
 		unmet_percent = inf->params.rpct - met_percent;
 	}
 	if (stat->write.nr >= IOINF_MIN_SAMPLES) {
 		inf->last_stat.write = inf->cur_stat.write;
+		list_for_each_entry(infg, &inf->active_infgs, active) {
+			infg->last_stat.write = infg->cur_stat.write;
+		}
 		met_percent = stat->write.met * 100 / stat->write.nr;
 		if (unmet_percent < inf->params.wpct - met_percent)
 			unmet_percent = inf->params.wpct - met_percent;
 	}
 
 	return unmet_percent;
+}
+
+static void infgs_update_inflight(struct ioinf *inf)
+{
+	struct ioinf_gq *infg;
+
+	if (!online_weight || list_empty(&inf->active_infgs))
+		return;
+
+	infgs_propagate_weights(inf);
+	list_for_each_entry(infg, &inf->active_infgs, active) {
+		infg->cg_rqw.exhausted = 0;
+		infg->cg_rqw.issued = 0;
+	}
 }
 
 static
@@ -611,6 +904,7 @@ void ioinf_update_inflight(struct ioinf *inf, u32 new_online, u32 new_offline)
 	inf->offline.issued = 0;
 
 	ioinf_set_hinflight(&inf->online, new_online);
+	infgs_update_inflight(inf);
 	inf->online.exhausted = 0;
 	inf->online.issued = 0;
 }
@@ -623,13 +917,14 @@ static void ioinf_timer_fn(struct timer_list *timer)
 	unsigned long flags;
 	u32 online_budget, offline_budget;
 	int unmet_percent;
+	u32 exhausted = online->exhausted;
 
 	spin_lock_irqsave(&inf->lock, flags);
 	ioinf_sample_lat(inf);
 	unmet_percent = ioinf_online_busy(inf);
 
-	online_budget = ioinf_calc_budget(online);
 	offline_budget = ioinf_calc_budget(offline);
+	online_budget = ioinf_calc_online_budget(inf, &exhausted);
 
 	if (unmet_percent < -SCALE_THRESH && inf->max_scale < MAX_SCALE)
 		inf->max_scale++;
@@ -641,7 +936,7 @@ static void ioinf_timer_fn(struct timer_list *timer)
 		online_budget -= online_budget * unmet_percent / 100;
 		online_budget = max(online_budget, IOINFG_MIN_INFLIGHT);
 		inflight_force_scale_down(inf, online_budget + offline_budget);
-	} else if (inf->scale < inf->max_scale && online->exhausted) {
+	} else if (inf->scale < inf->max_scale && exhausted) {
 		offline_budget = min(offline_budget, IOINFG_MIN_INFLIGHT);
 		inflight_force_scale_up(inf, online_budget + offline_budget);
 		if (inf->scale > inf->max_scale)
@@ -690,10 +985,13 @@ static int blk_ioinf_init(struct gendisk *disk)
 	inf->inflight = ioinf_default_inflight(inf);
 	inf->max_scale = MAX_SCALE;
 	inf->inf_timer_perid = IOINF_TIMER_PERID;
+
 	inf->offline.hinflight = IOINFG_MIN_INFLIGHT;
 	rq_wait_init(&inf->offline.rqw);
 	inf->online.hinflight = inf->inflight - IOINFG_MIN_INFLIGHT;
 	rq_wait_init(&inf->online.rqw);
+
+	INIT_LIST_HEAD(&inf->active_infgs);
 	timer_setup(&inf->inf_timer, ioinf_timer_fn, 0);
 
 	ret = rq_qos_add(&inf->rqos, disk, RQ_QOS_INFLIGHT, &ioinf_rqos_ops);
@@ -738,6 +1036,23 @@ static int ioinf_weight_show(struct seq_file *sf, void *v)
 	return 0;
 }
 
+static void infg_update_weight(struct ioinf_gq *infg, u32 new)
+{
+	u32 old;
+	struct ioinf *inf = infg->inf;
+
+	spin_lock_irq(&inf->lock);
+	old = infg_user_weight(infg);
+	infg->user_weight = new;
+	if (new != old && !list_empty(&infg->active)) {
+		if (new == 0)
+			list_del_init(&infg->active);
+		inf->total_weights = inf->total_weights - old + new;
+		infgs_propagate_weights(inf);
+	}
+	spin_unlock_irq(&inf->lock);
+}
+
 static ssize_t ioinf_weight_write(struct kernfs_open_file *of, char *buf,
 				  size_t nbytes, loff_t off)
 {
@@ -771,7 +1086,8 @@ static ssize_t ioinf_weight_write(struct kernfs_open_file *of, char *buf,
 		return -EINVAL;
 	}
 
-	infg->user_weight = v;
+	infg_update_weight(infg, v);
+
 	blkg_conf_exit(&ctx);
 	return nbytes;
 }
@@ -918,6 +1234,7 @@ static ssize_t ioinf_qos_write(struct kernfs_open_file *of, char *input,
 			inf->old_scale = SCALE_GRAN;
 			ioinf_update_inflight(inf, inf->online.hinflight,
 					      inf->offline.hinflight);
+			infgs_propagate_weights(inf);
 			spin_unlock_irq(&inf->lock);
 		}
 		inf->max_scale = MAX_SCALE;
@@ -989,6 +1306,12 @@ static struct blkg_policy_data *ioinf_pd_alloc(struct gendisk *disk,
 	if (!infg)
 		return NULL;
 
+	infg->stat = alloc_percpu_gfp(struct ioinf_lat_stat, GFP_ATOMIC);
+	if (!infg->stat) {
+		kfree(infg);
+		return NULL;
+	}
+
 	return &infg->pd;
 }
 
@@ -997,13 +1320,26 @@ static void ioinf_pd_init(struct blkg_policy_data *pd)
 	struct ioinf_gq *infg = pd_to_infg(pd);
 	struct blkcg_gq *blkg = pd_to_blkg(pd);
 
+	INIT_LIST_HEAD(&infg->active);
 	infg->inf = q_to_inf(blkg->q);
+	rq_wait_init(&infg->cg_rqw.rqw);
+	infg->cg_rqw.last_max = IOINFG_MIN_INFLIGHT;
+	infg->cg_rqw.max_inflight = IOINFG_MIN_INFLIGHT;
+}
+
+static void ioinf_pd_offline(struct blkg_policy_data *pd)
+{
+	struct ioinf_gq *infg = pd_to_infg(pd);
+
+	if (!list_empty_careful(&infg->active))
+		ioinf_deactivate_infg(infg);
 }
 
 static void ioinf_pd_free(struct blkg_policy_data *pd)
 {
 	struct ioinf_gq *infg = pd_to_infg(pd);
 
+	free_percpu(infg->stat);
 	kfree(infg);
 }
 
@@ -1016,6 +1352,7 @@ static struct blkcg_policy blkcg_policy_ioinf = {
 
 	.pd_alloc_fn	= ioinf_pd_alloc,
 	.pd_init_fn	= ioinf_pd_init,
+	.pd_offline_fn	= ioinf_pd_offline,
 	.pd_free_fn	= ioinf_pd_free,
 };
 
