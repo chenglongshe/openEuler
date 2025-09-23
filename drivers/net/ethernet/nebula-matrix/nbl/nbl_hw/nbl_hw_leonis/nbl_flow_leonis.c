@@ -1865,7 +1865,9 @@ static int nbl_flow_change_mcc_group_chain(struct nbl_resource_mgt *res_mgt, u8 
 						   struct nbl_flow_mcc_node, node)->mcc_id;
 			phy_ops->update_mcc_next_node(NBL_RES_MGT_TO_PHY_PRIV(res_mgt),
 						      node_mcc, current_mcc_id);
+
 		}
+
 	switch_res->allmulti_first_mcc = current_mcc_id;
 	return 0;
 }

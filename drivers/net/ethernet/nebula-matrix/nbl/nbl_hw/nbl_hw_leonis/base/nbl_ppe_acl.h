@@ -2027,7 +2027,7 @@ union acl_tcam_cfg_u {
 #define NBL_ACL_ACTION_RAM_CFG_DWLEN (4)
 union acl_action_ram_cfg_u {
 	struct acl_action_ram_cfg {
-		u32 c:4; /* [03:00] Default:0x0 RW */
+		u32 action_ram0_alloc_id:4; /* [03:00] Default:0x0 RW */
 		u32 action_ram0_enable:1; /* [04:04] Default:0x0 RW */
 		u32 action_ram1_alloc_id:4; /* [08:05] Default:0x0 RW */
 		u32 action_ram1_enable:1; /* [09:09] Default:0x0 RW */

@@ -4378,7 +4378,7 @@ static void nbl_serv_unset_lag_info(void *priv)
 	}
 }
 
-static void nbl_serv_set_netdev_ops(void *priv, const struct net_device_ops *net_device_ops, bool is_pf)
+static void nbl_serv_set_netdev_ops(void *priv, struct net_device_ops *net_device_ops, bool is_pf)
 {
 	struct nbl_service_mgt *serv_mgt = (struct nbl_service_mgt *)priv;
 	struct nbl_serv_net_resource_mgt *net_resource_mgt = NBL_SERV_MGT_TO_NET_RES_MGT(serv_mgt);
@@ -5718,9 +5718,9 @@ static int nbl_serv_load_p4(struct nbl_service_mgt *serv_mgt,
 			    const struct firmware *fw, char *verify_code, int type, u16 version)
 {
 	struct nbl_dispatch_ops *disp_ops = NBL_SERV_MGT_TO_DISP_OPS(serv_mgt);
-	const struct Elf32_Ehdr *elf_hdr = (struct Elf32_Ehdr *)fw->data;
+	const struct elf32_hdr *elf_hdr = (struct elf32_hdr *)fw->data;
 	struct nbl_common_info *common = NBL_SERV_MGT_TO_COMMON(serv_mgt);
-	struct Elf32_Shdr *shdr;
+	struct elf32_shdr *shdr;
 	struct nbl_load_p4_param param;
 	u8 *strtab, *name, *product_code = NULL;
 	int i;

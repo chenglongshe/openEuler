@@ -374,6 +374,7 @@ nbl_cmdq_execution_nolock(struct nbl_cmd_queue *queue,
 	if (ring->next_to_use == ring->count)
 		ring->next_to_use = 0;
 	/* wmb */
+
 	wmb();
 	phy_ops->update_cmdq_tail(NBL_CHAN_MGT_TO_PHY_PRIV(queue->chan_mgt),
 				  (ring->doorbell) & NBL_CMDQ_DOORBELL_MASK);
@@ -677,7 +678,6 @@ static void nbl_cmdq_get_param(void *priv, void *cmdq_param)
 int nbl_chan_send_cmdq(void *priv, const void *hdr, void *cmd)
 {
 	struct nbl_channel_mgt *chan_mgt = (struct nbl_channel_mgt *)priv;
-	struct nbl_common_info *common = chan_mgt->common;
 	int ret;
 
 	if (!chan_mgt->cmdq_mgt) {

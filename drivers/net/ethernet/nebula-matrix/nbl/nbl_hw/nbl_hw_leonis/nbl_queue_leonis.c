@@ -755,6 +755,7 @@ static int nbl_res_queue_init_ipro_dn_sport_tbl(struct nbl_resource_mgt *res_mgt
 			vf_vsi_id = nbl_res_pfvfid_to_vsi_id(res_mgt, pfid, vfid, NBL_VSI_DATA);
 			if (vf_vsi_id == 0xFFFF)
 				continue;
+
 			phy_ops->cfg_ipro_dn_sport_tbl(NBL_RES_MGT_TO_PHY_PRIV(res_mgt),
 							vf_vsi_id, eth_id, bmode, binit);
 		}

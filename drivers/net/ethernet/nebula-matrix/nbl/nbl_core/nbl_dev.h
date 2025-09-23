@@ -303,6 +303,7 @@ struct nbl_dev_user_iommu_group {
 
 struct nbl_dev_user {
 	struct vfio_device *vdev;
+	
 	struct device mdev;
 	struct notifier_block iommu_notifier;
 	struct device *dev;

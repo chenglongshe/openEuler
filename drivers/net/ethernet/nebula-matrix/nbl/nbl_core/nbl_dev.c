@@ -32,15 +32,15 @@ static struct nbl_dev_board_id_table board_id_table;
 
 struct nbl_dev_ops dev_ops;
 
-const struct net_device_ops netdev_ops_leonis_pf;
-const struct net_device_ops netdev_ops_leonis_vf;
-const struct net_device_ops netdev_ops_leonis_rep;
-const struct ethtool_ops ethtool_ops_leonis_pf;
-const struct ethtool_ops ethtool_ops_leonis_vf;
-const struct ethtool_ops ethtool_ops_leonis_rep;
-const struct dcbnl_rtnl_ops dcbnl_ops_leonis_pf;
-const struct dcbnl_rtnl_ops dcbnl_ops_leonis_vf;
-const struct tlsdev_ops ktls_ops;
+struct net_device_ops netdev_ops_leonis_pf;
+struct net_device_ops netdev_ops_leonis_vf;
+struct net_device_ops netdev_ops_leonis_rep;
+struct ethtool_ops ethtool_ops_leonis_pf;
+struct ethtool_ops ethtool_ops_leonis_vf;
+struct ethtool_ops ethtool_ops_leonis_rep;
+struct dcbnl_rtnl_ops dcbnl_ops_leonis_pf;
+struct dcbnl_rtnl_ops dcbnl_ops_leonis_vf;
+struct tlsdev_ops ktls_ops;
 struct xfrmdev_ops xfrm_ops;
 
 static int nbl_dev_clean_mailbox_schedule(struct nbl_dev_mgt *dev_mgt);
@@ -694,10 +694,10 @@ static void nbl_dev_destroy_health(struct nbl_dev_mgt *dev_mgt)
 {
 	struct nbl_dev_ctrl *ctrl_dev = NBL_DEV_MGT_TO_CTRL_DEV(dev_mgt);
 
-	if (!IS_ERR_OR_NULL(ctrl_dev->health_reporters.fw_temp_reporter)) 
+	if (!IS_ERR_OR_NULL(ctrl_dev->health_reporters.fw_temp_reporter))
 		devl_health_reporter_destroy(ctrl_dev->health_reporters.fw_temp_reporter);
 
-	if (!IS_ERR_OR_NULL(ctrl_dev->health_reporters.fw_reboot_reporter)) 
+	if (!IS_ERR_OR_NULL(ctrl_dev->health_reporters.fw_reboot_reporter))
 		devl_health_reporter_destroy(ctrl_dev->health_reporters.fw_reboot_reporter);
 
 	nbl_fw_tracer_clean_saved_traces_array(&ctrl_dev->health_reporters);
@@ -1644,8 +1644,9 @@ static void nbl_setup_devlink_reporter(struct nbl_dev_mgt *dev_mgt)
 	if (IS_ERR(reps->fw_reboot_reporter)) {
 		dev_err(dev, "failed to create fw reboot reporter err = %ld\n",
 			PTR_ERR(reps->fw_reboot_reporter));
-		if (reps->fw_temp_reporter) 
+		if (reps->fw_temp_reporter)
 			devl_health_reporter_destroy(reps->fw_temp_reporter);
+		
 		return;
 	}
 }
@@ -1852,7 +1853,7 @@ static int nbl_dev_setup_netops_leonis(void *priv, struct net_device *netdev,
 				       struct nbl_init_param *param)
 {
 	struct nbl_dev_mgt *dev_mgt = (struct nbl_dev_mgt *)priv;
-	const struct net_device_ops *netdev_ops;
+	struct net_device_ops *netdev_ops;
 	struct nbl_service_ops *serv_ops = NBL_DEV_MGT_TO_SERV_OPS(dev_mgt);
 	struct nbl_resource_pt_ops *pt_ops = NBL_DEV_MGT_TO_RES_PT_OPS(dev_mgt);
 	static bool pf_inited, vf_inited, rep_inited;
@@ -2006,7 +2007,7 @@ static int nbl_dev_setup_ethtool_ops_leonis(void *priv, struct net_device *netde
 					    struct nbl_init_param *param)
 {
 	struct nbl_dev_mgt *dev_mgt = (struct nbl_dev_mgt *)priv;
-	const struct ethtool_ops *ethtool_ops;
+	struct ethtool_ops *ethtool_ops;
 	struct nbl_service_ops *serv_ops = NBL_DEV_MGT_TO_SERV_OPS(dev_mgt);
 	static bool pf_inited, vf_inited, rep_inited;
 	bool is_vf = param->caps.is_vf;

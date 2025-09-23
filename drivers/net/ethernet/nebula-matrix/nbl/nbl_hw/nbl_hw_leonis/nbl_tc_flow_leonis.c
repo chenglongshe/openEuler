@@ -3659,7 +3659,6 @@ int nbl_insert_pp_ht(struct nbl_resource_mgt *res_mgt,
 		     u16 hash_value1, u32 key_index)
 {
 	struct nbl_flow_pp_ht_tbl *node;
-	struct nbl_common_info *common = NBL_RES_MGT_TO_COMMON(res_mgt);
 
 	if (!pp_ht_mng)
 		return -EINVAL;

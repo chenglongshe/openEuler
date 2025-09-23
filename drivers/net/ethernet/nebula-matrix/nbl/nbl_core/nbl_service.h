@@ -228,8 +228,8 @@ struct nbl_serv_lag_info {
 };
 
 struct nbl_serv_netdev_ops {
-	const struct net_device_ops *pf_netdev_ops;
-	const struct net_device_ops *rep_netdev_ops;
+	struct net_device_ops *pf_netdev_ops;
+	struct net_device_ops *rep_netdev_ops;
 };
 
 struct nbl_serv_rep_drop {

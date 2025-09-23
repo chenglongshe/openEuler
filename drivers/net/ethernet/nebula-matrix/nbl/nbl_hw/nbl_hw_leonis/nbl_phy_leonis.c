@@ -14,8 +14,7 @@
 
 static int dvn_descreq_num_cfg = DEFAULT_DVN_DESCREQ_NUMCFG; /* default 8 and 8 */
 module_param(dvn_descreq_num_cfg, int, 0);
-MODULE_PARM_DESC(dvn_descreq_num_cfg, 
-		 "bit[31:16]:split ring,support 8/16,"
+MODULE_PARM_DESC(dvn_descreq_num_cfg, "bit[31:16]:split ring,support 8/16,"
 		 " bit[15:0]:packed ring, support 8/12/16/20/24/28/32");
 
 static u32 nbl_phy_dump_registers[] = {

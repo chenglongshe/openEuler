@@ -198,7 +198,6 @@
 #define NBL_FLOW_ACTION_META_RECIRC			(BIT_ULL(38))
 #define NBL_FLOW_ACTION_STAT				(BIT_ULL(39))
 #define NBL_ACTION_FLAG_OFFSET_MAX			(BIT_ULL(40))
-
 extern struct list_head lag_resource_head;
 extern struct mutex nbl_lag_mutex;
 #define SET_DEV_MIN_MTU(netdev, mtu) ((netdev)->min_mtu = (mtu))

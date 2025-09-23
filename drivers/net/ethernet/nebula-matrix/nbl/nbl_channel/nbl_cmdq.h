@@ -4,6 +4,9 @@
  * Author:
  */
 
+/* Nebula-matrix DPDK user-network
+ * Copyright(c) 2021-2030 nBL, Inc.
+ */
 #ifndef _NBL_CMDQ_H
 #define _NBL_CMDQ_H
 

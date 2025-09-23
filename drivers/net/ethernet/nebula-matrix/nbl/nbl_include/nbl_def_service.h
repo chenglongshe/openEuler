@@ -178,7 +178,7 @@ struct nbl_service_ops {
 	void (*unregister_indr_dev_tc_offload)(void *priv, struct net_device *netdev);
 	void (*set_lag_info)(void *priv, struct net_device *bond_netdev, u8 lag_id);
 	void (*unset_lag_info)(void *priv);
-	void (*set_netdev_ops)(void *priv, const struct net_device_ops *net_device_ops, bool is_pf);
+	void (*set_netdev_ops)(void *priv, struct net_device_ops *net_device_ops, bool is_pf);
 
 	/* ethtool */
 	void (*get_drvinfo)(struct net_device *netdev, struct ethtool_drvinfo *drvinfo);

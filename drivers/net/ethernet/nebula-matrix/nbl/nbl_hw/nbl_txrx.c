@@ -630,8 +630,9 @@ static inline void nbl_page_release_dynamic(struct nbl_res_rx_ring *rx_ring,
 	}
 
 free_page:
+	
 	dma_unmap_page_attrs(rx_ring->dma_dev, dma_info->addr, dma_info->size,
-			     DMA_FROM_DEVICE, NBL_RX_DMA_ATTR);
+			     DMA_FROM_DEVICE, NBL_RX_DMA_ATTR);	
 }
 
 static inline void nbl_put_rx_frag(struct nbl_res_rx_ring *rx_ring,
@@ -2400,6 +2401,7 @@ static bool nbl_ktls_send_resync_mul(struct nbl_resource_mgt *res_mgt,
 		tx_buffer->len = total_len;
 	}
 	/* wmb */
+
 	wmb();
 
 	head_desc->flags = cpu_to_le16(avail_used_flags | NBL_PACKED_DESC_F_NEXT);
