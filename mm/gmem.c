@@ -302,7 +302,7 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 		page = gm_mapping->page;
 		if (!page) {
 			gmem_err("host gm_mapping page is NULL. Set nomap");
-			gm_mapping_flags_set(gm_mapping, GM_PAGE_NOMAP);
+			gm_mapping_flags_set(gm_mapping, GM_MAPPING_NOMAP);
 			goto unlock;
 		}
 		get_page(page);
@@ -328,21 +328,9 @@ peer_map:
 
 	ret = mmu->peer_map(&gmf);
 	if (ret != GM_RET_SUCCESS) {
-		if (ret == GM_RET_MIGRATING) {
-			/*
-			 * gmem page is migrating due to overcommit.
-			 * update page to willneed and this will stop page evicting
-			 */
-			gm_mapping_flags_set(gm_mapping, GM_PAGE_WILLNEED);
-			gmem_stats_counter(NR_PAGE_MIGRATING_D2H, 1);
-			ret = GM_RET_SUCCESS;
-		} else {
-			gmem_err("peer map failed");
-			if (page) {
-				gm_mapping_flags_set(gm_mapping, GM_PAGE_NOMAP);
-				put_page(page);
-			}
-		}
+		gmem_err("peer map failed");
+		if (page)
+			gm_mapping_flags_set(gm_mapping, GM_MAPPING_CPU);
 		goto unlock;
 	}
 
@@ -351,10 +339,9 @@ peer_map:
 		folio_put(page_folio(page));
 	}
 
-	gm_mapping_flags_set(gm_mapping, GM_PAGE_DEVICE);
+	gm_mapping_flags_set(gm_mapping, GM_MAPPING_DEVICE);
 	gm_mapping->dev = dev;
-	gm_page->va = addr;
-	gm_page->mm = mm;
+	gm_page_add_rmap(gm_page, mm, addr);
 	gm_mapping->gm_page = gm_page;
 	hnode_activelist_add(hnode, gm_page);
 	hnode_active_pages_inc(hnode);
@@ -408,6 +395,7 @@ vm_fault_t gm_host_fault_locked(struct vm_fault *vmf,
 
 	dma_unmap_page(dma_dev, gmf.dma_addr, size, DMA_BIDIRECTIONAL);
 	hnode = get_hnode(gm_mapping->gm_page->hnid);
+	gm_page_remove_rmap(gm_mapping->gm_page);
 	hnode_activelist_del(hnode, gm_mapping->gm_page);
 	hnode_active_pages_dec(hnode);
 	put_gm_page(gm_mapping->gm_page);
@@ -648,11 +636,12 @@ static int gmem_unmap_vma_pages(struct vm_area_struct *vma, unsigned long start,
 				continue;
 			}
 			hnode = get_hnode(gm_mapping->gm_page->hnid);
+			gm_page_remove_rmap(gm_mapping->gm_page);
 			hnode_activelist_del(hnode, gm_mapping->gm_page);
 			hnode_active_pages_dec(hnode);
 			put_gm_page(gm_mapping->gm_page);
 		}
-		gm_mapping_flags_set(gm_mapping, GM_PAGE_NOMAP);
+		gm_mapping_flags_set(gm_mapping, GM_MAPPING_NOMAP);
 		mutex_unlock(&gm_mapping->lock);
 	}
 
@@ -789,7 +778,7 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 	vma_src = find_vma(mm, src);
 
 	if (!vma_src || vma_src->vm_start > src || !vma_dest || vma_dest->vm_start > dest) {
-		gmem_err("hmemcpy: the vma find by src/dest is NULL!\n");
+		gmem_err("hmemcpy: the vma find by src/dest is NULL!");
 		goto unlock_mm;
 	}
 
@@ -797,14 +786,19 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 	gm_mapping_src = vm_object_lookup(vma_src->vm_obj, src & ~(page_size - 1));
 
 	if (!gm_mapping_src) {
-		gmem_err("hmemcpy: gm_mapping_src is NULL\n");
+		gmem_err("hmemcpy: gm_mapping_src is NULL");
+		goto unlock_mm;
+	}
+
+	if (gm_mapping_nomap(gm_mapping_src)) {
+		gmem_err("hmemcpy: src address is not mapping to CPU or device");
 		goto unlock_mm;
 	}
 
 	if (hnid != -1) {
 		dev = get_gm_dev(hnid);
 		if (!dev) {
-			gmem_err("hmemcpy: hnode's dev is NULL\n");
+			gmem_err("hmemcpy: hnode's dev is NULL");
 			goto unlock_mm;
 		}
 	}
@@ -816,14 +810,14 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 			ret = handle_mm_fault(vma_dest, dest & ~(page_size - 1), FAULT_FLAG_USER |
 						FAULT_FLAG_INSTRUCTION | FAULT_FLAG_WRITE, NULL);
 			if (ret) {
-				gmem_err("%s: failed to execute host page fault, ret:%d\n",
+				gmem_err("%s: failed to execute host page fault, ret:%d",
 					__func__, ret);
 				goto unlock_mm;
 			}
 		} else {
 			ret = gm_dev_fault_locked(mm, dest & ~(page_size - 1), dev, MADV_WILLNEED);
 			if (ret != GM_RET_SUCCESS) {
-				gmem_err("%s: failed to excecute dev page fault.\n", __func__);
+				gmem_err("%s: failed to excecute dev page fault.", __func__);
 				goto unlock_mm;
 			}
 		}

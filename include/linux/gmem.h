@@ -224,14 +224,13 @@ struct gm_dev {
 	struct gm_mapping *gm_mapping;
 };
 
-#define GM_PAGE_DIRTY	0x8 /* Whether the page is dirty */
-#define GM_PAGE_CPU	0x10 /* Determines whether page is a pointer or a pfn number. */
-#define GM_PAGE_DEVICE	0x20
-#define GM_PAGE_NOMAP	0x40
-#define GM_PAGE_PINNED	0x80
-#define GM_PAGE_WILLNEED	0x100
+#define GM_MAPPING_CPU		0x10 /* Determines whether page is a pointer or a pfn number. */
+#define GM_MAPPING_DEVICE	0x20
+#define GM_MAPPING_NOMAP	0x40
+#define GM_MAPPING_PINNED	0x80
+#define GM_MAPPING_WILLNEED	0x100
 
-#define GM_PAGE_TYPE_MASK	(GM_PAGE_CPU | GM_PAGE_DEVICE | GM_PAGE_NOMAP)
+#define GM_MAPPING_TYPE_MASK	(GM_MAPPING_CPU | GM_MAPPING_DEVICE | GM_MAPPING_NOMAP)
 
 /* Records the status of a page-size physical page */
 struct gm_mapping {
@@ -248,8 +247,8 @@ struct gm_mapping {
 
 static inline void gm_mapping_flags_set(struct gm_mapping *gm_mapping, int flags)
 {
-	if (flags & GM_PAGE_TYPE_MASK)
-		gm_mapping->flag &= ~GM_PAGE_TYPE_MASK;
+	if (flags & GM_MAPPING_TYPE_MASK)
+		gm_mapping->flag &= ~GM_MAPPING_TYPE_MASK;
 
 	gm_mapping->flag |= flags;
 }
@@ -261,27 +260,17 @@ static inline void gm_mapping_flags_clear(struct gm_mapping *gm_mapping, int fla
 
 static inline bool gm_mapping_cpu(struct gm_mapping *gm_mapping)
 {
-	return !!(gm_mapping->flag & GM_PAGE_CPU);
+	return !!(gm_mapping->flag & GM_MAPPING_CPU);
 }
 
 static inline bool gm_mapping_device(struct gm_mapping *gm_mapping)
 {
-	return !!(gm_mapping->flag & GM_PAGE_DEVICE);
+	return !!(gm_mapping->flag & GM_MAPPING_DEVICE);
 }
 
 static inline bool gm_mapping_nomap(struct gm_mapping *gm_mapping)
 {
-	return !!(gm_mapping->flag & GM_PAGE_NOMAP);
-}
-
-static inline bool gm_mapping_willneed(struct gm_mapping *gm_mapping)
-{
-	return !!(gm_mapping->flag & GM_PAGE_WILLNEED);
-}
-
-static inline bool gm_mapping_pinned(struct gm_mapping *gm_mapping)
-{
-	return !!(gm_mapping->flag & GM_PAGE_PINNED);
+	return !!(gm_mapping->flag & GM_MAPPING_NOMAP);
 }
 
 #define test_gm_mapping_mapped_on_node(i) { /* implement this */ }
@@ -392,9 +381,28 @@ struct gm_page {
 	* */
 	unsigned long va;
 	struct mm_struct *mm;
+	spinlock_t rmap_lock;
 
+	unsigned int flag;
 	atomic_t refcount;
 };
+
+#define GM_PAGE_EVICTING	0x1
+
+static inline void gm_page_flags_set(struct gm_page *gm_page, int flags)
+{
+	gm_page->flag |= flags;
+}
+
+static inline void gm_page_flags_clear(struct gm_page *gm_page, int flags)
+{
+	gm_page->flag &= ~flags;
+}
+
+static inline bool gm_page_evicting(struct gm_page *gm_page)
+{
+	return !!(gm_page->flag & GM_PAGE_EVICTING);
+}
 
 #define NUM_IMPORT_PAGES   16
 
@@ -406,6 +414,8 @@ void hnode_activelist_add(struct hnode *hnode, struct gm_page *gm_page);
 void hnode_activelist_del(struct hnode *hnode, struct gm_page *gm_page);
 void hnode_activelist_del_and_add(struct hnode *hnode, struct gm_page *gm_page);
 void mark_gm_page_active(struct gm_page *gm_page);
+void gm_page_add_rmap(struct gm_page *gm_page, struct mm_struct *mm, unsigned long va);
+void gm_page_remove_rmap(struct gm_page *gm_page);
 int gm_add_pages(unsigned int hnid, struct list_head *pages);
 void gm_free_page(struct gm_page *gm_page);
 struct gm_page *gm_alloc_page(struct mm_struct *mm, struct hnode *hnode);
