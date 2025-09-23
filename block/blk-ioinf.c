@@ -20,10 +20,13 @@
 #define IOINFG_MIN_INFLIGHT	1
 /* default wake-up time in jiffies for backgroup job, see ioinf_timer_fn() */
 #define IOINF_TIMER_PERID	500
+/* minimal number of samples for congestion control */
+#define IOINF_MIN_SAMPLES	100
 
 /* scale inflight from 1/1000 to 100 */
 enum {
 	MIN_SCALE	= 1,		/* one thousandth. */
+	SCALE_THRESH	= 3,		/* Regulate scale threshold. */
 	DFL_SCALE	= 100,		/* one tenth. */
 	SCALE_GRAN	= 1000,		/* The control granularity is 1/1000. */
 	MAX_SCALE	= 100000,	/* A hundredfold. */
@@ -34,18 +37,30 @@ enum {
 	INF_ENABLE,
 	INF_INFLIGHT,
 
+	QOS_ENABLE,
+	QOS_RLAT,
+	QOS_WLAT,
+	QOS_RPCT,
+	QOS_WPCT,
+
 	NR_QOS_CTRL_PARAMS,
 };
 
 /* qos control params */
 struct ioinf_params {
 	bool enabled;
+	bool qos_enabled;
 	u32 inflight;
+	u64 rlat;
+	u64 wlat;
+	u32 rpct;
+	u32 wpct;
 };
 
 struct ioinf_io_stat {
 	u64 nr;
 	u64 lat;
+	u64 met;
 };
 
 struct ioinf_lat_stat {
@@ -70,6 +85,7 @@ struct ioinf {
 	u32			inflight;
 	u32			scale;
 	u32			old_scale;
+	u32			max_scale;
 
 	/* default time for ioinf_timer_fn */
 	unsigned long		inf_timer_perid;
@@ -84,6 +100,7 @@ struct ioinf {
 	struct ioinf_rq_wait	online;
 
 	struct ioinf_lat_stat	last_stat;
+	struct ioinf_lat_stat	cur_stat;
 	struct ioinf_lat_stat	delta_stat;
 	struct ioinf_lat_stat __percpu *stat;
 };
@@ -276,7 +293,7 @@ retry:
 
 	ioinf_rqw->exhausted++;
 	/* wake up ioinf_timer_fn() immediately to adjust scale */
-	if (inf->scale < MAX_SCALE)
+	if (inf->scale < inf->max_scale)
 		timer_reduce(&inf->inf_timer, jiffies + 1);
 	return false;
 }
@@ -336,10 +353,14 @@ static void ioinf_record_lat(struct ioinf *inf, struct request *rq)
 	case REQ_OP_READ:
 		this_cpu_inc(inf->stat->read.nr);
 		this_cpu_add(inf->stat->read.lat, lat);
+		if (inf->params.qos_enabled && lat <= inf->params.rlat)
+			this_cpu_inc(inf->stat->read.met);
 		break;
 	case REQ_OP_WRITE:
 		this_cpu_inc(inf->stat->write.nr);
 		this_cpu_add(inf->stat->write.lat, lat);
+		if (inf->params.qos_enabled && lat <= inf->params.wlat)
+			this_cpu_inc(inf->stat->write.met);
 		break;
 	default:
 		break;
@@ -407,8 +428,9 @@ static int ioinf_lat_show(void *data, struct seq_file *m)
 	struct ioinf *inf = rqos_to_inf(rqos);
 	struct ioinf_lat_stat *stat = &inf->delta_stat;
 
-	seq_printf(m, "online average latency: (%llu-%llu) (%llu-%llu)\n",
-		stat->read.nr, stat->read.lat, stat->write.nr, stat->write.lat);
+	seq_printf(m, "online average latency: (%llu/%llu-%llu) (%llu/%llu-%llu)\n",
+		   stat->read.met, stat->read.nr, stat->read.lat,
+		   stat->write.met, stat->write.nr, stat->write.lat);
 
 	return 0;
 }
@@ -458,7 +480,7 @@ static void inflight_force_scale_up(struct ioinf *inf, u32 aim)
 	__inflight_scale_up(inf, aim, true);
 }
 
-static void inflight_scale_down(struct ioinf *inf, u32 aim)
+static void __inflight_scale_down(struct ioinf *inf, u32 aim, bool force)
 {
 	u32 new_scale;
 
@@ -467,10 +489,23 @@ static void inflight_scale_down(struct ioinf *inf, u32 aim)
 		return;
 
 	new_scale = DIV_ROUND_UP(aim * SCALE_GRAN, inf->params.inflight);
-	if (new_scale >= inf->old_scale)
-		return;
+	if (new_scale >= inf->old_scale) {
+		if (!force)
+			return;
+		new_scale = inf->scale - 1;
+	}
 
 	inf->scale = new_scale;
+}
+
+static void inflight_scale_down(struct ioinf *inf, u32 aim)
+{
+	__inflight_scale_down(inf, aim, false);
+}
+
+static void inflight_force_scale_down(struct ioinf *inf, u32 aim)
+{
+	__inflight_scale_down(inf, aim, true);
 }
 
 u32 ioinf_calc_budget(struct ioinf_rq_wait *ioinf_rqw)
@@ -494,8 +529,10 @@ static void ioinf_sample_cpu_lat(struct ioinf_lat_stat *cur, int cpu,
 
 	cur->read.nr += pstat->read.nr;
 	cur->read.lat += pstat->read.lat;
+	cur->read.met += pstat->read.met;
 	cur->write.nr += pstat->write.nr;
 	cur->write.lat += pstat->write.lat;
+	cur->write.met += pstat->write.met;
 }
 
 static struct ioinf_lat_stat ioinf_calc_stat(struct ioinf_lat_stat *cur,
@@ -504,11 +541,13 @@ static struct ioinf_lat_stat ioinf_calc_stat(struct ioinf_lat_stat *cur,
 	struct ioinf_lat_stat delta = {0};
 
 	delta.read.nr = cur->read.nr - last->read.nr;
+	delta.read.met = cur->read.met - last->read.met;
 	delta.read.lat = cur->read.lat - last->read.lat;
 	if (delta.read.nr > 0)
 		delta.read.lat = delta.read.lat / delta.read.nr;
 
 	delta.write.nr = cur->write.nr - last->write.nr;
+	delta.write.met = cur->write.met - last->write.met;
 	delta.write.lat = cur->write.lat - last->write.lat;
 	if (delta.write.nr > 0)
 		delta.write.lat = delta.write.lat / delta.write.nr;
@@ -518,13 +557,37 @@ static struct ioinf_lat_stat ioinf_calc_stat(struct ioinf_lat_stat *cur,
 
 static void ioinf_sample_lat(struct ioinf *inf)
 {
-	struct ioinf_lat_stat cur = {0};
 	int cpu;
 
 	for_each_possible_cpu(cpu)
-		ioinf_sample_cpu_lat(&cur, cpu, inf->stat);
-	inf->delta_stat = ioinf_calc_stat(&cur, &inf->last_stat);
-	inf->last_stat = cur;
+		ioinf_sample_cpu_lat(&inf->cur_stat, cpu, inf->stat);
+	inf->delta_stat = ioinf_calc_stat(&inf->cur_stat, &inf->last_stat);
+}
+
+static int ioinf_online_busy(struct ioinf *inf)
+{
+	struct ioinf_lat_stat *stat;
+	int met_percent, unmet_percent = 0;
+
+	if (!inf->params.qos_enabled) {
+		inf->last_stat = inf->cur_stat;
+		return unmet_percent;
+	}
+
+	stat = &inf->delta_stat;
+	if (stat->read.nr >= IOINF_MIN_SAMPLES) {
+		inf->last_stat.read = inf->cur_stat.read;
+		met_percent = stat->read.met * 100 / stat->read.nr;
+		unmet_percent = inf->params.rpct - met_percent;
+	}
+	if (stat->write.nr >= IOINF_MIN_SAMPLES) {
+		inf->last_stat.write = inf->cur_stat.write;
+		met_percent = stat->write.met * 100 / stat->write.nr;
+		if (unmet_percent < inf->params.wpct - met_percent)
+			unmet_percent = inf->params.wpct - met_percent;
+	}
+
+	return unmet_percent;
 }
 
 static
@@ -559,16 +622,30 @@ static void ioinf_timer_fn(struct timer_list *timer)
 	struct ioinf_rq_wait *offline = &inf->offline;
 	unsigned long flags;
 	u32 online_budget, offline_budget;
+	int unmet_percent;
 
-	ioinf_sample_lat(inf);
 	spin_lock_irqsave(&inf->lock, flags);
+	ioinf_sample_lat(inf);
+	unmet_percent = ioinf_online_busy(inf);
 
 	online_budget = ioinf_calc_budget(online);
 	offline_budget = ioinf_calc_budget(offline);
 
-	if (online->exhausted) {
+	if (unmet_percent < -SCALE_THRESH && inf->max_scale < MAX_SCALE)
+		inf->max_scale++;
+
+	if (unmet_percent > 0) {
+		inf->max_scale = clamp(inf->scale - 1, MIN_SCALE, MAX_SCALE);
+		offline_budget = min(offline_budget, IOINFG_MIN_INFLIGHT);
+		online_budget = online->hinflight;
+		online_budget -= online_budget * unmet_percent / 100;
+		online_budget = max(online_budget, IOINFG_MIN_INFLIGHT);
+		inflight_force_scale_down(inf, online_budget + offline_budget);
+	} else if (inf->scale < inf->max_scale && online->exhausted) {
 		offline_budget = min(offline_budget, IOINFG_MIN_INFLIGHT);
 		inflight_force_scale_up(inf, online_budget + offline_budget);
+		if (inf->scale > inf->max_scale)
+			inf->scale = (inf->old_scale + inf->max_scale + 1) / 2;
 	} else if (!online_budget) {
 		inflight_scale_up(inf, offline_budget);
 	} else if (inf->old_scale < inf->scale) {
@@ -611,6 +688,7 @@ static int blk_ioinf_init(struct gendisk *disk)
 	spin_lock_init(&inf->lock);
 	inf->params.inflight = disk->queue->nr_requests;
 	inf->inflight = ioinf_default_inflight(inf);
+	inf->max_scale = MAX_SCALE;
 	inf->inf_timer_perid = IOINF_TIMER_PERID;
 	inf->offline.hinflight = IOINFG_MIN_INFLIGHT;
 	rq_wait_init(&inf->offline.rqw);
@@ -709,8 +787,12 @@ static u64 ioinf_qos_prfill(struct seq_file *sf, struct blkg_policy_data *pd,
 		return 0;
 
 	params = inf->params;
-	seq_printf(sf, "%s enable=%d inflight=%u", dname,
-		   params.enabled, params.inflight);
+	seq_printf(sf, "%s enable=%d inflight=%u qos_enable=%d", dname,
+		   params.enabled, params.inflight, params.qos_enabled);
+
+	if (inf->params.qos_enabled)
+		seq_printf(sf, " rlat=%llu rpct=%u wlat=%llu wpct=%u",
+			   params.rlat, params.rpct, params.wlat, params.wpct);
 
 	seq_putc(sf, '\n');
 	return 0;
@@ -728,6 +810,11 @@ static int ioinf_qos_show(struct seq_file *sf, void *v)
 static const match_table_t qos_ctrl_tokens = {
 	{ INF_ENABLE,		"enable=%u"	},
 	{ INF_INFLIGHT,		"inflight=%u"	},
+	{ QOS_ENABLE,		"qos_enable=%u"	},
+	{ QOS_RLAT,		"rlat=%u"	},
+	{ QOS_WLAT,		"wlat=%u"	},
+	{ QOS_RPCT,		"rpct=%u"	},
+	{ QOS_WPCT,		"wpct=%u"	},
 	{ NR_QOS_CTRL_PARAMS,	NULL		},
 };
 
@@ -776,6 +863,31 @@ static ssize_t ioinf_qos_write(struct kernfs_open_file *of, char *input,
 				goto einval;
 			params.inflight = v;
 			continue;
+		case QOS_ENABLE:
+			if (match_u64(&args[0], &v))
+				goto einval;
+			params.qos_enabled = !!v;
+			continue;
+		case QOS_RLAT:
+			if (match_u64(&args[0], &v) || v == 0)
+				goto einval;
+			params.rlat = v;
+			continue;
+		case QOS_WLAT:
+			if (match_u64(&args[0], &v) || v == 0)
+				goto einval;
+			params.wlat = v;
+			continue;
+		case QOS_RPCT:
+			if (match_u64(&args[0], &v) || v > 100)
+				goto einval;
+			params.rpct = v;
+			continue;
+		case QOS_WPCT:
+			if (match_u64(&args[0], &v) || v > 100)
+				goto einval;
+			params.wpct = v;
+			continue;
 		default:
 			goto einval;
 		}
@@ -808,6 +920,7 @@ static ssize_t ioinf_qos_write(struct kernfs_open_file *of, char *input,
 					      inf->offline.hinflight);
 			spin_unlock_irq(&inf->lock);
 		}
+		inf->max_scale = MAX_SCALE;
 	}
 
 	blkg_conf_exit(&ctx);
