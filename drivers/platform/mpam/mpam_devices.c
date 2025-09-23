@@ -562,6 +562,17 @@ static struct mpam_msc_ris *mpam_get_or_create_ris(struct mpam_msc *msc,
 	return found;
 }
 
+static void mpam_cpbm_wd_hisi_workaround(struct mpam_props *props)
+{
+	static const struct midr_range cpus[] = {
+		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
+		{ /* sentinel */ }
+	};
+
+	if (is_midr_in_range_list(read_cpuid_id(), cpus))
+		props->cpbm_wd = 21;
+}
+
 static void mpam_ris_hw_probe(struct mpam_msc_ris *ris)
 {
 	int err;
@@ -592,6 +603,7 @@ static void mpam_ris_hw_probe(struct mpam_msc_ris *ris)
 		u32 cpor_features = mpam_read_partsel_reg(msc, CPOR_IDR);
 
 		props->cpbm_wd = FIELD_GET(MPAMF_CPOR_IDR_CPBM_WD, cpor_features);
+		mpam_cpbm_wd_hisi_workaround(props);
 		if (props->cpbm_wd)
 			mpam_set_feature(mpam_feat_cpor_part, props);
 	}
