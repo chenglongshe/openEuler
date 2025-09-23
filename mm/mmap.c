@@ -2621,7 +2621,7 @@ int split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 
 #ifdef CONFIG_GMEM
 static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_area_struct *vma,
-					unsigned long start_addr, unsigned long end_addr)
+					      unsigned long start_addr, unsigned long end_addr)
 {
 	unsigned long start, end, addr;
 	struct vm_object *obj = vma->vm_obj;
@@ -2665,6 +2665,7 @@ static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_ar
 
 		gmf.va = addr;
 		gmf.size = HPAGE_SIZE;
+		gmf.pfn = gm_mapping->gm_page->dev_pfn;
 		gmf.dev = gm_mapping->dev;
 		ret = gm_mapping->dev->mmu->peer_unmap(&gmf);
 		if (ret != GM_RET_SUCCESS)
@@ -2678,6 +2679,7 @@ static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_ar
 			mutex_unlock(&gm_mapping->lock);
 			continue;
 		}
+		gm_page_remove_rmap(gm_mapping->gm_page);
 		hnode_activelist_del(hnode, gm_mapping->gm_page);
 		hnode_active_pages_dec(hnode);
 		put_gm_page(gm_mapping->gm_page);

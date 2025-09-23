@@ -1937,6 +1937,77 @@ static void unmap_single_vma(struct mmu_gather *tlb,
 	}
 }
 
+static void unmap_single_peer_shared_vma(struct mm_struct *mm, struct vm_area_struct *vma,
+					 unsigned long start_addr, unsigned long end_addr)
+{
+	unsigned long start, end, addr;
+	struct vm_object *obj = vma->vm_obj;
+	enum gm_ret ret;
+	struct gm_mapping *gm_mapping;
+	struct hnode *hnode;
+	struct gm_fault_t gmf = {
+		.mm = mm,
+		.copy = false,
+	};
+
+	start = max(vma->vm_start, start_addr);
+	if (start >= vma->vm_end)
+		return;
+	addr = start;
+	end = min(vma->vm_end, end_addr);
+	if (end <= vma->vm_start)
+		return;
+
+	if (!obj)
+		return;
+
+	if (!mm->gm_as)
+		return;
+
+	do {
+		xa_lock(obj->logical_page_table);
+		gm_mapping = vm_object_lookup(obj, addr);
+		if (!gm_mapping) {
+			xa_unlock(obj->logical_page_table);
+			continue;
+		}
+		xa_unlock(obj->logical_page_table);
+
+		mutex_lock(&gm_mapping->lock);
+		if (!gm_mapping_device(gm_mapping)) {
+			mutex_unlock(&gm_mapping->lock);
+			continue;
+		}
+
+		/* In fact, during the exit_mmap process of the host, we do not
+		 * need to call peer_unmap to release the memory within the NPU
+		 * card, as the NPU card has an independent process that will
+		 * handle the unmap operation. */
+		//gmf.va = addr;
+		//gmf.size = HPAGE_SIZE;
+		//gmf.pfn = gm_mapping->gm_page->dev_pfn;
+		//gmf.dev = gm_mapping->dev;
+		//ret = gm_mapping->dev->mmu->peer_unmap(&gmf);
+		//if (ret != GM_RET_SUCCESS)
+		//	gmem_err("%s: call dev peer_unmap error %d", __func__, ret);
+
+		/*
+		 * Regardless of whether the gm_page is unmapped, we should release it.
+		 */
+		hnode = get_hnode(gm_mapping->gm_page->hnid);
+		if (!hnode) {
+			mutex_unlock(&gm_mapping->lock);
+			continue;
+		}
+		gm_page_remove_rmap(gm_mapping->gm_page);
+		hnode_activelist_del(hnode, gm_mapping->gm_page);
+		hnode_active_pages_dec(hnode);
+		put_gm_page(gm_mapping->gm_page);
+		gm_mapping->gm_page = NULL;
+		mutex_unlock(&gm_mapping->lock);
+	} while (addr += HPAGE_SIZE, addr != end);
+}
+
 /**
  * unmap_vmas - unmap a range of memory covered by a list of vma's
  * @tlb: address of the caller's struct mmu_gather
@@ -1980,6 +2051,9 @@ void unmap_vmas(struct mmu_gather *tlb, struct ma_state *mas,
 		unmap_single_vma(tlb, vma, start, end, &details,
 				 mm_wr_locked);
 		hugetlb_zap_end(vma, &details);
+#ifdef CONFIG_GMEM
+		unmap_single_peer_shared_vma(vma->vm_mm, vma, start, end);
+#endif
 		vma = mas_find(mas, tree_end - 1);
 	} while (vma && likely(!xa_is_zero(vma)));
 	mmu_notifier_invalidate_range_end(&range);

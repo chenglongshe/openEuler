@@ -87,10 +87,52 @@ static ssize_t nr_activepages_show(struct kobject *kobj,
 static struct kobj_attribute nr_activepages_attr = 
 	__ATTR(nr_activepages, 0444, nr_activepages_show, NULL);
 
+static ssize_t nr_freelist_show(struct kobject *kobj,
+				struct kobj_attribute *attr, char *buf)
+{
+	unsigned int nr_freelist = 0;
+	struct gm_page *gm_page;
+	struct hnode *hnode = get_hnode_kobj(kobj);
+	if (!hnode)
+		return -EINVAL;
+
+	spin_lock(&hnode->freelist_lock);
+	list_for_each_entry(gm_page, &hnode->freelist, gm_page_list) {
+		nr_freelist++;
+	}
+	spin_unlock(&hnode->freelist_lock);
+	return sprintf(buf, "%u\n", nr_freelist);
+}
+
+static struct kobj_attribute nr_freelist_attr =
+        __ATTR(nr_freelist, 0444, nr_freelist_show, NULL);
+
+static ssize_t nr_activelist_show(struct kobject *kobj,
+				  struct kobj_attribute *attr, char *buf)
+{
+	unsigned int nr_activelist = 0;
+	struct gm_page *gm_page;
+	struct hnode *hnode = get_hnode_kobj(kobj);
+	if (!hnode)
+		return -EINVAL;
+
+	spin_lock(&hnode->activelist_lock);
+	list_for_each_entry(gm_page, &hnode->activelist, gm_page_list) {
+		nr_activelist++;
+	}
+	spin_unlock(&hnode->activelist_lock);
+	return sprintf(buf, "%u\n", nr_activelist);
+}
+
+static struct kobj_attribute nr_activelist_attr =
+        __ATTR(nr_activelist, 0444, nr_activelist_show, NULL);
+
 static struct attribute *hnode_attrs[] = {
 	&max_memsize_attr.attr,
 	&nr_freepages_attr.attr,
 	&nr_activepages_attr.attr,
+	&nr_freelist_attr.attr,
+	&nr_activelist_attr.attr,
 	NULL,
 };
 

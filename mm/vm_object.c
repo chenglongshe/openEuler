@@ -51,7 +51,7 @@ struct gm_mapping *alloc_gm_mapping(void)
 	if (!gm_mapping)
 		return NULL;
 
-	gm_mapping_flags_set(gm_mapping, GM_PAGE_NOMAP);
+	gm_mapping_flags_set(gm_mapping, GM_MAPPING_NOMAP);
 	mutex_init(&gm_mapping->lock);
 
 	return gm_mapping;
