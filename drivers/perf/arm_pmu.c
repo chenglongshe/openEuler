@@ -954,6 +954,9 @@ struct arm_pmu *armpmu_alloc(void)
 		events = per_cpu_ptr(pmu->hw_events, cpu);
 		raw_spin_lock_init(&events->pmu_lock);
 		events->percpu_pmu = pmu;
+
+		if (!pmu->has_smt && topology_core_has_smt(cpu))
+			pmu->has_smt = true;
 	}
 
 	return pmu;
