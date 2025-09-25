@@ -6162,17 +6162,16 @@ static bool hugetlb_pte_stable(struct hstate *h, struct mm_struct *mm,
 static vm_fault_t hugetlb_no_page(struct address_space *mapping,
 			struct vm_fault *vmf)
 {
+	u32 hash = hugetlb_fault_mutex_hash(mapping, vmf->pgoff);
+	bool new_folio, new_anon_folio = false;
 	struct vm_area_struct *vma = vmf->vma;
 	struct mm_struct *mm = vma->vm_mm;
 	struct hstate *h = hstate_vma(vma);
 	vm_fault_t ret = VM_FAULT_SIGBUS;
-	int anon_rmap = 0;
-	unsigned long size;
-	struct folio *folio;
-	pte_t new_pte;
-	bool new_folio, new_pagecache_folio = false;
-	u32 hash = hugetlb_fault_mutex_hash(mapping, vmf->pgoff);
 	bool folio_locked = true;
+	struct folio *folio;
+	unsigned long size;
+	pte_t new_pte;
 
 	/*
 	 * Currently, we are forced to kill the process in the event the
@@ -6265,14 +6264,13 @@ static vm_fault_t hugetlb_no_page(struct address_space *mapping,
 				folio_put(folio);
 				goto out;
 			}
-			new_pagecache_folio = true;
 		} else {
+			new_anon_folio = true;
 			folio_lock(folio);
 
 			ret = vmf_anon_prepare(vmf);
 			if (unlikely(ret))
 				goto backout_unlocked;
-			anon_rmap = 1;
 		}
 	} else {
 		/*
@@ -6321,7 +6319,7 @@ static vm_fault_t hugetlb_no_page(struct address_space *mapping,
 	if (!pte_same(huge_ptep_get(vmf->pte), vmf->orig_pte))
 		goto backout;
 
-	if (anon_rmap)
+	if (new_anon_folio)
 		hugetlb_add_new_anon_rmap(folio, vma, vmf->address);
 	else
 		hugetlb_add_file_rmap(folio);
@@ -6341,7 +6339,7 @@ static vm_fault_t hugetlb_no_page(struct address_space *mapping,
 		 * No need to keep file folios locked. See comment in
 		 * hugetlb_fault().
 		 */
-		if (!anon_rmap) {
+		if (!new_anon_folio) {
 			folio_locked = false;
 			folio_unlock(folio);
 		}
@@ -6369,7 +6367,8 @@ out:
 backout:
 	spin_unlock(vmf->ptl);
 backout_unlocked:
-	if (new_folio && !new_pagecache_folio)
+	/* We only need to restore reservations for private mappings */
+	if (new_anon_folio)
 		restore_reserve_on_error(h, vma, vmf->address, folio);
 
 	folio_unlock(folio);
