@@ -59,7 +59,7 @@ static ssize_t max_memsize_store(struct kobject *kobj,
 }
 
 static struct kobj_attribute max_memsize_attr =
-	__ATTR(max_memsize, 0644, max_memsize_show, max_memsize_store);
+	__ATTR(max_memsize, 0640, max_memsize_show, max_memsize_store);
 
 static ssize_t nr_freepages_show(struct kobject *kobj,
 				 struct kobj_attribute *attr, char *buf)
@@ -72,7 +72,7 @@ static ssize_t nr_freepages_show(struct kobject *kobj,
 }
 
 static struct kobj_attribute nr_freepages_attr =
-	__ATTR(nr_freepages, 0444, nr_freepages_show, NULL);
+	__ATTR(nr_freepages, 0440, nr_freepages_show, NULL);
 
 static ssize_t nr_activepages_show(struct kobject *kobj,
 				   struct kobj_attribute *attr, char *buf)
@@ -85,7 +85,7 @@ static ssize_t nr_activepages_show(struct kobject *kobj,
 }
 
 static struct kobj_attribute nr_activepages_attr = 
-	__ATTR(nr_activepages, 0444, nr_activepages_show, NULL);
+	__ATTR(nr_activepages, 0440, nr_activepages_show, NULL);
 
 static ssize_t nr_freelist_show(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
@@ -105,7 +105,7 @@ static ssize_t nr_freelist_show(struct kobject *kobj,
 }
 
 static struct kobj_attribute nr_freelist_attr =
-        __ATTR(nr_freelist, 0444, nr_freelist_show, NULL);
+        __ATTR(nr_freelist, 0440, nr_freelist_show, NULL);
 
 static ssize_t nr_activelist_show(struct kobject *kobj,
 				  struct kobj_attribute *attr, char *buf)
@@ -125,7 +125,7 @@ static ssize_t nr_activelist_show(struct kobject *kobj,
 }
 
 static struct kobj_attribute nr_activelist_attr =
-        __ATTR(nr_activelist, 0444, nr_activelist_show, NULL);
+        __ATTR(nr_activelist, 0440, nr_activelist_show, NULL);
 
 static struct attribute *hnode_attrs[] = {
 	&max_memsize_attr.attr,
