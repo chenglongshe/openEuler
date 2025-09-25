@@ -2683,6 +2683,7 @@ static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_ar
 		hnode_activelist_del(hnode, gm_mapping->gm_page);
 		hnode_active_pages_dec(hnode);
 		put_gm_page(gm_mapping->gm_page);
+		gm_mapping_flags_set(gm_mapping, GM_MAPPING_NOMAP);
 		gm_mapping->gm_page = NULL;
 		mutex_unlock(&gm_mapping->lock);
 	} while (addr += HPAGE_SIZE, addr != end);
