@@ -61,7 +61,7 @@ static ssize_t max_memsize_store(struct kobject *kobj,
 }
 
 static struct kobj_attribute max_memsize_attr =
-	__ATTR(max_memsize, 0644, max_memsize_show, max_memsize_store);
+	__ATTR(max_memsize, 0640, max_memsize_show, max_memsize_store);
 
 static ssize_t nr_freepages_show(struct kobject *kobj,
 				 struct kobj_attribute *attr, char *buf)
@@ -75,7 +75,7 @@ static ssize_t nr_freepages_show(struct kobject *kobj,
 }
 
 static struct kobj_attribute nr_freepages_attr =
-	__ATTR(nr_freepages, 0444, nr_freepages_show, NULL);
+	__ATTR(nr_freepages, 0440, nr_freepages_show, NULL);
 
 static ssize_t nr_activepages_show(struct kobject *kobj,
 				   struct kobj_attribute *attr, char *buf)
