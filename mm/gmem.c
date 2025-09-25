@@ -331,6 +331,7 @@ peer_map:
 		gmem_err("peer map failed");
 		if (page)
 			gm_mapping_flags_set(gm_mapping, GM_MAPPING_CPU);
+		put_gm_page(gm_page);
 		goto unlock;
 	}
 
