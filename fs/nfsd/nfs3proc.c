@@ -153,9 +153,9 @@ nfsd3_proc_read(struct svc_rqst *rqstp)
 	struct nfsd3_readargs *argp = rqstp->rq_argp;
 	struct nfsd3_readres *resp = rqstp->rq_resp;
 	__be32	nfserr;
-	u32	max_blocksize = svc_max_payload(rqstp);
-	unsigned long cnt = min(argp->count, max_blocksize);
+	unsigned long cnt = min(argp->count, svc_max_payload(rqstp));
 
+	cnt = min_t(u32, cnt, rqstp->rq_res.buflen);
 	dprintk("nfsd: READ(3) %s %lu bytes at %Lu\n",
 				SVCFH_fmt(&argp->fh),
 				(unsigned long) argp->count,
