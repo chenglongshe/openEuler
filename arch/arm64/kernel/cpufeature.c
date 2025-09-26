@@ -2443,13 +2443,24 @@ static void mpam_extra_caps(void)
 #include <asm/xcall.h>
 DEFINE_STATIC_KEY_FALSE(xcall_enable);
 
+#define AIDR_ELx_XCALL_SHIFT		32
+#define AIDR_ELx_XCALL			(UL(1) << AIDR_ELx_XCALL_SHIFT)
+
 static bool is_arch_xcall_xint_support(void)
 {
+	u64 aidr_el1 = read_sysreg_s(SYS_AIDR_EL1);
+	u64 el = read_sysreg(CurrentEL);
+
 	/* List of CPUs that support Xcall/Xint */
 	static const struct midr_range xcall_xint_cpus[] = {
 		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
 		{ /* sentinel */ }
 	};
+
+	if (el == CurrentEL_EL1) {
+		if (!(aidr_el1 & AIDR_ELx_XCALL))
+			return false;
+	}
 
 	if (is_midr_in_range_list(read_cpuid_id(), xcall_xint_cpus))
 		return true;
