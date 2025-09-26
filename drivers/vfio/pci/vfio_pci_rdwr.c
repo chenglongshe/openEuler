@@ -19,6 +19,9 @@
 #include <linux/io-64-nonatomic-lo-hi.h>
 
 #include "vfio_pci_priv.h"
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_tmi.h>
+#endif
 
 #ifdef CONFIG_HISI_VIRTCCA_CODA
 #ifndef __GENKSYMS__
@@ -74,6 +77,11 @@ static int vfio_pci_iowrite##size(struct vfio_pci_core_device *vdev,	\
 static int vfio_pci_iowrite##size(struct vfio_pci_core_device *vdev,		\
 			bool test_mem, u##size val, void __iomem *io)	\
 {									\
+#ifdef CONFIG_HISI_VIRTCCA_HOST				\
+	struct pci_dev *pdev = vdev->pdev;				\
+	bool cc_dev = pdev == NULL ? false : is_cc_dev(pci_dev_id(pdev)); \
+									\
+#endif				\
 	if (test_mem) {							\
 		down_read(&vdev->memory_lock);				\
 		if (!__vfio_pci_memory_enabled(vdev)) {			\
@@ -82,7 +90,12 @@ static int vfio_pci_iowrite##size(struct vfio_pci_core_device *vdev,		\
 		}							\
 	}								\
 									\
-	vfio_iowrite##size(val, io);					\
+#ifdef CONFIG_HISI_VIRTCCA_HOST				\
+	if (cc_dev) {							\
+		WARN_ON(tmi_mmio_write(va_to_pa(io), val, size, pci_dev_id(pdev)));	\
+	else							\
+#endif				\
+		vfio_iowrite##size(val, io);					\
 									\
 	if (test_mem)							\
 		up_read(&vdev->memory_lock);				\
@@ -127,6 +140,11 @@ static int vfio_pci_ioread##size(struct vfio_pci_core_device *vdev,	\
 static int vfio_pci_ioread##size(struct vfio_pci_core_device *vdev,		\
 			bool test_mem, u##size *val, void __iomem *io)	\
 {									\
+#ifdef CONFIG_HISI_VIRTCCA_HOST				\
+	struct pci_dev *pdev = vdev->pdev;				\
+	bool cc_dev = pdev == NULL ? false : is_cc_dev(pci_dev_id(pdev)); \
+									\
+#endif				\
 	if (test_mem) {							\
 		down_read(&vdev->memory_lock);				\
 		if (!__vfio_pci_memory_enabled(vdev)) {			\
@@ -135,7 +153,12 @@ static int vfio_pci_ioread##size(struct vfio_pci_core_device *vdev,		\
 		}							\
 	}								\
 									\
-	*val = vfio_ioread##size(io);					\
+#ifdef CONFIG_HISI_VIRTCCA_HOST				\
+	if (cc_dev) {							\
+		*val = tmi_mmio_read(va_to_pa(io), size, pci_dev_id(pdev));		\
+	else							\
+#endif				\
+		*val = vfio_ioread##size(io);					\
 									\
 	if (test_mem)							\
 		up_read(&vdev->memory_lock);				\
