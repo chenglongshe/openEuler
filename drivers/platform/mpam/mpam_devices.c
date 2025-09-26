@@ -1258,6 +1258,22 @@ static u32 mpam_cpbm_hisi_workaround(u32 cpbm, u8 cache_level)
 	return cpbm;
 }
 
+static u16 mpam_intpri_hisi_workaround(struct mpam_msc_ris *ris, u16 intpri)
+{
+	struct mpam_class *class = ris->comp->class;
+
+	if (read_cpuid_implementor() != ARM_CPU_IMP_HISI)
+		return intpri;
+
+	if (class->type == MPAM_CLASS_MEMORY)
+		return 3;
+
+	if (class->level == 3)
+		return 0;
+
+	return intpri;
+}
+
 static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 				      struct mpam_config *cfg)
 {
@@ -1325,7 +1341,7 @@ static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 		if (mpam_has_feature(mpam_feat_max_limit, cfg))
 			limit = cfg->max_limit;
 		else
-			limit = false;
+			limit = true;
 
 		if (limit)
 			mpam_write_partsel_reg(msc, MBW_MAX, bwa_fract |
@@ -1343,6 +1359,7 @@ static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 		intpri = 0;
 
 	if (mpam_has_feature(mpam_feat_intpri_part, rprops)) {
+		intpri = mpam_intpri_hisi_workaround(ris, intpri);
 		if (mpam_has_feature(mpam_feat_intpri_part, cfg))
 			pri_val |= FIELD_PREP(MPAMCFG_PRI_INTPRI, cfg->intpri);
 		else
