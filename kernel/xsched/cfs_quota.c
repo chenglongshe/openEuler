@@ -35,7 +35,6 @@ void xsched_quota_refill(struct work_struct *work)
 	spin_unlock(&xg->lock);
 
 	for_each_active_xcu(xcu, id) {
-		xcu = xsched_cu_mgr[id];
 		mutex_lock(&xcu->xcu_lock);
 		if (!READ_ONCE(xg->perxcu_priv[id].xse.on_rq)) {
 			enqueue_ctx(&xg->perxcu_priv[id].xse, xcu);
