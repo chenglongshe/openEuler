@@ -626,6 +626,8 @@ struct vma_numab_state {
 	unsigned long next_scan;
 	unsigned long next_pid_reset;
 	unsigned long access_pids[2];
+	/* MM scan sequence ID when scan first started after VMA creation */
+	int start_scan_seq;
 };
 
 /*
