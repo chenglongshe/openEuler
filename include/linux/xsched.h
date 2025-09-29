@@ -38,7 +38,6 @@
 #define RUNTIME_INF ((u64)~0ULL)
 #define XSCHED_TIME_INF RUNTIME_INF
 #define XSCHED_CFS_ENTITY_WEIGHT_DFLT 1
-#define XSCHED_CFS_MIN_TIMESLICE (10 * NSEC_PER_MSEC)
 #define XSCHED_CFS_QUOTA_PERIOD_MS (100 * NSEC_PER_MSEC)
 #define XSCHED_CFG_SHARE_DFLT 1024
 
@@ -438,13 +437,8 @@ static inline int xsched_inc_pending_kicks_xse(struct xsched_entity *xse)
 	atomic_inc(&xse->kicks_pending_ctx_cnt);
 
 	/* Incrementing prio based pending kicks counter for RT class */
-	if (xse_is_rt(xse)) {
+	if (xse_is_rt(xse))
 		atomic_inc(&xse->xcu->xrq.rt.prio_nr_kicks[xse->rt.prio]);
-		XSCHED_DEBUG("xcu increased pending kicks @ %s\n", __func__);
-	} else {
-		XSCHED_DEBUG("xse %u isn't rt class @ %s\n", xse->tgid,
-			    __func__);
-	}
 
 	return 0;
 }
@@ -476,18 +470,12 @@ static inline int xsched_dec_pending_kicks_xse(struct xsched_entity *xse)
 	/* Decrementing prio based pending kicks counter for RT class. */
 	if (xse_is_rt(xse)) {
 		kicks_prio_rt = &xse->xcu->xrq.rt.prio_nr_kicks[xse->rt.prio];
-
 		if (!atomic_read(kicks_prio_rt)) {
 			XSCHED_ERR(
-				"Tried to decrement prio pending kicks beyond 0!\n");
+				"Try to decrement prio pending kicks beyond 0!\n");
 			return -EINVAL;
 		}
-
 		atomic_dec(kicks_prio_rt);
-		XSCHED_DEBUG("xcu decreased pending kicks @ %s\n", __func__);
-	} else {
-		XSCHED_DEBUG("xse %u isn't rt class @ %s\n", xse->tgid,
-			    __func__);
 	}
 
 	return 0;
@@ -591,7 +579,6 @@ static inline void xsched_init_vsm(struct vstream_metadata *vsm,
 				struct vstream_info *vs, vstream_args_t *arg)
 {
 	vsm->sq_id = arg->sq_id;
-	vsm->exec_time = arg->vk_args.exec_time;
 	vsm->sqe_num = arg->vk_args.sqe_num;
 	vsm->timeout = arg->vk_args.timeout;
 	memcpy(vsm->sqe, arg->vk_args.sqe, XCU_SQE_SIZE_MAX);
@@ -610,8 +597,6 @@ struct xsched_cu *xcu_find(uint32_t *type,
 /* Vstream metadata proccesing functions.*/
 int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg);
 struct vstream_metadata *xsched_vsm_fetch_first(struct vstream_info *vs);
-void submit_kick(struct vstream_info *vs, struct xcu_op_handler_params *params,
-		 struct vstream_metadata *vsm);
 /* Xsched group manage functions */
 int xsched_group_inherit(struct task_struct *tsk, struct xsched_entity *xse);
 void xcu_cg_init_common(struct xsched_group *xcg);

@@ -54,15 +54,13 @@ static void put_prev_ctx(struct xsched_entity *xse)
 
 static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
-	int kick_count;
+	int kick_count, scheduled = 0, not_empty;
 	struct vstream_info *vs;
-	unsigned int sum_exec_time = 0;
-	size_t kicks_submitted = 0;
+	struct xcu_op_handler_params params;
 	struct vstream_metadata *vsm;
-	int not_empty;
 
 	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
-	XSCHED_DEBUG("Before decrement XSE kick_count=%u @ %s\n",
+	XSCHED_DEBUG("Before decrement XSE kick_count=%d @ %s\n",
 		kick_count, __func__);
 
 	if (kick_count == 0) {
@@ -74,31 +72,44 @@ static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
 	do {
 		not_empty = 0;
 		for_each_vstream_in_ctx(vs, xse->ctx) {
+			if (scheduled >= XSCHED_CFS_KICK_SLICE)
+				break;
+
 			spin_lock(&vs->stream_lock);
 			vsm = xsched_vsm_fetch_first(vs);
 			spin_unlock(&vs->stream_lock);
-			if (vsm) {
-				list_add_tail(&vsm->node, &xcu->vsm_list);
 
-				sum_exec_time += vsm->exec_time;
-				kicks_submitted++;
-				xsched_dec_pending_kicks_xse(xse);
-				XSCHED_DEBUG(
-					"vs id = %d Kick submit exec_time %u sq_tail %u sqe_num %u sq_id %u @ %s\n",
-					vs->id, vsm->exec_time, vsm->sq_tail,
-					vsm->sqe_num, vsm->sq_id, __func__);
-				not_empty++;
+			if (!vsm)
+				continue;
+			list_add_tail(&vsm->node, &xcu->vsm_list);
+			scheduled++;
+			xsched_dec_pending_kicks_xse(xse);
+			not_empty++;
+		}
+	} while ((scheduled < XSCHED_CFS_KICK_SLICE) && (not_empty));
+
+	/*
+	 * Iterate over all vstreams in context:
+	 * Set wr_cqe bit in last computing task in vsm_list
+	 */
+	for_each_vstream_in_ctx(vs, xse->ctx) {
+		list_for_each_entry_reverse(vsm, &xcu->vsm_list, node) {
+			if (vsm->parent == vs) {
+				params.group = vsm->parent->xcu->group;
+				params.param_1 = &(int){SQE_SET_NOTIFY};
+				params.param_2 = &vsm->sqe;
+				xcu_sqe_op(&params);
+				break;
 			}
 		}
-	} while ((sum_exec_time < XSCHED_CFS_MIN_TIMESLICE) && (not_empty));
+	}
 
 	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
 	XSCHED_DEBUG("After decrement XSE kick_count=%d @ %s\n",
 		    kick_count, __func__);
 
-	xse->total_scheduled += kicks_submitted;
-
-	return kicks_submitted;
+	xse->total_scheduled += scheduled;
+	return scheduled;
 }
 
 static struct xsched_entity *__raw_pick_next_ctx(struct xsched_cu *xcu)
@@ -196,7 +207,6 @@ static int delete_ctx(struct xsched_context *ctx)
 		atomic_read(&xse->kicks_pending_ctx_cnt), __func__);
 
 	xsched_group_xse_detach(xse);
-
 	return 0;
 }
 
@@ -369,7 +379,7 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 
 	err = xsched_xse_set_class(xse);
 	if (err) {
-		XSCHED_ERR("Failed to set xse class @ %s\n", __func__);
+		XSCHED_ERR("Fail to set xse class @ %s\n", __func__);
 		return err;
 	}
 
@@ -402,70 +412,97 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 	return err;
 }
 
-/*
- * A function for submitting stream's commands (sending commands to a XCU).
- */
-static int xsched_proc(struct xsched_cu *xcu, struct vstream_info *vs,
-		       struct vstream_metadata *vsm)
+static void submit_kick(struct vstream_metadata *vsm)
 {
+	struct vstream_info *vs = vsm->parent;
 	struct xcu_op_handler_params params;
-	struct xsched_entity *xse;
+	params.group = vs->xcu->group;
+	params.fd = vs->fd;
+	params.param_1 = &vs->id;
+	params.param_2 = &vs->channel_id;
+	params.param_3 = vsm->sqe;
+	params.param_4 = &vsm->sqe_num;
+	params.param_5 = &vsm->timeout;
+	params.param_6 = &vs->sqcq_type;
+	params.param_7 = vs->drv_ctx;
+	params.param_8 = &vs->logic_vcq_id;
 
-	XSCHED_CALL_STUB();
+	/* Send vstream on a device for processing. */
+	if (xcu_run(&params)) {
+		XSCHED_ERR(
+			"Fail to send Vstream id %u tasks to a device for processing.\n",
+			vs->id);
+	}
 
-	xse = &vs->ctx->xse;
+	XSCHED_DEBUG("Vstream id %u submit vsm: sq_tail %u\n", vs->id, vsm->sq_tail);
+}
 
-	/* Init input parameters for xcu_run and xcu_wait callbacks. */
-	params.group = xcu->group;
+static void submit_wait(struct vstream_metadata *vsm)
+{
+	struct vstream_info *vs = vsm->parent;
+	struct xcu_op_handler_params params;
+	/* Wait timeout in ms. */
+	int32_t timeout = 500;
 
-	/* Increase process time by abstract kick handling time. */
-	xse->last_exec_runtime += vsm->exec_time;
+	params.group = vs->xcu->group;
+	params.param_1 = &vs->channel_id;
+	params.param_2 = &vs->logic_vcq_id;
+	params.param_3 = &vs->user_stream_id;
+	params.param_4 = &vsm->sqe;
+	params.param_5 = vsm->cqe;
+	params.param_6 = vs->drv_ctx;
+	params.param_7 = &timeout;
 
-	XSCHED_DEBUG("Process vsm sq_tail %d exec_time %u sqe_num %d sq_id %d@ %s\n",
-		    vsm->sq_tail, vsm->exec_time, vsm->sqe_num, vsm->sq_id, __func__);
-	submit_kick(vs, &params, vsm);
+	/* Wait for a device to complete processing. */
+	if (xcu_wait(&params)) {
+		XSCHED_ERR("Fail to wait Vstream id %u tasks, logic_cq_id %u.\n",
+			vs->id, vs->logic_vcq_id);
+	}
 
-	xse->total_submitted++;
-
-	XSCHED_DEBUG("xse %d total_submitted = %lu @ %s\n",
-		    xse->tgid, xse->total_submitted, __func__);
-
-	XSCHED_EXIT_STUB();
-	return 0;
+	XSCHED_DEBUG("Vstream id %u wait finish, logic_cq_id %u\n",
+		vs->id, vs->logic_vcq_id);
 }
 
 static int __xsched_submit(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
 	struct vstream_metadata *vsm, *tmp;
-	unsigned int submit_exec_time = 0;
-	size_t kicks_submitted = 0;
-	unsigned long wait_us;
+	int submitted = 0;
+	long submit_exec_time = 0;
+	ktime_t t_start = 0;
+	struct xcu_op_handler_params params;
 
 	XSCHED_DEBUG("%s called for xse %d on xcu %u\n",
 		__func__, xse->tgid, xcu->id);
 
 	list_for_each_entry_safe(vsm, tmp, &xcu->vsm_list, node) {
-		xsched_proc(xcu, vsm->parent, vsm);
-		submit_exec_time += vsm->exec_time;
-		kicks_submitted++;
+		submit_kick(vsm);
+		XSCHED_DEBUG("Xse %d vsm %u sched_delay: %lld ns\n",
+			xse->tgid, vsm->sq_id, ktime_to_ns(ktime_sub(ktime_get(), vsm->add_time)));
+
+		params.group = vsm->parent->xcu->group;
+		params.param_1 = &(int){SQE_IS_NOTIFY};
+		params.param_2 = &vsm->sqe;
+		if (xcu_sqe_op(&params)) {
+			mutex_unlock(&xcu->xcu_lock);
+			t_start = ktime_get();
+			submit_wait(vsm);
+			submit_exec_time += ktime_to_ns(ktime_sub(ktime_get(), t_start));
+			mutex_lock(&xcu->xcu_lock);
+		}
+		submitted++;
+		list_del(&vsm->node);
+		kfree(vsm);
 	}
 
+	xse->last_exec_runtime += submit_exec_time;
+	xse->total_submitted += submitted;
+	atomic_add(submitted, &xse->submitted_one_kick);
 	INIT_LIST_HEAD(&xcu->vsm_list);
+	XSCHED_DEBUG("Xse %d submitted=%d total=%zu, exec_time=%ld @ %s\n",
+		xse->tgid, submitted, xse->total_submitted,
+		submit_exec_time, __func__);
 
-	mutex_unlock(&xcu->xcu_lock);
-
-	wait_us = div_u64(submit_exec_time, NSEC_PER_USEC);
-	XSCHED_DEBUG("XCU kicks_submitted=%lu wait_us=%lu @ %s\n",
-		    kicks_submitted, wait_us, __func__);
-
-	if (wait_us > 0) {
-		/* Sleep shift not larger than 12.5% */
-		usleep_range(wait_us, wait_us + (wait_us >> 3));
-	}
-
-	mutex_lock(&xcu->xcu_lock);
-
-	return kicks_submitted;
+	return submitted;
 }
 
 static inline bool should_preempt(struct xsched_entity *xse)
@@ -520,35 +557,6 @@ static int xsched_schedule(void *input_xcu)
 	}
 
 	return err;
-}
-
-void submit_kick(struct vstream_info *vs,
-			struct xcu_op_handler_params *params,
-			struct vstream_metadata *vsm)
-{
-	int ret;
-
-	params->fd = vs->fd;
-	params->param_1 = &vs->id;
-	params->param_2 = &vs->channel_id;
-	params->param_3 = vsm->sqe;
-	params->param_4 = &vsm->sqe_num;
-	params->param_5 = &vsm->timeout;
-	params->param_6 = &vs->sqcq_type;
-	params->param_7 = vs->drv_ctx;
-	/* Send vstream on a device for processing. */
-	ret = xcu_run(params);
-	if (ret) {
-		XSCHED_ERR(
-			"Failed to send vstream tasks vstreamId=%d to a device for processing.\n",
-			vs->id);
-	}
-
-	XSCHED_DEBUG("Vstream_id %d submit vsm: sq_tail %d\n", vs->id, vsm->sq_tail);
-
-	kfree(vsm);
-
-	return;
 }
 
 /* Initialize xsched rt runqueue during kernel init.
@@ -643,7 +651,7 @@ int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg)
 
 	new_vsm = kmalloc(sizeof(struct vstream_metadata), GFP_KERNEL);
 	if (!new_vsm) {
-		XSCHED_ERR("Failed to alloc kick metadata for vs %u @ %s\n",
+		XSCHED_ERR("Fail to alloc kick metadata for vs %u @ %s\n",
 			vs->id, __func__);
 		return -ENOMEM;
 	}
