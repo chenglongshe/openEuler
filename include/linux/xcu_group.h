@@ -23,6 +23,20 @@ enum xcu_version {
 };
 
 struct xcu_op_handler_params {
+	int fd;
+	struct xcu_group *group;
+	void *payload;
+	union {
+		struct {
+			void *param_1;
+			void *param_2;
+			void *param_3;
+			void *param_4;
+			void *param_5;
+			void *param_6;
+			void *param_7;
+		};
+	};
 };
 
 typedef int (*xcu_op_handler_fn_t)(struct xcu_op_handler_params *params);
@@ -33,6 +47,8 @@ struct xcu_operation {
 	xcu_op_handler_fn_t wait;
 	xcu_op_handler_fn_t complete;
 	xcu_op_handler_fn_t alloc;
+	xcu_op_handler_fn_t logic_alloc;
+	xcu_op_handler_fn_t logic_free;
 };
 
 struct xcu_group {
