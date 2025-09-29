@@ -38,7 +38,8 @@
 #define RUNTIME_INF ((u64)~0ULL)
 #define XSCHED_TIME_INF RUNTIME_INF
 #define XSCHED_CFS_ENTITY_WEIGHT_DFLT 1
-#define XSCHED_CFS_MIN_TIMESLICE (10*NSEC_PER_MSEC)
+#define XSCHED_CFS_MIN_TIMESLICE (10 * NSEC_PER_MSEC)
+#define XSCHED_CFS_QUOTA_PERIOD_MS (100 * NSEC_PER_MSEC)
 #define XSCHED_CFG_SHARE_DFLT 1024
 
 #define __GET_VS_TASK_TYPE(t) ((t)&0xFF)
@@ -590,6 +591,7 @@ static inline void xsched_init_vsm(struct vstream_metadata *vsm,
 				struct vstream_info *vs, vstream_args_t *arg)
 {
 	vsm->sq_id = arg->sq_id;
+	vsm->exec_time = arg->vk_args.exec_time;
 	vsm->sqe_num = arg->vk_args.sqe_num;
 	vsm->timeout = arg->vk_args.timeout;
 	memcpy(vsm->sqe, arg->vk_args.sqe, XCU_SQE_SIZE_MAX);
@@ -615,6 +617,13 @@ int xsched_group_inherit(struct task_struct *tsk, struct xsched_entity *xse);
 void xcu_cg_init_common(struct xsched_group *xcg);
 void xcu_grp_shares_update(struct xsched_group *xg);
 void xsched_group_xse_detach(struct xsched_entity *xse);
+
+void xsched_quota_init(void);
+void xsched_quota_timeout_init(struct xsched_group *xg);
+void xsched_quota_timeout_update(struct xsched_group *xg);
+void xsched_quota_account(struct xsched_group *xg, s64 exec_time);
+bool xsched_quota_exceed(struct xsched_group *xg);
+void xsched_quota_refill(struct work_struct *work);
 void enqueue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
 void dequeue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
 #endif /* __LINUX_XSCHED_H__ */
