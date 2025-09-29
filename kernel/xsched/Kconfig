@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config XCU_SCHEDULER
+	bool "Enable XSched functionality"
+	select CGROUP_XCU
+	default n
+
+config XCU_VSTREAM
+	bool "Enable vstream SQ/CQ buffers maintaining for XPU"
+	default n
+	depends on XCU_SCHEDULER
