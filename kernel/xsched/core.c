@@ -26,6 +26,7 @@
 
 int num_active_xcu;
 spinlock_t xcu_mgr_lock;
+extern struct xsched_group *root_xcg;
 
 /* Xsched XCU array and bitmask that represents which XCUs
  * are present and online.
@@ -49,6 +50,7 @@ static void put_prev_ctx(struct xsched_entity *xse)
 	xse->class->put_prev_ctx(xse);
 	xse->last_exec_runtime = 0;
 	atomic_set(&xse->submitted_one_kick, 0);
+	XSCHED_DEBUG("Put current xse %d @ %s\n", xse->tgid, __func__);
 }
 
 static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
@@ -194,6 +196,8 @@ static int delete_ctx(struct xsched_context *ctx)
 	XSCHED_DEBUG("Deleting ctx %d, pending kicks left=%d @ %s\n", xse->tgid,
 		atomic_read(&xse->kicks_pending_ctx_cnt), __func__);
 
+	xsched_group_xse_detach(xse);
+
 	return 0;
 }
 
@@ -318,7 +322,10 @@ struct xsched_cu *xcu_find(uint32_t *type,
 
 int xsched_xse_set_class(struct xsched_entity *xse)
 {
-	switch (xse->task_type) {
+#ifdef CONFIG_CGROUP_XCU
+	xsched_group_inherit(current, xse);
+#endif
+	switch (xse->parent_grp->sched_type) {
 	case XSCHED_TYPE_RT:
 		xse->class = &rt_xsched_class;
 		XSCHED_DEBUG("Context is in RT class %s\n", __func__);
@@ -345,7 +352,7 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 	xse->total_scheduled = 0;
 	xse->total_submitted = 0;
 	xse->last_exec_runtime = 0;
-	xse->task_type = XSCHED_TYPE_RT;
+	xse->task_type = GET_VS_TASK_TYPE(vs);
 	xse->fd = ctx->fd;
 	xse->tgid = ctx->tgid;
 
@@ -715,10 +722,9 @@ EXPORT_SYMBOL(xsched_xcu_register);
 
 int __init xsched_init(void)
 {
-	/* Initializing global Xsched context list. */
+	/* Initializing global XSched context list. */
 	INIT_LIST_HEAD(&xsched_ctx_list);
-
+	xcu_cg_init_common(root_xcg);
 	return 0;
 }
-
 late_initcall(xsched_init);

@@ -5,7 +5,7 @@
 #include <linux/hash.h>
 #include <linux/hashtable.h>
 #include <linux/xcu_group.h>
-#include <linux/kref.h>
+#include <linux/cgroup.h>
 #include <linux/vstream.h>
 #ifndef pr_fmt
 #define pr_fmt(fmt) fmt
@@ -39,13 +39,11 @@
 #define XSCHED_TIME_INF RUNTIME_INF
 #define XSCHED_CFS_ENTITY_WEIGHT_DFLT 1
 #define XSCHED_CFS_MIN_TIMESLICE (10*NSEC_PER_MSEC)
+#define XSCHED_CFG_SHARE_DFLT 1024
 
 #define __GET_VS_TASK_TYPE(t) ((t)&0xFF)
-
 #define __GET_VS_TASK_PRIO_RT(t) (((t) >> 8) & 0xFF)
-
 #define GET_VS_TASK_TYPE(vs_ptr) __GET_VS_TASK_TYPE((vs_ptr)->task_type)
-
 #define GET_VS_TASK_PRIO_RT(vs_ptr) __GET_VS_TASK_PRIO_RT((vs_ptr)->task_type)
 
 /*
@@ -56,6 +54,8 @@
  * A default kick slice for CFS class XSEs.
  */
 #define XSCHED_CFS_KICK_SLICE 10
+
+extern struct xsched_cu *xsched_cu_mgr[XSCHED_NR_CUS];
 
 enum xcu_sched_type {
 	XSCHED_TYPE_RT,
@@ -186,11 +186,14 @@ struct xsched_cu {
 
 	struct mutex xcu_lock;
 
-	atomic_t has_active;
-
 	wait_queue_head_t wq_xcu_idle;
 	wait_queue_head_t wq_xcu_running;
 };
+
+extern int num_active_xcu;
+#define for_each_active_xcu(xcu, id)                                           \
+	for ((id) = 0, xcu = xsched_cu_mgr[(id)];                                  \
+	     (id) < num_active_xcu && (xcu = xsched_cu_mgr[(id)]); (id)++)
 
 struct xsched_entity_rt {
 	struct list_head list_node;
@@ -260,6 +263,11 @@ struct xsched_entity {
 	 */
 	struct xsched_cu *xcu;
 
+	/* Link to list of xsched_group items */
+	struct list_head group_node;
+	struct xsched_group *parent_grp;
+	bool is_group;
+
 	/* General purpose xse lock. */
 	spinlock_t xse_lock;
 };
@@ -272,6 +280,93 @@ static inline bool xse_is_rt(const struct xsched_entity *xse)
 static inline bool xse_is_cfs(const struct xsched_entity *xse)
 {
 	return xse && xse->class == &fair_xsched_class;
+}
+
+/* xsched_group's xcu related stuff */
+struct xsched_group_xcu_priv {
+	/* Owner of this group */
+	struct xsched_group *self;
+
+	/* xcu id */
+	int xcu_id;
+
+	/* Link to scheduler */
+	struct xsched_entity xse; /* xse of this group on runqueue */
+	struct xsched_rq_cfs *cfs_rq; /* cfs runqueue "owned" by this group */
+	struct xsched_rq_rt *rt_rq; /* rt runqueue "owned" by this group */
+
+	/* Statistics */
+	int nr_throttled;
+	u64 throttled_time;
+	u64 overrun_time;
+};
+
+/* Xsched scheduling control group */
+struct xsched_group {
+	/* Cgroups controller structure */
+	struct cgroup_subsys_state css;
+
+	/* Control group settings: */
+	int sched_type;
+	int prio;
+
+	/* Bandwidth setting: shares value set by user */
+	u64 shares_cfg;
+	u64 shares_cfg_red;
+	u32 weight;
+	u64 children_shares_sum;
+
+	/* Bandwidth setting: maximal quota in period */
+	s64 quota;
+	/* record the runtime of operators during the period */
+	s64 runtime;
+	s64 period;
+	struct hrtimer quota_timeout;
+	struct work_struct refill_work;
+	u64 qoslevel;
+
+	struct xsched_group_xcu_priv perxcu_priv[XSCHED_NR_CUS];
+
+	/* Groups hierarchcy */
+	struct xsched_group *parent;
+	struct list_head children_groups;
+	struct list_head group_node;
+
+	spinlock_t lock;
+
+	/* for XSE to move in perxcu */
+	struct list_head members;
+};
+
+#define XSCHED_RQ_OF(xse)                                                      \
+	(container_of(((xse)->cfs.cfs_rq), struct xsched_rq, cfs))
+
+#define XSCHED_RQ_OF_CFS_XSE(cfs_xse)                                          \
+	(container_of(((cfs_xse)->cfs_rq), struct xsched_rq, cfs))
+
+#define XSCHED_SE_OF(cfs_xse)                                                  \
+	(container_of((cfs_xse), struct xsched_entity, cfs))
+
+#define xcg_parent_grp_xcu(xcg)                                                \
+	((xcg)->self->parent->perxcu_priv[(xcg)->xcu_id])
+
+#define xse_parent_grp_xcu(xse_cfs)                                            \
+	(&((XSCHED_SE_OF(xse_cfs)                                                  \
+		    ->parent_grp->perxcu_priv[(XSCHED_SE_OF(xse_cfs))->xcu->id])))
+
+static inline struct xsched_group_xcu_priv *
+xse_this_grp_xcu(struct xsched_entity_cfs *xse_cfs)
+{
+	struct xsched_entity *xse;
+
+	xse = xse_cfs ? container_of(xse_cfs, struct xsched_entity, cfs) : NULL;
+	return xse ? container_of(xse, struct xsched_group_xcu_priv, xse) : NULL;
+}
+
+static inline struct xsched_group *
+xse_this_grp(struct xsched_entity_cfs *xse_cfs)
+{
+	return xse_cfs ? xse_this_grp_xcu(xse_cfs)->self : NULL;
 }
 
 /* Returns a pointer to an atomic_t variable representing a counter
@@ -515,6 +610,11 @@ int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg);
 struct vstream_metadata *xsched_vsm_fetch_first(struct vstream_info *vs);
 void submit_kick(struct vstream_info *vs, struct xcu_op_handler_params *params,
 		 struct vstream_metadata *vsm);
+/* Xsched group manage functions */
+int xsched_group_inherit(struct task_struct *tsk, struct xsched_entity *xse);
+void xcu_cg_init_common(struct xsched_group *xcg);
+void xcu_grp_shares_update(struct xsched_group *xg);
+void xsched_group_xse_detach(struct xsched_entity *xse);
 void enqueue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
 void dequeue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
 #endif /* __LINUX_XSCHED_H__ */
