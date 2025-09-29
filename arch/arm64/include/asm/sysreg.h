@@ -366,6 +366,7 @@
 #define ID_AA64PFR1_NMI_MASK		GENMASK(39, 36)
 #define HCRX_EL2_TALLINT		BIT(6)
 #define HCRX_EL2_TALLINT_MASK		GENMASK(6, 6)
+#define ALLINT_ALLINT			BIT(13)
 
 /*** Statistical Profiling Extension ***/
 
