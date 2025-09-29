@@ -5,11 +5,21 @@
 #include <linux/idr.h>
 #include <uapi/linux/xcu_vstream.h>
 
+#ifndef CONFIG_XSCHED_NR_CUS
+#define CONFIG_XSCHED_NR_CUS 1
+#endif /* !CONFIG_XSCHED_NR_CUS */
+#define XSCHED_NR_CUS CONFIG_XSCHED_NR_CUS
+
 extern struct xcu_group *xcu_group_root;
 
 enum xcu_type {
 	XCU_TYPE_ROOT,
 	XCU_TYPE_XPU,
+};
+
+enum xcu_version {
+	XCU_HW_V1,
+	XCU_HW_V2,
 };
 
 struct xcu_op_handler_params {
@@ -29,11 +39,30 @@ struct xcu_group {
 	/* sq id. */
 	uint32_t id;
 
+	/* Version of XCU group */
+	enum xcu_version ver;
+
 	/* Type of XCU group. */
 	enum xcu_type type;
 
 	/* IDR for the next layer of XCU group tree. */
 	struct idr next_layer;
+
+	/* Pointer to the previous XCU group in the XCU group tree. */
+	struct xcu_group *previous_layer;
+
+	/* Pointer to operation fn pointers object describing
+	 * this XCU group's callbacks.
+	 */
+	struct xcu_operation *opt;
+
+	/* Pointer to the XCU related to this XCU group. */
+	struct xsched_cu *xcu;
+
+	/* Mask of XCU ids associated with this XCU group
+	 * and this group's children's XCUs.
+	 */
+	DECLARE_BITMAP(xcu_mask, XSCHED_NR_CUS);
 };
 
 #ifdef CONFIG_XCU_SCHEDULER

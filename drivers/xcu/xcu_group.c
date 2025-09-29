@@ -16,7 +16,106 @@
  * more details.
  *
  */
+#include <linux/rwsem.h>
+#include <linux/slab.h>
 #include <linux/xcu_group.h>
+#include <linux/xsched.h>
+
+static DECLARE_RWSEM(xcu_group_rwsem);
+
+struct xcu_group *xcu_group_init(int id)
+{
+	struct xcu_group *node = kzalloc(sizeof(*node), GFP_KERNEL);
+
+	if (!node)
+		return NULL;
+
+	node->id = id;
+	node->type = XCU_TYPE_XPU;
+	idr_init(&node->next_layer);
+
+	return node;
+}
+EXPORT_SYMBOL(xcu_group_init);
+
+int __xcu_group_attach(struct xcu_group *new_group,
+				struct xcu_group *previous_group)
+{
+	int id = new_group->id;
+
+	if (id == -1)
+		id = idr_alloc(&previous_group->next_layer, new_group, 0,
+			       INT_MAX, GFP_KERNEL);
+	else
+		id = idr_alloc(&previous_group->next_layer, new_group, id,
+			       id + 1, GFP_KERNEL);
+
+	if (id < 0) {
+		XSCHED_ERR("Fail to attach xcu_group: id conflict @ %s\n",
+			   __func__);
+		return -EEXIST;
+	}
+	new_group->id = id;
+	new_group->previous_layer = previous_group;
+
+	return 0;
+}
+
+int xcu_group_attach(struct xcu_group *new_group,
+				struct xcu_group *previous_group)
+{
+	int ret;
+
+	down_write(&xcu_group_rwsem);
+	ret = __xcu_group_attach(new_group, previous_group);
+	up_write(&xcu_group_rwsem);
+
+	return ret;
+}
+EXPORT_SYMBOL(xcu_group_attach);
+
+static inline void __xcu_group_detach(struct xcu_group *group)
+{
+	if (!group || !group->previous_layer)
+		return;
+
+	idr_remove(&group->previous_layer->next_layer, group->id);
+	group->previous_layer = NULL;
+}
+
+void xcu_group_detach(struct xcu_group *group)
+{
+	down_write(&xcu_group_rwsem);
+	__xcu_group_detach(group);
+	up_write(&xcu_group_rwsem);
+}
+EXPORT_SYMBOL(xcu_group_detach);
+
+void xcu_group_free(struct xcu_group *group)
+{
+	idr_destroy(&group->next_layer);
+	if (group != xcu_group_root)
+		kfree(group);
+}
+EXPORT_SYMBOL(xcu_group_free);
+
+static struct xcu_group *__xcu_group_find_nolock(struct xcu_group *group,
+						int id)
+{
+	return idr_find(&group->next_layer, id);
+}
+
+struct xcu_group *xcu_group_find(struct xcu_group *group, int id)
+{
+	struct xcu_group *result;
+
+	down_read(&xcu_group_rwsem);
+	result = __xcu_group_find_nolock(group, id);
+	up_read(&xcu_group_rwsem);
+
+	return result;
+}
+EXPORT_SYMBOL(xcu_group_find);
 
 /* This function runs "run" callback for a given xcu_group
  * and a given vstream that are passed within
