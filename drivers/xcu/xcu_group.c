@@ -123,7 +123,12 @@ EXPORT_SYMBOL(xcu_group_find);
  */
 int xcu_run(struct xcu_op_handler_params *params)
 {
-	return 0;
+	if (!params->group->opt || !params->group->opt->run) {
+		XSCHED_ERR("No function [run] called.\n");
+		return -EINVAL;
+	}
+
+	return params->group->opt->run(params);
 }
 
 /* This function runs "wait" callback for a given xcu_group

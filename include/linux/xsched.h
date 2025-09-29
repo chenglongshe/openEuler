@@ -471,6 +471,8 @@ struct xsched_cu *xcu_find(uint32_t *type,
 /* Vstream metadata proccesing functions.*/
 int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg);
 struct vstream_metadata *xsched_vsm_fetch_first(struct vstream_info *vs);
+void submit_kick(struct vstream_info *vs, struct xcu_op_handler_params *params,
+		 struct vstream_metadata *vsm);
 void enqueue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
 void dequeue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
 #endif /* __LINUX_XSCHED_H__ */
