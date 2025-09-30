@@ -46,7 +46,6 @@ static void put_prev_ctx(struct xsched_entity *xse)
 	struct xsched_cu *xcu = xse->xcu;
 
 	lockdep_assert_held(&xcu->xcu_lock);
-
 	xse->class->put_prev_ctx(xse);
 	xse->last_exec_runtime = 0;
 	atomic_set(&xse->submitted_one_kick, 0);
@@ -505,16 +504,18 @@ static int xsched_schedule(void *input_xcu)
 			continue;
 
 		curr_xse = xcu->xrq.curr_xse;
-		if (curr_xse) { /* if not deleted yet */
-			put_prev_ctx(curr_xse);
-			if (!atomic_read(&curr_xse->kicks_pending_ctx_cnt)) {
-				dequeue_ctx(curr_xse, xcu);
-				XSCHED_DEBUG(
-					"%s: Dequeue xse %d due to zero kicks on xcu %u\n",
-					__func__, curr_xse->tgid, xcu->id);
-				curr_xse = xcu->xrq.curr_xse = NULL;
-			}
-		}
+		if (!curr_xse)
+			continue;
+
+		/* if not deleted yet */
+		put_prev_ctx(curr_xse);
+		if (!atomic_read(&curr_xse->kicks_pending_ctx_cnt))
+			dequeue_ctx(curr_xse, xcu);
+
+		if (xsched_quota_exceed(curr_xse->parent_grp))
+			dequeue_ctx(&curr_xse->parent_grp->perxcu_priv[xcu->id].xse, xcu);
+
+		xcu->xrq.curr_xse = NULL;
 	}
 
 	return err;

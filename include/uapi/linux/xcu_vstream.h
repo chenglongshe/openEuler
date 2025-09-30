@@ -28,6 +28,7 @@ typedef struct vstream_free_args { } vstream_free_args_t;
 
 typedef struct vstream_kick_args {
 	__u32 sqe_num;
+	__u32 exec_time;
 	__s32 timeout;
 	__s8 sqe[XCU_SQE_SIZE_MAX];
 } vstream_kick_args_t;
