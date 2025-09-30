@@ -17,6 +17,17 @@ enum xcu_type {
 	XCU_TYPE_XPU,
 };
 
+/**
+ * @group: value for this entry.
+ * @hash_node: hash node list.
+ * @dev_id: device id to bind with ctx.
+ */
+struct ctx_devid_revmap_data {
+	unsigned int dev_id;
+	struct xcu_group *group;
+	struct hlist_node hash_node;
+};
+
 struct xcu_op_handler_params {
 	int fd;
 	struct xcu_group *group;
