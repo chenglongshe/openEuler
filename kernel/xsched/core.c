@@ -42,19 +42,116 @@ static DEFINE_HASHTABLE(ctx_revmap, XCU_HASH_ORDER);
 
 static void put_prev_ctx(struct xsched_entity *xse)
 {
+	struct xsched_cu *xcu = xse->xcu;
+
+	lockdep_assert_held(&xcu->xcu_lock);
+
+	xse->class->put_prev_ctx(xse);
+	xse->last_exec_runtime = 0;
+	atomic_set(&xse->submitted_one_kick, 0);
+}
+
+static size_t select_work_def(struct xsched_cu *xcu, struct xsched_entity *xse)
+{
+	int kick_count;
+	struct vstream_info *vs;
+	unsigned int sum_exec_time = 0;
+	size_t kicks_submitted = 0;
+	struct vstream_metadata *vsm;
+	int not_empty;
+
+	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
+	XSCHED_DEBUG("Before decrement XSE kick_count=%u @ %s\n",
+		kick_count, __func__);
+
+	if (kick_count == 0) {
+		XSCHED_WARN("Try to select xse that has 0 kicks @ %s\n",
+			__func__);
+		return 0;
+	}
+
+	do {
+		not_empty = 0;
+		for_each_vstream_in_ctx(vs, xse->ctx) {
+			spin_lock(&vs->stream_lock);
+			vsm = xsched_vsm_fetch_first(vs);
+			spin_unlock(&vs->stream_lock);
+			if (vsm) {
+				list_add_tail(&vsm->node, &xcu->vsm_list);
+
+				sum_exec_time += vsm->exec_time;
+				kicks_submitted++;
+				xsched_dec_pending_kicks_xse(xse);
+				XSCHED_DEBUG(
+					"vs id = %d Kick submit exec_time %u sq_tail %u sqe_num %u sq_id %u @ %s\n",
+					vs->id, vsm->exec_time, vsm->sq_tail,
+					vsm->sqe_num, vsm->sq_id, __func__);
+				not_empty++;
+			}
+		}
+	} while (not_empty);
+
+	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
+	XSCHED_DEBUG("After decrement XSE kick_count=%d @ %s\n",
+		    kick_count, __func__);
+
+	xse->total_scheduled += kicks_submitted;
+
+	return kicks_submitted;
 }
 
 static struct xsched_entity *__raw_pick_next_ctx(struct xsched_cu *xcu)
 {
-	return NULL;
+	const struct xsched_class *class;
+	struct xsched_entity *next = NULL;
+	size_t scheduled;
+
+	lockdep_assert_held(&xcu->xcu_lock);
+	for_each_xsched_class(class) {
+		next = class->pick_next_ctx(xcu);
+		if (next) {
+			scheduled = class->select_work ?
+				class->select_work(xcu, next) : select_work_def(xcu, next);
+
+			XSCHED_DEBUG("xse %d scheduled=%zu total=%zu @ %s\n",
+				next->tgid, scheduled, next->total_scheduled, __func__);
+			break;
+		}
+	}
+
+	return next;
 }
 
 void enqueue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu)
 {
+	lockdep_assert_held(&xcu->xcu_lock);
+
+	if (xse_integrity_check(xse)) {
+		XSCHED_ERR("Fail to check xse integrity @ %s\n", __func__);
+		return;
+	}
+
+	if (!xse->on_rq) {
+		xse->on_rq = true;
+		xse->class->enqueue_ctx(xse, xcu);
+		XSCHED_DEBUG("Enqueue xse %d @ %s\n", xse->tgid, __func__);
+	}
 }
 
 void dequeue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu)
 {
+	lockdep_assert_held(&xcu->xcu_lock);
+
+	if (xse_integrity_check(xse)) {
+		XSCHED_ERR("Fail to check xse integrity @ %s\n", __func__);
+		return;
+	}
+
+	if (xse->on_rq) {
+		xse->class->dequeue_ctx(xse);
+		xse->on_rq = false;
+		XSCHED_DEBUG("Dequeue xse %d @ %s\n", xse->tgid, __func__);
+	}
 }
 
 static int delete_ctx(struct xsched_context *ctx)
@@ -220,6 +317,15 @@ struct xsched_cu *xcu_find(uint32_t *type,
 
 int xsched_xse_set_class(struct xsched_entity *xse)
 {
+	switch (xse->task_type) {
+	case XSCHED_TYPE_RT:
+		xse->class = &rt_xsched_class;
+		XSCHED_DEBUG("Context is in RT class %s\n", __func__);
+		break;
+	default:
+		XSCHED_ERR("Xse has incorrect class @ %s\n", __func__);
+		return -EINVAL;
+	}
 	return 0;
 }
 
@@ -231,6 +337,10 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 	atomic_set(&xse->kicks_pending_ctx_cnt, 0);
 	atomic_set(&xse->submitted_one_kick, 0);
 
+	xse->total_scheduled = 0;
+	xse->total_submitted = 0;
+	xse->last_exec_runtime = 0;
+	xse->task_type = XSCHED_TYPE_RT;
 	xse->fd = ctx->fd;
 	xse->tgid = ctx->tgid;
 
@@ -252,6 +362,25 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 		return err;
 	}
 
+	if (xse_is_rt(xse)) {
+		xse->rt.state = XSE_PREPARE;
+		xse->rt.flag = XSE_TIF_NONE;
+		xse->rt.prio = GET_VS_TASK_PRIO_RT(vs);
+		xse->rt.kick_slice = XSCHED_RT_KICK_SLICE;
+
+		/* XSE priority is being decreased by 1 here because
+		 * in libucc priority counter starts from 1 while in the
+		 * kernel counter starts with 0.
+		 *
+		 * This inconsistency has to be solve in libucc in the
+		 * future rather that having this confusing decrement to
+		 * priority inside the kernel.
+		 */
+		if (xse->rt.prio > 0)
+			xse->rt.prio -= 1;
+
+		INIT_LIST_HEAD(&xse->rt.list_node);
+	}
 	WRITE_ONCE(xse->on_rq, false);
 
 	spin_lock_init(&xse->xse_lock);
@@ -261,6 +390,11 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 static int __xsched_submit(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
 	return 0;
+}
+
+static inline bool should_preempt(struct xsched_entity *xse)
+{
+	return xse->class->check_preempt(xse);
 }
 
 static int xsched_schedule(void *input_xcu)
@@ -311,19 +445,37 @@ static int xsched_schedule(void *input_xcu)
 	return err;
 }
 
+/* Initialize xsched rt runqueue during kernel init.
+ * Should only be called from xsched_init function.
+ */
+static inline void xsched_rt_rq_init(struct xsched_cu *xcu)
+{
+	int prio = 0;
+
+	xcu->xrq.rt.nr_running = 0;
+
+	for_each_xse_prio(prio) {
+		INIT_LIST_HEAD(&xcu->xrq.rt.rq[prio]);
+		xcu->xrq.rt.prio_nr_running[prio] = 0;
+		atomic_set(&xcu->xrq.rt.prio_nr_kicks[prio], 0);
+	}
+}
+
 /* Initialize xsched classes' runqueues. */
 static inline void xsched_rq_init(struct xsched_cu *xcu)
 {
 	xcu->xrq.nr_running = 0;
 	xcu->xrq.curr_xse = NULL;
+	xcu->xrq.class = &rt_xsched_class;
 	xcu->xrq.state = XRQ_STATE_IDLE;
+	xsched_rt_rq_init(xcu);
 }
 
 /* Initializes all xsched XCU objects.
  * Should only be called from xsched_xcu_register function.
  */
 static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
-			    int xcu_id)
+				int xcu_id)
 {
 	bitmap_clear(xcu_group_root->xcu_mask, 0, XSCHED_NR_CUS);
 
@@ -331,16 +483,18 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 	xcu->state = XSCHED_XCU_NONE;
 	xcu->group = group;
 
+	atomic_set(&xcu->pending_kicks_rt, 0);
 	atomic_set(&xcu->has_active, 0);
 
 	INIT_LIST_HEAD(&xcu->vsm_list);
-
 	init_waitqueue_head(&xcu->wq_xcu_idle);
-
 	mutex_init(&xcu->xcu_lock);
 
 	/* Mark current XCU in a mask inside XCU root group. */
 	set_bit(xcu->id, xcu_group_root->xcu_mask);
+
+	/* Initialize current XCU's runqueue. */
+	xsched_rq_init(xcu);
 
 	/* This worker should set XCU to XSCHED_XCU_WAIT_IDLE.
 	 * If after initialization XCU still has XSCHED_XCU_NONE
