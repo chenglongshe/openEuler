@@ -32,6 +32,89 @@ spinlock_t xcu_mgr_lock;
 DECLARE_BITMAP(xcu_online_mask, XSCHED_NR_CUS);
 struct xsched_cu *xsched_cu_mgr[XSCHED_NR_CUS];
 
+/* Storage list for contexts. */
+struct list_head xsched_ctx_list;
+DEFINE_MUTEX(xsched_ctx_list_mutex);
+
+/* Frees a given vstream and also frees and dequeues it's context
+ * if a given vstream is the last and only vstream attached to it's
+ * corresponding context object.
+ */
+void xsched_task_free(struct kref *kref)
+{
+	struct xsched_context *ctx;
+	vstream_info_t *vs, *tmp;
+
+	ctx = container_of(kref, struct xsched_context, kref);
+
+	mutex_lock(&xsched_ctx_list_mutex);
+	list_for_each_entry_safe(vs, tmp, &ctx->vstream_list, ctx_node) {
+		list_del(&vs->ctx_node);
+		kfree(vs->data);
+		kfree(vs);
+	}
+
+	list_del(&ctx->ctx_node);
+	mutex_unlock(&xsched_ctx_list_mutex);
+
+	kfree(ctx);
+}
+
+int vstream_bind_to_xcu(vstream_info_t *vstream_info)
+{
+	struct xsched_cu *xcu_found = NULL;
+	uint32_t type = XCU_TYPE_XPU;
+
+	xcu_found = xcu_find(&type, vstream_info->dev_id, vstream_info->channel_id);
+	if (!xcu_found)
+		return -EINVAL;
+
+	/* Bind vstream to a xcu. */
+	vstream_info->xcu = xcu_found;
+	XSCHED_DEBUG("XCU bound to a vstream: type=%u, dev_id=%u, chan_id=%u.\n",
+		type, vstream_info->dev_id, vstream_info->channel_id);
+
+	return 0;
+}
+
+struct xsched_cu *xcu_find(uint32_t *type,
+				uint32_t dev_id, uint32_t channel_id)
+{
+	struct xcu_group *group = NULL;
+	uint32_t local_type = *type;
+
+	/* Find xcu by type. */
+	group = xcu_group_find(xcu_group_root, local_type);
+	if (group == NULL) {
+		XSCHED_ERR("Fail to find type group.\n");
+		return NULL;
+	}
+
+	/* Find device id group. */
+	group = xcu_group_find(group, dev_id);
+	if (group == NULL) {
+		XSCHED_ERR("Fail to find device group.\n");
+		return NULL;
+	}
+	/* Find channel id group. */
+	group = xcu_group_find(group, channel_id);
+	if (group == NULL) {
+		XSCHED_ERR("Fail to find channel group.\n");
+		return NULL;
+	}
+
+	*type = local_type;
+	XSCHED_DEBUG("XCU found: type=%u, dev_id=%u, chan_id=%u.\n",
+		local_type, dev_id, channel_id);
+
+	return group->xcu;
+}
+
+int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
+{
+	return 0;
+}
+
 static int xsched_schedule(void *input_xcu)
 {
 	return 0;
@@ -108,3 +191,13 @@ int xsched_xcu_register(struct xcu_group *group)
 	return 0;
 }
 EXPORT_SYMBOL(xsched_xcu_register);
+
+int __init xsched_init(void)
+{
+	/* Initializing global Xsched context list. */
+	INIT_LIST_HEAD(&xsched_ctx_list);
+
+	return 0;
+}
+
+late_initcall(xsched_init);
