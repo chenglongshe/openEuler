@@ -216,7 +216,7 @@ static size_t select_work_rt(struct xsched_cu *xcu, struct xsched_entity *xse)
 }
 
 const struct xsched_class rt_xsched_class = {
-	.next = NULL,
+	.next = &fair_xsched_class,
 	.dequeue_ctx = dequeue_ctx_rt,
 	.enqueue_ctx = enqueue_ctx_rt,
 	.pick_next_ctx = pick_next_ctx_rt,
