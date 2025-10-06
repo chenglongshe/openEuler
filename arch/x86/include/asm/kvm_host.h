@@ -686,7 +686,7 @@ struct kvm_hypervisor_cpuid {
 	u32 limit;
 };
 
-#ifdef CONFIG_KVM_XEN
+#if defined(CONFIG_KVM_XEN) || defined(CONFIG_KABI_COMPAT)
 /* Xen HVM per vcpu emulation context */
 struct kvm_vcpu_xen {
 	u64 hypercall_rip;
@@ -941,7 +941,7 @@ struct kvm_vcpu_arch {
 	bool hyperv_enabled;
 	struct kvm_vcpu_hv *hyperv;
 #endif
-#ifdef CONFIG_KVM_XEN
+#if defined(CONFIG_KVM_XEN) || defined(CONFIG_KABI_COMPAT)
 	struct kvm_vcpu_xen xen;
 #endif
 	cpumask_var_t wbinvd_dirty_mask;
@@ -1140,7 +1140,7 @@ struct msr_bitmap_range {
 	unsigned long *bitmap;
 };
 
-#ifdef CONFIG_KVM_XEN
+#if defined(CONFIG_KVM_XEN) || defined(CONFIG_KABI_COMPAT)
 /* Xen emulation context */
 struct kvm_xen {
 	struct mutex xen_lock;
@@ -1266,10 +1266,10 @@ struct kvm_arch {
 	unsigned long n_max_mmu_pages;
 	unsigned int indirect_shadow_pages;
 	u8 mmu_valid_gen;
-	u8 vm_type;
-	bool has_private_mem;
-	bool has_protected_state;
-	bool pre_fault_allowed;
+	KABI_EXTEND(u8 vm_type)
+	KABI_EXTEND(bool has_private_mem)
+	KABI_EXTEND(bool has_protected_state)
+	KABI_EXTEND(bool pre_fault_allowed)
 	struct hlist_head mmu_page_hash[KVM_NUM_MMU_PAGES];
 	struct list_head active_mmu_pages;
 	struct list_head zapped_obsolete_pages;
@@ -1361,7 +1361,7 @@ struct kvm_arch {
 	struct kvm_hv hyperv;
 #endif
 
-#ifdef CONFIG_KVM_XEN
+#if defined(CONFIG_KVM_XEN) || defined(CONFIG_KABI_COMPAT)
 	struct kvm_xen xen;
 #endif
 
