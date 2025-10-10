@@ -184,6 +184,7 @@ static size_t select_work_rt(struct xsched_cu *xcu, struct xsched_entity *xse)
 	int kick_count, scheduled = 0;
 	struct vstream_info *vs;
 	struct vstream_metadata *vsm;
+	struct xcu_op_handler_params params;
 
 	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);
 	XSCHED_DEBUG("Before decrement XSE kick_count=%d @ %s\n",
@@ -203,6 +204,22 @@ static size_t select_work_rt(struct xsched_cu *xcu, struct xsched_entity *xse)
 			xsched_dec_pending_kicks_xse(xse);
 		}
 		spin_unlock(&vs->stream_lock);
+	}
+
+	/*
+	 * Iterate over all vstreams in context:
+	 * Set wr_cqe bit in last computing task in vsm_list
+	 */
+	for_each_vstream_in_ctx(vs, xse->ctx) {
+		list_for_each_entry_reverse(vsm, &xcu->vsm_list, node) {
+			if (vsm->parent == vs) {
+				params.group = vsm->parent->xcu->group;
+				params.param_1 = &(int){SQE_SET_NOTIFY};
+				params.param_2 = &vsm->sqe;
+				xcu_sqe_op(&params);
+				break;
+			}
+		}
 	}
 
 	kick_count = atomic_read(&xse->kicks_pending_ctx_cnt);

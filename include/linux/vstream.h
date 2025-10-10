@@ -13,15 +13,18 @@
  * to be processed by a driver.
  */
 typedef struct vstream_metadata {
-	uint32_t exec_time;
 	/* A value of SQ tail that has been passed with the
 	 * kick that is described by this exact metadata object.
 	 */
 	uint32_t sq_tail;
 	uint32_t sqe_num;
 	uint32_t sq_id;
+	uint8_t sqe[XCU_SQE_SIZE_MAX];
+
+	/* Report buffer for fake read. */
+	int8_t cqe[XCU_CQE_BUF_SIZE];
+	uint32_t cqe_num;
 	int32_t timeout;
-	int8_t sqe[XCU_SQE_SIZE_MAX];
 
 	/* A node for metadata list */
 	struct list_head node;
