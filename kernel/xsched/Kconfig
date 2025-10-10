@@ -34,3 +34,18 @@ config XSCHED_NR_CUS
       This option defines the maximum number of Compute Units (CUs) that can be
       managed by the XSched scheduler, consider changing this value proportionally
       to the number of available XCU cores.
+
+config CGROUP_XCU
+    bool "XCU bandwidth control and group scheduling for xsched_cfs"
+    default n
+    depends on XCU_SCHEDULER
+    help
+      This option enables the extended Compute Unit (XCU) resource controller for
+      CFS task groups, providing hierarchical scheduling and fine-grained bandwidth
+      allocation capabilities. Key features include:
+      - Proportional XCU time distribution across cgroups based on shares/quotas
+      - Nested group scheduling with latency isolation
+      - Integration with xsched_cfs for fair CPU resource management
+
+      Required for systems requiring fine-grained resource control in cgroups.
+      If unsure, say N.
