@@ -30,7 +30,7 @@
 #endif
 
 static DEFINE_SPINLOCK(g_kbox_super_block_lock);
-static DEFINE_SEMAPHORE(user_sem);
+static DEFINE_SEMAPHORE(user_sem, 1);
 
 union char_int_transfer_u {
 	int data_int;

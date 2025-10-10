@@ -36,11 +36,7 @@ static DEFINE_PER_CPU(union sxe_trace_info, sxe_trace_id);
 
 #define NS_TO_MS_UNIT (1000000)
 
-#ifdef DEFINE_SEMAPHORE_NEED_CNT
 DEFINE_SEMAPHORE(g_hdc_sema, 1);
-#else
-DEFINE_SEMAPHORE(g_hdc_sema);
-#endif
 
 static void sxe_trace_id_alloc(u64 *trace_id)
 {
