@@ -21,12 +21,7 @@
 #include <linux/delay.h>
 
 #ifdef CONFIG_XCU_VSTREAM
-#define MAX_VSTREAM_NUM 512
-
-static DEFINE_MUTEX(vs_mutex);
-static vstream_info_t *vstream_array[MAX_VSTREAM_NUM];
-
-static int vstream_del(uint32_t vstream_id);
+static int vstream_del(vstream_info_t *vstream, uint32_t vstream_id);
 static int vstream_file_release(struct inode *inode, struct file *file);
 static const struct file_operations vstreamfd_fops = {
 	.release = vstream_file_release,
@@ -44,13 +39,8 @@ static inline void vstream_file_put(struct file *vstream_file)
 
 static int vstream_file_create(struct vstream_info *vs)
 {
-	int err = anon_inode_getfd("[vstreamfd]",
-		&vstreamfd_fops, vs, O_RDWR | O_CLOEXEC | O_NONBLOCK);
-	if (err < 0)
-		XSCHED_ERR("Fail to alloc anon inode vs %u @ %s\n",
-			vs->id, __func__);
-
-	return err;
+	return anon_inode_getfd("[vstreamfd]", &vstreamfd_fops, vs,
+		O_RDWR | O_CLOEXEC | O_NONBLOCK);
 }
 
 static int vstream_destroy(vstream_info_t *vstream)
@@ -59,7 +49,7 @@ static int vstream_destroy(vstream_info_t *vstream)
 	struct xsched_context *ctx = NULL;
 	struct xsched_entity *xse = NULL;
 
-	err = vstream_del(vstream->id);
+	err = vstream_del(vstream, vstream->id);
 	if (err)
 		return err;
 
@@ -104,7 +94,9 @@ static void init_xsched_ctx(struct xsched_context *ctx,
 static int alloc_ctx_from_vstream(struct vstream_info *vstream_info,
 				struct xsched_context **ctx)
 {
-	*ctx = ctx_find_by_tgid(vstream_info->tgid);
+	struct xsched_cu *xcu = vstream_info->xcu;
+
+	*ctx = ctx_find_by_tgid_and_xcu(vstream_info->tgid, xcu);
 	if (*ctx)
 		return 0;
 
@@ -123,8 +115,8 @@ static int alloc_ctx_from_vstream(struct vstream_info *vstream_info,
 		kfree(*ctx);
 		return -EINVAL;
 	}
-
-	list_add(&(*ctx)->ctx_node, &xsched_ctx_list);
+	list_add(&(*ctx)->ctx_node, &xcu->ctx_list);
+	++xcu->nr_ctx;
 
 	return 0;
 }
@@ -133,27 +125,26 @@ static int alloc_ctx_from_vstream(struct vstream_info *vstream_info,
 static int vstream_bind_to_ctx(struct vstream_info *vs)
 {
 	struct xsched_context *ctx = NULL;
-	int alloc_err = 0;
+	struct xsched_cu *xcu = vs->xcu;
+	int err = 0;
 
-	mutex_lock(&xsched_ctx_list_mutex);
-	ctx = ctx_find_by_tgid(vs->tgid);
+	mutex_lock(&xcu->ctx_list_lock);
+	ctx = ctx_find_by_tgid_and_xcu(vs->tgid, xcu);
 	if (ctx) {
 		XSCHED_DEBUG("Ctx %d found @ %s\n", vs->tgid, __func__);
 		kref_get(&ctx->kref);
 	} else {
-		alloc_err = alloc_ctx_from_vstream(vs, &ctx);
-		if (alloc_err)
+		err = alloc_ctx_from_vstream(vs, &ctx);
+		if (err)
 			goto out_err;
 	}
 
 	vs->ctx = ctx;
-	vs->xcu = ctx->xse.xcu;
-	ctx->dev_id = vs->dev_id;
 	list_add(&vs->ctx_node, &vs->ctx->vstream_list);
 
 out_err:
-	mutex_unlock(&xsched_ctx_list_mutex);
-	return alloc_err;
+	mutex_unlock(&xcu->ctx_list_lock);
+	return err;
 }
 
 static vstream_info_t *vstream_create(struct vstream_args *arg)
@@ -166,7 +157,6 @@ static vstream_info_t *vstream_create(struct vstream_args *arg)
 		return NULL;
 	}
 
-	vstream->inode_fd = vstream_file_create(vstream);
 	vstream->dev_id = arg->dev_id;
 	vstream->channel_id = arg->channel_id;
 	vstream->kicks_count = 0;
@@ -183,63 +173,77 @@ static vstream_info_t *vstream_create(struct vstream_args *arg)
 
 static int vstream_add(vstream_info_t *vstream, uint32_t id)
 {
+	int err = 0;
+	struct xsched_cu *xcu = vstream->xcu;
+
 	if (id >= MAX_VSTREAM_NUM) {
-		XSCHED_ERR("vstream id out of range.\n");
+		XSCHED_ERR("Vstream id=%u out of range @ %s.\n",
+			id, __func__);
 		return -EINVAL;
 	}
 
-	mutex_lock(&vs_mutex);
-	if (vstream_array[id] != NULL) {
-		mutex_unlock(&vs_mutex);
+	mutex_lock(&xcu->vs_array_lock);
+	if (xcu->vs_array[id] != NULL) {
 		XSCHED_ERR("Vstream id=%u cell is busy.\n", id);
-		return -EINVAL;
+		err = -EINVAL;
+		goto out_err;
 	}
-	vstream_array[id] = vstream;
-	mutex_unlock(&vs_mutex);
+	xcu->vs_array[id] = vstream;
 
-	return 0;
+out_err:
+	mutex_unlock(&xcu->vs_array_lock);
+	return err;
 }
 
-static int vstream_del(uint32_t vstream_id)
+static int vstream_del(vstream_info_t *vstream, uint32_t vstream_id)
 {
+	struct xsched_cu *xcu = vstream->xcu;
+
 	if (vstream_id >= MAX_VSTREAM_NUM) {
-		XSCHED_ERR("Vstream id=%u out of range.\n", vstream_id);
+		XSCHED_ERR("Vstream id=%u out of range @ %s.\n",
+			vstream_id, __func__);
 		return -EINVAL;
 	}
 
-	mutex_lock(&vs_mutex);
-	vstream_array[vstream_id] = NULL;
-	mutex_unlock(&vs_mutex);
+	mutex_lock(&xcu->vs_array_lock);
+	xcu->vs_array[vstream_id] = NULL;
+	mutex_unlock(&xcu->vs_array_lock);
 	return 0;
 }
 
-static vstream_info_t *vstream_get(uint32_t vstream_id)
+static vstream_info_t *vstream_get(struct xsched_cu *xcu, uint32_t vstream_id)
 {
 	vstream_info_t *vstream = NULL;
 
 	if (vstream_id >= MAX_VSTREAM_NUM) {
-		XSCHED_ERR("Vstream id=%u out of range.\n", vstream_id);
+		XSCHED_ERR("Vstream id=%u out of range @ %s.\n",
+			vstream_id, __func__);
 		return NULL;
 	}
 
-	mutex_lock(&vs_mutex);
-	vstream = vstream_array[vstream_id];
-	mutex_unlock(&vs_mutex);
+	mutex_lock(&xcu->vs_array_lock);
+	vstream = xcu->vs_array[vstream_id];
+	mutex_unlock(&xcu->vs_array_lock);
 
 	return vstream;
 }
 
 static vstream_info_t *
-vstream_get_by_user_stream_id(uint32_t user_stream_id)
+vstream_get_by_user_stream_id(struct xsched_cu *xcu, uint32_t user_stream_id)
 {
 	int id;
+	static vstream_info_t *ret;
 
+	mutex_lock(&xcu->vs_array_lock);
 	for (id = 0; id < MAX_VSTREAM_NUM; id++) {
-		if (vstream_array[id] != NULL &&
-			vstream_array[id]->user_stream_id == user_stream_id)
-			return vstream_array[id];
+		if (xcu->vs_array[id] != NULL &&
+			xcu->vs_array[id]->user_stream_id == user_stream_id) {
+			ret = xcu->vs_array[id];
+			break;
+		}
 	}
-	return NULL;
+	mutex_unlock(&xcu->vs_array_lock);
+	return ret;
 }
 
 static int sqcq_alloc(struct vstream_args *arg)
@@ -262,7 +266,7 @@ static int sqcq_alloc(struct vstream_args *arg)
 	vstream->task_type = arg->task_type;
 
 	ret = vstream_bind_to_xcu(vstream);
-	if (ret < 0) {
+	if (ret) {
 		ret = -EINVAL;
 		goto out_err_vstream_free;
 	}
@@ -290,23 +294,27 @@ static int sqcq_alloc(struct vstream_args *arg)
 	vstream->sqcq_type = va_args->type;
 
 	ret = vstream_bind_to_ctx(vstream);
-	if (ret < 0)
+	if (ret)
 		goto out_err_vstream_free;
 
 	ctx = vstream->ctx;
+	ret = vstream_file_create(vstream);
+	if (ret < 0) {
+		XSCHED_ERR("Fail to alloc anon inode for vstream %u @ %s\n",
+			vstream->id, __func__);
+		goto out_err_vstream_free;
+	}
+	vstream->inode_fd = ret;
 
 	/* Add new vstream to array after allocating inode */
 	ret = vstream_add(vstream, vstream->id);
-	if (ret < 0)
+	if (ret)
 		goto out_err_vstream_free;
 
 	return 0;
 
 out_err_vstream_free:
 	kfree(vstream);
-	XSCHED_ERR("Exit %s with error, current_pid=%d, err=%d.\n",
-		__func__, current->pid, ret);
-
 	return ret;
 }
 
@@ -317,20 +325,17 @@ static int logic_cq_alloc(struct vstream_args *arg)
 	vstream_info_t *vstream = NULL;
 	vstream_alloc_args_t *logic_cq_alloc_para = &arg->va_args;
 	struct xsched_cu *xcu_found = NULL;
-	uint32_t logic_cq_id = 0, type = XCU_TYPE_XPU;
+	uint32_t logic_cq_id = 0;
+	uint32_t type = XCU_TYPE_XPU;
 
-	vstream = vstream_get_by_user_stream_id(
+	xcu_found = xcu_find(&type, arg->dev_id, arg->channel_id);
+	if (!xcu_found)
+		return -EINVAL;
+
+	vstream = vstream_get_by_user_stream_id(xcu_found,
 		logic_cq_alloc_para->user_stream_id);
-	if (!vstream) {
-		xcu_found = xcu_find(&type, arg->dev_id, arg->channel_id);
-		if (!xcu_found) {
-			err = -EINVAL;
-			goto out_err;
-		}
-	} else {
+	if (vstream)
 		xcu_found = vstream->xcu;
-	}
-
 	params.group = xcu_found->group;
 	params.fd = arg->fd;
 	params.payload = arg->payload;
@@ -338,21 +343,12 @@ static int logic_cq_alloc(struct vstream_args *arg)
 	err = xcu_logic_alloc(&params);
 	if (err) {
 		XSCHED_ERR("Fail to alloc logic CQ memory to a vstream.\n");
-		goto out_err;
+		return err;
 	}
+	if (vstream)
+		vstream->logic_vcq_id = logic_cq_id;
 
-	vstream->logic_vcq_id = logic_cq_id;
-	XSCHED_DEBUG(
-		"Vstream logic CQ: dev_id=%u, stream_id=%u, logic_cqid=%u @ %s\n",
-		vstream->dev_id, vstream->user_stream_id,
-		vstream->logic_vcq_id, __func__);
 	return 0;
-
-out_err:
-	XSCHED_ERR(
-		"Exit %s with error, current_pid=%d, err=%d.\n",
-		__func__, current->pid, err);
-	return err;
 }
 
 int vstream_alloc(struct vstream_args *arg)
@@ -372,11 +368,17 @@ int vstream_free(struct vstream_args *arg)
 {
 	struct file *vs_file;
 	struct xcu_op_handler_params params;
+	struct xsched_cu *xcu_found;
 	uint32_t vstream_id = arg->sq_id;
+	uint32_t type = XCU_TYPE_XPU;
 	vstream_info_t *vstream = NULL;
 	int err = 0;
 
-	vstream = vstream_get(vstream_id);
+	xcu_found = xcu_find(&type, arg->dev_id, arg->channel_id);
+	if (!xcu_found)
+		return -EINVAL;
+
+	vstream = vstream_get(xcu_found, vstream_id);
 	if (!vstream) {
 		XSCHED_ERR("Fail to free NULL vstream, vstream id=%u\n", vstream_id);
 		return -EINVAL;
@@ -387,10 +389,13 @@ int vstream_free(struct vstream_args *arg)
 	params.payload = arg->payload;
 
 	vs_file = vstream_file_get(vstream->inode_fd);
-	vstream_destroy(vstream);
-	vs_file->private_data = NULL;
-	vstream_file_put(vs_file);
+	if (vs_file) {
+		vs_file->private_data = NULL;
+		vstream_file_put(vs_file);
+	}
 
+	/* After vstream_get(), destroying the vstream may not fail */
+	vstream_destroy(vstream);
 	err = xcu_finish(&params);
 	if (err)
 		XSCHED_ERR("Fail to free vstream sqId=%u, cqId=%u.\n",
@@ -402,23 +407,25 @@ int vstream_free(struct vstream_args *arg)
 int vstream_kick(struct vstream_args *arg)
 {
 	vstream_info_t *vstream;
-	int vstream_id = arg->sq_id;
+	struct xsched_cu *xcu = NULL;
 	struct xsched_entity *xse;
 	int err = 0;
+	uint32_t vstream_id = arg->sq_id;
+	uint32_t type = XCU_TYPE_XPU;
 
-	struct xsched_cu *xcu = NULL;
-
-	XSCHED_CALL_STUB();
+	xcu = xcu_find(&type, arg->dev_id, arg->channel_id);
+	if (!xcu)
+		return -EINVAL;
 
 	/* Get vstream. */
-	vstream = vstream_get(vstream_id);
+	vstream = vstream_get(xcu, vstream_id);
 	if (!vstream || !vstream->ctx) {
-		XSCHED_ERR("Vstream NULL or doesn't have a context.\n");
+		XSCHED_ERR("Vstream NULL or doesn't have a context. "
+			"vstream_id=%u, dev_id=%u\n", vstream_id, arg->dev_id);
 		return -EINVAL;
 	}
 
 	xse = &vstream->ctx->xse;
-	xcu = vstream->xcu;
 	XSCHED_DEBUG("New kick on xse %d @ %s\n", xse->tgid, __func__);
 
 	do {
@@ -474,17 +481,17 @@ SYSCALL_DEFINE2(vstream_manage, struct vstream_args __user *, arg, int, cmd)
 	struct vstream_args vstream_arg;
 
 	if (copy_from_user(&vstream_arg, arg, sizeof(struct vstream_args))) {
-		pr_err("copy_from_user failed\n");
+		XSCHED_ERR("copy_from_user failed\n");
 		return -EFAULT;
 	}
 
 	res = vstream_command_table[cmd](&vstream_arg);
 	if (copy_to_user(arg, &vstream_arg, sizeof(struct vstream_args))) {
-		pr_err("copy_to_user failed\n");
+		XSCHED_ERR("copy_to_user failed\n");
 		return -EFAULT;
 	}
 
-	pr_debug("vstream_manage: cmd %d\n", cmd);
+	XSCHED_DEBUG("vstream_manage: cmd %d\n", cmd);
 	return res;
 }
 #else

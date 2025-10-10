@@ -7,8 +7,13 @@
 #include <linux/xcu_group.h>
 #include <linux/cgroup.h>
 #include <linux/vstream.h>
+
 #ifndef pr_fmt
 #define pr_fmt(fmt) fmt
+#endif
+
+#ifdef CONFIG_XCU_VSTREAM
+#define MAX_VSTREAM_NUM (512)
 #endif
 
 #define XSCHED_ERR_PREFIX "XSched [ERROR]: "
@@ -92,18 +97,14 @@ enum xse_flag {
 	XSE_TIF_BALANCE, /* Unused so far */
 };
 
-
 extern const struct xsched_class rt_xsched_class;
 extern const struct xsched_class fair_xsched_class;
 
 #define xsched_first_class (&rt_xsched_class)
-
 #define for_each_xsched_class(class)                                           \
 	for (class = xsched_first_class; class; class = class->next)
-
 #define for_each_xse_prio(prio)                                                \
 	for (prio = XSE_PRIO_LOW; prio < NR_XSE_PRIO; prio++)
-
 #define for_each_vstream_in_ctx(vs, ctx)                                       \
 	list_for_each_entry((vs), &((ctx)->vstream_list), ctx_node)
 
@@ -178,6 +179,16 @@ struct xsched_cu {
 	atomic_t pending_kicks_cfs;
 
 	struct task_struct *worker;
+
+	/* Storage list for contexts associated with this xcu */
+	uint32_t nr_ctx;
+	struct list_head ctx_list;
+	struct mutex ctx_list_lock;
+
+#ifdef CONFIG_XCU_VSTREAM
+	vstream_info_t *vs_array[MAX_VSTREAM_NUM];
+	struct mutex vs_array_lock;
+#endif
 
 	struct xsched_rq xrq;
 	struct list_head vsm_list;
@@ -531,20 +542,20 @@ extern struct list_head xsched_ctx_list;
 extern struct mutex xsched_ctx_list_mutex;
 
 /* Returns a pointer to xsched_context object corresponding to a given
- * device file descriptor provided by fd argument.
+ * tgid and xcu.
  */
-static inline struct xsched_context *ctx_find_by_tgid(pid_t tgid)
+static inline struct xsched_context *
+ctx_find_by_tgid_and_xcu(pid_t tgid, struct xsched_cu *xcu)
 {
 	struct xsched_context *ctx;
 	struct xsched_context *ret = NULL;
 
-	list_for_each_entry(ctx, &xsched_ctx_list, ctx_node) {
+	list_for_each_entry(ctx, &xcu->ctx_list, ctx_node) {
 		if (ctx->tgid == tgid) {
 			ret = ctx;
 			break;
 		}
 	}
-
 	return ret;
 }
 
@@ -586,7 +597,7 @@ static inline void xsched_init_vsm(struct vstream_metadata *vsm,
 	INIT_LIST_HEAD(&vsm->node);
 }
 
-int xsched_xcu_register(struct xcu_group *group);
+int xsched_xcu_register(struct xcu_group *group, int phys_id);
 void xsched_task_free(struct kref *kref);
 int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs);
 int ctx_bind_to_xcu(vstream_info_t *vstream_info, struct xsched_context *ctx);
