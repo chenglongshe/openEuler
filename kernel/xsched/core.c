@@ -34,6 +34,9 @@ struct xsched_cu *xsched_cu_mgr[XSCHED_NR_CUS];
 struct list_head xsched_ctx_list;
 DEFINE_MUTEX(xsched_ctx_list_mutex);
 
+static DEFINE_MUTEX(revmap_mutex);
+static DEFINE_HASHTABLE(ctx_revmap, XCU_HASH_ORDER);
+
 /* Frees a given vstream and also frees and dequeues it's context
  * if a given vstream is the last and only vstream attached to it's
  * corresponding context object.
@@ -56,6 +59,45 @@ void xsched_task_free(struct kref *kref)
 	mutex_unlock(&xsched_ctx_list_mutex);
 
 	kfree(ctx);
+}
+
+int ctx_bind_to_xcu(vstream_info_t *vstream_info, struct xsched_context *ctx)
+{
+	struct ctx_devid_revmap_data *revmap_data;
+	struct xsched_cu *xcu_found = NULL;
+	uint32_t type = XCU_TYPE_XPU;
+
+	/* Find XCU history. */
+	hash_for_each_possible(ctx_revmap, revmap_data, hash_node,
+				(unsigned long)ctx->dev_id) {
+		if (revmap_data && revmap_data->group) {
+			/* Bind ctx to group xcu.*/
+			ctx->xse.xcu = revmap_data->group->xcu;
+			return 0;
+		}
+	}
+
+	revmap_data = kzalloc(sizeof(struct ctx_devid_revmap_data), GFP_KERNEL);
+	if (revmap_data == NULL) {
+		XSCHED_ERR("Revmap_data is NULL @ %s\n", __func__);
+		return -ENOMEM;
+	}
+
+	xcu_found = xcu_find(&type, ctx->dev_id, vstream_info->channel_id);
+	if (!xcu_found)
+		return -EINVAL;
+
+	/* Bind ctx to an XCU from channel group. */
+	revmap_data->group = xcu_found->group;
+	ctx->xse.xcu = xcu_found;
+	vstream_info->xcu = xcu_found;
+	revmap_data->dev_id = vstream_info->dev_id;
+	XSCHED_DEBUG("Ctx bind to xcu %u @ %s\n", xcu_found->id, __func__);
+
+	hash_add(ctx_revmap, &revmap_data->hash_node,
+		 (unsigned long)ctx->dev_id);
+
+	return 0;
 }
 
 int vstream_bind_to_xcu(vstream_info_t *vstream_info)
@@ -108,9 +150,44 @@ struct xsched_cu *xcu_find(uint32_t *type,
 	return group->xcu;
 }
 
-int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
+int xsched_xse_set_class(struct xsched_entity *xse)
 {
 	return 0;
+}
+
+int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
+{
+	int err = 0;
+	struct xsched_entity *xse = &ctx->xse;
+
+	atomic_set(&xse->kicks_pending_ctx_cnt, 0);
+	atomic_set(&xse->submitted_one_kick, 0);
+
+	xse->fd = ctx->fd;
+	xse->tgid = ctx->tgid;
+
+	err = ctx_bind_to_xcu(vs, ctx);
+	if (err) {
+		XSCHED_ERR(
+			"Couldn't find valid xcu for vstream %u dev_id %u @ %s\n",
+			vs->id, vs->dev_id, __func__);
+		return -EINVAL;
+	}
+
+	xse->ctx = ctx;
+	if (likely(vs->xcu != NULL))
+		xse->xcu = vs->xcu;
+
+	err = xsched_xse_set_class(xse);
+	if (err) {
+		XSCHED_ERR("Failed to set xse class @ %s\n", __func__);
+		return err;
+	}
+
+	WRITE_ONCE(xse->on_rq, false);
+
+	spin_lock_init(&xse->xse_lock);
+	return err;
 }
 
 static int xsched_schedule(void *input_xcu)
