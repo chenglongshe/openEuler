@@ -148,7 +148,7 @@ static ssize_t bus_show(struct device *dev, struct device_attribute *attr, char 
 {
 	struct hisi_pcie_pmu *pcie_pmu = to_pcie_pmu(dev_get_drvdata(dev));
 
-	return sysfs_emit(buf, "%#04x\n", PCI_BUS_NUM(pcie_pmu->bdf_min));
+	return sysfs_emit(buf, "%#04x\n", (unsigned)PCI_BUS_NUM(pcie_pmu->bdf_min));
 }
 static DEVICE_ATTR_RO(bus);
 
