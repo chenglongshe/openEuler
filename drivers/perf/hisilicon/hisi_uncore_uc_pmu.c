@@ -67,7 +67,8 @@ static int hisi_uc_pmu_check_filter(struct perf_event *event)
 	    (HISI_GET_EVENTID(event) > HISI_UC_URING_EVENT_MAX))
 		dev_warn(uc_pmu->dev,
 			 "Only events: [%#x ~ %#x] support channel filtering!",
-			 HISI_UC_URING_EVENT_MIN, HISI_UC_URING_EVENT_MAX);
+			 (unsigned int)HISI_UC_URING_EVENT_MIN,
+			 (unsigned int)HISI_UC_URING_EVENT_MAX);
 
 	return 0;
 }
