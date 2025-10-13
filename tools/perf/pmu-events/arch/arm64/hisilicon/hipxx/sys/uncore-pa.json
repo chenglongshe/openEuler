@@ -1,0 +1,184 @@
+[
+    {
+	"EventCode": "0x00",
+	"EventName": "tx_req",
+	"BriefDescription": "Count of the requests transmitted by PA",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x01",
+	"EventName": "tx_dat",
+	"BriefDescription": "Count of the data transmitted by PA",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x02",
+	"EventName": "tx_snp",
+	"BriefDescription": "Count of the snoopy transmitted by PA",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x07",
+	"EventName": "rx_req",
+	"BriefDescription": "Count of the requests received by PA",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x08",
+	"EventName": "rx_dat",
+	"BriefDescription": "Count of the data received by PA",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x09",
+	"EventName": "rx_snp",
+	"BriefDescription": "Count of the snoopy received by PA",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x78",
+	"EventName": "pa_cycles",
+	"BriefDescription": "Count of PA cycles",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x78",
+	"EventName": "cycle",
+	"BriefDescription": "Count of PA cycles",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x40",
+	"EventName": "rx_req",
+	"BriefDescription": "Count of the requests flit from Ring to PA link0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x40",
+	"EventName": "pa_rx_req_link0",
+	"BriefDescription": "Count of the requests flit from Ring to PA link0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x41",
+	"EventName": "pa_rx_req_link1",
+	"BriefDescription": "Count of the requests flit from Ring to PA link1",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x42",
+	"EventName": "pa_rx_req_link2",
+	"BriefDescription": "Count of the requests flit from Ring to PA link2",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x43",
+	"EventName": "pa_rx_req_link3",
+	"BriefDescription": "Count of the requests flit from Ring to PA link3",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x44",
+	"EventName": "pa_rx_data_link0",
+	"BriefDescription": "Count of the data flit from Ring to PA link0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x45",
+	"EventName": "pa_rx_data_link1",
+	"BriefDescription": "Count of the data flit from Ring to PA link1",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x46",
+	"EventName": "pa_rx_data_link2",
+	"BriefDescription": "Count of the data flit from Ring to PA link2",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x47",
+	"EventName": "pa_rx_data_link3",
+	"BriefDescription": "Count of the data flit from Ring to PA link3",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x5c",
+	"EventName": "tx_req",
+	"BriefDescription": "Count of the total flit transmitted by PA link0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x60",
+	"EventName": "pa_tx_req_link0",
+	"BriefDescription": "Count of the requests flit from PA link0 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x61",
+	"EventName": "pa_tx_req_link1",
+	"BriefDescription": "Count of the requests flit from PA link1 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x62",
+	"EventName": "pa_tx_req_link2",
+	"BriefDescription": "Count of the requests flit from PA link2 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x63",
+	"EventName": "pa_tx_req_link3",
+	"BriefDescription": "Count of the requests flit from PA link3 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x64",
+	"EventName": "pa_tx_data_link0",
+	"BriefDescription": "Count of the data flit from PA link0 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x65",
+	"EventName": "pa_tx_data_link1",
+	"BriefDescription": "Count of the data flit from PA link1 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x66",
+	"EventName": "pa_tx_data_link2",
+	"BriefDescription": "Count of the data flit from PA link2 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    },
+    {
+	"EventCode": "0x67",
+	"EventName": "pa_tx_data_link3",
+	"BriefDescription": "Count of the data flit from PA link3 to Ring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sicl,pa"
+    }
+]

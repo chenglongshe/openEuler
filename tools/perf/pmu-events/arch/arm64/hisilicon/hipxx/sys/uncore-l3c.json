@@ -1,0 +1,448 @@
+[
+   {
+	"EventCode": "0x29",
+	"EventName": "l3c_back_invalid",
+	"BriefDescription": "Count number of L3C back invalid operations",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x3c",
+	"EventName": "l3c_cpu_evict",
+	"BriefDescription": "Count number of evict from CPU core",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x40",
+	"EventName": "l3c_retry_cpu",
+	"BriefDescription": "Count number of retry that L3C suppresses the CPU operations",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x41",
+	"EventName": "l3c_retry_ring",
+	"BriefDescription": "Count number of retry that L3C suppresses the ring operations",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x42",
+	"EventName": "atomic_tablehsnp_rejecten",
+	"BriefDescription": "Number of times the hydrasnp in the atomic table is rejected.",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x43",
+	"EventName": "atomic_tablerejecten",
+	"BriefDescription": "Number of times internal requests in the atomic table are rejected.",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x44",
+	"EventName": "atomic_tablealloc",
+	"BriefDescription": "Number of times the atomic table is allocated.",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x45",
+	"EventName": "atomic_tablevic",
+	"BriefDescription": "Number of times the atomic table is replaced.",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x46",
+	"EventName": "atomic_tabletimeout",
+	"BriefDescription": "Number of times the atomic table times out.",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x47",
+	"EventName": "atomic_tablehmerge",
+	"BriefDescription": "Number of times the atomic table performs hydrasnp merge protocol.",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x48",
+	"EventName": "l3c_hit",
+	"BriefDescription": "Count number of hit data from L3C to CPU core",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x7f",
+	"EventName": "l3c_cycles",
+	"BriefDescription": "Count of L3C cycles",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x7f",
+	"EventName": "cycles",
+	"BriefDescription": "Count of L3C cycles",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xb8",
+	"EventName": "l3c_ref",
+	"BriefDescription": "Count number of all CPU accessed L3C",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xb9",
+	"EventName": "dat_access",
+	"BriefDescription": "Count number of the cluster CPU accessed L3C",
+	"Filter": "tt_core=0xff",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xbc",
+	"EventName": "l3c_ref",
+	"BriefDescription": "Count number of all CPU accessed L3C",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+
+   },
+   {
+	"EventCode": "0xbd",
+	"EventName": "l3c2ring",
+	"BriefDescription": "Count number of the L3T return data to RING(64B)",
+	"Filter": "tt_core=0xff,ext=1",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xbd",
+	"EventName": "l3c2ring_ext",
+	"BriefDescription": "Count number of the L3T ext return data to RING(64B)",
+	"Filter": "tt_core=0xff,ext=2",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc0",
+	"EventName": "cpu_read_l3c_sum",
+	"Filter": "tt_core=0xff",
+	"BriefDescription": "Count of the requests issued by the cluster CPU read L3C",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc3",
+	"EventName": "l3c_read_hha_sum",
+	"Filter": "tt_core=0xff,tt_req=0x4",
+	"BriefDescription": "Count number of L3C read access to HHA",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xce",
+	"EventName": "l3t_retry_alloc",
+	"Filter": "tt_core=0xff",
+	"BriefDescription": "Count of the L3C retry CPU",
+	"Compat": "0x000000(30|40)",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc1",
+	"EventName": "l3t_dvmop_alloc",
+	"Filter": "tt_req=0x3",
+	"BriefDescription": "Number of DVMOp requests received by L3T",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc4",
+	"EventName": "l3t_aq_time_alloc",
+	"BriefDescription": "Total time spent by AQ buffer for marked requests",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc5",
+	"EventName": "l3t_pq_time_alloc",
+	"BriefDescription": "Total time spent by PQ buffer for marked requests",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc6",
+	"EventName": "l3t_snp_cpu_alloc",
+	"BriefDescription": "Number of SNPs sent by L3T to CPU",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xc8",
+	"EventName": "l3t_rxsnp_l3t_alloc",
+	"BriefDescription": "Number of SNPs received by L3T from RING",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xca",
+	"EventName": "l3t_rxhydrasnp_l3t_alloc",
+	"BriefDescription": "Number of HYDRASNPs received by L3T from RING",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xcb",
+	"EventName": "l3t_dbid_l3t_alloc",
+	"BriefDescription": "Number of CPU requests received by L3T",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0xcd",
+	"EventName": "l3t_wrnotram_alloc",
+	"BriefDescription": "Number of write requests received by L3T for MATA",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x00",
+	"EventName": "rd_cpipe",
+	"BriefDescription": "the number of CPIPEs from CPU send read request to L3",
+	"Filter": "ext=1",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x00",
+	"EventName": "rd_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU send read request to L3 ext",
+	"Filter": "ext=2",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x01",
+	"EventName": "rd_hit_cpipe",
+	"BriefDescription": "the number of CPIPEs from CPU read request hit to L3",
+	"Filter": "ext=1",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x01",
+	"EventName": "rd_hit_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU read request hit to L3 ext",
+	"Filter": "ext=2",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x02",
+	"EventName": "wr_cpipe",
+	"BriefDescription": "the number of CPIPEs from CPU send stream write request to L3",
+	"Compat": "0x00000040",
+	"Filter": "ext=1",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x02",
+	"EventName": "wr_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU send stream write request to L3 ext",
+	"Compat": "0x00000040",
+	"Filter": "ext=2",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x03",
+	"EventName": "wr_hit_cpipe",
+	"BriefDescription": "the number of CPIPEs from CPU stream write request hit to L3",
+	"Compat": "0x00000040",
+	"Filter": "ext=1",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x03",
+	"EventName": "wr_hit_cpipe_ext",
+	"BriefDescription": "the number of CPIPEs from CPU stream write request hit to L3 ext",
+	"Compat": "0x00000040",
+	"Filter": "ext=2",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x04",
+	"EventName": "io_rd_cpipe",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO send read request to CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x04",
+	"EventName": "io_rd_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO send read request to CPIPE to L3 ext",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x05",
+	"EventName": "io_rd_hit_cpipe",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO read request hit CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x05",
+	"EventName": "io_rd_hit_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO read request hit CPIPE to L3 ext",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x06",
+	"EventName": "io_wr_cpipe",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO send stream write request to CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x06",
+	"EventName": "io_wr_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO send stream write request to CPIPE to L3 ext",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x07",
+	"EventName": "io_wr_hit_cpipe",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of IO stream write request hit CPIPE to L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x07",
+	"EventName": "io_wr_hit_cpipe_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of IO stream write request hit CPIPE to L3 ext",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x0c",
+	"EventName": "victim_num",
+	"Filter": "ext=1",
+	"BriefDescription": "the number of victim entries in L3",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x0c",
+	"EventName": "victim_num_ext",
+	"Filter": "ext=2",
+	"BriefDescription": "the number of victim entries in L3 ext",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x0d",
+	"EventName": "l3d_compress_alloc_solo",
+	"BriefDescription": "the number of times that data is not compressed when alloc L3D data is compressed",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x0e",
+	"EventName": "l3d_compress_alloc_twins",
+	"BriefDescription": "the number of times that data is compressed when alloc L3D data is compressed",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x0f",
+	"EventName": "l3d_compress_vic_solo",
+	"BriefDescription": "the number of times that only 64-byte data is compressed during data replacement",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x10",
+	"EventName": "l3d_compress_vic_twins",
+	"BriefDescription": "the number of times that only 128-byte data is compressed during data replacement",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x12",
+	"EventName": "l3d_alloc",
+	"BriefDescription": "the number of l3d allocs",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x18",
+	"EventName": "rd_spipe",
+	"BriefDescription": "the number of SPipe from CPU send read request",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x19",
+	"EventName": "rd_hit_spipe",
+	"BriefDescription": "the number of SPipe from CPU read request hit",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x1a",
+	"EventName": "wr_spipe",
+	"BriefDescription": "the number of SPipe from CPU send stream write request",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x1b",
+	"EventName": "wr_hit_spipe",
+	"BriefDescription": "the number of SPipe from CPU stream write request hit",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x1c",
+	"EventName": "io_rd_spipe",
+	"BriefDescription": "the number of IO send read request to SPipe",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x1d",
+	"EventName": "io_rd_hit_spipe",
+	"BriefDescription": "the number of IO read request hit SPipe",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x1e",
+	"EventName": "io_wr_spipe",
+	"BriefDescription": "the number of IO send stream write request to SPipe",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   },
+   {
+	"EventCode": "0x1f",
+	"EventName": "io_wr_hit_spipe",
+	"BriefDescription": "the number of IO send stream write request hit to SPipe",
+	"Compat": "0x00000040",
+	"Unit": "hisi_sccl,l3c"
+   }
+]

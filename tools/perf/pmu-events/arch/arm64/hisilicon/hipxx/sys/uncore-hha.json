@@ -1,0 +1,128 @@
+[
+   {
+	"EventCode": "0x00",
+	"EventName": "rx_ops_num",
+	"BriefDescription": "Number of all operations received by the HHA",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x01",
+	"EventName": "rx_outer",
+	"BriefDescription": "Number of all operations received by the HHA from another socket",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x02",
+	"EventName": "rx_sccl",
+	"BriefDescription": "Number of all operations received by the HHA from another SCCL in this socket",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x03",
+	"EventName": "hha_rx_cxl",
+	"BriefDescription": "Number of operations that HHA has received from CXL",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x13",
+	"EventName": "hha_rx_cmo",
+	"BriefDescription": "Count number of CMO operations received by the HHA",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x16",
+	"EventName": "hha_rx_prefetch_drop",
+	"BriefDescription": "Count number of prefetch operations dropped by the HHA",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x1a",
+	"EventName": "hha_rx_ch0",
+	"BriefDescription": "Count number of all operations received by the HHA from channel 0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x1b",
+	"EventName": "hha_rx_ch1",
+	"BriefDescription": "Count number of all operations received by the HHA from channel 1",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x1c",
+	"EventName": "hha_rd_ddr_64b",
+	"BriefDescription": "Count number of read operations sent by HHA to DDRC which size is 64 bytes",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x1d",
+	"EventName": "hha_wr_ddr_64b",
+	"BriefDescription": "Count number of write operations sent by HHA to DDRC which size is 64 bytes",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x1e",
+	"EventName": "hha_rd_ddr_128b",
+	"BriefDescription": "Count number of read operations sent by HHA to DDRC which size is 128 bytes",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x1f",
+	"EventName": "hha_wr_ddr_128b",
+	"BriefDescription": "Count number of write operations sent by HHA to DDRC which size is 128 bytes",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x23",
+	"EventName": "hha_backinvalid",
+	"BriefDescription": "Count number of HHA back invalid operations",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x2e",
+	"EventName": "hha_retry",
+	"BriefDescription": "Count of the HHA retry",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x55",
+	"EventName": "hha_cycles",
+	"BriefDescription": "Count of the HHA cycles",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0x55",
+	"EventName": "cycles",
+	"BriefDescription": "Count of the HHA cycles",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0xc5",
+	"EventName": "hha_req_lat",
+	"BriefDescription": "Count the total latency that HHA completes all requests",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   },
+   {
+	"EventCode": "0xcd",
+	"EventName": "hha_req_cnt",
+	"BriefDescription": "Count the total operations that HHA receives",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,hha"
+   }
+]

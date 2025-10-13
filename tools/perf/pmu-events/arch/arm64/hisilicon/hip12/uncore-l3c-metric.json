@@ -1,0 +1,65 @@
+[
+    {
+        "MetricName": "l3t_dvmop_thp",
+        "MetricExpr": "l3t_dvmop_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of DVMOp requests processed by L3T per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_aq_time_thp",
+        "MetricExpr": "l3t_aq_time_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of AQ buffer time per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_pq_time_thp",
+        "MetricExpr": "l3t_pq_time_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of PQ buffer time per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_snp_cpu_thp",
+        "MetricExpr": "l3t_snp_cpu_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of SNPs sent to CPU per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_rxsnp_l3t_thp",
+        "MetricExpr": "l3t_rxsnp_l3t_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of SNPs received by L3T per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_rxhydrasnp_l3t_thp",
+        "MetricExpr": "l3t_rxhydrasnp_l3t_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of HYDRASNPs received by L3T per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_dbid_l3t_thp",
+        "MetricExpr": "l3t_dbid_l3t_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of DBIDs returned to CPU per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_wrnotram_thp",
+        "MetricExpr": "l3t_wrnotram_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of write requests to MATA per cycle",
+        "ScaleUnit": "ops/cycle"
+    },
+    {
+        "MetricName": "l3t_retry_thp",
+        "MetricExpr": "l3t_retry_alloc / l3c_cycles",
+        "MetricGroup": "L3C_THP",
+        "BriefDescription": "Average throughput of retry requests per cycle",
+        "ScaleUnit": "ops/cycle"
+    }
+]

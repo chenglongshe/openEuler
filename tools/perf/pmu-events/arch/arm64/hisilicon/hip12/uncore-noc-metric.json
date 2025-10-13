@@ -1,0 +1,38 @@
+[
+	{
+		"MetricName": "ingress_flow_bw",
+		"MetricExpr": "ingress_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth from subsys to Ring",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"MetricName": "egress_flow_bw",
+		"MetricExpr": "egress_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth from Ring to subsys",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"MetricName": "cw_main_flow_bw",
+		"MetricExpr": "cw_main_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth of clockwise main Ring",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	},
+	{
+		"MetricName": "cc_main_flow_bw",
+		"MetricExpr": "cc_main_flow_sum * 64 / duration_time / 1e6",
+		"MetricGroup": "NoC_bw",
+		"BriefDescription": "Average data bandwidth of counterclockwise main Ring",
+		"ScaleUnit": "1MB/s",
+		"Compat": "0x00000000",
+		"Unit": "hisi_scl,noc"
+	}
+]
