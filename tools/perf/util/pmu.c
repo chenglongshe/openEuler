@@ -827,7 +827,7 @@ static bool perf_pmu__match_ignoring_suffix(const char *pmu_name, const char *to
 
 	/* Ensure we end in a number */
 	while (1) {
-		if (!isdigit(*p))
+		if (!isdigit(*p) && (*p != '_'))
 			return false;
 		if (*(++p) == 0)
 			break;
