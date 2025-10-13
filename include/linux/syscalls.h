@@ -948,6 +948,10 @@ asmlinkage long sys_cachestat(unsigned int fd,
 		struct cachestat __user *cstat, unsigned int flags);
 asmlinkage long sys_map_shadow_stack(unsigned long addr, unsigned long size, unsigned int flags);
 
+#ifdef CONFIG_XCALL_SMT_QOS
+asmlinkage long sys_vdso_wfxt_return(void);
+#endif
+
 /*
  * Architecture-specific system calls
  */

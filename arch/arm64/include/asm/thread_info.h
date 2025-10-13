@@ -48,8 +48,13 @@ struct thread_info {
 #endif
 	u32			cpu;
 
+#ifdef CONFIG_XCALL_SMT_QOS
+	u64			qos_context1; // save x0
+	u64			qos_context2; // save x1
+#else
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
+#endif
 };
 
 #define thread_saved_pc(tsk)	\

@@ -12,7 +12,7 @@
  */
 #define VDSO_LBASE	0x0
 
-#define __VVAR_PAGES    2
+#define __VVAR_PAGES    3
 
 #ifndef __ASSEMBLY__
 
@@ -36,6 +36,10 @@ extern char vdso_start[], vdso_end[];
 extern char vdso32_start[], vdso32_end[];
 #ifdef CONFIG_ARM64_ILP32
 extern char vdso_ilp32_start[], vdso_ilp32_end[];
+#endif
+
+#ifdef CONFIG_XCALL_SMT_QOS
+struct qos_data *arch_get_qos_data(void *vvar_page);
 #endif
 
 #endif /* !__ASSEMBLY__ */
