@@ -458,7 +458,7 @@ struct task_group {
 
 	struct cfs_bandwidth	cfs_bandwidth;
 
-#ifdef CONFIG_QOS_SCHED
+#if defined(CONFIG_QOS_SCHED) || defined(CONFIG_XCALL_SMT_QOS)
 	long qos_level;
 #endif
 
@@ -1575,8 +1575,8 @@ do {						\
 	flags = _raw_spin_rq_lock_irqsave(rq);	\
 } while (0)
 
-#ifdef CONFIG_QOS_SCHED
-#ifdef CONFIG_QOS_SCHED_MULTILEVEL
+#if defined(CONFIG_QOS_SCHED) || defined(CONFIG_XCALL_SMT_QOS)
+#if defined(CONFIG_QOS_SCHED_MULTILEVEL) || defined(CONFIG_XCALL_SMT_QOS)
 enum task_qos_level {
 	QOS_LEVEL_OFFLINE_EX = -2,
 	QOS_LEVEL_OFFLINE = -1,

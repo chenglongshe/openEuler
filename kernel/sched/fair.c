@@ -79,6 +79,10 @@
 #include <asm/prefer_numa.h>
 #endif
 
+#ifdef CONFIG_XCALL_SMT_QOS
+#include <asm/smt_qos.h>
+#endif
+
 /*
  * The initial- and re-scaling of tunables is configurable
  *
@@ -167,6 +171,11 @@ static bool is_offline_task(struct task_struct *p);
 
 #ifdef CONFIG_QOS_SCHED_SMT_EXPELLER
 static DEFINE_PER_CPU(int, qos_smt_status);
+#endif
+
+#ifdef CONFIG_XCALL_SMT_QOS
+static DEFINE_PER_CPU(int, pmu_smt_status);
+DEFINE_PER_CPU(bool, pmu_enable);
 #endif
 
 #ifdef CONFIG_QOS_SCHED_PRIO_LB
@@ -9970,6 +9979,183 @@ static bool qos_smt_expelled(int this_cpu)
 
 #endif
 
+#ifdef CONFIG_XCALL_SMT_QOS
+static bool pmu_smt_update_status(struct task_struct *p)
+{
+	int status = QOS_LEVEL_ONLINE;
+
+	if (p != NULL && task_group(p)->qos_level < QOS_LEVEL_ONLINE)
+		status = QOS_LEVEL_OFFLINE;
+
+	if (p != NULL && task_group(p)->qos_level > QOS_LEVEL_ONLINE)
+		status = QOS_LEVEL_HIGH;
+
+	if (__this_cpu_read(pmu_smt_status) == status)
+		return false;
+
+	__this_cpu_write(pmu_smt_status, status);
+	if (status == QOS_LEVEL_OFFLINE)
+		trace_printk("udpate %s-%d to offline!\n", p->comm, p->pid);
+	else if (status == QOS_LEVEL_HIGH)
+		trace_printk("udpate %s-%d to high level online!\n", p->comm, p->pid);
+
+	return true;
+}
+
+static DEFINE_PER_CPU(call_single_data_t, pmu_setup_csd) =
+	CSD_INIT(setup_pmu_counter, NULL);
+
+static void send_pmu_setup_ipi(int cpu)
+{
+	call_single_data_t *csd;
+	int ret;
+
+	csd = &per_cpu(pmu_setup_csd, cpu);
+	ret = smp_call_function_single_async(cpu, csd);
+	if (ret)
+		trace_printk("Sending IPI failed to CPU %d\n", cpu);
+}
+
+static void pmu_smt_send_ipi_setup_pmu(int this_cpu)
+{
+	struct rq *rq = NULL;
+	int cpu;
+
+	/*
+	 * If the cfs.h_nr_running of current cpu is 0 (which means
+	 * current CPU is idle), not send IPI to setup pmu
+	 * for sibling CPU
+	 */
+	rq = cpu_rq(this_cpu);
+	if (rq->cfs.h_nr_running == 0)
+		return;
+
+	for_each_cpu(cpu, cpu_smt_mask(this_cpu)) {
+		if (cpu == this_cpu)
+			continue;
+
+		rq = cpu_rq(cpu);
+
+		/*
+		* There are two cases where current don't need to send ipi
+		* to setup PMU:
+		* a) The pmu_smt_status of siblings cpu is online;
+		* b) The cfs.h_nr_running of siblings cpu is 0.
+		*/
+		if (per_cpu(pmu_smt_status, cpu) >= QOS_LEVEL_ONLINE ||
+		    rq->cfs.h_nr_running == 0)
+			continue;
+
+		if (!per_cpu(pmu_enable, cpu)) {
+			trace_printk("cpu%d send ipi to cpu%d to setup pmu\n", smp_processor_id(), cpu);
+			send_pmu_setup_ipi(cpu);
+		}
+	}
+}
+
+static DEFINE_PER_CPU(call_single_data_t, pmu_stop_csd) =
+	CSD_INIT(stop_pmu_counter, NULL);
+
+static void send_pmu_stop_ipi(int cpu)
+{
+	call_single_data_t *csd;
+	int ret;
+
+	csd = &per_cpu(pmu_stop_csd, cpu);
+	ret = smp_call_function_single_async(cpu, csd);
+	if (ret)
+		trace_printk("Sending IPI failed to CPU %d\n", cpu);
+}
+
+static void pmu_smt_send_ipi_stop_pmu(int this_cpu)
+{
+	struct rq *rq = NULL;
+	int cpu;
+
+	for_each_cpu(cpu, cpu_smt_mask(this_cpu)) {
+		if (cpu == this_cpu)
+			continue;
+
+		rq = cpu_rq(cpu);
+
+		trace_printk("cpu%d send ipi to cpu%d to stop pmu\n", smp_processor_id(), cpu);
+		send_pmu_stop_ipi(cpu);
+	}
+}
+
+/*
+ * If current cpu runs offline task, check whether
+ * SMT cpu runs online task, if so, enable PMU
+ * counter on current cpu.
+ */
+static void setup_pmu_counter_on_cpu(int this_cpu)
+{
+	struct rq *rq = NULL;
+	int cpu;
+
+	for_each_cpu(cpu, cpu_smt_mask(this_cpu)) {
+		if (cpu == this_cpu)
+			continue;
+
+		rq = cpu_rq(cpu);
+
+		/*
+		* There are two cases where current don't need to enable PMU counter
+		* to setup PMU:
+		* a) The pmu_smt_status of siblings cpu is offline;
+		* b) The cfs.h_nr_running of siblings cpu is 0.
+		*/
+		if (per_cpu(pmu_smt_status, cpu) <= QOS_LEVEL_ONLINE ||
+		    rq->cfs.h_nr_running == 0)
+			continue;
+
+		setup_pmu_counter(NULL);
+	}
+}
+
+static void pmu_smt_qos_setup(int this_cpu, struct task_struct *p)
+{
+	int old_status = __this_cpu_read(pmu_smt_status);
+
+	pmu_smt_update_status(p);
+
+	/*
+	 * Offline task has finished, need to stop pmu counter
+	 */
+	if (old_status < QOS_LEVEL_ONLINE && __this_cpu_read(pmu_smt_status) >= QOS_LEVEL_ONLINE)
+		stop_pmu_counter(NULL);
+
+	/*
+	 * Online -> High or offline -> High switch need to check if SMT cpu is
+	 * already running offline task.
+	 *
+	 * If current cpu is to run High task, check whether SMT cpu
+	 * runs offline task, if so, send IPI to enable PMU counter.
+	 */
+	if (__this_cpu_read(pmu_smt_status) > QOS_LEVEL_ONLINE) {
+		pmu_smt_send_ipi_setup_pmu(this_cpu);
+		return;
+	}
+
+	/*
+	 * High -> online or High -> offline
+	 * which means high task has finished on this cpu
+	 * we need to stop pmu counter on sibling cpu.
+	*/
+	if (old_status > QOS_LEVEL_ONLINE && __this_cpu_read(pmu_smt_status) <= QOS_LEVEL_ONLINE)
+		pmu_smt_send_ipi_stop_pmu(this_cpu);
+
+	/*
+	 * High -> offline or online -> offline
+	 * If current cpu is to run offline task, check whether SMT cpu
+	 * runs High task, if so, enable PMU counter.
+	 */
+	if (old_status >= QOS_LEVEL_ONLINE && __this_cpu_read(pmu_smt_status) < QOS_LEVEL_ONLINE)
+		setup_pmu_counter_on_cpu(this_cpu);
+}
+
+#endif
+
 #ifdef CONFIG_QOS_SCHED_SMT_EXPELLER
 DEFINE_STATIC_KEY_TRUE(qos_smt_expell_switch);
 
@@ -10175,7 +10361,7 @@ pick_next_task_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf
 	struct task_struct *p;
 	int new_tasks;
 	unsigned long time;
-#ifdef CONFIG_QOS_SCHED_SMT_EXPELLER
+#if defined(CONFIG_QOS_SCHED_SMT_EXPELLER) || defined(CONFIG_XCALL_SMT_QOS)
 	int this_cpu = rq->cpu;
 #endif
 
@@ -10356,6 +10542,9 @@ done: __maybe_unused;
 #ifdef CONFIG_QOS_SCHED_SMT_EXPELLER
 	qos_smt_expel(this_cpu, p);
 #endif
+#ifdef CONFIG_XCALL_SMT_QOS
+	pmu_smt_qos_setup(this_cpu, p);
+#endif
 
 	return p;
 
@@ -10408,6 +10597,9 @@ idle:
 
 #ifdef CONFIG_QOS_SCHED_SMT_EXPELLER
 	qos_smt_expel(this_cpu, NULL);
+#endif
+#ifdef CONFIG_XCALL_SMT_QOS
+	pmu_smt_qos_setup(this_cpu, p);
 #endif
 
 	return NULL;
