@@ -11982,6 +11982,15 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
 		return ERR_PTR(-ENOMEM);
 
 	/*
+	 * To fix kabi change, each allocated event is changed to be of size:
+	 *	sizeof(struct perf_event) + sizeof(struct hw_perf_event_ext)
+	 * And event->hw_ext will point to the struct hw_perf_event_ext part.
+	 * See perf_event_init().
+	 */
+	event->hw_ext = (struct hw_perf_event_ext *)((void *)event +
+						sizeof(struct perf_event));
+
+	/*
 	 * Single events are their own group leaders, with an
 	 * empty sibling list:
 	 */
@@ -13843,7 +13852,9 @@ void __init perf_event_init(void)
 	ret = init_hw_breakpoint();
 	WARN(ret, "hw_breakpoint initialization failed with: %d", ret);
 
-	perf_event_cache = KMEM_CACHE(perf_event, SLAB_PANIC);
+	perf_event_cache = kmem_cache_create("perf_event",
+		sizeof(struct perf_event) + sizeof(struct hw_perf_event_ext),
+		__alignof__(struct perf_event), SLAB_PANIC, NULL);
 
 	/*
 	 * Build time assertion that we keep the data_head at the intended
