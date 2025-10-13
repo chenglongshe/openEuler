@@ -44,6 +44,8 @@ static void sig_handler(int sig __maybe_unused)
 	done = true;
 }
 
+static unsigned long long test;
+
 /*
  * evlist__prepare_workload will send a SIGUSR1 if the fork fails, since
  * we asked by setting its exec_error to the function below,
