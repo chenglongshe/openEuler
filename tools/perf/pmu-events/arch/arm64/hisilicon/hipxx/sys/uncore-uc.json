@@ -1,0 +1,462 @@
+[
+    {
+	"EventCode": "0x00",
+	"EventName": "sq_time",
+	"Filter": "rd_req_en=1",
+	"BriefDescription": "Count the total latency that sq completed cpu request",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x01",
+	"EventName": "pq_time",
+	"Filter": "rd_req_en=1",
+	"BriefDescription": "Count the total latency that pq completed cpu request",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x02",
+	"EventName": "hbm_time",
+	"Filter": "rd_req_en=1",
+	"BriefDescription": "Count the total latency that UC requests to access the HBM",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x03",
+	"EventName": "iq_comp_time_cring",
+	"Filter": "rd_req_en=1",
+	"BriefDescription": "Count the total latency that CRING completed cpu request",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x05",
+	"EventName": "iq_comp_time_uring",
+	"Filter": "rd_req_en=1",
+	"BriefDescription": "Count the total latency that URING completed cpu request",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x10",
+	"EventName": "cpu_rd",
+	"BriefDescription": "Count of the number of the read request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x11",
+	"EventName": "cpu_wr",
+	"BriefDescription": "Count of the number of the write request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x12",
+	"EventName": "cpu_atomic",
+	"BriefDescription": "Count of the number of the atomic request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x17",
+	"EventName": "cpu_rd64",
+	"BriefDescription": "Count of the number of the cpu_rd64 request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x18",
+	"EventName": "cpu_rd128",
+	"BriefDescription": "Count of the number of the cpu_rd128 request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x19",
+	"EventName": "cpu_rs64",
+	"BriefDescription": "Count of the number of the cpu_rs64 request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x1a",
+	"EventName": "cpu_rs128",
+	"BriefDescription": "Count of the number of the cpu_rs128 request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x1C",
+	"EventName": "cpu_mru",
+	"BriefDescription": "Count of the number of the cpu_mru request that come from cpu",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x2C",
+	"EventName": "ext2uc_read",
+	"BriefDescription": "Count of the number of the read request that come from ext",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x2D",
+	"EventName": "ext2uc_write",
+	"BriefDescription": "Count of the number of the write request that come from ext",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x2E",
+	"EventName": "ext2uc_atomic",
+	"BriefDescription": "Count of the number of the atomic request that come from ext",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x33",
+	"EventName": "ext2uc_ru64",
+	"BriefDescription": "Count of the number of the 64B ReadUnique request that come from ext",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x34",
+	"EventName": "ext2uc_ru128",
+	"BriefDescription": "Count of the number of the 128B ReadUnique request that come from ext",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x35",
+	"EventName": "ext2uc_rs64",
+	"BriefDescription": "Count of the number of the 64B ReadShared request that come from ext",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x36",
+	"EventName": "ext2uc_rs128",
+	"BriefDescription": "Count of the number of the 128B ReadShared request that come from ext",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x47",
+	"EventName": "uc2ext_read_uring",
+	"BriefDescription": "Count of the number of the read request from uc to uring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x48",
+	"EventName": "uc2ext_write_uring",
+	"BriefDescription": "Count of the number of the write request from uc to uring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x49",
+	"EventName": "uc2ext_atomic_uring",
+	"BriefDescription": "Count of the number of the atomic message sent by the UC from the URIING to the EXT",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x5C",
+	"EventName": "io2uc_atomic",
+	"BriefDescription": "Count of the number of the I/O Atomic messages received by the UC",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x60",
+	"EventName": "io2uc_write",
+	"BriefDescription": "Count of the number of the UC receives a write request from the I/O",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x7E",
+	"EventName": "uc2cpu_retry",
+	"BriefDescription": "Count of the number of the retry packets sent from the UC to the CPU",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x7F",
+	"EventName": "uc2ext_retry",
+	"BriefDescription": "Count of the number of the retry sent from the UC to the EXT",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x81",
+	"EventName": "uc2hbm_bank0_rd64",
+	"BriefDescription": "Count of the number of the 64B read request sent by the UC to HBMC BANK0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x82",
+	"EventName": "uc2hbm_bank0_rd128",
+	"BriefDescription": "Count of the number of the 128B read request sent from the UC to HBMC BANK0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x83",
+	"EventName": "uc2hbm_bank0_wr64",
+	"BriefDescription": "Count of the number of the 64B write request sent by the UC to HBMC BANK0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x84",
+	"EventName": "uc2hbm_bank0_wr128",
+	"BriefDescription": "Count of the number of the 128B write request sent by the UC to HBMC BANK0",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x87",
+	"EventName": "uc2hbm_bank1_rd64",
+	"BriefDescription": "Count of the number of the 64B read request sent by the UC to HBMC BANK1",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x88",
+	"EventName": "uc2hbm_bank1_rd128",
+	"BriefDescription": "Count of the number of the 128B read request sent by the UC to HBMC BANK1",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x89",
+	"EventName": "uc2hbm_bank1_wr64",
+	"BriefDescription": "Count of the number of the 64B write request sent from the UC to HBMC BANK1",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x8A",
+	"EventName": "uc2hbm_bank1_wr128",
+	"BriefDescription": "Count of the number of the 128B write request sent from the UC to HBMC BANK1",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x8D",
+	"EventName": "uc2sdmaa_retry",
+	"BriefDescription": "Count of the number of retry messages received by the SDMAA module",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x8E",
+	"EventName": "uc2sdmaa_pgnt",
+	"BriefDescription": "Count of the number of pgnt messages received by the SDMAA module",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x8F",
+	"EventName": "sdmaa2uc_unalign",
+	"BriefDescription": "Count of the number of Unaligned Small Packets Delivered by SDMAA",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x91",
+	"EventName": "sdmaa2uc_read",
+	"BriefDescription": "Count of the number of SDMAA Read Requests",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x92",
+	"EventName": "sdmaa2uc_write",
+	"BriefDescription": "Count of the number of SDMAA Write Requests",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x93",
+	"EventName": "sdmaa2uc_memset",
+	"BriefDescription": "Count of the number of memsets delivered by SDMAA",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x94",
+	"EventName": "sdmaa_tx_preload",
+	"BriefDescription": "Count of the number of preload operations delivered by the SDMAA module",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0x95",
+	"EventName": "cycles",
+	"BriefDescription": "Count of the nUC cycles",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xB1",
+	"EventName": "hpipe_lookup",
+	"BriefDescription": "Count of SPIPE lookup",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xB3",
+	"EventName": "hpipe_hit",
+	"BriefDescription": "Count of the number of spipe hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xB4",
+	"EventName": "hpipe_rd_hit",
+	"BriefDescription": "Count of SPIPE read hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xB5",
+	"EventName": "hpipe_wr_hit",
+	"BriefDescription": "Count of SPIPE write hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xBA",
+	"EventName": "hc_pipe_lookup",
+	"BriefDescription": "Count of HC_PIPE lookup",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xBB",
+	"EventName": "hc_pipe_hit_1k",
+	"BriefDescription": "Count of HC_PIPE hit 1k",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xBD",
+	"EventName": "hc_pipe_rd_hit",
+	"BriefDescription": "Count of HC_PIPE read hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xBE",
+	"EventName": "hc_pipe_wr_hit",
+	"BriefDescription": "Count of HC_PIPE write hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xCE",
+	"EventName": "sc_pipe_lookup",
+	"BriefDescription": "Count of SC_PIPE lookup",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xCF",
+	"EventName": "sc_pipe_hit_sector",
+	"BriefDescription": "Count of SC_PIPE hit sector",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xD1",
+	"EventName": "sc_pipe_rd_hit",
+	"BriefDescription": "Count of SC_PIPE read hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xD2",
+	"EventName": "sc_pipe_wr_hit",
+	"BriefDescription": "Count of SC_PIPE write hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xD9",
+	"EventName": "spipe_lookup",
+	"BriefDescription": "Count of HPIPE lookup",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xDB",
+	"EventName": "spipe_hit",
+	"BriefDescription": "Count of the number of hpipe hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xDC",
+	"EventName": "spipe_rd_hit",
+	"BriefDescription": "Count of HPIPE read hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xDD",
+	"EventName": "spipe_wr_hit",
+	"BriefDescription": "Count of HPIPE write hit",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xFA",
+	"EventName": "cring_rxdat_cnt",
+	"BriefDescription": "Count of the number of packets received by the UC from the cring",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xFB",
+	"EventName": "cring_txdat_cnt",
+	"BriefDescription": "Count of the number of packets sent from the UC to the CRING",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xFC",
+	"EventName": "uring_rxdat_cnt",
+	"BriefDescription": "Count of the number of Indicates the number of packets received by the UC from the uring module",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xFD",
+	"EventName": "uring_txdat_cnt",
+	"BriefDescription": "Count of the number of Indicates the number of packets sent from the UC to the enabling module",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xFE",
+	"EventName": "uring_rxreqdat_cnt",
+	"BriefDescription": "Count of the number of data combination request packets received by the UC from the uring module",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    },
+    {
+	"EventCode": "0xFF",
+	"EventName": "uring_txreqdat_cnt",
+	"BriefDescription": "Count of the number of data combination requests sent by the UC to the uring module",
+	"Compat": "0x00000030",
+	"Unit": "hisi_sccl,uc"
+    }
+]

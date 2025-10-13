@@ -1,0 +1,163 @@
+[
+    {
+	"EventCode": "0x82",
+	"EventName": "l3t_req_dvm_latency",
+	"BriefDescription": "Count of total DVM Non-Sync requests latency from L3T",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x09",
+	"EventName": "l3t_req_dvm_num",
+	"BriefDescription": "Count the number of DVM Non-Sync requests from L3T",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x83",
+	"EventName": "l3t_req_dvmsync_latency",
+	"BriefDescription": "Count of total DVM -Sync requests latency from L3T",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x0A",
+	"EventName": "l3t_req_dvmsync_num",
+	"BriefDescription": "Count the number of DVM Sync requests from L3T",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x84",
+	"EventName": "mn_req_dvm_latency",
+	"BriefDescription": "Count of total DVM Non-Sync requests latency from others MN",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x0B",
+	"EventName": "mn_req_dvm_num",
+	"BriefDescription": "Count the number of DVM Non-Sync requests from others MN",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x85",
+	"EventName": "mn_req_dvmsync_latency",
+	"BriefDescription": "Count of total DVM -Sync requests latency from others MN",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x0C",
+	"EventName": "mn_req_dvmsync_num",
+	"BriefDescription": "Count the number of DVM Sync requests from others MN",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x86",
+	"EventName": "pa_req_dvm_latency",
+	"BriefDescription": "Count of total DVM Non-Sync requests latency from PA",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x0D",
+	"EventName": "pa_req_dvm_num",
+	"BriefDescription": "Count the number of DVM Non-Sync requests from PA",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x87",
+	"EventName": "pa_req_dvmsync_latency",
+	"BriefDescription": "Count of total DVM -Sync requests latency from PA",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x0E",
+	"EventName": "pa_req_dvmsync_num",
+	"BriefDescription": "Count the number of DVM Sync requests from PA",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x00",
+	"EventName": "req_eobarrier_num",
+	"BriefDescription": "Count the number of eobarrier requests from CPU",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x01",
+	"EventName": "req_ecbarrier_num",
+	"BriefDescription": "Count the number of ecbarrier requests from CPU",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x02",
+	"EventName": "req_dvmop_num",
+	"BriefDescription": "Count the number of DVM (DVM Sync + DVM Non-Sync) opention requests",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x03",
+	"EventName": "req_dvmsync_num",
+	"BriefDescription": "Count the number of DVM Sync requests",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x04",
+	"EventName": "req_retry_num",
+	"BriefDescription": "Count the number of DVM retry requests",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x05",
+	"EventName": "req_writenosnp_num",
+	"BriefDescription": "Count the number of writenosnp requests",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x06",
+	"EventName": "req_readnosnp_num",
+	"BriefDescription": "Count the number of readnosnp requests",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x80",
+	"EventName": "snp_dvm_latency",
+	"BriefDescription": "Count of total DVM Non-Sync snoop requests latency",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x07",
+	"EventName": "snp_dvm_num",
+	"BriefDescription": "Count the number of DVM Non-Sync snoop requests",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x81",
+	"EventName": "snp_dvmsync_latency",
+	"BriefDescription": "Count of total DVM Sync snoop requests latency",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    },
+    {
+	"EventCode": "0x08",
+	"EventName": "snp_dvmsync_num",
+	"BriefDescription": "Count the number of DVM Sync snoop requests",
+	"Compat": "0x00000000",
+	"Unit": "hisi_scl,mn"
+    }
+]
