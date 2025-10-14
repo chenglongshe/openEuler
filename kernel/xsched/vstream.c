@@ -401,7 +401,53 @@ int vstream_free(struct vstream_args *arg)
 
 int vstream_kick(struct vstream_args *arg)
 {
-	return 0;
+	vstream_info_t *vstream;
+	int vstream_id = arg->sq_id;
+	struct xsched_entity *xse;
+	int err = 0;
+
+	struct xsched_cu *xcu = NULL;
+
+	XSCHED_CALL_STUB();
+
+	/* Get vstream. */
+	vstream = vstream_get(vstream_id);
+	if (!vstream || !vstream->ctx) {
+		XSCHED_ERR("Vstream NULL or doesn't have a context.\n");
+		return -EINVAL;
+	}
+
+	xse = &vstream->ctx->xse;
+	xcu = vstream->xcu;
+	XSCHED_DEBUG("New kick on xse %d @ %s\n", xse->tgid, __func__);
+
+	do {
+		mutex_lock(&xcu->xcu_lock);
+		spin_lock(&vstream->stream_lock);
+
+		/* Adding kick metadata. */
+		err = xsched_vsm_add_tail(vstream, arg);
+		if (err == -EBUSY) {
+			spin_unlock(&vstream->stream_lock);
+			mutex_unlock(&xcu->xcu_lock);
+
+			/* Retry after a while */
+			usleep_range(100, 200);
+			continue;
+		}
+
+		/* Don't forget to unlock */
+		if (err) {
+			XSCHED_ERR("Fail to add kick metadata to vs %u @ %s\n",
+				vstream->id, __func__);
+			break;
+		}
+	} while (err == -EBUSY);
+
+	spin_unlock(&vstream->stream_lock);
+	mutex_unlock(&xcu->xcu_lock);
+
+	return err;
 }
 
 /*
