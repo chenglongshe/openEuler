@@ -2,6 +2,8 @@
 #ifndef __LINUX_XSCHED_H__
 #define __LINUX_XSCHED_H__
 
+#include <linux/hash.h>
+#include <linux/hashtable.h>
 #include <linux/xcu_group.h>
 #include <linux/kref.h>
 #include <linux/vstream.h>
@@ -30,6 +32,12 @@
 
 #define XSCHED_EXIT_STUB()                                                     \
 	XSCHED_DEBUG(" -----* %s @ %s exited *-----\n", __func__, __FILE__)
+
+#define XCU_HASH_ORDER 6
+
+#define __GET_VS_TASK_TYPE(t) ((t)&0xFF)
+
+#define GET_VS_TASK_TYPE(vs_ptr) __GET_VS_TASK_TYPE((vs_ptr)->task_type)
 
 enum xcu_state {
 	XCU_INACTIVE,
@@ -76,6 +84,12 @@ struct xsched_entity {
 
 	pid_t owner_pid;
 	pid_t tgid;
+
+	/* Amount of pending kicks currently sitting on this context. */
+	atomic_t kicks_pending_ctx_cnt;
+
+	/* Amount of submitted kicks context, used for resched decision. */
+	atomic_t submitted_one_kick;
 
 	/* File descriptor coming from an associated context
 	 * used for identifying a given xsched entity in
@@ -134,7 +148,6 @@ static inline struct xsched_context *ctx_find_by_tgid(pid_t tgid)
 
 	return ret;
 }
-
 
 static inline void xsched_init_vsm(struct vstream_metadata *vsm,
 				struct vstream_info *vs, vstream_args_t *arg)
