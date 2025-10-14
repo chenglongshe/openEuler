@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config XCU_SCHEDULER
+    bool "Enable XSched functionality"
+    select CGROUP_XCU
+    default n
+    help
+      This option enables the XSched scheduler, a custom scheduling mechanism
+      designed for heterogeneous compute units (e.g., XPUs). It provides:
+      - Priority-based task scheduling with latency-sensitive optimizations.
+      - Integration with cgroups (via CGROUP_XCU) for resource isolation.
+
+      Enable this only if your system requires advanced scheduling for XPU workloads.
+      If unsure, say N.
+
+config XCU_VSTREAM
+    bool "Enable vstream SQ/CQ buffers maintaining for XPU"
+    default n
+    depends on XCU_SCHEDULER
+    help
+      This option enables virtual stream (vstream) support for XPUs, managing
+      submission queues (SQ) and completion queues (CQ) in kernel space. Key features:
+      - Zero-copy buffer management between user and kernel space.
+      - Batch processing of XPU commands to reduce MMIO overhead.
+
+      Requires XCU_SCHEDULER to be enabled. May increase kernel memory usage.
+      Recommended for high-throughput XPU workloads. If unsure, say N.
+
+config XSCHED_NR_CUS
+    int "Number of CUs (a.k.a. XCUs) available to XSched mechanism"
+    default 8
+    depends on XCU_SCHEDULER
+    help
+      This option defines the maximum number of Compute Units (CUs) that can be
+      managed by the XSched scheduler, consider changing this value proportionally
+      to the number of available XCU cores.
+
+config CGROUP_XCU
+    bool "XCU bandwidth control and group scheduling for xsched_cfs"
+    default n
+    depends on XCU_SCHEDULER
+    help
+      This option enables the extended Compute Unit (XCU) resource controller for
+      CFS task groups, providing hierarchical scheduling and fine-grained bandwidth
+      allocation capabilities. Key features include:
+      - Proportional XCU time distribution across cgroups based on shares/quotas
+      - Nested group scheduling with latency isolation
+      - Integration with xsched_cfs for fair CPU resource management
+
+      Required for systems requiring fine-grained resource control in cgroups.
+      If unsure, say N.
