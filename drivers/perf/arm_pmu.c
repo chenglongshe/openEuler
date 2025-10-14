@@ -448,7 +448,11 @@ validate_group(struct perf_event *event)
 	return 0;
 }
 
+#ifdef CONFIG_XCALL_SMT_QOS
+static __maybe_unused irqreturn_t armpmu_dispatch_irq(int irq, void *dev)
+#else
 static irqreturn_t armpmu_dispatch_irq(int irq, void *dev)
+#endif
 {
 	struct arm_pmu *armpmu;
 	int ret;
@@ -658,10 +662,17 @@ void armpmu_free_irq(int irq, int cpu)
 	per_cpu(cpu_irq_ops, cpu) = NULL;
 }
 
+#ifdef CONFIG_XCALL_SMT_QOS
+extern irqreturn_t my_pmu_irq_handler(int irq, void *dev_id);
+#endif
 int armpmu_request_irq(int irq, int cpu)
 {
 	int err = 0;
+#ifndef CONFIG_XCALL_SMT_QOS
 	const irq_handler_t handler = armpmu_dispatch_irq;
+#else
+	const irq_handler_t handler = my_pmu_irq_handler;
+#endif
 	const struct pmu_irq_ops *irq_ops;
 
 	if (!irq)
