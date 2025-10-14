@@ -17,6 +17,11 @@ enum xcu_type {
 	XCU_TYPE_XPU,
 };
 
+enum xcu_sqe_op_type {
+	SQE_SET_NOTIFY,
+	SQE_IS_NOTIFY,
+};
+
 /**
  * @group: value for this entry.
  * @hash_node: hash node list.
@@ -41,6 +46,7 @@ struct xcu_op_handler_params {
 			void *param_5;
 			void *param_6;
 			void *param_7;
+			void *param_8;
 		};
 	};
 };
@@ -55,6 +61,7 @@ struct xcu_operation {
 	xcu_op_handler_fn_t alloc;
 	xcu_op_handler_fn_t logic_alloc;
 	xcu_op_handler_fn_t logic_free;
+	xcu_op_handler_fn_t sqe_op;
 };
 
 struct xcu_group {
@@ -99,6 +106,7 @@ extern int xcu_finish(struct xcu_op_handler_params *params);
 extern int xcu_alloc(struct xcu_op_handler_params *params);
 extern int xcu_logic_alloc(struct xcu_op_handler_params *params);
 extern int xcu_logic_free(struct xcu_op_handler_params *params);
+extern int xcu_sqe_op(struct xcu_op_handler_params *params);
 #endif /* !CONFIG_XCU_SCHEDULER */
 
 #endif /* __XSCHED_XCU_GROUP_H__ */
