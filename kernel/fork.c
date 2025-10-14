@@ -974,6 +974,13 @@ void __mmdrop(struct mm_struct *mm)
 	mm_destroy_cid(mm);
 	mm_counter_destroy(mm);
 
+#ifdef CONFIG_XCALL_SMT_QOS
+	if (mm->smt_qos_page) {
+		__free_page(mm->smt_qos_page);
+		mm->smt_qos_page = NULL;
+	}
+#endif
+
 	free_mm(mm);
 }
 EXPORT_SYMBOL_GPL(__mmdrop);
@@ -1390,6 +1397,13 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 	sp_init_mm(mm);
 	mm->user_ns = get_user_ns(user_ns);
 	lru_gen_init_mm(mm);
+
+#ifdef CONFIG_XCALL_SMT_QOS
+	mm->smt_qos_page = alloc_page(GFP_KERNEL_ACCOUNT | __GFP_ZERO);
+	if (!mm->smt_qos_page)
+		goto fail_cid;
+#endif
+
 	return mm;
 
 fail_cid:

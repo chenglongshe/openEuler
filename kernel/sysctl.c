@@ -81,6 +81,10 @@
 #include <linux/rtmutex.h>
 #endif
 
+#ifdef CONFIG_XCALL_SMT_QOS
+#include <asm/smt_qos.h>
+#endif
+
 /* shared constants to be used in various sysctls */
 const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
 EXPORT_SYMBOL(sysctl_vals);
@@ -2039,6 +2043,17 @@ static struct ctl_table kern_table[] = {
 		.procname	= "max_rcu_stall_to_panic",
 		.data		= &sysctl_max_rcu_stall_to_panic,
 		.maxlen		= sizeof(sysctl_max_rcu_stall_to_panic),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ONE,
+		.extra2		= SYSCTL_INT_MAX,
+	},
+#endif
+#ifdef CONFIG_XCALL_SMT_QOS
+	{
+		.procname	= "xcall_vdso_delay_cycles",
+		.data		= &sysctl_delay_cycles,
+		.maxlen		= sizeof(sysctl_delay_cycles),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= SYSCTL_ONE,

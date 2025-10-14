@@ -36,3 +36,8 @@
 #define __ARCH_WANT_MEMFD_SECRET
 
 #include <asm-generic/unistd.h>
+
+#ifndef __NR_vdso_wfxt_return
+#define __NR_vdso_wfxt_return (__NR_arch_specific_syscall + 11)
+__SYSCALL(__NR_vdso_wfxt_return, sys_vdso_wfxt_return)
+#endif
