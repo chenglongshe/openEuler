@@ -13,6 +13,9 @@
 #include <linux/sched.h>
 #include <linux/sched/debug.h>
 #include <linux/thread_info.h>
+#ifdef CONFIG_XCALL_SMT_QOS
+#include <vdso/vsyscall.h>
+#endif
 
 #include <asm/cpufeature.h>
 #include <asm/daifflags.h>
@@ -26,6 +29,10 @@
 #include <asm/stacktrace.h>
 #include <asm/sysreg.h>
 #include <asm/system_misc.h>
+#ifdef CONFIG_XCALL_SMT_QOS
+#include <asm/vdso.h>
+#include <asm/smt_qos.h>
+#endif
 
 /*
  * Handle IRQ/context state management when entering from kernel mode.
@@ -570,6 +577,29 @@ static __always_inline void __el1_pnmi(struct pt_regs *regs,
 	arm64_exit_nmi(regs);
 }
 
+#ifdef CONFIG_XCALL_SMT_QOS
+static void set_return_to_vdso(struct pt_regs *regs)
+{
+	struct qos_data *qos_data = NULL;
+	unsigned long trampoline = 0;
+
+	if (current->mm && current->mm->smt_qos_page) {
+		qos_data = arch_get_qos_data(page_address(current->mm->smt_qos_page));
+		trampoline = (unsigned long)VDSO_SYMBOL(current->mm->context.vdso,
+							smt_qos_trampoline);
+	}
+
+	if (!cpus_have_const_cap(ARM64_HAS_WFXT) || !qos_data ||
+	    !trampoline || !sysctl_delay_cycles)
+		return;
+
+	qos_data->delay_cycles = sysctl_delay_cycles;
+	task_thread_info(current)->qos_context1 = regs->pc;
+	task_thread_info(current)->qos_context2 = regs->regs[8];
+	regs->pc = trampoline;
+}
+#endif
+
 #if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ACTLR_XCALL_XINT)
 static void noinstr el0_xint(struct pt_regs *regs, u64 nmi_flag,
 			     void (*handler)(struct pt_regs *),
@@ -588,6 +618,9 @@ static void noinstr el0_xint(struct pt_regs *regs, u64 nmi_flag,
 		do_interrupt_handler(regs, nmi_handler);
 		arm64_exit_nmi(regs);
 
+#ifdef CONFIG_XCALL_SMT_QOS
+		set_return_to_vdso(regs);
+#endif
 		fast_exit_to_user_mode(regs);
 		return;
 	}
@@ -603,9 +636,12 @@ static void noinstr el0_xint(struct pt_regs *regs, u64 nmi_flag,
 	do_interrupt_handler(regs, handler);
 	xint_exit_rcu();
 
+#ifdef CONFIG_XCALL_SMT_QOS
+	set_return_to_vdso(regs);
+#endif
+
 	fast_exit_to_user_mode(regs);
 }
-
 
 asmlinkage void noinstr el0t_64_fast_irq_handler(struct pt_regs *regs)
 {

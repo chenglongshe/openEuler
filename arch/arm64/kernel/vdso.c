@@ -40,6 +40,7 @@ enum vdso_abi {
 enum vvar_pages {
 	VVAR_DATA_PAGE_OFFSET,
 	VVAR_TIMENS_PAGE_OFFSET,
+	VVAR_SMT_QOS_PAGE_OFFSET,
 	VVAR_NR_PAGES,
 };
 
@@ -126,6 +127,13 @@ static int __init __vdso_init(enum vdso_abi abi)
 	return 0;
 }
 
+#ifdef CONFIG_XCALL_SMT_QOS
+struct qos_data *arch_get_qos_data(void *vvar_page)
+{
+	return (struct qos_data *)(vvar_page);
+}
+#endif
+
 #ifdef CONFIG_TIME_NS
 struct vdso_data *arch_get_vdso_data(void *vvar_page)
 {
@@ -161,6 +169,18 @@ int vdso_join_timens(struct task_struct *task, struct time_namespace *ns)
 }
 #endif
 
+#ifdef CONFIG_XCALL_SMT_QOS
+static struct page *find_qos_vvar_page(struct vm_area_struct *vma)
+{
+	if (likely(vma->vm_mm == current->mm))
+		return current->mm->smt_qos_page;
+
+	WARN(1, "smt qos page accessed remotely");
+
+	return NULL;
+}
+#endif
+
 static vm_fault_t vvar_fault(const struct vm_special_mapping *sm,
 			     struct vm_area_struct *vma, struct vm_fault *vmf)
 {
@@ -188,6 +208,11 @@ static vm_fault_t vvar_fault(const struct vm_special_mapping *sm,
 		pfn = sym_to_pfn(vdso_data);
 		break;
 #endif /* CONFIG_TIME_NS */
+#ifdef CONFIG_XCALL_SMT_QOS
+	case VVAR_SMT_QOS_PAGE_OFFSET:
+		pfn = page_to_pfn(find_qos_vvar_page(vma));
+		break;
+#endif
 	default:
 		return VM_FAULT_SIGBUS;
 	}

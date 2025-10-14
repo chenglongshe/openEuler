@@ -9,7 +9,11 @@
 # Include the generic Makefile to check the built vdso.
 include $(srctree)/lib/vdso/Makefile
 
+ifdef CONFIG_XCALL_SMT_QOS
+obj-vdso := vgettimeofday.o note.o sigreturn.o smt_qos.o smt_qos_trampoline.o
+else
 obj-vdso := vgettimeofday.o note.o sigreturn.o
+endif
 
 # Build rules
 targets := $(obj-vdso) vdso.so vdso.so.dbg
@@ -40,6 +44,12 @@ CFLAGS_REMOVE_vgettimeofday.o = $(CC_FLAGS_FTRACE) -Os $(CC_FLAGS_SCS) \
 				$(RANDSTRUCT_CFLAGS) $(GCC_PLUGINS_CFLAGS) \
 				$(CC_FLAGS_LTO) $(CC_FLAGS_CFI) \
 				-Wmissing-prototypes -Wmissing-declarations
+ifdef CONFIG_XCALL_SMT_QOS
+CFLAGS_REMOVE_smt_qos.o = $(CC_FLAGS_FTRACE) -Os $(CC_FLAGS_SCS) \
+			  $(RANDSTRUCT_CFLAGS) $(GCC_PLUGINS_CFLAGS) \
+			  $(CC_FLAGS_LTO) $(CC_FLAGS_CFI) \
+			  -Wmissing-prototypes -Wmissing-declarations
+endif
 KASAN_SANITIZE			:= n
 KCSAN_SANITIZE			:= n
 UBSAN_SANITIZE			:= n
