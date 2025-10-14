@@ -2059,6 +2059,24 @@ static struct ctl_table kern_table[] = {
 		.extra1		= SYSCTL_ONE,
 		.extra2		= SYSCTL_INT_MAX,
 	},
+	{
+		.procname	= "sample_interval_inst",
+		.data		= &sysctl_sample_interval_inst,
+		.maxlen		= sizeof(sysctl_sample_interval_inst),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= SYSCTL_INT_MAX,
+	},
+	{
+		.procname	= "sample_interval_cycles",
+		.data		= &sysctl_sample_interval_cycles,
+		.maxlen		= sizeof(sysctl_sample_interval_cycles),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= SYSCTL_INT_MAX,
+	},
 #endif
 	{ }
 };
