@@ -570,13 +570,12 @@ static __always_inline void __el1_pnmi(struct pt_regs *regs,
 	arm64_exit_nmi(regs);
 }
 
-#ifdef CONFIG_FAST_IRQ
+#if defined(CONFIG_FAST_IRQ) || defined(CONFIG_ACTLR_XCALL_XINT)
 static void noinstr el0_xint(struct pt_regs *regs, u64 nmi_flag,
 			     void (*handler)(struct pt_regs *),
 			     void (*nmi_handler)(struct pt_regs *))
 {
 	fast_enter_from_user_mode(regs);
-#ifndef CONFIG_DEBUG_FEATURE_BYPASS
 	/* Is there a NMI to handle? */
 	if (system_uses_nmi() && (read_sysreg(isr_el1) & nmi_flag)) {
 		/*
@@ -589,10 +588,9 @@ static void noinstr el0_xint(struct pt_regs *regs, u64 nmi_flag,
 		do_interrupt_handler(regs, nmi_handler);
 		arm64_exit_nmi(regs);
 
-		exit_to_user_mode(regs);
+		fast_exit_to_user_mode(regs);
 		return;
 	}
-#endif
 
 	write_sysreg(DAIF_PROCCTX_NOIRQ, daif);
 
@@ -1058,7 +1056,7 @@ asmlinkage void noinstr el0t_64_xcall_handler(struct pt_regs *regs)
 }
 asmlinkage void noinstr el0t_64_xint_handler(struct pt_regs *regs)
 {
-	el0_interrupt(regs, ISR_EL1_IS, handle_arch_irq, handle_arch_nmi_irq);
+	el0_xint(regs, ISR_EL1_IS, handle_arch_irq, handle_arch_nmi_irq);
 }
 #endif
 
