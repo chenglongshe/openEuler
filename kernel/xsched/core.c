@@ -385,9 +385,70 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 	return err;
 }
 
+/*
+ * A function for submitting stream's commands (sending commands to a XCU).
+ */
+static int xsched_proc(struct xsched_cu *xcu, struct vstream_info *vs,
+		       struct vstream_metadata *vsm)
+{
+	struct xcu_op_handler_params params;
+	struct xsched_entity *xse;
+
+	XSCHED_CALL_STUB();
+
+	xse = &vs->ctx->xse;
+
+	/* Init input parameters for xcu_run and xcu_wait callbacks. */
+	params.group = xcu->group;
+
+	/* Increase process time by abstract kick handling time. */
+	xse->last_exec_runtime += vsm->exec_time;
+
+	XSCHED_DEBUG("Process vsm sq_tail %d exec_time %u sqe_num %d sq_id %d@ %s\n",
+		    vsm->sq_tail, vsm->exec_time, vsm->sqe_num, vsm->sq_id, __func__);
+	submit_kick(vs, &params, vsm);
+
+	xse->total_submitted++;
+
+	XSCHED_DEBUG("xse %d total_submitted = %lu @ %s\n",
+		    xse->tgid, xse->total_submitted, __func__);
+
+	XSCHED_EXIT_STUB();
+	return 0;
+}
+
 static int __xsched_submit(struct xsched_cu *xcu, struct xsched_entity *xse)
 {
-	return 0;
+	struct vstream_metadata *vsm, *tmp;
+	unsigned int submit_exec_time = 0;
+	size_t kicks_submitted = 0;
+	unsigned long wait_us;
+
+	XSCHED_DEBUG("%s called for xse %d on xcu %u\n",
+		__func__, xse->tgid, xcu->id);
+
+	list_for_each_entry_safe(vsm, tmp, &xcu->vsm_list, node) {
+		xsched_proc(xcu, vsm->parent, vsm);
+		submit_exec_time += vsm->exec_time;
+		kicks_submitted++;
+	}
+
+	INIT_LIST_HEAD(&xcu->vsm_list);
+
+	mutex_unlock(&xcu->xcu_lock);
+
+	wait_us = div_u64(submit_exec_time, NSEC_PER_USEC);
+	XSCHED_DEBUG("XCU kicks_submitted=%lu wait_us=%lu @ %s\n",
+		    kicks_submitted, wait_us, __func__);
+
+	if (wait_us > 0) {
+		/* Sleep shift not larger than 12.5% */
+		usleep_range(wait_us, wait_us + (wait_us >> 3));
+	}
+
+	mutex_lock(&xcu->xcu_lock);
+
+	return kicks_submitted;
 }
 
 static inline bool should_preempt(struct xsched_entity *xse)
@@ -441,6 +502,35 @@ static int xsched_schedule(void *input_xcu)
 	}
 
 	return err;
+}
+
+void submit_kick(struct vstream_info *vs,
+			struct xcu_op_handler_params *params,
+			struct vstream_metadata *vsm)
+{
+	int ret;
+
+	params->fd = vs->fd;
+	params->param_1 = &vs->id;
+	params->param_2 = &vs->channel_id;
+	params->param_3 = vsm->sqe;
+	params->param_4 = &vsm->sqe_num;
+	params->param_5 = &vsm->timeout;
+	params->param_6 = &vs->sqcq_type;
+	params->param_7 = vs->drv_ctx;
+	/* Send vstream on a device for processing. */
+	ret = xcu_run(params);
+	if (ret) {
+		XSCHED_ERR(
+			"Failed to send vstream tasks vstreamId=%d to a device for processing.\n",
+			vs->id);
+	}
+
+	XSCHED_DEBUG("Vstream_id %d submit vsm: sq_tail %d\n", vs->id, vsm->sq_tail);
+
+	kfree(vsm);
+
+	return;
 }
 
 /* Initialize xsched rt runqueue during kernel init.
