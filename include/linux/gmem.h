@@ -388,6 +388,7 @@ struct gm_page {
 };
 
 #define GM_PAGE_EVICTING	0x1
+#define GM_PAGE_PINNED		0x2
 
 static inline void gm_page_flags_set(struct gm_page *gm_page, int flags)
 {
@@ -404,6 +405,11 @@ static inline bool gm_page_evicting(struct gm_page *gm_page)
 	return !!(gm_page->flag & GM_PAGE_EVICTING);
 }
 
+static inline bool gm_page_pinned(struct gm_page *gm_page)
+{
+	return !!(gm_page->flag & GM_PAGE_PINNED);
+}
+
 #define NUM_IMPORT_PAGES   16
 
 int __init gm_page_cachep_init(void);
@@ -414,6 +420,8 @@ void hnode_activelist_add(struct hnode *hnode, struct gm_page *gm_page);
 void hnode_activelist_del(struct hnode *hnode, struct gm_page *gm_page);
 void hnode_activelist_del_and_add(struct hnode *hnode, struct gm_page *gm_page);
 void mark_gm_page_active(struct gm_page *gm_page);
+void mark_gm_page_pinned(struct gm_page *gm_page);
+void mark_gm_page_unpinned(struct gm_page *gm_page);
 void gm_page_add_rmap(struct gm_page *gm_page, struct mm_struct *mm, unsigned long va);
 void gm_page_remove_rmap(struct gm_page *gm_page);
 int gm_add_pages(unsigned int hnid, struct list_head *pages);

@@ -1434,6 +1434,12 @@ static vm_fault_t __do_peer_shared_anonymous_page(struct vm_fault *vmf)
 
 	mutex_lock(&gm_mapping->lock);
 
+	if (gm_mapping_device(gm_mapping) && gm_page_pinned(gm_mapping->gm_page)) {
+		pr_err("page is pinned! addr is %lx\n", gm_mapping->gm_page->va);
+		ret = VM_FAULT_SIGBUS;
+		goto release;
+	}
+
 	if (gm_mapping_cpu(gm_mapping))
 		folio = page_folio(gm_mapping->page);
 	if (!folio) {

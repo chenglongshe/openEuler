@@ -291,10 +291,17 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 	if (gm_mapping_nomap(gm_mapping)) {
 		goto peer_map;
 	} else if (gm_mapping_device(gm_mapping)) {
-		if (behavior == MADV_WILLNEED) {
+		switch (behavior) {
+		case MADV_PINNED:
+			mark_gm_page_pinned(gm_mapping->gm_page);
+			fallthrough;
+		case MADV_WILLNEED:
 			mark_gm_page_active(gm_mapping->gm_page);
 			goto unlock;
-		} else {
+		case MADV_PINNED_REMOVE:
+			mark_gm_page_unpinned(gm_mapping->gm_page);
+			goto unlock;
+		default:
 			ret = 0;
 			goto unlock;
 		}
@@ -344,6 +351,12 @@ peer_map:
 	gm_mapping->dev = dev;
 	gm_page_add_rmap(gm_page, mm, addr);
 	gm_mapping->gm_page = gm_page;
+
+	if (behavior == MADV_PINNED)
+		mark_gm_page_pinned(gm_page);
+	else if (behavior == MADV_PINNED_REMOVE)
+		mark_gm_page_unpinned(gm_page);
+
 	hnode_activelist_add(hnode, gm_page);
 	hnode_active_pages_inc(hnode);
 unlock:
@@ -494,6 +507,7 @@ struct prefetch_data {
 	unsigned long addr;
 	size_t size;
 	struct work_struct work;
+	int behavior;
 	int *res;
 };
 
@@ -508,7 +522,7 @@ static void prefetch_work_cb(struct work_struct *work)
 	do {
 		/* MADV_WILLNEED: dev will soon access this addr. */
 		mmap_read_lock(d->mm);
-		ret = gm_dev_fault_locked(d->mm, addr, d->dev, MADV_WILLNEED);
+		ret = gm_dev_fault_locked(d->mm, addr, d->dev, d->behavior);
 		mmap_read_unlock(d->mm);
 		if (ret == GM_RET_PAGE_EXIST) {
 			gmem_err("%s: device has done page fault, ignore prefetch\n",
@@ -522,7 +536,7 @@ static void prefetch_work_cb(struct work_struct *work)
 	kfree(d);
 }
 
-static int hmadvise_do_prefetch(struct gm_dev *dev, unsigned long addr, size_t size)
+static int hmadvise_do_prefetch(struct gm_dev *dev, unsigned long addr, size_t size, int behavior)
 {
 	unsigned long start, end, per_size;
 	int page_size = HPAGE_SIZE;
@@ -578,6 +592,7 @@ static int hmadvise_do_prefetch(struct gm_dev *dev, unsigned long addr, size_t s
 		data->mm = current->mm;
 		data->dev = dev;
 		data->addr = start;
+		data->behavior = behavior;
 		data->res = &res;
 		if (per_size == 0)
 			data->size = size;
@@ -745,7 +760,12 @@ int hmadvise_inner(int hnid, unsigned long start, size_t len_in, int behavior)
 no_hnid:
 	switch (behavior) {
 	case MADV_PREFETCH:
-		return hmadvise_do_prefetch(dev, start, len_in);
+		behavior = MADV_WILLNEED;
+		fallthrough;
+	case MADV_PINNED_REMOVE:
+		fallthrough;
+	case MADV_PINNED:
+		return hmadvise_do_prefetch(dev, start, len_in, behavior);
 	case MADV_DONTNEED:
 		return hmadvise_do_eagerfree(start, len_in);
 	default:
