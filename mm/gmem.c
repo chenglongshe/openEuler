@@ -477,6 +477,17 @@ enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev, enum gm_mmu_mode 
 
 	INIT_LIST_HEAD(&ctx->gm_dev_link);
 	INIT_LIST_HEAD(&ctx->gm_as_link);
+
+	if (!list_empty(&as->gm_ctx_list)) {
+		struct list_head *old_node;
+		struct gm_context *old_ctx;
+
+		old_node = as->gm_ctx_list.prev;
+		list_del_init(old_node);
+		old_ctx = list_entry(old_node, struct gm_context, gm_as_link);
+		kfree(old_ctx);
+	}
+
 	list_add_tail(&dev->gm_ctx_list, &ctx->gm_dev_link);
 	list_add_tail(&ctx->gm_as_link, &as->gm_ctx_list);
 
