@@ -348,18 +348,13 @@ static inline void hnode_free_pages_dec(struct hnode *hnode)
 	atomic_dec(&hnode->nr_free_pages);
 }
 
-static inline bool is_hnode(int node)
-{
-	return (node < MAX_NUMNODES) && !node_isset(node, node_possible_map) &&
-	       node_isset(node, hnode_map);
-}
-
 static inline int get_hnuma_id(struct gm_dev *gm_dev)
 {
 	return first_node(gm_dev->registered_hnodes);
 }
 
 void __init hnuma_init(void);
+bool is_hnode(int nid);
 unsigned int alloc_hnode_id(void);
 void free_hnode_id(unsigned int nid);
 struct hnode *get_hnode(unsigned int hnid);

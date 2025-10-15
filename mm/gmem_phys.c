@@ -22,6 +22,7 @@
 static struct kmem_cache *gm_page_cachep;
 
 DEFINE_SPINLOCK(hnode_lock);
+static nodemask_t hnode_map;
 struct hnode *hnodes[MAX_NUMNODES];
 
 void __init hnuma_init(void)
@@ -29,9 +30,15 @@ void __init hnuma_init(void)
 	unsigned int node;
 
 	spin_lock(&hnode_lock);
+	nodes_clear(hnode_map);
 	for_each_node(node)
 		node_set(node, hnode_map);
 	spin_unlock(&hnode_lock);
+}
+
+bool is_hnode(int nid)
+{
+	return node_isset(nid, hnode_map);
 }
 
 unsigned int alloc_hnode_id(void)
