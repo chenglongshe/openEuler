@@ -781,6 +781,26 @@ static bool hnid_match_dest(int hnid, struct gm_mapping *dest)
 	return (hnid < 0) ? gm_mapping_cpu(dest) : gm_mapping_device(dest);
 }
 
+static void cpu_page_copy(struct page *dst_page, unsigned long dst_offset,
+	struct page *src_page, unsigned long src_offset, size_t size)
+{
+	unsigned long src, dst;
+
+	src = (unsigned long)page_address(src_page) + src_offset;
+	dst = (unsigned long)page_address(dst_page) + dst_offset;
+	if (!src || !dst) {
+		gmem_err("%s: src (%lx) or dst (%lx) is invalid!", __func__, src, dst);
+		return;
+	}
+	memcpy((void *)dst, (void *)src, size);
+}
+
+enum gmem_copy_dir {
+	COPY_GMEM_TO_NORM,
+	COPY_NORM_TO_GMEM,
+	COPY_GMEM_TO_GMEM,
+};
+
 static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 		unsigned long src, size_t size)
 {
@@ -790,6 +810,9 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 	struct gm_mapping *gm_mapping_dest, *gm_mapping_src;
 	struct gm_dev *dev = NULL;
 	struct gm_memcpy_t gmc = {0};
+	enum gmem_copy_dir dir;
+	struct page *trans_hpage;
+	void *trans_addr;
 
 	if (size == 0)
 		return;
@@ -803,24 +826,39 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 		goto unlock_mm;
 	}
 
-	gm_mapping_dest = vm_object_lookup(vma_dest->vm_obj, dest & ~(page_size - 1));
-	gm_mapping_src = vm_object_lookup(vma_src->vm_obj, src & ~(page_size - 1));
-
-	if (!gm_mapping_src) {
-		gmem_err("hmemcpy: gm_mapping_src is NULL");
+	if (vma_is_peer_shared(vma_src) && vma_is_peer_shared(vma_dest)) {
+		dir = COPY_GMEM_TO_GMEM;
+		gm_mapping_dest = vm_object_lookup(vma_dest->vm_obj, dest & ~(page_size - 1));
+		gm_mapping_src = vm_object_lookup(vma_src->vm_obj, src & ~(page_size - 1));
+	} else if (vma_is_peer_shared(vma_src)) {
+		dir = COPY_GMEM_TO_NORM;
+		gm_mapping_src = vm_object_lookup(vma_src->vm_obj, src & ~(page_size - 1));
+		gm_mapping_dest = NULL;
+	} else if (vma_is_peer_shared(vma_dest)) {
+		dir = COPY_NORM_TO_GMEM;
+		gm_mapping_dest = vm_object_lookup(vma_dest->vm_obj, dest & ~(page_size - 1));
+		gm_mapping_src = NULL;
+	} else {
+		gmem_err("%s: src %lx and dest %lx both not gmem addr!", __func__, src, dest);
 		goto unlock_mm;
 	}
 
-	if (gm_mapping_nomap(gm_mapping_src)) {
-		gmem_err("hmemcpy: src address is not mapping to CPU or device");
+	trans_hpage = alloc_pages(GFP_TRANSHUGE, HPAGE_PMD_ORDER);
+	if (!trans_hpage) {
+		gmem_err("%s: alloc trans_hpage failed!", __func__);
 		goto unlock_mm;
 	}
+	trans_addr = page_to_virt(trans_hpage);
+
+	if (dir != COPY_NORM_TO_GMEM && (!gm_mapping_src || gm_mapping_nomap(gm_mapping_src)))
+		gmem_err("%s: gm_mapping_src is NULL or still not mapped! addr is %lx",
+			__func__, src);
 
 	if (hnid != -1) {
 		dev = get_gm_dev(hnid);
 		if (!dev) {
 			gmem_err("hmemcpy: hnode's dev is NULL");
-			goto unlock_mm;
+			goto free_trans_page;
 		}
 	}
 
@@ -828,49 +866,141 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 	if (!gm_mapping_dest || gm_mapping_nomap(gm_mapping_dest)
 		|| !hnid_match_dest(hnid, gm_mapping_dest)) {
 		if (hnid == -1) {
-			ret = handle_mm_fault(vma_dest, dest & ~(page_size - 1), FAULT_FLAG_USER |
-						FAULT_FLAG_INSTRUCTION | FAULT_FLAG_WRITE, NULL);
-			if (ret) {
-				gmem_err("%s: failed to execute host page fault, ret:%d",
-					__func__, ret);
-				goto unlock_mm;
+			if (gm_mapping_dest && gm_mapping_device(gm_mapping_dest)
+				&& gm_page_pinned(gm_mapping_dest->gm_page)) {
+				gmem_err("%s: dest %lx is pinned on device, skip handle_mm_fault",
+					__func__, dest);
+			} else {
+				ret = handle_mm_fault(vma_dest, dest & ~(page_size - 1),
+					FAULT_FLAG_USER | FAULT_FLAG_INSTRUCTION | FAULT_FLAG_WRITE,
+					NULL);
+				if (ret) {
+					gmem_err("%s: failed to execute host page fault, ret:%d",
+						__func__, ret);
+					goto free_trans_page;
+				}
 			}
 		} else {
 			ret = gm_dev_fault_locked(mm, dest & ~(page_size - 1), dev, MADV_WILLNEED);
 			if (ret != GM_RET_SUCCESS) {
 				gmem_err("%s: failed to excecute dev page fault.", __func__);
-				goto unlock_mm;
+				goto free_trans_page;
 			}
 		}
 	}
-	if (!gm_mapping_dest)
+	if (!gm_mapping_dest && dir != COPY_GMEM_TO_NORM)
 		gm_mapping_dest = vm_object_lookup(vma_dest->vm_obj, round_down(dest, page_size));
 
 	if (gm_mapping_dest && gm_mapping_dest != gm_mapping_src)
 		mutex_lock(&gm_mapping_dest->lock);
-	mutex_lock(&gm_mapping_src->lock);
+	if (gm_mapping_src)
+		mutex_lock(&gm_mapping_src->lock);
 	// Use memcpy when there is no device address, otherwise use peer_memcpy
-	if (hnid == -1) {
+	if (dir == COPY_GMEM_TO_NORM) {
+		if (!gm_mapping_src) {
+			gmem_err("%s: do COPY_GMEM_TO_NORM but gm_mapping_src is NULL!", __func__);
+			goto unlock_gm_mapping;
+		}
 		if (gm_mapping_cpu(gm_mapping_src)) { // host to host
-			gmem_err("hmemcpy: host to host is unimplemented\n");
-			goto unlock_gm_mmaping;
-		} else { // device to host
+			cpu_page_copy(trans_hpage,
+				(unsigned long)trans_addr & (page_size - 1),
+				gm_mapping_src->page, src & (page_size - 1),
+				size);
+			goto copy_to_norm_dest;
+		} else if (gm_mapping_device(gm_mapping_src)) { // device to host
 			dev = gm_mapping_src->dev;
-			gmc.dest = phys_to_dma(dev->dma_dev,
-				page_to_phys(gm_mapping_dest->page) + (dest & (page_size - 1)));
+			gmc.dest = phys_to_dma(dev->dma_dev, page_to_phys(trans_hpage) +
+				((unsigned long)trans_addr & (page_size - 1)));
 			gmc.src = gm_mapping_src->gm_page->dev_dma_addr + (src & (page_size - 1));
 			gmc.kind = GM_MEMCPY_D2H;
+		} else {
+			gmem_err("gm_mapping_src bad status, dir is COPY_GMEM_TO_NORM");
+			goto unlock_gm_mapping;
 		}
-	} else {
-		if (gm_mapping_cpu(gm_mapping_src)) { // host to device
+	} else if (dir == COPY_NORM_TO_GMEM) {
+		if (!gm_mapping_dest) {
+			gmem_err("%s: do COPY_NORM_TO_GMEM but gm_mapping_dest is NULL!", __func__);
+			goto unlock_gm_mapping;
+		}
+		if (copy_from_user(trans_addr, (void __user *)src, size) > 0)
+			gmem_err("copy normal src %lx to trans failed", src);
+		if (gm_mapping_cpu(gm_mapping_dest)) { // host to host
+			cpu_page_copy(gm_mapping_dest->page, dest & (page_size - 1),
+				trans_hpage, (unsigned long)trans_addr & (page_size - 1), size);
+			goto unlock_gm_mapping;
+		} else if (gm_mapping_device(gm_mapping_dest)) {
+			if (!dev) {
+				gmem_err("%s: do COPY_NORM_TO_GMEM but dev is NULL, hnid is %d",
+					__func__, hnid);
+				goto unlock_gm_mapping;
+			}
 			gmc.dest = gm_mapping_dest->gm_page->dev_dma_addr +
-						(dest & (page_size - 1));
-			gmc.src = phys_to_dma(dev->dma_dev,
-				page_to_phys(gm_mapping_src->page) + (src & (page_size - 1)));
+				(dest & (page_size - 1));
+			gmc.src = phys_to_dma(dev->dma_dev, page_to_phys(trans_hpage) +
+				((unsigned long)trans_addr & (page_size - 1)));
 			gmc.kind = GM_MEMCPY_H2D;
 		} else { // device to device
-			gmem_err("hmemcpy: device to device is unimplemented\n");
-			goto unlock_gm_mmaping;
+			gmem_err("gm_mapping_dest bad status, dir is COPY_NORM_TO_GMEM\n");
+			goto unlock_gm_mapping;
+		}
+	} else if (dir == COPY_GMEM_TO_GMEM) {
+		if (gm_mapping_cpu(gm_mapping_src)) {
+			if (gm_mapping_cpu(gm_mapping_dest)) {
+				cpu_page_copy(gm_mapping_dest->page, dest & (page_size - 1),
+						gm_mapping_src->page, src & (page_size - 1), size);
+				goto unlock_gm_mapping;
+			} else if (gm_mapping_device(gm_mapping_dest)) {
+				dev = gm_mapping_dest->dev;
+				gmc.dest = gm_mapping_dest->gm_page->dev_dma_addr +
+					(dest & (page_size - 1));
+				gmc.src = phys_to_dma(dev->dma_dev,
+					page_to_phys(gm_mapping_src->page) +
+					(src & (page_size - 1)));
+				gmc.kind = GM_MEMCPY_H2D;
+			} else {
+				gmem_err("gm_mapping_dest bad status, src is on host!");
+				goto unlock_gm_mapping;
+			}
+		} else if (gm_mapping_device(gm_mapping_src)) {
+			if (gm_mapping_cpu(gm_mapping_dest)) {
+				dev = gm_mapping_src->dev;
+				gmc.dest = phys_to_dma(dev->dma_dev,
+					page_to_phys(gm_mapping_dest->page) +
+					(dest & (page_size - 1)));
+				gmc.src = gm_mapping_src->gm_page->dev_dma_addr +
+					(src & (page_size - 1));
+				gmc.kind = GM_MEMCPY_D2H;
+			} else if (gm_mapping_device(gm_mapping_dest)) {
+				dev = gm_mapping_src->dev;
+				gmc.dest = phys_to_dma(dev->dma_dev, page_to_phys(trans_hpage) +
+					((unsigned long)trans_addr & (page_size - 1)));
+				gmc.src = gm_mapping_src->gm_page->dev_dma_addr +
+					(src & (page_size - 1));
+				gmc.kind = GM_MEMCPY_D2H;
+				gmc.mm = mm;
+				gmc.dev = dev;
+				gmc.size = size;
+				dev->mmu->peer_hmemcpy(&gmc);
+
+				dev = gm_mapping_dest->dev;
+				gmc.dest = gm_mapping_dest->gm_page->dev_dma_addr +
+					(dest & (page_size - 1));
+				gmc.src = phys_to_dma(dev->dma_dev, page_to_phys(trans_hpage) +
+					((unsigned long)trans_addr & (page_size - 1)));
+				gmc.kind = GM_MEMCPY_H2D;
+				gmc.mm = mm;
+				gmc.dev = dev;
+				gmc.size = size;
+				dev->mmu->peer_hmemcpy(&gmc);
+
+				goto unlock_gm_mapping;
+			} else {
+				gmem_err("gm_mapping_dest bad status, src is on device!");
+				goto unlock_gm_mapping;
+			}
+		} else {
+			gmem_err("gm_mapping_src bad status, dir is COPY_GMEM_TO_GMEM");
+			goto unlock_gm_mapping;
 		}
 	}
 	gmc.mm = mm;
@@ -878,10 +1008,19 @@ static void do_hmemcpy(struct mm_struct *mm, int hnid, unsigned long dest,
 	gmc.size = size;
 	dev->mmu->peer_hmemcpy(&gmc);
 
-unlock_gm_mmaping:
-	mutex_unlock(&gm_mapping_src->lock);
+copy_to_norm_dest:
+	if (dir == COPY_GMEM_TO_NORM) {
+		if (copy_to_user((void __user *)dest, trans_addr, size) > 0)
+			gmem_err("copy trans to normal dest %lx failed!", dest);
+	}
+
+unlock_gm_mapping:
+	if (gm_mapping_src)
+		mutex_unlock(&gm_mapping_src->lock);
 	if (gm_mapping_dest && gm_mapping_dest != gm_mapping_src)
 		mutex_unlock(&gm_mapping_dest->lock);
+free_trans_page:
+	__free_pages(trans_hpage, HPAGE_PMD_ORDER);
 unlock_mm:
 	mmap_read_unlock(mm);
 }
@@ -949,15 +1088,20 @@ int hmemcpy(int hnid, unsigned long dest, unsigned long src, size_t size)
 	vma_src = find_vma(mm, src);
 
 	if ((ULONG_MAX - size < src) || !vma_src || vma_src->vm_start > src ||
-		!vma_is_peer_shared(vma_src) || vma_src->vm_end < (src + size)) {
+		vma_src->vm_end < (src + size)) {
 		gmem_err("failed to find peer_shared vma by invalid src or size\n");
 		goto unlock;
 	}
 
 	if ((ULONG_MAX - size < dest) || !vma_dest || vma_dest->vm_start > dest ||
-		!vma_is_peer_shared(vma_dest) || vma_dest->vm_end < (dest + size)) {
+		vma_dest->vm_end < (dest + size)) {
 		gmem_err("failed to find peer_shared vma by invalid dest or size\n");
 		goto unlock;
+	}
+
+	if (!vma_is_peer_shared(vma_src) && !vma_is_peer_shared(vma_dest)) {
+		mmap_read_unlock(mm);
+		return -EAGAIN;
 	}
 
 	if (!(vma_dest->vm_flags & VM_WRITE)) {
