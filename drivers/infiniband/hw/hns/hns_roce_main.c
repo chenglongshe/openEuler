@@ -445,6 +445,8 @@ static int hns_roce_alloc_uar_entry(struct ib_ucontext *uctx)
 	if (!context->db_mmap_entry)
 		return -ENOMEM;
 
+	hns_roce_get_cq_bankid_for_uctx(context);
+
 	return 0;
 }
 
@@ -577,6 +579,8 @@ static int hns_roce_alloc_ucontext(struct ib_ucontext *uctx,
 	ret = hns_roce_alloc_uar_entry(uctx);
 	if (ret)
 		goto error_fail_uar_entry;
+
+	hns_roce_put_cq_bankid_for_uctx(context);
 
 	if (hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_CQ_RECORD_DB ||
 	    hr_dev->caps.flags & HNS_ROCE_CAP_FLAG_QP_RECORD_DB) {
