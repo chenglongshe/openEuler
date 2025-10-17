@@ -91,6 +91,8 @@ struct inet_request_sock {
 				comp_ok	   : 1,
 #endif
 				smc_ok	   : 1;
+	u16			ums_ok	   : 1,
+				unused	   : 15;
 	u32                     ir_mark;
 	union {
 		struct ip_options_rcu __rcu	*ireq_opt;
