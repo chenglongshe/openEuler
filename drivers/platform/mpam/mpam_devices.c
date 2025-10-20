@@ -1016,7 +1016,7 @@ static void __ris_msmon_read(void *arg)
 	read_msmon_ctl_flt_vals(m, &cur_ctl, &cur_flt);
 	gen_msmon_ctl_flt_vals(m, &ctl_val, &flt_val);
 	config_mismatch = cur_flt != flt_val ||
-			  cur_ctl != (ctl_val | MSMON_CFG_x_CTL_EN);
+			 (cur_ctl & ~MSMON_CFG_x_CTL_OFLOW_STATUS) != (ctl_val | MSMON_CFG_x_CTL_EN);
 
 	if (config_mismatch || reset_on_next_read)
 		write_msmon_ctl_flt_vals(m, ctl_val, flt_val);
@@ -1074,8 +1074,8 @@ static void __ris_msmon_read(void *arg)
 		}
 
 		/* Add any pre-overflow value to the mbwu_state->val */
-		if (mbwu_state->prev_val > now)
-			overflow_val = mpam_msmon_overflow_val(ris) - mbwu_state->prev_val;
+		if (mbwu_state->prev_val > now && (cur_ctl & MSMON_CFG_x_CTL_OFLOW_STATUS))
+			overflow_val = mpam_msmon_overflow_val(ris);
 
 		mbwu_state->prev_val = now;
 		mbwu_state->correction += overflow_val;
