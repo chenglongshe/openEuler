@@ -35,6 +35,8 @@
 #include <linux/xarray.h>
 #include <linux/vm_object.h>
 
+#include "gmem-internal.h"
+
 /*
  * Sine VM_OBJECT maintains the logical page table under each VMA, and each VMA
  * points to a VM_OBJECT. Ultimately VM_OBJECTs must be maintained as long as VMA

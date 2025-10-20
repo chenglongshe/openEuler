@@ -49,6 +49,10 @@
 #include <linux/ksm.h>
 
 #include <linux/vm_object.h>
+#ifdef CONFIG_GMEM
+#include <linux/gmem.h>
+#include "gmem-internal.h"
+#endif
 
 #include <linux/share_pool.h>
 
@@ -1293,6 +1297,28 @@ static unsigned long __mmap_region_ext(struct mm_struct *mm,
 				   struct file *file, unsigned long addr,
 				   unsigned long len, vm_flags_t vm_flags,
 				   unsigned long pgoff, struct list_head *uf);
+
+#ifdef CONFIG_GMEM
+static unsigned long
+get_unmapped_area_aligned(struct file *file, unsigned long addr, unsigned long len,
+		unsigned long pgoff, unsigned long flags, unsigned long align)
+{
+	if (len > TASK_SIZE)
+		return -ENOMEM;
+
+	addr = current->mm->get_unmapped_area(file, addr, len + align, pgoff, flags);
+	if (IS_ERR_VALUE(addr))
+		return addr;
+
+	addr = round_up(addr, align);
+	if (addr > TASK_SIZE - len)
+		return -ENOMEM;
+	if (!IS_ALIGNED(addr, PMD_SIZE))
+		return -EINVAL;
+
+	return addr;
+}
+#endif
 /*
  * The caller must write-lock current->mm->mmap_lock.
  */
@@ -1997,28 +2023,6 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 
 EXPORT_SYMBOL(get_unmapped_area);
 
-#ifdef CONFIG_GMEM
-unsigned long
-get_unmapped_area_aligned(struct file *file, unsigned long addr, unsigned long len,
-		unsigned long pgoff, unsigned long flags, unsigned long align)
-{
-	if (len > TASK_SIZE)
-		return -ENOMEM;
-
-	addr = current->mm->get_unmapped_area(file, addr, len + align, pgoff, flags);
-	if (IS_ERR_VALUE(addr))
-		return addr;
-
-	addr = round_up(addr, align);
-	if (addr > TASK_SIZE - len)
-		return -ENOMEM;
-	if (!IS_ALIGNED(addr, PMD_SIZE))
-		return -EINVAL;
-
-	return addr;
-}
-EXPORT_SYMBOL(get_unmapped_area_aligned);
-#endif
 
 /**
  * find_vma_intersection() - Look up the first VMA which intersects the interval

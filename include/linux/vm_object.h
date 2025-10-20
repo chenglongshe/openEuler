@@ -2,10 +2,8 @@
 #ifndef _VM_OBJECT_H
 #define _VM_OBJECT_H
 
-#include <linux/mm_types.h>
-
 #ifdef CONFIG_GMEM
-#include <linux/gmem.h>
+#include <linux/mm_types.h>
 /* vm_object KPI */
 int __init vm_object_init(void);
 struct vm_object *vm_object_create(struct vm_area_struct *vma);

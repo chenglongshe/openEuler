@@ -29,6 +29,9 @@
 #include <linux/oom.h>
 #ifdef CONFIG_GMEM
 #include <linux/vm_object.h>
+#include <linux/gmem.h>
+
+#include "gmem-internal.h"
 #endif
 
 #include "internal.h"

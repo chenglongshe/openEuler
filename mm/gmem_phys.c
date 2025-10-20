@@ -16,6 +16,8 @@
 #include <linux/gmem.h>
 #include <linux/vm_object.h>
 
+#include "gmem-internal.h"
+
 #define NUM_SWAP_PAGES		16
 #define MAX_SWAP_RETRY_TIMES	10
 
@@ -38,7 +40,8 @@ void __init hnuma_init(void)
 
 bool is_hnode(int nid)
 {
-	return node_isset(nid, hnode_map);
+	return (nid < MAX_NUMNODES) && !node_isset(nid, node_possible_map) &&
+			node_isset(nid, hnode_map);
 }
 
 unsigned int alloc_hnode_id(void)

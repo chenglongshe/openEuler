@@ -42,13 +42,14 @@
 #include <linux/workqueue.h>
 #include <linux/proc_fs.h>
 
+#include "gmem-internal.h"
+
 DEFINE_STATIC_KEY_FALSE(gmem_status);
 EXPORT_SYMBOL_GPL(gmem_status);
 
 static struct kmem_cache *gm_as_cache;
 static struct kmem_cache *gm_dev_cache;
 static struct kmem_cache *gm_ctx_cache;
-static struct kmem_cache *gm_region_cache;
 static DEFINE_XARRAY_ALLOC(gm_dev_id_pool);
 
 static bool enable_gmem;
@@ -136,13 +137,9 @@ static int __init gmem_init(void)
 	if (!gm_ctx_cache)
 		goto free_dev;
 
-	gm_region_cache = KMEM_CACHE(gm_region, 0);
-	if (!gm_region_cache)
-		goto free_ctx;
-
 	err = gm_page_cachep_init();
 	if (err)
-		goto free_region;
+		goto free_ctx;
 
 	err = gm_init_sysfs();
 	if (err)
@@ -154,14 +151,14 @@ static int __init gmem_init(void)
 
 	err = gmem_stats_init();
 	if (err)
-		goto free_region;
+		goto free_ctx;
 
 	prefetch_wq = alloc_workqueue("prefetch",
 		__WQ_LEGACY | WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE, GM_WORK_CONCURRENCY);
 	if (!prefetch_wq) {
 		gmem_err("fail to alloc workqueue prefetch_wq\n");
 		err = -EFAULT;
-		goto free_region;
+		goto free_ctx;
 	}
 
 #ifdef CONFIG_PROC_FS
@@ -176,8 +173,6 @@ free_gm_sysfs:
 	gm_deinit_sysfs();
 free_gm_page:
 	gm_page_cachep_destroy();
-free_region:
-	kmem_cache_destroy(gm_region_cache);
 free_ctx:
 	kmem_cache_destroy(gm_ctx_cache);
 free_dev:
@@ -298,7 +293,7 @@ enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long  addr, struc
 		case MADV_WILLNEED:
 			mark_gm_page_active(gm_mapping->gm_page);
 			goto unlock;
-		case MADV_PINNED_REMOVE:
+		case MADV_UNPINNED:
 			mark_gm_page_unpinned(gm_mapping->gm_page);
 			goto unlock;
 		default:
@@ -354,7 +349,7 @@ peer_map:
 
 	if (behavior == MADV_PINNED)
 		mark_gm_page_pinned(gm_page);
-	else if (behavior == MADV_PINNED_REMOVE)
+	else if (behavior == MADV_UNPINNED)
 		mark_gm_page_unpinned(gm_page);
 
 	hnode_activelist_add(hnode, gm_page);
@@ -773,7 +768,7 @@ no_hnid:
 	case MADV_PREFETCH:
 		behavior = MADV_WILLNEED;
 		fallthrough;
-	case MADV_PINNED_REMOVE:
+	case MADV_UNPINNED:
 		fallthrough;
 	case MADV_PINNED:
 		return hmadvise_do_prefetch(dev, start, len_in, behavior);

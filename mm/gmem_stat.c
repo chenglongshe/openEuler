@@ -11,6 +11,8 @@
 #include <linux/kobject.h>
 #include <linux/gmem.h>
 
+#include "gmem-internal.h"
+
 static struct kobject *gm_kobj;
 
 struct hnode_kobject {

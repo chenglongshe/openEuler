@@ -32,6 +32,7 @@
 #include "shuffle.h"
 #ifdef CONFIG_GMEM
 #include <linux/gmem.h>
+#include "gmem-internal.h"
 #endif
 
 #include <asm/setup.h>

@@ -1,0 +1,165 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+#ifndef _GMEM_INTERNAL_H
+#define _GMEM_INTERNAL_H
+
+#include <linux/gmem.h>
+
+#define gm_dev_is_peer(dev) (((dev)->capability & GM_DEV_CAP_PEER) != 0)
+
+/* h-NUMA topology */
+struct hnode {
+	unsigned int id;
+	struct gm_dev *dev;
+
+	struct task_struct *swapd_task;
+
+	struct list_head freelist;
+	struct list_head activelist;
+	spinlock_t freelist_lock;
+	spinlock_t activelist_lock;
+	atomic_t nr_free_pages;
+	atomic_t nr_active_pages;
+
+	unsigned long max_memsize;
+
+	bool import_failed;
+};
+
+static inline void hnode_active_pages_inc(struct hnode *hnode)
+{
+	atomic_inc(&hnode->nr_active_pages);
+}
+
+static inline void hnode_active_pages_dec(struct hnode *hnode)
+{
+	atomic_dec(&hnode->nr_active_pages);
+}
+
+static inline void hnode_free_pages_inc(struct hnode *hnode)
+{
+	atomic_inc(&hnode->nr_free_pages);
+}
+
+static inline void hnode_free_pages_dec(struct hnode *hnode)
+{
+	atomic_dec(&hnode->nr_free_pages);
+}
+
+static inline int get_hnuma_id(struct gm_dev *gm_dev)
+{
+	return first_node(gm_dev->registered_hnodes);
+}
+
+#define GM_MAPPING_CPU		0x10 /* Determines whether page is a pointer or a pfn number. */
+#define GM_MAPPING_DEVICE	0x20
+#define GM_MAPPING_NOMAP	0x40
+#define GM_MAPPING_WILLNEED	0x80
+
+#define GM_MAPPING_TYPE_MASK	(GM_MAPPING_CPU | GM_MAPPING_DEVICE | GM_MAPPING_NOMAP)
+
+
+static inline void gm_mapping_flags_set(struct gm_mapping *gm_mapping, int flags)
+{
+	if (flags & GM_MAPPING_TYPE_MASK)
+		gm_mapping->flag &= ~GM_MAPPING_TYPE_MASK;
+
+	gm_mapping->flag |= flags;
+}
+
+static inline void gm_mapping_flags_clear(struct gm_mapping *gm_mapping, int flags)
+{
+	gm_mapping->flag &= ~flags;
+}
+
+static inline bool gm_mapping_cpu(struct gm_mapping *gm_mapping)
+{
+	return !!(gm_mapping->flag & GM_MAPPING_CPU);
+}
+
+static inline bool gm_mapping_device(struct gm_mapping *gm_mapping)
+{
+	return !!(gm_mapping->flag & GM_MAPPING_DEVICE);
+}
+
+static inline bool gm_mapping_nomap(struct gm_mapping *gm_mapping)
+{
+	return !!(gm_mapping->flag & GM_MAPPING_NOMAP);
+}
+
+enum gmem_stats_item {
+	NR_PAGE_MIGRATING_H2D,
+	NR_PAGE_MIGRATING_D2H,
+	NR_GMEM_STAT_ITEMS
+};
+
+extern void gmem_stats_counter(enum gmem_stats_item item, int val);
+extern void gmem_stats_counter_show(void);
+
+void __init hnuma_init(void);
+bool is_hnode(int nid);
+unsigned int alloc_hnode_id(void);
+void free_hnode_id(unsigned int nid);
+struct hnode *get_hnode(unsigned int hnid);
+struct gm_dev *get_gm_dev(unsigned int nid);
+void hnode_init(struct hnode *hnode, unsigned int hnid, struct gm_dev *dev);
+void hnode_deinit(unsigned int hnid, struct gm_dev *dev);
+
+#define GM_PAGE_EVICTING	0x1
+#define GM_PAGE_PINNED		0x2
+
+static inline void gm_page_flags_set(struct gm_page *gm_page, int flags)
+{
+	gm_page->flag |= flags;
+}
+
+static inline void gm_page_flags_clear(struct gm_page *gm_page, int flags)
+{
+	gm_page->flag &= ~flags;
+}
+
+static inline bool gm_page_evicting(struct gm_page *gm_page)
+{
+	return !!(gm_page->flag & GM_PAGE_EVICTING);
+}
+
+static inline bool gm_page_pinned(struct gm_page *gm_page)
+{
+	return !!(gm_page->flag & GM_PAGE_PINNED);
+}
+
+#define NUM_IMPORT_PAGES   16
+
+int __init gm_page_cachep_init(void);
+void gm_page_cachep_destroy(void);
+
+void hnode_freelist_add(struct hnode *hnode, struct gm_page *gm_page);
+void hnode_activelist_add(struct hnode *hnode, struct gm_page *gm_page);
+void hnode_activelist_del(struct hnode *hnode, struct gm_page *gm_page);
+void hnode_activelist_del_and_add(struct hnode *hnode, struct gm_page *gm_page);
+
+void mark_gm_page_active(struct gm_page *gm_page);
+void mark_gm_page_pinned(struct gm_page *gm_page);
+void mark_gm_page_unpinned(struct gm_page *gm_page);
+
+void gm_page_add_rmap(struct gm_page *gm_page, struct mm_struct *mm, unsigned long va);
+void gm_page_remove_rmap(struct gm_page *gm_page);
+int gm_add_pages(unsigned int hnid, struct list_head *pages);
+void gm_free_page(struct gm_page *gm_page);
+struct gm_page *gm_alloc_page(struct mm_struct *mm, struct hnode *hnode);
+
+static inline void get_gm_page(struct gm_page *gm_page)
+{
+	atomic_inc(&gm_page->refcount);
+}
+
+static inline void put_gm_page(struct gm_page *gm_page)
+{
+	if (atomic_dec_and_test(&gm_page->refcount))
+		gm_free_page(gm_page);
+}
+
+int hnode_init_sysfs(unsigned int hnid);
+int __init gm_init_sysfs(void);
+void gm_deinit_sysfs(void);
+
+#endif /* _GMEM_INTERNAL_H */

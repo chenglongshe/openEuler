@@ -100,10 +100,6 @@
 #include <linux/user_events.h>
 #include <linux/iommu.h>
 
-#ifdef CONFIG_GMEM
-#include <linux/vm_object.h>
-#endif
-
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 #include <linux/sched/grid_qos.h>
 #endif
@@ -117,10 +113,6 @@
 #include <asm/tlbflush.h>
 #ifdef CONFIG_FAST_SYSCALL
 #include <asm/xcall.h>
-#endif
-
-#ifdef CONFIG_GMEM
-#include <linux/vm_object.h>
 #endif
 
 #include <trace/events/sched.h>
@@ -535,9 +527,7 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 	vma_numab_state_init(new);
 	dup_anon_vma_name(orig, new);
 
-#ifdef CONFIG_GMEM
 	dup_peer_shared_vma(new);
-#endif
 
 	return new;
 }
@@ -564,10 +554,8 @@ static void vm_area_free_rcu_cb(struct rcu_head *head)
 
 void vm_area_free(struct vm_area_struct *vma)
 {
-#ifdef CONFIG_GMEM
 	if (vma_is_peer_shared(vma))
 		vm_object_drop_locked(vma);
-#endif
 #ifdef CONFIG_PER_VMA_LOCK
 	call_rcu(&vma->vm_rcu, vm_area_free_rcu_cb);
 #else
