@@ -128,8 +128,6 @@ static inline bool gm_page_pinned(struct gm_page *gm_page)
 	return !!(gm_page->flag & GM_PAGE_PINNED);
 }
 
-#define NUM_IMPORT_PAGES   16
-
 int __init gm_page_cachep_init(void);
 void gm_page_cachep_destroy(void);
 
@@ -144,7 +142,6 @@ void mark_gm_page_unpinned(struct gm_page *gm_page);
 
 void gm_page_add_rmap(struct gm_page *gm_page, struct mm_struct *mm, unsigned long va);
 void gm_page_remove_rmap(struct gm_page *gm_page);
-int gm_add_pages(unsigned int hnid, struct list_head *pages);
 void gm_free_page(struct gm_page *gm_page);
 struct gm_page *gm_alloc_page(struct mm_struct *mm, struct hnode *hnode);
 
@@ -165,12 +162,16 @@ void gm_deinit_sysfs(void);
 
 vm_fault_t do_peer_shared_anonymous_page(struct vm_fault *vmf);
 unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
-						unsigned long flag);
+				unsigned long flag);
 void gmem_reserve_vma(struct mm_struct *mm, unsigned long start,
 				size_t len, struct list_head *head);
 void gmem_release_vma(struct mm_struct *mm, struct list_head *head);
 unsigned long gmem_unmap_align(struct mm_struct *mm, unsigned long start, size_t len);
 void gmem_unmap_region(struct mm_struct *mm, unsigned long start, size_t len);
 bool gm_mmap_check_flags(unsigned long flags);
+
+unsigned long gm_vm_mmap_pgoff(struct file *file, unsigned long addr,
+				unsigned long len, unsigned long prot,
+				unsigned long flag, unsigned long pgoff);
 
 #endif /* _GMEM_INTERNAL_H */

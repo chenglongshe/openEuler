@@ -1725,7 +1725,7 @@ static inline void zap_logic_pmd_range(struct vm_area_struct *vma, unsigned long
 
 	if (!vma_is_peer_shared(vma))
 		return;
-	if (!pmd_none_or_clear_bad(pmd) && !pmd_trans_huge(*pmd))
+	if (verify_pmd && !pmd_none_or_clear_bad(pmd) && !pmd_trans_huge(*pmd))
 		return;
 	if (!vma->vm_obj)
 		return;
@@ -5742,8 +5742,10 @@ out_map:
 static inline vm_fault_t create_huge_pmd(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
+#ifdef CONFIG_GMEM
 	if (vma_is_peer_shared(vma))
 		return do_peer_shared_anonymous_page(vmf);
+#endif
 	if (vma_is_anonymous(vma))
 		return do_huge_pmd_anonymous_page(vmf);
 	if (vma->vm_ops->huge_fault)
@@ -5991,13 +5993,10 @@ retry_pud:
 		vmf.orig_pmd = pmdp_get_lockless(vmf.pmd);
 
 #ifdef CONFIG_GMEM
-#define THP_ENABLE_PATH "/sys/kernel/mm/transparent_hugepage/enabled"
-
 		if (vma_is_peer_shared(vma) && pmd_none(*vmf.pmd) &&
 			(thp_disabled_by_hw() || vma_thp_disabled(vma, vma->vm_flags))) {
 			/* if transparent hugepage is not enabled, return pagefault failed */
-			gmem_err("transparent hugepage is not enabled. check %s\n",
-					THP_ENABLE_PATH);
+			gmem_err("transparent hugepage is not enabled\n");
 			return VM_FAULT_SIGBUS;
 		}
 #endif

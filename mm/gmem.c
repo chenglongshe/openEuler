@@ -52,7 +52,7 @@ static struct kmem_cache *gm_dev_cache;
 static struct kmem_cache *gm_ctx_cache;
 static DEFINE_XARRAY_ALLOC(gm_dev_id_pool);
 
-static bool enable_gmem;
+static bool enable_gmem __ro_after_init;
 
 static inline unsigned long pe_mask(unsigned int order)
 {

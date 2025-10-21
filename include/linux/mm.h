@@ -322,6 +322,13 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_NOHUGEPAGE	0x40000000	/* MADV_NOHUGEPAGE marked this vma */
 #define VM_MERGEABLE	0x80000000	/* KSM may merge identical pages */
 
+#ifdef CONFIG_GMEM
+# define VM_PEER_SHARED_BIT	56 /* movable memory between host and device */
+#define VM_PEER_SHARED	BIT(VM_PEER_SHARED_BIT) 
+#else
+#define VM_PEER_SHARED	VM_NONE
+#endif
+
 #ifdef CONFIG_USERSWAP
 # define VM_USWAP_BIT	61
 #define VM_USWAP	BIT(VM_USWAP_BIT)
@@ -343,11 +350,6 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_HIGH_ARCH_4	BIT(VM_HIGH_ARCH_BIT_4)
 #define VM_HIGH_ARCH_5	BIT(VM_HIGH_ARCH_BIT_5)
 
-#ifdef CONFIG_GMEM
-#define VM_PEER_SHARED	BIT(56)
-#else
-#define VM_PEER_SHARED	VM_NONE
-#endif
 #endif /* CONFIG_ARCH_USES_HIGH_VMA_FLAGS */
 
 #ifdef CONFIG_ARCH_HAS_PKEYS

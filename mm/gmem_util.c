@@ -7,11 +7,12 @@
  *
  */
 
-#include <linux/mm.h>
-#include <linux/vm_object.h>
+#include <linux/err.h>
 #include <linux/khugepaged.h>
 #include <linux/mman.h>
+#include <linux/mm.h>
 #include <linux/pgalloc.h>
+#include <linux/vm_object.h>
 
 #include "internal.h"
 #include "gmem-internal.h"
@@ -180,7 +181,6 @@ unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 	struct gm_context *ctx, *tmp;
 	unsigned long prot = VM_NONE;
 	enum gm_ret ret;
-	char *thp_enable_path = "/sys/kernel/mm/transparent_hugepage/enabled";
 
 	vma = find_vma(mm, addr);
 	if (!vma) {
@@ -189,8 +189,7 @@ unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 	}
 
 	if (thp_disabled_by_hw() || vma_thp_disabled(vma, vma->vm_flags)) {
-		gmem_err("transparent hugepage is not enabled. check %s\n",
-				thp_enable_path);
+		gmem_err("transparent hugepage is not enabled\n");
 		return -EINVAL;
 	}
 
@@ -420,4 +419,39 @@ bool gm_mmap_check_flags(unsigned long flags)
 		}
 	}
 	return true;
+}
+
+unsigned long gm_vm_mmap_pgoff(struct file *file, unsigned long addr,
+        unsigned long len, unsigned long prot,
+        unsigned long flag, unsigned long pgoff)
+{
+	struct mm_struct *mm = current->mm;
+	LIST_HEAD(reserve_list);
+	unsigned int retry_times = 0;
+	unsigned long ret;
+	enum gm_ret gm_ret;
+
+retry:
+	ret = vm_mmap_pgoff(file, addr, len, prot, flag, pgoff);
+
+	if (!IS_ERR_VALUE(ret)) {
+
+		gm_ret = alloc_va_in_peer_devices(ret, len, flag);
+		/**
+		 * if alloc_va_in_peer_devices failed
+		 * add vma to reserve_list and release after find a proper vma
+		 */
+		if (gm_ret == GM_RET_NOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
+			retry_times++;
+			gmem_reserve_vma(mm, ret, len, &reserve_list);
+			goto retry;
+		} else if (gm_ret != GM_RET_SUCCESS) {
+			gmem_err("alloc vma ret %lu\n", ret);
+			gmem_reserve_vma(mm, ret, len, &reserve_list);
+			ret = -ENOMEM;
+		}
+		gmem_release_vma(mm, &reserve_list);
+	}
+
+	return ret;
 }

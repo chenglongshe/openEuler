@@ -1492,10 +1492,12 @@ unsigned long __do_mmap_mm(struct mm_struct *mm, struct file *file, unsigned lon
 	}
 #ifdef CONFIG_GMEM
 	if (flags & MAP_PEER_SHARED) {
-		if (gmem_is_enabled())
+		if (gmem_is_enabled()) {
 			vm_flags |= VM_PEER_SHARED;
-		else
+			len = round_up(len, HPAGE_SIZE);
+		} else {
 			return -EINVAL;
+		}
 	}
 #endif
 

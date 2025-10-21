@@ -150,6 +150,8 @@ struct gm_mmu {
 #define GM_DEV_CAP_REPLAYABLE	0x00000001
 #define GM_DEV_CAP_PEER		0x00000010
 
+#define NUM_IMPORT_PAGES   16 /* number of physical pages imported each time */
+
 struct gm_context {
 	struct gm_as *as;
 	struct gm_dev *dev;
@@ -251,7 +253,8 @@ struct gm_page {
 	unsigned int flag;
 	atomic_t refcount;
 };
-
+/* For driver to add device pages */
+int gm_add_pages(unsigned int hnid, struct list_head *pages);
 struct gm_page *alloc_gm_page_struct(void);
 
 #define gmem_err(fmt, ...) \
