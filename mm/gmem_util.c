@@ -96,12 +96,12 @@ vm_fault_t do_peer_shared_anonymous_page(struct vm_fault *vmf)
 	struct gm_mapping *gm_mapping;
 	vm_fault_t ret = 0;
 
-		if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER))
-				return VM_FAULT_FALLBACK;
-		ret = vmf_anon_prepare(vmf);
-		if (ret)
-				return ret;
-		khugepaged_enter_vma(vma, vma->vm_flags);
+	if (!thp_vma_suitable_order(vma, haddr, PMD_ORDER))
+		return VM_FAULT_FALLBACK;
+	ret = vmf_anon_prepare(vmf);
+	if (ret)
+		return ret;
+	khugepaged_enter_vma(vma, vma->vm_flags);
 
 	gm_mapping = vma_prepare_gm_mapping(vma, haddr);
 	if (!gm_mapping)
@@ -216,7 +216,7 @@ int alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 		};
 
 		if (!ctx->dev->mmu->peer_va_alloc_fixed) {
-			pr_debug("gmem: mmu ops has no alloc_vma\n");
+			gmem_err("gmem: mmu ops has no alloc_vma\n");
 			continue;
 		}
 
@@ -227,6 +227,7 @@ int alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 				ret = -ENOMEM;
 			return ret;
 		}
+		ret = 0;
 	}
 
 	if (!vma->vm_obj)

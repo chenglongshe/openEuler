@@ -127,8 +127,6 @@ struct gm_dev {
 	/* Add tracking of registered device local physical memory. */
 	nodemask_t registered_hnodes;
 	struct device *dma_dev;
-
-	struct gm_mapping *gm_mapping;
 };
 
 /* Records the status of a page-size physical page */
