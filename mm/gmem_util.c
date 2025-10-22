@@ -418,39 +418,3 @@ bool gm_mmap_check_flags(unsigned long flags)
 	}
 	return true;
 }
-
-unsigned long gm_vm_mmap_pgoff(struct file *file, unsigned long addr,
-        unsigned long len, unsigned long prot,
-        unsigned long flag, unsigned long pgoff)
-{
-	struct mm_struct *mm = current->mm;
-	LIST_HEAD(reserve_list);
-	unsigned int retry_times = 0;
-	unsigned long ret;
-	int error = 0;
-
-retry:
-	flag &= ~MAP_PEER_SHARED;
-	error = vm_mmap_pgoff(file, addr, len, prot, flag, pgoff);
-
-	if (!IS_ERR_VALUE(ret)) {
-
-		error = alloc_va_in_peer_devices(ret, len, flag);
-		/**
-		 * if alloc_va_in_peer_devices failed
-		 * add vma to reserve_list and release after find a proper vma
-		 */
-		if (error == -ENOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
-			retry_times++;
-			gmem_reserve_vma(mm, ret, len, &reserve_list);
-			goto retry;
-		} else if (error != 0) {
-+			gmem_err("alloc vma ret %d\n", error);
-			gmem_reserve_vma(mm, ret, len, &reserve_list);
-			ret = -ENOMEM;
-		}
-		gmem_release_vma(mm, &reserve_list);
-	}
-
-	return ret;
-}
