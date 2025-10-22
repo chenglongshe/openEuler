@@ -1,0 +1,547 @@
+From 94ad6b1ebc620c3f60cabaedc386f2867daab433 Mon Sep 17 00:00:00 2001
+From: Liu Kai <liukai284@huawei.com>
+Date: Wed, 17 Sep 2025 20:30:22 +0800
+Subject: [PATCH] Adapt 910b npu driver for xsched ko
+
+hulk inclusion
+category: feature
+bugzilla: https://gitee.com/openeuler/kernel/issues/IC5EHB
+
+-----------------------------------------
+
+Adapt 910b npu driver for xsched ko
+
+Signed-off-by: Hui Tang <tanghui20@huawei.com>
+Signed-off-by: Konstantin Meskhidze <konstantin.meskhidze@huawei.com>
+Signed-off-by: Liu Kai <liukai284@huawei.com>
+---
+ rms/trs_drv/chan/chan_rxtx.c        |   2 +-
+ rms/trs_drv/trs_core/Makefile       |   1 +
+ rms/trs_drv/trs_core/trs_fops.c     | 138 +++++++++++++++++++++-------
+ rms/trs_drv/trs_core/trs_hw_sqcq.c  |   3 +-
+ rms/trs_drv/trs_core/trs_hw_sqcq.h  |   3 +-
+ rms/trs_drv/trs_core/trs_logic_cq.c | 100 ++++++++++++--------
+ rms/trs_drv/trs_core/trs_logic_cq.h |   3 +-
+ rms/trs_drv/trs_core/trs_sqcq_map.c |   4 +
+ ts_agent/src/ts_agent_update_sqe.c  |   6 ++
+ 9 files changed, 186 insertions(+), 74 deletions(-)
+
+diff --git a/rms/trs_drv/chan/chan_rxtx.c b/rms/trs_drv/chan/chan_rxtx.c
+index 1fc72da..1e4ef38 100755
+--- a/rms/trs_drv/chan/chan_rxtx.c
++++ b/rms/trs_drv/chan/chan_rxtx.c
+@@ -156,7 +156,7 @@ static int trs_chan_fill_sqe(struct trs_chan *chan, u8 *sqe, int timeout, int ad
+     /* if using bar to r/w sqe, it should use stack value to store sqe to avoid waster time */
+     sqe_addr = trs_chan_mem_is_local_mem(&sq->mem_attr) ? dst_addr : sqe_tmp;
+
+-    if (addr_domain == CHAN_ADDR_DOMAIN_KERNEL) {
++    if (addr_domain == CHAN_ADDR_DOMAIN_KERNEL || !access_ok(sqe, sq->para.sqe_size)) {
+         memcpy_s(sqe_addr, sq->para.sqe_size, sqe, sq->para.sqe_size);
+     } else {
+         ret_cpy = copy_from_user(sqe_addr, sqe, sq->para.sqe_size);
+diff --git a/rms/trs_drv/trs_core/Makefile b/rms/trs_drv/trs_core/Makefile
+index e0a6a55..8d27ad9 100755
+--- a/rms/trs_drv/trs_core/Makefile
++++ b/rms/trs_drv/trs_core/Makefile
+@@ -41,6 +41,7 @@ endif
+
+ EXTRA_CFLAGS += -I$(DRIVER_SRC_BASE_DIR)/rms/trs_drv/inc
+ EXTRA_CFLAGS += -I$(DRIVER_SRC_BASE_DIR)/rms/trs_drv/trs_core
++EXTRA_CFLAGS += -I$(DRIVER_SRC_BASE_DIR)/tsch/
+
+ obj-m += ascend_trs_core.o
+ ascend_trs_core-objs := trs_fops.o trs_ts_inst.o trs_proc.o trs_res_mng.o trs_sqcq_map.o trs_hw_sqcq.o trs_sw_sqcq.o trs_logic_cq.o trs_cb_sqcq.o trs_shm_sqcq.o trs_proc_fs.o
+diff --git a/rms/trs_drv/trs_core/trs_fops.c b/rms/trs_drv/trs_core/trs_fops.c
+index e5702d2..96ea16f 100755
+--- a/rms/trs_drv/trs_core/trs_fops.c
++++ b/rms/trs_drv/trs_core/trs_fops.c
+@@ -33,6 +33,8 @@
+ #include "trs_ts_inst.h"
+ #include "trs_cmd.h"
+ #include "trs_fops.h"
++#include "trs_logic_cq.h"
++#include "task_struct.h"
+
+ static int (*const trs_res_id_handles[TRS_MAX_CMD])(struct trs_proc_ctx *proc_ctx,
+     struct trs_core_ts_inst *ts_inst, struct trs_res_id_para *para) = {
+@@ -195,8 +197,17 @@ static int (*const trs_sqcq_alloc_handles[DRV_INVALID_TYPE])(struct trs_proc_ctx
+     [DRV_CTRL_TYPE] = trs_sw_sqcq_alloc
+ };
+
+-static int ioctl_trs_sqcq_alloc(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
++static bool is_xsched_used(void __user *ptr, int size)
+ {
++    if (access_ok(ptr, size))
++        return false;
++
++    return true;
++}
++
++int ioctl_trs_sqcq_alloc(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
++{
++    bool xsched_used = is_xsched_used((void __user *)arg, sizeof(struct halSqCqInputInfo));
+     struct trs_core_ts_inst *ts_inst = NULL;
+     struct halSqCqInputInfo para;
+     struct trs_alloc_para *alloc_para = NULL;
+@@ -204,10 +215,14 @@ static int ioctl_trs_sqcq_alloc(struct trs_proc_ctx *proc_ctx, unsigned int cmd,
+     struct trs_uio_info uio_info;
+     int ret;
+
+-    ret = copy_from_user(&para, (struct halSqCqInputInfo __user *)arg, sizeof(para));
+-    if (ret != 0) {
+-        trs_err("Copy from user failed. (ret=%d)\n", ret);
+-        return ret;
++    if (xsched_used) {
++        memcpy(&para, (struct halSqCqInputInfo *)arg, sizeof(para));
++    } else {
++        ret = copy_from_user(&para, (struct halSqCqInputInfo __user *)arg, sizeof(para));
++        if (ret != 0) {
++            trs_err("Copy from user failed. (ret=%d)\n", ret);
++            return ret;
++        }
+     }
+
+     alloc_para = get_alloc_para_addr(&para);
+@@ -238,10 +253,18 @@ static int ioctl_trs_sqcq_alloc(struct trs_proc_ctx *proc_ctx, unsigned int cmd,
+     trs_core_inst_put(ts_inst);
+
+     if (ret == 0) {
+-        ret = copy_to_user((struct halSqCqInputInfo __user *)arg, &para, sizeof(para));
+-        ret |= copy_to_user((struct trs_uio_info __user *)user_uio_info, &uio_info, sizeof(uio_info));
+-        if (ret != 0) {
+-            trs_err("Copy to user failed. (ret=%d)\n", ret);
++        if (xsched_used) {
++            memcpy((struct halSqCqInputInfo *)arg, &para, sizeof(para));
++            ret = copy_to_user((struct trs_uio_info __user *)user_uio_info, &uio_info, sizeof(uio_info));
++            if (ret != 0) {
++                trs_err("Copy to user failed. (ret=%d)\n", ret);
++            }
++        } else {
++            ret = copy_to_user((struct halSqCqInputInfo __user *)arg, &para, sizeof(para));
++            ret |= copy_to_user((struct trs_uio_info __user *)user_uio_info, &uio_info, sizeof(uio_info));
++            if (ret != 0) {
++                trs_err("Copy to user failed. (ret=%d)\n", ret);
++            }
+         }
+     }
+
+@@ -257,16 +280,20 @@ static int (*const trs_sqcq_free_handles[DRV_INVALID_TYPE])(struct trs_proc_ctx
+     [DRV_CTRL_TYPE] = trs_sw_sqcq_free
+ };
+
+-static int ioctl_trs_sqcq_free(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
++int ioctl_trs_sqcq_free(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
+ {
+     struct trs_core_ts_inst *ts_inst = NULL;
+     struct halSqCqFreeInfo para;
+     int ret;
+
+-    ret = copy_from_user(&para, (struct halSqCqFreeInfo __user *)arg, sizeof(para));
+-    if (ret != 0) {
+-        trs_err("Copy from user failed. (ret=%d)\n", ret);
+-        return ret;
++    if (is_xsched_used((void *)arg, sizeof(struct halSqCqFreeInfo))) {
++        memcpy(&para, (struct halSqCqFreeInfo *)arg, sizeof(para));
++    } else {
++        ret = copy_from_user(&para, (struct halSqCqFreeInfo __user *)arg, sizeof(para));
++        if (ret != 0) {
++            trs_err("Copy from user failed. (ret=%d)\n", ret);
++            return ret;
++        }
+     }
+
+     if ((para.type < 0) || (para.type >= DRV_INVALID_TYPE)) {
+@@ -362,17 +389,26 @@ static int (*const trs_sqcq_send_handles[DRV_INVALID_TYPE])(struct trs_proc_ctx
+     [DRV_CALLBACK_TYPE] = trs_cb_sqcq_send,
+ };
+
+-static int ioctl_trs_sqcq_send(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
++int ioctl_trs_sqcq_send(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
+ {
+     struct trs_core_ts_inst *ts_inst = NULL;
++    struct halTaskSendInfo *kern_para = (struct halTaskSendInfo *)arg;
+     struct halTaskSendInfo __user *usr_para = (struct halTaskSendInfo __user *)arg;
+     struct halTaskSendInfo para;
++    struct trs_logic_cq *logic_cq = NULL;
++    struct ts_stars_sqe_header *sqe_header = NULL;
++    uint32_t logic_cqId = cmd;
++    bool xsched_used = is_xsched_used((void *)arg, sizeof(struct halTaskSendInfo));
+     int ret;
+
+-    ret = copy_from_user(&para, usr_para, sizeof(para));
+-    if (ret != 0) {
+-        trs_err("Copy from user failed. (ret=%d)\n", ret);
+-        return ret;
++    if (xsched_used) {
++        memcpy(&para, (struct halTaskSendInfo *)arg, sizeof(para));
++    } else {
++        ret = copy_from_user(&para, usr_para, sizeof(para));
++        if (ret != 0) {
++            trs_err("Copy from user failed. (ret=%d)\n", ret);
++            return ret;
++        }
+     }
+
+     if ((para.type < 0) || (para.type >= DRV_INVALID_TYPE) || (trs_sqcq_send_handles[para.type] == NULL) ||
+@@ -387,14 +423,39 @@ static int ioctl_trs_sqcq_send(struct trs_proc_ctx *proc_ctx, unsigned int cmd,
+         return -EINVAL;
+     }
+
++    if (xsched_used) {
++        logic_cq = &ts_inst->logic_cq_ctx.cq[logic_cqId];
++        if (logic_cq == NULL) {
++            trs_err("Invalid para. (logic_cqId=%u)\n", logic_cqId);
++            return -EINVAL;
++        }
++
++        sqe_header = (struct ts_stars_sqe_header *)para.sqe_addr;
++        trs_debug("sqe_header->type=%u logic_cqId=%u stream_id=%u task_id=%u\n",
++            sqe_header->type, logic_cqId, sqe_header->rt_stream_id, sqe_header->task_id);
++
++        if ((sqe_header->type == 0) && (sqe_header->wr_cqe == 1)) {
++            trs_debug("logic_cq->wakeup_num=%u\n", atomic_read(&logic_cq->wakeup_num));
++
++            if (atomic_read(&logic_cq->wakeup_num) > 0) {
++                atomic_dec(&logic_cq->wakeup_num);
++                trs_debug("logic_cq->wakeup_num=%u\n", atomic_read(&logic_cq->wakeup_num));
++            }
++        }
++    }
++
+     ret = trs_sqcq_send_handles[para.type](proc_ctx, ts_inst, &para);
+
+     trs_core_inst_put(ts_inst);
+
+     if ((ret == 0) && (para.type == DRV_NORMAL_TYPE)) {
+-        ret = put_user(para.pos, &usr_para->pos);
+-        if (ret != 0) {
+-            trs_err("Put to user fail. (devid=%u; tsid=%u; sqId=%u)\n", proc_ctx->devid, para.tsId, para.sqId);
++        if (xsched_used) {
++            kern_para->pos = para.pos;
++        } else {
++            ret = put_user(para.pos, &usr_para->pos);
++            if (ret != 0) {
++                trs_err("Put to user fail. (devid=%u; tsid=%u; sqId=%u)\n", proc_ctx->devid, para.tsId, para.sqId);
++            }
+         }
+     }
+
+@@ -402,22 +463,28 @@ static int ioctl_trs_sqcq_send(struct trs_proc_ctx *proc_ctx, unsigned int cmd,
+ }
+
+ static int (*const trs_sqcq_recv_handles[DRV_INVALID_TYPE])(struct trs_proc_ctx *proc_ctx,
+-    struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para) = {
++    struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para, bool is_xsched) = {
+     [DRV_NORMAL_TYPE] = trs_hw_sqcq_recv,
+     [DRV_LOGIC_TYPE] = trs_logic_cq_recv,
+ };
+
+-static int ioctl_trs_sqcq_recv(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
++int ioctl_trs_sqcq_recv(struct trs_proc_ctx *proc_ctx, unsigned int cmd, unsigned long arg)
+ {
+     struct trs_core_ts_inst *ts_inst = NULL;
+-    struct halReportRecvInfo *usr_para = (struct halReportRecvInfo __user *)arg;
++    struct halReportRecvInfo *kern_para = (struct halReportRecvInfo *)arg;
++    struct halReportRecvInfo __user *usr_para = (struct halReportRecvInfo __user *)arg;
+     struct halReportRecvInfo para;
+     int ret;
++    bool xsched_used = is_xsched_used((void *)arg, sizeof(struct halReportRecvInfo));
+
+-    ret = copy_from_user(&para, usr_para, sizeof(para));
+-    if (ret != 0) {
+-        trs_err("Copy from user failed. (ret=%d)\n", ret);
+-        return ret;
++    if (xsched_used) {
++        memcpy(&para, (struct halReportRecvInfo *)arg, sizeof(para));
++    } else {
++        ret = copy_from_user(&para, usr_para, sizeof(para));
++        if (ret != 0) {
++            trs_err("Copy from user failed. (ret=%d)\n", ret);
++            return ret;
++        }
+     }
+
+     if ((para.type < 0) || (para.type >= DRV_INVALID_TYPE) || (trs_sqcq_recv_handles[para.type] == NULL) ||
+@@ -432,11 +499,16 @@ static int ioctl_trs_sqcq_recv(struct trs_proc_ctx *proc_ctx, unsigned int cmd,
+         return -EINVAL;
+     }
+
+-    ret = trs_sqcq_recv_handles[para.type](proc_ctx, ts_inst, &para);
++    ret = trs_sqcq_recv_handles[para.type](proc_ctx, ts_inst, &para, xsched_used);
++
+     if (ret == 0) {
+-        ret = put_user(para.report_cqe_num, &usr_para->report_cqe_num);
+-        if (ret != 0) {
+-            trs_err("Put to user fail. (devid=%u; tsid=%u; cqId=%u)\n", proc_ctx->devid, para.tsId, para.cqId);
++        if (xsched_used) {
++            kern_para->report_cqe_num = para.report_cqe_num;
++        } else {
++            ret = put_user(para.report_cqe_num, &usr_para->report_cqe_num);
++            if (ret != 0) {
++                trs_err("Put to user fail. (devid=%u; tsid=%u; cqId=%u)\n", proc_ctx->devid, para.tsId, para.cqId);
++            }
+         }
+     } else {
+         u32 ts_status;
+diff --git a/rms/trs_drv/trs_core/trs_hw_sqcq.c b/rms/trs_drv/trs_core/trs_hw_sqcq.c
+index 825d603..10f3903 100755
+--- a/rms/trs_drv/trs_core/trs_hw_sqcq.c
++++ b/rms/trs_drv/trs_core/trs_hw_sqcq.c
+@@ -1160,7 +1160,8 @@ int trs_hw_sqcq_send(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_
+     return ret;
+ }
+
+-int trs_hw_sqcq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para)
++int trs_hw_sqcq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para,
++                     bool is_xsched)
+ {
+     struct trs_id_inst *inst = &ts_inst->inst;
+     struct trs_chan_recv_para recv_para;
+diff --git a/rms/trs_drv/trs_core/trs_hw_sqcq.h b/rms/trs_drv/trs_core/trs_hw_sqcq.h
+index b32cd64..b6affdf 100755
+--- a/rms/trs_drv/trs_core/trs_hw_sqcq.h
++++ b/rms/trs_drv/trs_core/trs_hw_sqcq.h
+@@ -32,7 +32,8 @@ int trs_sqcq_config(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_i
+ int trs_sqcq_query(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halSqCqQueryInfo *para);
+
+ int trs_hw_sqcq_send(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halTaskSendInfo *para);
+-int trs_hw_sqcq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para);
++int trs_hw_sqcq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para,
++                     bool is_xsched);
+ void trs_proc_diable_sq_status(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst,
+     int res_type, u32 res_id);
+ void trs_hw_sqcq_recycle(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, int res_type, u32 res_id);
+diff --git a/rms/trs_drv/trs_core/trs_logic_cq.c b/rms/trs_drv/trs_core/trs_logic_cq.c
+index d35b8d5..d1fbe63 100755
+--- a/rms/trs_drv/trs_core/trs_logic_cq.c
++++ b/rms/trs_drv/trs_core/trs_logic_cq.c
+@@ -265,13 +265,15 @@ static bool trs_logic_is_cqe_match(struct trs_logic_cq *logic_cq, void *cqe, u32
+ }
+
+ static int trs_logic_cq_recv_para_check(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst,
+-    struct halReportRecvInfo *para)
++    struct halReportRecvInfo *para, bool is_xsched)
+ {
+     struct trs_id_inst *inst = &ts_inst->inst;
+
+-    if (!trs_proc_has_res(proc_ctx, ts_inst, TRS_LOGIC_CQ, para->cqId)) {
+-        trs_err("Not proc owner cq. (devid=%u; tsid=%u; logic_cqid=%u)\n", inst->devid, inst->tsid, para->cqId);
+-        return -EINVAL;
++    if (!is_xsched) {
++        if (!trs_proc_has_res(proc_ctx, ts_inst, TRS_LOGIC_CQ, para->cqId)) {
++            trs_err("Not proc owner cq. (devid=%u; tsid=%u; logic_cqid=%u)\n", inst->devid, inst->tsid, para->cqId);
++            return -EINVAL;
++        }
+     }
+
+     if (((para->timeout < 0) && (para->timeout != -1)) || (para->cqe_num == 0) || (para->cqe_addr == NULL)) {
+@@ -441,7 +443,7 @@ static void trs_logic_cq_eliminate_holes(struct trs_logic_cq *logic_cq, u32 star
+ }
+
+ static int trs_logic_cq_match_copy(struct trs_core_ts_inst *ts_inst, struct trs_logic_cq *logic_cq,
+-    struct halReportRecvInfo *para)
++    struct halReportRecvInfo *para, bool is_xsched)
+ {
+     u32 start, report_cnt, tail;
+     u32 rollback = 0;
+@@ -463,11 +465,17 @@ static int trs_logic_cq_match_copy(struct trs_core_ts_inst *ts_inst, struct trs_
+     }
+
+     trs_logic_cq_copy_trace("Logic Cq Recv Match", ts_inst, logic_cq, start, report_cnt);
+-    ret = copy_to_user((void __user *)para->cqe_addr, logic_cq->addr + ((unsigned long)start * logic_cq->cqe_size),
+-        (unsigned long)report_cnt * logic_cq->cqe_size);
+-    if (ret != 0) {
+-        trs_err("copy to user fail, cqid=%u report_cnt=%u\n", logic_cq->cqid, report_cnt);
+-        return ret;
++
++    if (is_xsched) {
++        memcpy((void *)para->cqe_addr, logic_cq->addr + ((unsigned long)start * logic_cq->cqe_size),
++            (unsigned long)report_cnt * logic_cq->cqe_size);
++    } else {
++        ret = copy_to_user((void __user *)para->cqe_addr, logic_cq->addr + ((unsigned long)start * logic_cq->cqe_size),
++            (unsigned long)report_cnt * logic_cq->cqe_size);
++        if (ret != 0) {
++            trs_err("copy to user fail, cqid=%u report_cnt=%u\n", logic_cq->cqid, report_cnt);
++            return ret;
++        }
+     }
+
+     para->report_cqe_num = report_cnt;
+@@ -480,7 +488,7 @@ static int trs_logic_cq_match_copy(struct trs_core_ts_inst *ts_inst, struct trs_
+ }
+
+ static int trs_logic_cq_non_match_copy(struct trs_core_ts_inst *ts_inst, struct trs_logic_cq *logic_cq,
+-    struct halReportRecvInfo *para)
++    struct halReportRecvInfo *para, bool is_xsched)
+ {
+     u32 start, report_cnt, tail;
+     int ret;
+@@ -490,11 +498,17 @@ static int trs_logic_cq_non_match_copy(struct trs_core_ts_inst *ts_inst, struct
+     report_cnt = (tail > start) ? tail - start : logic_cq->cq_depth - start;
+
+     trs_logic_cq_copy_trace("Logic Cq Recv NoMatch", ts_inst, logic_cq, start, report_cnt);
+-    ret = copy_to_user((void __user *)para->cqe_addr, logic_cq->addr + ((unsigned long)start * logic_cq->cqe_size),
+-        (unsigned long)report_cnt * logic_cq->cqe_size);
+-    if (ret != 0) {
+-        trs_err("copy to user fail, cqid=%u report_cnt=%u\n", logic_cq->cqid, report_cnt);
+-        return ret;
++
++    if (is_xsched) {
++        memcpy((void *)para->cqe_addr, logic_cq->addr + ((unsigned long)start * logic_cq->cqe_size),
++                (unsigned long)report_cnt * logic_cq->cqe_size);
++    } else {
++        ret = copy_to_user((void __user *)para->cqe_addr, logic_cq->addr + ((unsigned long)start * logic_cq->cqe_size),
++            (unsigned long)report_cnt * logic_cq->cqe_size);
++        if (ret != 0) {
++            trs_err("copy to user fail, cqid=%u report_cnt=%u\n", logic_cq->cqid, report_cnt);
++            return ret;
++        }
+     }
+
+     para->report_cqe_num = report_cnt;
+@@ -503,7 +517,7 @@ static int trs_logic_cq_non_match_copy(struct trs_core_ts_inst *ts_inst, struct
+ }
+
+ static int trs_logic_cq_copy_report(struct trs_core_ts_inst *ts_inst,
+-    struct trs_logic_cq *logic_cq, struct halReportRecvInfo *para)
++    struct trs_logic_cq *logic_cq, struct halReportRecvInfo *para, bool is_xsched)
+ {
+     u32 version = para->res[0];
+     int full_flag = 0;
+@@ -522,9 +536,9 @@ static int trs_logic_cq_copy_report(struct trs_core_ts_inst *ts_inst,
+     }
+
+     if (version == 1) {
+-        ret = trs_logic_cq_match_copy(ts_inst, logic_cq, para); // runtime new version
++        ret = trs_logic_cq_match_copy(ts_inst, logic_cq, para, is_xsched); // runtime new version
+     } else {
+-        ret = trs_logic_cq_non_match_copy(ts_inst, logic_cq, para);
++        ret = trs_logic_cq_non_match_copy(ts_inst, logic_cq, para, is_xsched);
+     }
+     if (ret != 0) {
+         return ret;
+@@ -553,8 +567,8 @@ static int trs_logic_cq_wait_event(struct trs_logic_cq *logic_cq, int timeout)
+     long ret, tm;
+
+     atomic_inc(&logic_cq->wait_thread_num);
+-    trs_debug("Wake wait start. (logic_cqid=%u; timeout=%d; wait_thread_num=%d)\n",
+-        logic_cq->cqid, timeout, atomic_read(&logic_cq->wait_thread_num));
++    trs_debug("Wake wait start. (logic_cqid=%u; timeout=%d; wait_thread_num=%d, wakeup_num=%d)\n",
++        logic_cq->cqid, timeout, atomic_read(&logic_cq->wait_thread_num), atomic_read(&logic_cq->wakeup_num));
+
+     tm = (timeout == -1) ? MAX_SCHEDULE_TIMEOUT : msecs_to_jiffies((u32)timeout);
+     (void)prepare_to_wait_exclusive(&logic_cq->wait_queue, &wq_entry, TASK_INTERRUPTIBLE);
+@@ -592,12 +606,13 @@ static int trs_logic_cq_wait_event(struct trs_logic_cq *logic_cq, int timeout)
+     return ret;
+ }
+
+-int trs_logic_cq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para)
++int trs_logic_cq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para,
++                      bool is_xsched)
+ {
+     struct trs_logic_cq *logic_cq = NULL;
+     int ret;
+
+-    ret = trs_logic_cq_recv_para_check(proc_ctx, ts_inst, para);
++    ret = trs_logic_cq_recv_para_check(proc_ctx, ts_inst, para, is_xsched);
+     if (ret != 0) {
+         return ret;
+     }
+@@ -609,24 +624,35 @@ int trs_logic_cq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts
+         return trs_thread_bind_irq_wait(logic_cq, para->timeout);
+     }
+     trs_logic_cq_recv_trace("Recv start", ts_inst, para);
+-    do {
+-        mutex_lock(&logic_cq->mutex);
+-        ret = trs_logic_cq_copy_report(ts_inst, logic_cq, para);
+-        mutex_unlock(&logic_cq->mutex);
+-        if (ret == 0) {
+-            logic_cq->stat.recv++;
+-            trs_logic_cq_recv_trace("Recv finish", ts_inst, para);
+-            return ret;
+-        }
+
+-        if (ret == -EAGAIN) {
++    if (is_xsched) {
+             if (para->timeout == 0) {
+-                para->report_cqe_num = 0;
+-                return 0;
++                    para->report_cqe_num = 0;
++                    return 0;
+             }
+             ret = trs_logic_cq_wait_event(logic_cq, para->timeout);
+-        }
+-    } while (ret >= 0);
++            trs_debug("Skip reading report for xsched, waiting for cq irq: logic_cqid=%u, timeout=%u, ret=%u)\n",
++                      para->cqId, para->timeout, ret);
++    } else {
++        do {
++            mutex_lock(&logic_cq->mutex);
++            ret = trs_logic_cq_copy_report(ts_inst, logic_cq, para, is_xsched);
++            mutex_unlock(&logic_cq->mutex);
++            if (ret == 0) {
++                logic_cq->stat.recv++;
++                trs_logic_cq_recv_trace("Recv finish", ts_inst, para);
++                return ret;
++            }
++
++            if (ret == -EAGAIN) {
++                if (para->timeout == 0) {
++                    para->report_cqe_num = 0;
++                    return 0;
++                }
++                ret = trs_logic_cq_wait_event(logic_cq, para->timeout);
++            }
++        } while (ret >= 0);
++    }
+
+     return ret;
+ }
+diff --git a/rms/trs_drv/trs_core/trs_logic_cq.h b/rms/trs_drv/trs_core/trs_logic_cq.h
+index a45b110..b776b7f 100755
+--- a/rms/trs_drv/trs_core/trs_logic_cq.h
++++ b/rms/trs_drv/trs_core/trs_logic_cq.h
+@@ -90,7 +90,8 @@ struct trs_core_ts_inst;
+
+ int trs_logic_cq_alloc(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halSqCqInputInfo *para);
+ int trs_logic_cq_free(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halSqCqFreeInfo *para);
+-int trs_logic_cq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para);
++int trs_logic_cq_recv(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst, struct halReportRecvInfo *para,
++                      bool is_xsched);
+
+ void trs_logic_set_cqe_version(struct trs_core_ts_inst *ts_inst, u32 logic_cqid, u32 cqe_verion);
+ int trs_logic_cq_enque(struct trs_core_ts_inst *ts_inst, u32 logic_cq_id, u32 stream_id, u32 task_id, void *cqe);
+diff --git a/rms/trs_drv/trs_core/trs_sqcq_map.c b/rms/trs_drv/trs_core/trs_sqcq_map.c
+index 8103d65..998ecfb 100755
+--- a/rms/trs_drv/trs_core/trs_sqcq_map.c
++++ b/rms/trs_drv/trs_core/trs_sqcq_map.c
+@@ -305,6 +305,10 @@ int trs_sq_remap(struct trs_proc_ctx *proc_ctx, struct trs_core_ts_inst *ts_inst
+     int sq_reg_type = TRS_MAP_TYPE_REG;
+     int ret;
+
++    ret = 0;
++    goto out;
++
++
+     if ((sq_info->sq_phy_addr == 0) || (sq_info->db_addr == 0) || (uio_info->sq_que_addr == 0)) {
+         ret = 0;
+         goto out;
+diff --git a/ts_agent/src/ts_agent_update_sqe.c b/ts_agent/src/ts_agent_update_sqe.c
+index bb4e3b2..01fe60c 100755
+--- a/ts_agent/src/ts_agent_update_sqe.c
++++ b/ts_agent/src/ts_agent_update_sqe.c
+@@ -1146,6 +1146,12 @@ static void cqe_set_drop_flag(ts_stars_cqe_t *cqe)
+     if (cqe->warn || (cqe->sqe_type == TS_STARS_SQE_TYPE_PCIE_DMA)) {
+         /* cqe has been processed in ts_agent, no need to send to runtime */
+         cqe->drop_flag = 1U;
++        ts_agent_debug("cqe has been processed in ts_agent, no need to send to runtime, drop_flag=%u\n", cqe->drop_flag);
++
++        /* no drop, xsched needs to proc cqe */
++        cqe->drop_flag = 0U;
++        ts_agent_debug("send cqe to runtime/xsched anyway, drop_flag=%u\n", cqe->drop_flag);
++
+         return;
+     }
+     cqe->drop_flag = 0U;
+--
+2.33.0
