@@ -73,6 +73,7 @@ void sxe_reset(struct sxe_adapter *adapter)
 
 	clear_bit(SXE_SFP_NEED_RESET, &adapter->monitor_ctxt.state);
 	clear_bit(SXE_LINK_NEED_CONFIG, &adapter->monitor_ctxt.state);
+	clear_bit(SXE_SFP_NEED_DOWN, &adapter->monitor_ctxt.state);
 
 	ret = sxe_hw_reset(adapter);
 	if (ret < 0)
@@ -1897,6 +1898,11 @@ static void sxe_netdev_feature_init(struct net_device *netdev)
 			    NETIF_F_HW_VLAN_CTAG_RX |
 			    NETIF_F_HW_VLAN_CTAG_TX;
 
+#ifdef HAVE_NETDEV_XDP_FEATURES
+	netdev->xdp_features |= NETDEV_XDP_ACT_BASIC | NETDEV_XDP_ACT_REDIRECT |
+				NETDEV_XDP_ACT_XSK_ZEROCOPY;
+#endif
+
 	adapter = netdev_priv(netdev);
 	adapter->cap |= SXE_LRO_CAPABLE;
 }
@@ -1904,7 +1910,7 @@ static void sxe_netdev_feature_init(struct net_device *netdev)
 static void sxe_netdev_name_init(struct net_device *netdev,
 				 struct pci_dev *pdev)
 {
-	strlcpy(netdev->name, pci_name(pdev), sizeof(netdev->name));
+	SXE_STRCPY(netdev->name, pci_name(pdev), sizeof(netdev->name));
 }
 
 #ifndef NO_NETDEVICE_MIN_MAX_MTU

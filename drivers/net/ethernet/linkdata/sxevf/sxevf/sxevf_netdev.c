@@ -243,8 +243,10 @@ static s32 sxevf_get_link_enable(struct sxevf_adapter *adapter)
 	bool enable = adapter->link.link_enable;
 
 	msg.msg_type = SXEVF_LINK_ENABLE_GET;
+	spin_lock_bh(&adapter->mbx_lock);
 	ret = sxevf_send_and_rcv_msg(hw, (u32 *)&msg,
 				     SXEVF_MSG_NUM(sizeof(msg)));
+	spin_unlock_bh(&adapter->mbx_lock);
 	if (!ret &&
 	    msg.msg_type == (SXEVF_LINK_ENABLE_GET | SXEVF_MSGTYPE_ACK)) {
 		adapter->link.link_enable = msg.link_enable;
@@ -723,12 +725,16 @@ static void sxevf_netdev_feature_init(struct net_device *netdev)
 
 	netdev->features |= NETIF_F_HW_VLAN_CTAG_FILTER |
 			    NETIF_F_HW_VLAN_CTAG_RX | NETIF_F_HW_VLAN_CTAG_TX;
+
+#ifdef HAVE_NETDEV_XDP_FEATURES
+	netdev->xdp_features |= NETDEV_XDP_ACT_BASIC;
+#endif
 }
 
 static void sxevf_netdev_name_init(struct net_device *netdev,
 				   struct pci_dev *pdev)
 {
-	strlcpy(netdev->name, pci_name(pdev), sizeof(netdev->name));
+	SXE_STRCPY(netdev->name, pci_name(pdev), sizeof(netdev->name));
 }
 
 #ifndef NO_NETDEVICE_MIN_MAX_MTU
