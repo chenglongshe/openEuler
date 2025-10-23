@@ -127,4 +127,3 @@ unsigned long sxe_get_completion_timeout(struct sxe_adapter *adapter)
 
 	return 32000ul;
 }
-
