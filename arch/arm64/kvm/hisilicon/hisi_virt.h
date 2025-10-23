@@ -70,11 +70,16 @@ enum hisi_cpu_type {
 #define DVMBM_MAX_DIES			32
 
 /* HIP12 */
+#define DVMBM_DIE1_SOCKET_SHIFT_HIP12		59
+#define DVMBM_DIE2_SOCKET_SHIFT_HIP12		55
 #define DVMBM_DIE1_VDIE_SHIFT_HIP12		57
 #define DVMBM_DIE2_VDIE_SHIFT_HIP12		53
 #define DVMBM_DIE1_CLUSTER_SHIFT_HIP12		6
 #define DVMBM_DIE2_CLUSTER_SHIFT_HIP12		0
 #define DVMBM_MAX_DIES_HIP12				8
+#define MPIDR_AFF3_DIE_ID_MASK				0x7
+#define MPIDR_AFF3_SOCKET_ID_MASK			0x18
+#define MPIDR_AFF3_SOCKET_ID_SHIFT			3
 
 void probe_hisi_cpu_type(void);
 bool hisi_ncsnp_supported(void);
