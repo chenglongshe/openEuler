@@ -1356,7 +1356,7 @@ static int hns3_set_tso(struct sk_buff *skb, u32 *paylen_fdop_ol4cs,
 	/* Software should clear the IPv4's checksum field when tso is
 	 * needed.
 	 */
-	if (l3.v4->version == 4)
+	if (l3.v4->version == IP_VERSION_IPV4)
 		l3.v4->check = 0;
 
 	/* tunnel packet */
@@ -1371,7 +1371,7 @@ static int hns3_set_tso(struct sk_buff *skb, u32 *paylen_fdop_ol4cs,
 		/* Software should clear the IPv4's checksum field when
 		 * tso is needed.
 		 */
-		if (l3.v4->version == 4)
+		if (l3.v4->version == IP_VERSION_IPV4)
 			l3.v4->check = 0;
 	}
 
@@ -1446,13 +1446,13 @@ static int hns3_get_l4_protocol(struct sk_buff *skb, u8 *ol4_proto,
 	l3.hdr = skb_inner_network_header(skb);
 	l4_hdr = skb_inner_transport_header(skb);
 
-	if (l3.v6->version == 6) {
+	if (l3.v6->version == IP_VERSION_IPV6) {
 		exthdr = l3.hdr + sizeof(*l3.v6);
 		l4_proto_tmp = l3.v6->nexthdr;
 		if (l4_hdr != exthdr)
 			ipv6_skip_exthdr(skb, exthdr - skb->data,
 					 &l4_proto_tmp, &frag_off);
-	} else if (l3.v4->version == 4) {
+	} else if (l3.v4->version == IP_VERSION_IPV4) {
 		l4_proto_tmp = l3.v4->protocol;
 	}
 
@@ -1540,7 +1540,7 @@ static void hns3_set_outer_l2l3l4(struct sk_buff *skb, u8 ol4_proto,
 static void hns3_set_l3_type(struct sk_buff *skb, union l3_hdr_info l3,
 			     u32 *type_cs_vlan_tso)
 {
-	if (l3.v4->version == 4) {
+	if (l3.v4->version == IP_VERSION_IPV4) {
 		hns3_set_field(*type_cs_vlan_tso, HNS3_TXD_L3T_S,
 			       HNS3_L3T_IPV4);
 
@@ -1549,7 +1549,7 @@ static void hns3_set_l3_type(struct sk_buff *skb, union l3_hdr_info l3,
 		 */
 		if (skb_is_gso(skb))
 			hns3_set_field(*type_cs_vlan_tso, HNS3_TXD_L3CS_B, 1);
-	} else if (l3.v6->version == 6) {
+	} else if (l3.v6->version == IP_VERSION_IPV6) {
 		hns3_set_field(*type_cs_vlan_tso, HNS3_TXD_L3T_S,
 			       HNS3_L3T_IPV6);
 	}
@@ -3652,11 +3652,12 @@ static int hns3_alloc_buffer(struct hns3_enet_ring *ring,
 			     struct hns3_desc_cb *cb)
 {
 	unsigned int order = hns3_page_order(ring);
+	u32 page_offset;
 	struct page *p;
 
 	if (ring->page_pool) {
 		p = page_pool_dev_alloc_frag(ring->page_pool,
-					     &cb->page_offset,
+					     &page_offset,
 					     hns3_buf_size(ring));
 		if (unlikely(!p))
 			return -ENOMEM;
@@ -3666,6 +3667,7 @@ static int hns3_alloc_buffer(struct hns3_enet_ring *ring,
 		cb->dma = page_pool_get_dma_addr(p);
 		cb->type = DESC_TYPE_PP_FRAG;
 		cb->reuse_flag = 0;
+		cb->page_offset = page_offset;
 		return 0;
 	}
 
@@ -3842,10 +3844,10 @@ out_buffer_fail:
 static void hns3_replace_buffer(struct hns3_enet_ring *ring, int i,
 				struct hns3_desc_cb *res_cb)
 {
-	if (!ring->page_pool)
+	if (!ring->page_pool) {
 		hns3_unmap_buffer(ring, &ring->desc_cb[i]);
-
-	ring->desc_cb[i] = *res_cb;
+		ring->desc_cb[i] = *res_cb;
+	}
 	ring->desc_cb[i].refill = 1;
 	ring->desc[i].addr = cpu_to_le64(ring->desc_cb[i].dma +
 					 ring->desc_cb[i].page_offset);
@@ -3982,7 +3984,9 @@ static bool hns3_nic_alloc_rx_buffers(struct hns3_enet_ring *ring,
 
 			hns3_reuse_buffer(ring, ring->next_to_use);
 		} else {
-			ret = hns3_alloc_and_map_buffer(ring, &res_cbs);
+			if (!ring->page_pool)
+				desc_cb = &res_cbs;
+			ret = hns3_alloc_and_map_buffer(ring, desc_cb);
 			if (ret) {
 				hns3_ring_stats_update(ring, sw_err_cnt);
 
@@ -3994,7 +3998,7 @@ static bool hns3_nic_alloc_rx_buffers(struct hns3_enet_ring *ring,
 				       HNS3_RING_RX_RING_HEAD_REG);
 				return true;
 			}
-			hns3_replace_buffer(ring, ring->next_to_use, &res_cbs);
+			hns3_replace_buffer(ring, ring->next_to_use, desc_cb);
 
 			hns3_ring_stats_update(ring, non_reuse_pg);
 		}
@@ -5848,6 +5852,7 @@ static void hns3_clear_tx_ring(struct hns3_enet_ring *ring)
 
 static int hns3_clear_rx_ring(struct hns3_enet_ring *ring)
 {
+	struct hns3_desc_cb *desc_cb;
 	struct hns3_desc_cb res_cbs;
 	int ret;
 
@@ -5856,8 +5861,11 @@ static int hns3_clear_rx_ring(struct hns3_enet_ring *ring)
 		 * freed in hns3_handle_rx_bd or will be freed by
 		 * stack, so we need to replace the buffer here.
 		 */
+		desc_cb = &ring->desc_cb[ring->next_to_use];
 		if (!ring->desc_cb[ring->next_to_use].reuse_flag) {
-			ret = hns3_alloc_and_map_buffer(ring, &res_cbs);
+			if (!ring->page_pool)
+				desc_cb = &res_cbs;
+			ret = hns3_alloc_and_map_buffer(ring, desc_cb);
 			if (ret) {
 				hns3_ring_stats_update(ring, sw_err_cnt);
 				/* if alloc new buffer fail, exit directly
@@ -5868,7 +5876,7 @@ static int hns3_clear_rx_ring(struct hns3_enet_ring *ring)
 					    ret);
 				return ret;
 			}
-			hns3_replace_buffer(ring, ring->next_to_use, &res_cbs);
+			hns3_replace_buffer(ring, ring->next_to_use, desc_cb);
 		}
 		ring_ptr_move_fw(ring, next_to_use);
 	}
