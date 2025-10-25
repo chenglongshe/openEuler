@@ -114,12 +114,16 @@ static void __mpam_write_reg(struct mpam_msc *msc, u16 reg, u32 val)
 	lockdep_assert_held_once(&msc->part_sel_lock);	\
 	____ret = __mpam_read_reg(msc, MPAMF_##reg);	\
 							\
+	pr_debug("par r: msc %d reg 0x%x val 0x%x\n",	\
+		  msc->id, MPAMF_##reg, ____ret);	\
 	____ret;					\
 })
 
 #define mpam_write_partsel_reg(msc, reg, val)			\
 ({								\
 	lockdep_assert_held_once(&msc->part_sel_lock);		\
+	pr_debug("par w: msc %d reg 0x%x val 0x%lx\n",		\
+		  msc->id, MPAMCFG_##reg, (unsigned long)val);	\
 	__mpam_write_reg(msc, MPAMCFG_##reg, val);		\
 })
 
@@ -130,12 +134,16 @@ static void __mpam_write_reg(struct mpam_msc *msc, u16 reg, u32 val)
 	lockdep_assert_held_once(&msc->mon_sel_lock);	\
 	____ret = __mpam_read_reg(msc, MSMON_##reg);	\
 							\
+	pr_debug("mon r: msc %d reg 0x%x val 0x%x\n",	\
+		  msc->id, MSMON_##reg, ____ret);	\
 	____ret;					\
 })
 
 #define mpam_write_monsel_reg(msc, reg, val)			\
 ({								\
 	lockdep_assert_held_once(&msc->mon_sel_lock);		\
+	pr_debug("mon w: msc %d reg 0x%x val 0x%lx\n",		\
+		  msc->id, MSMON_##reg, (unsigned long)val);	\
 	__mpam_write_reg(msc, MSMON_##reg, val);		\
 })
 
@@ -470,6 +478,9 @@ static int mpam_ris_get_affinity(struct mpam_msc *msc, cpumask_t *affinity,
 	}
 
 	cpumask_and(affinity, affinity, &msc->accessibility);
+
+	pr_debug("comp_id %d msc->id %d affinity %*pb\n",
+		  comp->comp_id, msc->id, cpumask_pr_args(affinity));
 
 	return 0;
 }
@@ -1016,7 +1027,7 @@ static void __ris_msmon_read(void *arg)
 	read_msmon_ctl_flt_vals(m, &cur_ctl, &cur_flt);
 	gen_msmon_ctl_flt_vals(m, &ctl_val, &flt_val);
 	config_mismatch = cur_flt != flt_val ||
-			  cur_ctl != (ctl_val | MSMON_CFG_x_CTL_EN);
+			 (cur_ctl & ~MSMON_CFG_x_CTL_OFLOW_STATUS) != (ctl_val | MSMON_CFG_x_CTL_EN);
 
 	if (config_mismatch || reset_on_next_read)
 		write_msmon_ctl_flt_vals(m, ctl_val, flt_val);
@@ -1074,8 +1085,8 @@ static void __ris_msmon_read(void *arg)
 		}
 
 		/* Add any pre-overflow value to the mbwu_state->val */
-		if (mbwu_state->prev_val > now)
-			overflow_val = mpam_msmon_overflow_val(ris) - mbwu_state->prev_val;
+		if (mbwu_state->prev_val > now && (cur_ctl & MSMON_CFG_x_CTL_OFLOW_STATUS))
+			overflow_val = mpam_msmon_overflow_val(ris);
 
 		mbwu_state->prev_val = now;
 		mbwu_state->correction += overflow_val;
