@@ -115,6 +115,10 @@ typedef struct xfs_buftarg {
 	struct percpu_counter	bt_io_count;
 	struct ratelimit_state	bt_ioerror_rl;
 
+	/* Atomic write unit values */
+	unsigned int		bt_bdev_awu_min;
+	unsigned int		bt_bdev_awu_max;
+
 	KABI_EXTEND(struct shrinker_v2 *bt_shrinker)
 } xfs_buftarg_t;
 
