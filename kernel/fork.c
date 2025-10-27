@@ -99,6 +99,7 @@
 #include <linux/stackprotector.h>
 #include <linux/user_events.h>
 #include <linux/iommu.h>
+#include <linux/vm_object.h>
 
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
 #include <linux/sched/grid_qos.h>

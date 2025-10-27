@@ -9,10 +9,6 @@
 #ifndef _GMEM_H
 #define _GMEM_H
 
-#include <linux/mm.h>
-
-struct hnode;
-
 /*
  * enum gm_ret - The return value of GMEM KPI that can be used to tell
  * the core VM or peripheral driver whether the GMEM KPI was

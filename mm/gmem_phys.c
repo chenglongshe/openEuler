@@ -13,7 +13,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/dma-direct.h>
 
-#include <linux/gmem.h>
 #include <linux/vm_object.h>
 
 #include "gmem-internal.h"

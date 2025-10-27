@@ -3,6 +3,7 @@
 #define _GMEM_INTERNAL_H
 
 #include <linux/gmem.h>
+#include <linux/mman.h>
 
 #define gm_dev_is_peer(dev) (((dev)->capability & GM_DEV_CAP_PEER) != 0)
 
@@ -161,5 +162,15 @@ static inline void put_gm_page(struct gm_page *gm_page)
 int hnode_init_sysfs(unsigned int hnid);
 int __init gm_init_sysfs(void);
 void gm_deinit_sysfs(void);
+
+vm_fault_t do_peer_shared_anonymous_page(struct vm_fault *vmf);
+unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
+						unsigned long flag);
+void gmem_reserve_vma(struct mm_struct *mm, unsigned long start,
+				size_t len, struct list_head *head);
+void gmem_release_vma(struct mm_struct *mm, struct list_head *head);
+unsigned long gmem_unmap_align(struct mm_struct *mm, unsigned long start, size_t len);
+void gmem_unmap_region(struct mm_struct *mm, unsigned long start, size_t len);
+bool gm_mmap_check_flags(unsigned long flags);
 
 #endif /* _GMEM_INTERNAL_H */

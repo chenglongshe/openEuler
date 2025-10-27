@@ -50,7 +50,6 @@
 
 #include <linux/vm_object.h>
 #ifdef CONFIG_GMEM
-#include <linux/gmem.h>
 #include "gmem-internal.h"
 #endif
 
@@ -652,9 +651,7 @@ static inline int dup_anon_vma(struct vm_area_struct *dst,
 	 */
 	if (src->anon_vma && !dst->anon_vma) {
 		int ret;
-#ifdef CONFIG_GMEM
 		dup_vm_object(dst, src, true);
-#endif
 		vma_assert_write_locked(dst);
 		dst->anon_vma = src->anon_vma;
 		ret = anon_vma_clone(dst, src);
@@ -1301,8 +1298,10 @@ static unsigned long __mmap_region_ext(struct mm_struct *mm,
 #ifdef CONFIG_GMEM
 static unsigned long
 get_unmapped_area_aligned(struct file *file, unsigned long addr, unsigned long len,
-		unsigned long pgoff, unsigned long flags, unsigned long align)
+			  unsigned long pgoff, unsigned long flags)
 {
+	unsigned long align = HPAGE_SIZE;
+	len = round_up(len, align);
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
@@ -1368,17 +1367,7 @@ unsigned long __do_mmap_mm(struct mm_struct *mm, struct file *file, unsigned lon
 	/* Obtain the address to map to. we verify (or select) it and ensure
 	 * that it represents a valid section of the address space.
 	 */
-#ifdef CONFIG_GMEM
-	if (gmem_is_enabled() && (flags & MAP_PEER_SHARED)) {
-		len = round_up(len, PMD_SIZE);
-		addr = get_unmapped_area_aligned(file, addr, len, pgoff, flags,
-						PMD_SIZE);
-	} else {
-		addr = get_unmapped_area(file, addr, len, pgoff, flags);
-	}
-#else
 	addr = get_unmapped_area(file, addr, len, pgoff, flags);
-#endif
 	if (IS_ERR_VALUE(addr))
 		return addr;
 
@@ -1517,7 +1506,6 @@ unsigned long __do_mmap_mm(struct mm_struct *mm, struct file *file, unsigned lon
 		*populate = len;
 	return addr;
 }
-EXPORT_SYMBOL(__do_mmap_mm);
 
 unsigned long do_mmap(struct file *file, unsigned long addr,
 		      unsigned long len, unsigned long prot,
@@ -1537,25 +1525,12 @@ unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 	unsigned long retval;
 
 #ifdef CONFIG_GMEM
-	if (gmem_is_enabled() && (flags & MAP_SHARED) && (flags & MAP_PEER_SHARED)) {
+	if (!gm_mmap_check_flags(flags)) {
 		retval = -EINVAL;
-		gmem_err(" MAP_PEER_SHARED and MAP_SHARE cannot be used together.\n");
-		goto out_fput;
-	}
-	if (gmem_is_enabled() && (flags & MAP_HUGETLB) && (flags & MAP_PEER_SHARED)) {
-		retval = -EINVAL;
-		gmem_err(" MAP_PEER_SHARED and MAP_HUGETLB cannot be used together.\n");
 		goto out_fput;
 	}
 #endif
 	if (!(flags & MAP_ANONYMOUS)) {
-#ifdef CONFIG_GMEM
-		if (gmem_is_enabled() && (flags & MAP_PEER_SHARED)) {
-			retval = -EINVAL;
-			gmem_err(" MAP_PEER_SHARED cannot map file page.\n");
-			goto out_fput;
-		}
-#endif
 		audit_mmap_fd(fd, flags);
 		file = fget(fd);
 		if (!file)
@@ -1992,6 +1967,10 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 	if (file) {
 		if (file->f_op->get_unmapped_area)
 			get_area = file->f_op->get_unmapped_area;
+#ifdef CONFIG_GMEM
+	} else if (gmem_is_enabled() && (flags & MAP_PEER_SHARED)) {
+		get_area = get_unmapped_area_aligned;
+#endif
 	} else if (flags & MAP_SHARED) {
 		/*
 		 * mmap_region() will call shmem_zero_setup() to create a file,
@@ -2022,7 +2001,6 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 }
 
 EXPORT_SYMBOL(get_unmapped_area);
-
 
 /**
  * find_vma_intersection() - Look up the first VMA which intersects the interval
@@ -2562,9 +2540,9 @@ int __split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	err = anon_vma_clone(new, vma);
 	if (err)
 		goto out_free_mpol;
-#ifdef COFNIG_GMEM
+
 	dup_vm_object(new, vma, false);
-#endif
+
 	if (new->vm_file)
 		get_file(new->vm_file);
 
@@ -2618,135 +2596,6 @@ int split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 
 	return __split_vma(vmi, vma, addr, new_below);
 }
-
-#ifdef CONFIG_GMEM
-static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_area_struct *vma,
-					      unsigned long start_addr, unsigned long end_addr)
-{
-	unsigned long start, end, addr;
-	struct vm_object *obj = vma->vm_obj;
-	enum gm_ret ret;
-	struct gm_context *ctx, *tmp;
-	struct gm_mapping *gm_mapping;
-	struct hnode *hnode;
-	struct gm_fault_t gmf = {
-		.mm = mm,
-		.copy = false,
-	};
-
-	start = max(vma->vm_start, start_addr);
-	if (start >= vma->vm_end)
-		return;
-	addr = start;
-	end = min(vma->vm_end, end_addr);
-	if (end <= vma->vm_start)
-		return;
-
-	if (!obj)
-		return;
-
-	if (!mm->gm_as)
-		return;
-
-	do {
-		xa_lock(obj->logical_page_table);
-		gm_mapping = vm_object_lookup(obj, addr);
-		if (!gm_mapping) {
-			xa_unlock(obj->logical_page_table);
-			continue;
-		}
-		xa_unlock(obj->logical_page_table);
-
-		mutex_lock(&gm_mapping->lock);
-		if (!gm_mapping_device(gm_mapping)) {
-			mutex_unlock(&gm_mapping->lock);
-			continue;
-		}
-
-		gmf.va = addr;
-		gmf.size = HPAGE_SIZE;
-		gmf.pfn = gm_mapping->gm_page->dev_pfn;
-		gmf.dev = gm_mapping->dev;
-		ret = gm_mapping->dev->mmu->peer_unmap(&gmf);
-		if (ret != GM_RET_SUCCESS)
-			gmem_err("%s: call dev peer_unmap error %d", __func__, ret);
-
-		/*
-		 * Regardless of whether the gm_page is unmapped, we should release it.
-		 */
-		hnode = get_hnode(gm_mapping->gm_page->hnid);
-		if (!hnode) {
-			mutex_unlock(&gm_mapping->lock);
-			continue;
-		}
-		gm_page_remove_rmap(gm_mapping->gm_page);
-		hnode_activelist_del(hnode, gm_mapping->gm_page);
-		hnode_active_pages_dec(hnode);
-		put_gm_page(gm_mapping->gm_page);
-		gm_mapping_flags_set(gm_mapping, GM_MAPPING_NOMAP);
-		gm_mapping->gm_page = NULL;
-		mutex_unlock(&gm_mapping->lock);
-	} while (addr += HPAGE_SIZE, addr != end);
-
-	list_for_each_entry_safe(ctx, tmp, &mm->gm_as->gm_ctx_list, gm_as_link) {
-		if (!gm_dev_is_peer(ctx->dev))
-			continue;
-		if (!ctx->dev->mmu->peer_va_free)
-			continue;
-
-		gmf.va = start;
-		gmf.size = end - start;
-		gmf.dev = ctx->dev;
-
-		ret = ctx->dev->mmu->peer_va_free(&gmf);
-		if (ret != GM_RET_SUCCESS)
-			pr_debug("gmem: free_vma failed, ret %d\n", ret);
-	}
-}
-
-static void munmap_in_peer_devices(struct mm_struct *mm, unsigned long start, unsigned long end)
-{
-	struct vm_area_struct *vma;
-
-	VMA_ITERATOR(vmi, mm, start);
-	for_each_vma_range(vmi, vma, end) {
-		if (vma_is_peer_shared(vma))
-			munmap_single_vma_in_peer_devices(mm, vma, start, end);
-	}
-}
-
-static unsigned long gmem_unmap_align(struct mm_struct *mm, unsigned long start, size_t len)
-{
-	struct vm_area_struct *vma, *vma_end;
-
-	vma = find_vma_intersection(mm, start, start + len);
-	vma_end = find_vma(mm, start + len);
-	if (!vma || !vma_is_peer_shared(vma))
-		return 0;
-	if (vma_is_peer_shared(vma)) {
-		if (!IS_ALIGNED(start, PMD_SIZE))
-			return -EINVAL;
-	}
-
-	/* Prevents partial release of the peer_share page. */
-	if (vma_end && vma_end->vm_start < (start + len) && vma_is_peer_shared(vma_end))
-		len = round_up(len, SZ_2M);
-	return len;
-}
-
-static void gmem_unmap_region(struct mm_struct *mm, unsigned long start, size_t len)
-{
-	unsigned long end, ret;
-
-	ret = gmem_unmap_align(mm, start, len);
-
-	if (!ret || IS_ERR_VALUE(ret))
-		return;
-
-	end = start + ret;
-	munmap_in_peer_devices(mm, start, end);
-}
-#endif
 
 /*
  * do_vmi_align_munmap() - munmap the aligned region from @start to @end.
@@ -2878,7 +2727,6 @@ do_vmi_align_munmap(struct vma_iterator *vmi, struct vm_area_struct *vma,
 
 	prev = vma_iter_prev_range(vmi);
 	next = vma_next(vmi);
-
 	if (next)
 		vma_iter_prev_range(vmi);
 
@@ -3015,24 +2863,21 @@ static unsigned long __mmap_region(struct mm_struct *mm, struct file *file,
 		nr_pages = count_vma_pages_range(mm, addr, end);
 
 		if (!may_expand_vm(mm, vm_flags,
-					(len >> PAGE_SHIFT) - nr_pages)) {
+					(len >> PAGE_SHIFT) - nr_pages))
 			return -ENOMEM;
-		}
 	}
 
 	/* Unmap any existing mapping in the area */
-	if (do_vmi_munmap(&vmi, mm, addr, len, uf, false)) {
+	if (do_vmi_munmap(&vmi, mm, addr, len, uf, false))
 		return -ENOMEM;
-	}
 
 	/*
 	 * Private writable mapping: check memory availability
 	 */
 	if (accountable_mapping(file, vm_flags)) {
 		charged = len >> PAGE_SHIFT;
-		if (security_vm_enough_memory_mm(mm, charged)) {
+		if (security_vm_enough_memory_mm(mm, charged))
 			return -ENOMEM;
-		}
 		vm_flags |= VM_ACCOUNT;
 	}
 

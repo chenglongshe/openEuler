@@ -77,11 +77,6 @@
 #include <linux/ptrace.h>
 #include <linux/vmalloc.h>
 #include <linux/sched/sysctl.h>
-#ifdef CONFIG_GMEM
-#include <linux/vm_object.h>
-#include <linux/gmem.h>
-#include "gmem-internal.h"
-#endif
 
 #include <linux/userswap.h>
 #include <linux/dynamic_pool.h>
@@ -94,6 +89,11 @@
 #include <linux/uaccess.h>
 #include <asm/tlb.h>
 #include <asm/tlbflush.h>
+
+#include <linux/vm_object.h>
+#ifdef CONFIG_GMEM
+#include "gmem-internal.h"
+#endif
 
 #include "pgalloc-track.h"
 #include "internal.h"
@@ -1717,13 +1717,16 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 }
 
 #ifdef CONFIG_GMEM
-static inline void zap_logic_pmd_range(struct vm_area_struct *vma,
-					unsigned long addr,
-					unsigned long end)
+static inline void zap_logic_pmd_range(struct vm_area_struct *vma, unsigned long addr,
+					unsigned long end, bool verify_pmd, pmd_t *pmd)
 {
 	struct gm_mapping *gm_mapping = NULL;
 	struct page *page = NULL;
 
+	if (!vma_is_peer_shared(vma))
+		return;
+	if (!pmd_none_or_clear_bad(pmd) && !pmd_trans_huge(*pmd))
+		return;
 	if (!vma->vm_obj)
 		return;
 
@@ -1745,201 +1748,13 @@ static inline void zap_logic_pud_range(struct vm_area_struct *vma,
 					unsigned long end)
 {
 	unsigned long next;
-
+	if (!vma_is_peer_shared(vma))
+		return;
 	do {
 		next = pmd_addr_end(addr, end);
-		zap_logic_pmd_range(vma, addr, next);
+		zap_logic_pmd_range(vma, addr, next, false, NULL);
 	} while (addr = next, addr != end);
 }
-#else
-static inline void zap_logic_pmd_range(struct vm_area_struct *vma,
-					unsigned long addr,
-					unsigned long end) {}
-static inline void zap_logic_pud_range(struct vm_area_struct *vma,
-					unsigned long addr,
-					unsigned long end) {}
-#endif
-
-static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
-				struct vm_area_struct *vma, pud_t *pud,
-				unsigned long addr, unsigned long end,
-				struct zap_details *details)
-{
-	pmd_t *pmd;
-	unsigned long next;
-
-	pmd = pmd_offset(pud, addr);
-	do {
-		next = pmd_addr_end(addr, end);
-		if (is_swap_pmd(*pmd) || pmd_trans_huge(*pmd) || pmd_devmap(*pmd)) {
-			if (next - addr != HPAGE_PMD_SIZE)
-				__split_huge_pmd(vma, pmd, addr, false, NULL);
-			else if (zap_huge_pmd(tlb, vma, pmd, addr)) {
-				addr = next;
-				continue;
-			}
-			/* fall through */
-		} else if (details && details->single_folio &&
-			   folio_test_pmd_mappable(details->single_folio) &&
-			   next - addr == HPAGE_PMD_SIZE && pmd_none(*pmd)) {
-			spinlock_t *ptl = pmd_lock(tlb->mm, pmd);
-			/*
-			 * Take and drop THP pmd lock so that we cannot return
-			 * prematurely, while zap_huge_pmd() has cleared *pmd,
-			 * but not yet decremented compound_mapcount().
-			 */
-			spin_unlock(ptl);
-		}
-#ifdef CONFIG_GMEM
-		/*
-		 * Here there can be other concurrent MADV_DONTNEED or
-		 * trans huge page faults running, and if the pmd is
-		 * none or trans huge it can change under us. This is
-		 * because MADV_DONTNEED holds the mmap_lock in read
-		 * mode.
-		 */
-		if (vma_is_peer_shared(vma)) {
-			if (pmd_none_or_clear_bad(pmd) || pmd_trans_huge(*pmd))
-				zap_logic_pmd_range(vma, addr, next);
-		}
-#endif
-		if (pmd_none(*pmd)) {
-			addr = next;
-			continue;
-		}
-		addr = zap_pte_range(tlb, vma, pmd, addr, next, details);
-		if (addr != next)
-			pmd--;
-	} while (pmd++, cond_resched(), addr != end);
-
-	return addr;
-}
-
-static inline unsigned long zap_pud_range(struct mmu_gather *tlb,
-				struct vm_area_struct *vma, p4d_t *p4d,
-				unsigned long addr, unsigned long end,
-				struct zap_details *details)
-{
-	pud_t *pud;
-	unsigned long next;
-
-	pud = pud_offset(p4d, addr);
-	do {
-		next = pud_addr_end(addr, end);
-		if (pud_trans_huge(*pud) || pud_devmap(*pud)) {
-			if (next - addr != HPAGE_PUD_SIZE) {
-				mmap_assert_locked(tlb->mm);
-				split_huge_pud(vma, pud, addr);
-			} else if (zap_huge_pud(tlb, vma, pud, addr))
-				goto next;
-			/* fall through */
-		}
-		if (pud_none_or_clear_bad(pud)) {
-			if (vma_is_peer_shared(vma))
-				zap_logic_pud_range(vma, addr, next);
-			continue;
-		}
-		next = zap_pmd_range(tlb, vma, pud, addr, next, details);
-next:
-		cond_resched();
-	} while (pud++, addr = next, addr != end);
-
-	return addr;
-}
-
-static inline unsigned long zap_p4d_range(struct mmu_gather *tlb,
-				struct vm_area_struct *vma, pgd_t *pgd,
-				unsigned long addr, unsigned long end,
-				struct zap_details *details)
-{
-	p4d_t *p4d;
-	unsigned long next;
-
-	p4d = p4d_offset(pgd, addr);
-	do {
-		next = p4d_addr_end(addr, end);
-		if (p4d_none_or_clear_bad(p4d)) {
-			if (vma_is_peer_shared(vma))
-				zap_logic_pud_range(vma, addr, next);
-			continue;
-		}
-		next = zap_pud_range(tlb, vma, p4d, addr, next, details);
-	} while (p4d++, addr = next, addr != end);
-
-	return addr;
-}
-
-void unmap_page_range(struct mmu_gather *tlb,
-			     struct vm_area_struct *vma,
-			     unsigned long addr, unsigned long end,
-			     struct zap_details *details)
-{
-	pgd_t *pgd;
-	unsigned long next;
-
-	BUG_ON(addr >= end);
-	tlb_start_vma(tlb, vma);
-	pgd = pgd_offset(vma->vm_mm, addr);
-	do {
-		next = pgd_addr_end(addr, end);
-		if (pgd_none_or_clear_bad(pgd)) {
-#ifdef CONFIG_GMEM
-			if (vma_is_peer_shared(vma))
-				zap_logic_pud_range(vma, addr, next);
-#endif
-			continue;
-		}
-		next = zap_p4d_range(tlb, vma, pgd, addr, next, details);
-	} while (pgd++, addr = next, addr != end);
-	tlb_end_vma(tlb, vma);
-}
-
-
-static void unmap_single_vma(struct mmu_gather *tlb,
-		struct vm_area_struct *vma, unsigned long start_addr,
-		unsigned long end_addr,
-		struct zap_details *details, bool mm_wr_locked)
-{
-	unsigned long start = max(vma->vm_start, start_addr);
-	unsigned long end;
-
-	if (start >= vma->vm_end)
-		return;
-	end = min(vma->vm_end, end_addr);
-	if (end <= vma->vm_start)
-		return;
-
-	if (vma->vm_file)
-		uprobe_munmap(vma, start, end);
-
-	if (unlikely(vma->vm_flags & VM_PFNMAP))
-		untrack_pfn(vma, 0, 0, mm_wr_locked);
-
-	if (start != end) {
-		if (unlikely(is_vm_hugetlb_page(vma))) {
-			/*
-			 * It is undesirable to test vma->vm_file as it
-			 * should be non-null for valid hugetlb area.
-			 * However, vm_file will be NULL in the error
-			 * cleanup path of mmap_region. When
-			 * hugetlbfs ->mmap method fails,
-			 * mmap_region() nullifies vma->vm_file
-			 * before calling this function to clean up.
-			 * Since no pte has actually been setup, it is
-			 * safe to do nothing in this case.
-			 */
-			if (vma->vm_file) {
-				zap_flags_t zap_flags = details ?
-				    details->zap_flags : 0;
-				__unmap_hugepage_range(tlb, vma, start, end,
-							     NULL, zap_flags);
-			}
-		} else
-			unmap_page_range(tlb, vma, start, end, details);
-	}
-}
-
-#ifdef CONFIG_GMEM
 
 static void unmap_single_peer_shared_vma(struct mm_struct *mm, struct vm_area_struct *vma,
 					 unsigned long start_addr, unsigned long end_addr)
@@ -1994,8 +1809,186 @@ static void unmap_single_peer_shared_vma(struct mm_struct *mm, struct vm_area_st
 		mutex_unlock(&gm_mapping->lock);
 	} while (addr += HPAGE_SIZE, addr != end);
 }
-
+#else
+static inline void zap_logic_pmd_range(struct vm_area_struct *vma, unsigned long addr,
+					unsigned long end, bool verify_pmd, pmd_t *pmd) {}
+static inline void zap_logic_pud_range(struct vm_area_struct *vma,
+					unsigned long addr,
+					unsigned long end) {}
+static inline void unmap_single_peer_shared_vma(struct mm_struct *mm, struct vm_area_struct *vma,
+					 unsigned long start_addr, unsigned long end_addr) {}
 #endif
+
+static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
+				struct vm_area_struct *vma, pud_t *pud,
+				unsigned long addr, unsigned long end,
+				struct zap_details *details)
+{
+	pmd_t *pmd;
+	unsigned long next;
+
+	pmd = pmd_offset(pud, addr);
+	do {
+		next = pmd_addr_end(addr, end);
+		if (is_swap_pmd(*pmd) || pmd_trans_huge(*pmd) || pmd_devmap(*pmd)) {
+			if (next - addr != HPAGE_PMD_SIZE)
+				__split_huge_pmd(vma, pmd, addr, false, NULL);
+			else if (zap_huge_pmd(tlb, vma, pmd, addr)) {
+				addr = next;
+				continue;
+			}
+			/* fall through */
+		} else if (details && details->single_folio &&
+			   folio_test_pmd_mappable(details->single_folio) &&
+			   next - addr == HPAGE_PMD_SIZE && pmd_none(*pmd)) {
+			spinlock_t *ptl = pmd_lock(tlb->mm, pmd);
+			/*
+			 * Take and drop THP pmd lock so that we cannot return
+			 * prematurely, while zap_huge_pmd() has cleared *pmd,
+			 * but not yet decremented compound_mapcount().
+			 */
+			spin_unlock(ptl);
+		}
+		/*
+		 * Here there can be other concurrent MADV_DONTNEED or
+		 * trans huge page faults running, and if the pmd is
+		 * none or trans huge it can change under us. This is
+		 * because MADV_DONTNEED holds the mmap_lock in read
+		 * mode.
+		 */
+		zap_logic_pmd_range(vma, addr, next, true, pmd);
+
+		if (pmd_none(*pmd)) {
+			addr = next;
+			continue;
+		}
+		addr = zap_pte_range(tlb, vma, pmd, addr, next, details);
+		if (addr != next)
+			pmd--;
+	} while (pmd++, cond_resched(), addr != end);
+
+	return addr;
+}
+
+static inline unsigned long zap_pud_range(struct mmu_gather *tlb,
+				struct vm_area_struct *vma, p4d_t *p4d,
+				unsigned long addr, unsigned long end,
+				struct zap_details *details)
+{
+	pud_t *pud;
+	unsigned long next;
+
+	pud = pud_offset(p4d, addr);
+	do {
+		next = pud_addr_end(addr, end);
+		if (pud_trans_huge(*pud) || pud_devmap(*pud)) {
+			if (next - addr != HPAGE_PUD_SIZE) {
+				mmap_assert_locked(tlb->mm);
+				split_huge_pud(vma, pud, addr);
+			} else if (zap_huge_pud(tlb, vma, pud, addr))
+				goto next;
+			/* fall through */
+		}
+		if (pud_none_or_clear_bad(pud)) {
+			zap_logic_pud_range(vma, addr, next);
+			continue;
+		}
+		next = zap_pmd_range(tlb, vma, pud, addr, next, details);
+next:
+		cond_resched();
+	} while (pud++, addr = next, addr != end);
+
+	return addr;
+}
+
+static inline unsigned long zap_p4d_range(struct mmu_gather *tlb,
+				struct vm_area_struct *vma, pgd_t *pgd,
+				unsigned long addr, unsigned long end,
+				struct zap_details *details)
+{
+	p4d_t *p4d;
+	unsigned long next;
+
+	p4d = p4d_offset(pgd, addr);
+	do {
+		next = p4d_addr_end(addr, end);
+		if (p4d_none_or_clear_bad(p4d)) {
+			zap_logic_pud_range(vma, addr, next);
+			continue;
+		}
+		next = zap_pud_range(tlb, vma, p4d, addr, next, details);
+	} while (p4d++, addr = next, addr != end);
+
+	return addr;
+}
+
+void unmap_page_range(struct mmu_gather *tlb,
+			     struct vm_area_struct *vma,
+			     unsigned long addr, unsigned long end,
+			     struct zap_details *details)
+{
+	pgd_t *pgd;
+	unsigned long next;
+
+	BUG_ON(addr >= end);
+	tlb_start_vma(tlb, vma);
+	pgd = pgd_offset(vma->vm_mm, addr);
+	do {
+		next = pgd_addr_end(addr, end);
+		if (pgd_none_or_clear_bad(pgd)) {
+			zap_logic_pud_range(vma, addr, next);
+			continue;
+		}
+		next = zap_p4d_range(tlb, vma, pgd, addr, next, details);
+	} while (pgd++, addr = next, addr != end);
+	tlb_end_vma(tlb, vma);
+}
+
+
+static void unmap_single_vma(struct mmu_gather *tlb,
+		struct vm_area_struct *vma, unsigned long start_addr,
+		unsigned long end_addr,
+		struct zap_details *details, bool mm_wr_locked)
+{
+	unsigned long start = max(vma->vm_start, start_addr);
+	unsigned long end;
+
+	if (start >= vma->vm_end)
+		return;
+	end = min(vma->vm_end, end_addr);
+	if (end <= vma->vm_start)
+		return;
+
+	if (vma->vm_file)
+		uprobe_munmap(vma, start, end);
+
+	if (unlikely(vma->vm_flags & VM_PFNMAP))
+		untrack_pfn(vma, 0, 0, mm_wr_locked);
+
+	if (start != end) {
+		if (unlikely(is_vm_hugetlb_page(vma))) {
+			/*
+			 * It is undesirable to test vma->vm_file as it
+			 * should be non-null for valid hugetlb area.
+			 * However, vm_file will be NULL in the error
+			 * cleanup path of mmap_region. When
+			 * hugetlbfs ->mmap method fails,
+			 * mmap_region() nullifies vma->vm_file
+			 * before calling this function to clean up.
+			 * Since no pte has actually been setup, it is
+			 * safe to do nothing in this case.
+			 */
+			if (vma->vm_file) {
+				zap_flags_t zap_flags = details ?
+				    details->zap_flags : 0;
+				__unmap_hugepage_range(tlb, vma, start, end,
+							     NULL, zap_flags);
+			}
+		} else
+			unmap_page_range(tlb, vma, start, end, details);
+	}
+}
+
 
 /**
  * unmap_vmas - unmap a range of memory covered by a list of vma's
@@ -5749,6 +5742,8 @@ out_map:
 static inline vm_fault_t create_huge_pmd(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
+	if (vma_is_peer_shared(vma))
+		return do_peer_shared_anonymous_page(vmf);
 	if (vma_is_anonymous(vma))
 		return do_huge_pmd_anonymous_page(vmf);
 	if (vma->vm_ops->huge_fault)

@@ -7,9 +7,9 @@
  *
  */
 
-#include <linux/slab.h>
+#include <linux/mm.h>
 #include <linux/kobject.h>
-#include <linux/gmem.h>
+#include <linux/slab.h>
 
 #include "gmem-internal.h"
 
@@ -29,10 +29,8 @@ static struct hnode *get_hnode_kobj(struct kobject *kobj)
 
 	hnode_kobj = container_of(kobj, struct hnode_kobject, kobj);
 	hnode = get_hnode(hnode_kobj->hnid);
-	if (!hnode) {
+	if (!hnode)
 		gmem_err("%s: failed to get hnode from kobject", __func__);
-		return NULL;
-	}
 
 	return hnode;
 }
