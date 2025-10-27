@@ -20,54 +20,219 @@
  *	x0 - bytes not copied
  */
 
-	.macro ldrb1 reg, ptr, val
-	user_ldst 9998f, ldtrb, \reg, \ptr, \val
-	.endm
-
-	.macro strb1 reg, ptr, val
-	strb \reg, [\ptr], \val
-	.endm
-
-	.macro ldrh1 reg, ptr, val
-	user_ldst 9997f, ldtrh, \reg, \ptr, \val
-	.endm
-
-	.macro strh1 reg, ptr, val
-	strh \reg, [\ptr], \val
-	.endm
-
-	.macro ldr1 reg, ptr, val
-	user_ldst 9997f, ldtr, \reg, \ptr, \val
-	.endm
-
-	.macro str1 reg, ptr, val
-	str \reg, [\ptr], \val
-	.endm
-
-	.macro ldp1 reg1, reg2, ptr, val
-	user_ldp 9997f, \reg1, \reg2, \ptr, \val
-	.endm
-
-	.macro stp1 reg1, reg2, ptr, val
-	stp \reg1, \reg2, [\ptr], \val
-	.endm
-
+dstin	.req	x0
 end	.req	x5
+src	.req	x1
 srcin	.req	x15
+count	.req	x2
+tmp1	.req	x3
+tmp1w	.req	w3
+tmp2	.req	x4
+tmp2w	.req	w4
+dst	.req	x6
+
+A_l	.req	x7
+A_h	.req	x8
+B_l	.req	x9
+B_h	.req	x10
+C_l	.req	x11
+C_h	.req	x12
+D_l	.req	x13
+D_h	.req	x14
+
+#define USER_OFF(off, x...)	USER(fixup_offset_##off, x)
+#define FIXUP_OFFSET(n)				\
+fixup_offset_##n:				\
+	sub	x0, end, dst;			\
+	sub	x0, x0, n;			\
+	ret
+
+FIXUP_OFFSET(0)
+FIXUP_OFFSET(8)
+FIXUP_OFFSET(16)
+FIXUP_OFFSET(24)
+FIXUP_OFFSET(32)
+FIXUP_OFFSET(40)
+FIXUP_OFFSET(48)
+FIXUP_OFFSET(56)
+
 SYM_FUNC_START(__arch_copy_from_user)
 	add	end, x0, x2
 	mov	srcin, x1
-#include "copy_template.S"
+
+	mov	dst, dstin
+	cmp	count, #16
+	/*When memory length is less than 16, the accessed are not aligned.*/
+	b.lo	.Ltiny15
+
+	neg	tmp2, src
+	ands	tmp2, tmp2, #15/* Bytes to reach alignment. */
+	b.eq	.LSrcAligned
+	sub	count, count, tmp2
+	/*
+	* Copy the leading memory data from src to dst in an increasing
+	* address order.By this way,the risk of overwriting the source
+	* memory data is eliminated when the distance between src and
+	* dst is less than 16. The memory accesses here are alignment.
+	*/
+	tbz	tmp2, #0, 1f
+USER_OFF(0,	ldtrb tmp1w, [src, #0])
+	strb	tmp1w, [dst], #1
+	add	src, src, #1
+1:
+	tbz	tmp2, #1, 2f
+USER_OFF(0,	ldtrh tmp1w, [src, #0])
+	strh	tmp1w, [dst], #2
+	add	src, src, #2
+2:
+	tbz	tmp2, #2, 3f
+USER_OFF(0,	ldtr tmp1w, [src, #0])
+	str	tmp1w, [dst], #4
+	add	src, src, #4
+3:
+	tbz	tmp2, #3, .LSrcAligned
+USER_OFF(0,	ldtr tmp1, [src, #0])
+	str	tmp1, [dst], #8
+	add	src, src, #8
+
+.LSrcAligned:
+	cmp	count, #64
+	b.ge	.Lcpy_over64
+	/*
+	* Deal with small copies quickly by dropping straight into the
+	* exit block.
+	*/
+.Ltail63:
+	/*
+	* Copy up to 48 bytes of data. At this point we only need the
+	* bottom 6 bits of count to be accurate.
+	*/
+	ands	tmp1, count, #0x30
+	b.eq	.Ltiny15
+	USER_OFF(0,	ldtr A_l, [src, #0])
+	USER_OFF(8,	ldtr A_h, [src, #8])
+	cmp	tmp1w, #0x20
+	b.eq	1f
+	b.lt	2f
+	stp 	A_l, A_h, [dst], #16
+	add	src, src, #16
+	USER_OFF(0,	ldtr A_l, [src, #0])
+	USER_OFF(8,	ldtr A_h, [src, #8])
+1:
+	stp 	A_l, A_h, [dst], #16
+	add	src, src, #16
+	USER_OFF(0,	ldtr A_l, [src, #0])
+	USER_OFF(8,	ldtr A_h, [src, #8])
+2:
+	stp 	A_l, A_h, [dst], #16
+	add	src, src, #16
+.Ltiny15:
+	/*
+	* Prefer to break one ldp/stp into several load/store to access
+	* memory in an increasing address order,rather than to load/store 16
+	* bytes from (src-16) to (dst-16) and to backward the src to aligned
+	* address,which way is used in original cortex memcpy. If keeping
+	* the original memcpy process here, memmove need to satisfy the
+	* precondition that src address is at least 16 bytes bigger than dst
+	* address,otherwise some source data will be overwritten when memove
+	* call memcpy directly. To make memmove simpler and decouple the
+	* memcpy's dependency on memmove, withdrew the original process.
+	*/
+	tbz	count, #3, 1f
+USER_OFF(0,	ldtr tmp1, [src, #0])
+	str	tmp1, [dst], #8
+	add	src, src, #8
+1:
+	tbz	count, #2, 2f
+USER_OFF(0,	ldtr tmp1w, [src, #0])
+	str	tmp1w, [dst], #4
+	add	src, src, #4
+2:
+	tbz	count, #1, 3f
+USER_OFF(0,	ldtrh tmp1w, [src, #0])
+	strh	tmp1w, [dst], #2
+	add	src, src, #2
+3:
+	tbz	count, #0, .Lexitfunc
+USER_OFF(0,	ldtrb tmp1w, [src, #0])
+	strb	tmp1w, [dst], #1
+	add	src, src, #1
+
+	b	.Lexitfunc
+
+.Lcpy_over64:
+	.p2align	L1_CACHE_SHIFT
+	USER_OFF(0,	ldtr A_l, [src, #0])
+	USER_OFF(8,	ldtr A_h, [src, #8])
+	subs	count, count, #128
+	b.ge	.Lcpy_body_large
+	/*
+	* Less than 128 bytes to copy, so handle 64 here and then jump
+	* to the tail.
+	*/
+	stp 	A_l, A_h, [dst, #0]
+USER_OFF(16,	ldtr B_l, [src, #16])
+USER_OFF(24,	ldtr B_h, [src, #24])
+USER_OFF(32,	ldtr C_l, [src, #32])
+USER_OFF(40,	ldtr C_h, [src, #40])
+	stp 	B_l, B_h, [dst, #16]
+	stp	C_l, C_h, [dst, #32]
+USER_OFF(48,	ldtr D_l, [src, #48])
+USER_OFF(56,	ldtr D_h, [src, #56])
+	add	src, src, #64
+	stp	D_l, D_h, [dst, #48]
+	add	dst, dst, #64
+
+	tst	count, #0x3f
+	b.ne	.Ltail63
+	b	.Lexitfunc
+
+	/*
+	* Critical loop.  Start at a new cache line boundary.  Assuming
+	* 64 bytes per line this ensures the entire loop is in one line.
+	*/
+.Lcpy_body_large:
+	/* pre-get 64 bytes data. */
+USER_OFF(16,	ldtr B_l, [src, #16])
+USER_OFF(24,	ldtr B_h, [src, #24])
+USER_OFF(32,	ldtr C_l, [src, #32])
+USER_OFF(40,	ldtr C_h, [src, #40])
+USER_OFF(48,	ldtr D_l, [src, #48])
+USER_OFF(56,	ldtr D_h, [src, #56])
+	add	src, src, #64
+
+1:
+	/*
+	* interlace the load of next 64 bytes data block with store of the last
+	* loaded 64 bytes data.
+	*/
+	stp 	A_l, A_h, [dst, #0]
+USER_OFF(0,	ldtr A_l, [src, #0])
+USER_OFF(8,	ldtr A_h, [src, #8])
+	stp 	B_l, B_h, [dst, #16]
+USER_OFF(16,	ldtr B_l, [src, #16])
+USER_OFF(24,	ldtr B_h, [src, #24])
+	stp	C_l, C_h, [dst, #32]
+USER_OFF(32,	ldtr C_l, [src, #32])
+USER_OFF(40,	ldtr C_h, [src, #40])
+	stp	D_l, D_h, [dst, #48]
+USER_OFF(48,	ldtr D_l, [src, #48])
+	add	dst, dst, #64
+USER_OFF(56,	ldtr D_h, [src, #56])
+	add	src, src, #64
+	subs	count, count, #64
+	b.ge	1b
+	stp 	A_l, A_h, [dst, #0]
+	stp 	B_l, B_h, [dst, #16]
+	stp	C_l, C_h, [dst, #32]
+	stp	D_l, D_h, [dst, #48]
+	add	dst, dst, #64
+
+	tst	count, #0x3f
+	b.ne	.Ltail63
+.Lexitfunc:
 	mov	x0, #0				// Nothing to copy
 	ret
 
-	// Exception fixups
-9997:	cmp	dst, dstin
-	b.ne	9998f
-	// Before being absolutely sure we couldn't copy anything, try harder
-USER(9998f, ldtrb tmp1w, [srcin])
-	strb	tmp1w, [dst], #1
-9998:	sub	x0, end, dst			// bytes not copied
-	ret
 SYM_FUNC_END(__arch_copy_from_user)
 EXPORT_SYMBOL(__arch_copy_from_user)
