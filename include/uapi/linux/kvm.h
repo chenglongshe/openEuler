@@ -95,6 +95,16 @@ struct kvm_userspace_memory_region {
 	__u64 userspace_addr; /* start of the userspace allocated memory */
 };
 
+/* for KVM_SET_USER_MEMORY_REGION2 */
+struct kvm_userspace_memory_region2 {
+	__u32 slot;
+	__u32 flags;
+	__u64 guest_phys_addr;
+	__u64 memory_size;
+	__u64 userspace_addr;
+	__u64 pad[16];
+};
+
 /*
  * The bit 0 ~ bit 15 of kvm_userspace_memory_region::flags are visible for
  * userspace, other bits are reserved for kvm internal use which are defined
@@ -1232,6 +1242,7 @@ struct kvm_ppc_resize_hpt {
 
 #define KVM_CAP_ARM_HISI_IPIV 798
 #define KVM_CAP_ARM_VIRT_MSI_BYPASS 799
+#define KVM_CAP_USER_MEMORY2 231
 
 #ifdef KVM_CAP_IRQ_ROUTING
 
@@ -1544,6 +1555,8 @@ struct kvm_numa_info {
 					struct kvm_userspace_memory_region)
 #define KVM_SET_TSS_ADDR          _IO(KVMIO,   0x47)
 #define KVM_SET_IDENTITY_MAP_ADDR _IOW(KVMIO,  0x48, __u64)
+#define KVM_SET_USER_MEMORY_REGION2 _IOW(KVMIO, 0x49, \
+					 struct kvm_userspace_memory_region2)
 
 #define KVM_LOAD_USER_DATA _IOW(KVMIO, 0x49, struct kvm_user_data)
 

@@ -12678,7 +12678,7 @@ void __user * __x86_set_memory_region(struct kvm *kvm, int id, gpa_t gpa,
 	}
 
 	for (i = 0; i < KVM_ADDRESS_SPACE_NUM; i++) {
-		struct kvm_userspace_memory_region m;
+		struct kvm_userspace_memory_region2 m;
 
 		m.slot = id | (i << 16);
 		m.flags = 0;
@@ -12827,6 +12827,10 @@ static int kvm_alloc_memslot_metadata(struct kvm *kvm,
 				linfo[j].disallow_lpage = 1;
 		}
 	}
+
+#ifdef CONFIG_KVM_GENERIC_MEMORY_ATTRIBUTES
+	kvm_mmu_init_memslot_memory_attributes(kvm, slot);
+#endif
 
 	if (kvm_page_track_create_memslot(kvm, slot, npages))
 		goto out_free;
