@@ -128,7 +128,13 @@ struct signal_struct {
 #ifdef CONFIG_POSIX_TIMERS
 
 	/* POSIX.1b Interval Timers */
-	int			posix_timer_id;
+	union {
+		unsigned int		next_posix_timer_id;
+		struct {
+			int		posix_timer_id;
+		} KABI_UNIQUE_ID;
+	}
+
 	struct list_head	posix_timers;
 
 	/* ITIMER_REAL timer for the process */
