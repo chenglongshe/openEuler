@@ -65,6 +65,7 @@ void sdei_watchdog_hardlockup_disable(unsigned int cpu)
 static int sdei_watchdog_callback(u32 event,
 		struct pt_regs *regs, void *arg)
 {
+	pr_err("sdei watchdog callback on cpu %d\n", smp_processor_id());
 	ktime_t delta, now = ktime_get_mono_fast_ns();
 
 	delta = now - __this_cpu_read(last_check_time);
