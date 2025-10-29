@@ -91,6 +91,23 @@ efi_status_t check_platform_features(void)
 
 u32 __weak code_size;
 
+#ifdef CONFIG_HISILICON_ERRATUM_1980005
+
+static inline bool is_midr_in_range(struct midr_range const *range)
+{
+	return midr_is_cpu_model_range(read_cpuid_id(), range->model,
+				       range->rv_min, range->rv_max);
+}
+
+bool is_midr_in_range_list(struct midr_range const *ranges)
+{
+	while (ranges->model)
+		if (is_midr_in_range(ranges++))
+			return true;
+	return false;
+}
+#endif
+
 void efi_cache_sync_image(unsigned long image_base,
 			  unsigned long alloc_size)
 {
