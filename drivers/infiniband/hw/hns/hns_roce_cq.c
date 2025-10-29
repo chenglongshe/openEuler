@@ -30,6 +30,7 @@
  * SOFTWARE.
  */
 
+#include <linux/pci.h>
 #include <rdma/ib_umem.h>
 #include <rdma/uverbs_ioctl.h>
 #include "hns_roce_device.h"
@@ -67,6 +68,43 @@ void hns_roce_get_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx)
 		if (!(cq_table->valid_cq_bank_mask & BIT(i)))
 			continue;
 
+		if (cq_table->ctx_num[i] < least_load) {
+			least_load = cq_table->ctx_num[i];
+			bankid = i;
+		}
+	}
+	cq_table->ctx_num[bankid]++;
+	mutex_unlock(&cq_table->bank_mutex);
+
+	uctx->cq_bank_id = bankid;
+}
+
+void hns_roce_put_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx)
+{
+	struct hns_roce_dev *hr_dev = to_hr_dev(uctx->ibucontext.device);
+	struct hns_roce_cq_table *cq_table = &hr_dev->cq_table;
+
+	if (hr_dev->pci_dev->revision < PCI_REVISION_ID_HIP09)
+		return;
+
+	mutex_lock(&cq_table->bank_mutex);
+	cq_table->ctx_num[uctx->cq_bank_id]--;
+	mutex_unlock(&cq_table->bank_mutex);
+}
+
+void hns_roce_get_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx)
+{
+	struct hns_roce_dev *hr_dev = to_hr_dev(uctx->ibucontext.device);
+	struct hns_roce_cq_table *cq_table = &hr_dev->cq_table;
+	u32 least_load = cq_table->ctx_num[0];
+	u8 bankid = 0;
+	u8 i;
+
+	if (hr_dev->pci_dev->revision < PCI_REVISION_ID_HIP09)
+		return;
+
+	mutex_lock(&cq_table->bank_mutex);
+	for (i = 1; i < HNS_ROCE_CQ_BANK_NUM; i++) {
 		if (cq_table->ctx_num[i] < least_load) {
 			least_load = cq_table->ctx_num[i];
 			bankid = i;

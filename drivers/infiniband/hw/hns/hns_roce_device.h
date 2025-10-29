@@ -267,11 +267,11 @@ struct hns_roce_ucontext {
 	struct hns_user_mmap_entry *db_mmap_entry;
 	struct hns_user_mmap_entry *reset_mmap_entry;
 	u32			config;
+	u8 cq_bank_id;
 	struct hns_roce_dca_ctx	dca_ctx;
 	struct list_head list; /* link all uctx to uctx_list on hr_dev */
 	pid_t pid; /* process id to which the uctx belongs */
 	struct hns_dca_ctx_debugfs dca_dbgfs;
-	u8 cq_bank_id;
 };
 
 struct hns_roce_pd {
@@ -1487,6 +1487,8 @@ struct hns_user_mmap_entry *
 hns_roce_user_mmap_entry_insert(struct ib_ucontext *ucontext, u64 address,
 				size_t length,
 				enum hns_roce_mmap_type mmap_type);
+void hns_roce_put_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
+void hns_roce_get_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
 void hns_roce_add_unfree_db(struct hns_roce_db_pg_node *db_node,
 			    struct hns_roce_dev *hr_dev);
 void hns_roce_free_unfree_db(struct hns_roce_dev *hr_dev);
@@ -1495,6 +1497,4 @@ void hns_roce_add_unfree_mtr(struct hns_roce_dev *hr_dev,
 void hns_roce_free_unfree_mtr(struct hns_roce_dev *hr_dev);
 int hns_roce_alloc_scc_param(struct hns_roce_dev *hr_dev);
 void hns_roce_dealloc_scc_param(struct hns_roce_dev *hr_dev);
-void hns_roce_put_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
-void hns_roce_get_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
 #endif /* _HNS_ROCE_DEVICE_H */
