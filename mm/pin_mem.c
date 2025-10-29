@@ -1006,11 +1006,11 @@ vm_fault_t do_mem_remap(int pid, struct mm_struct *mm)
 			}
 			if (!pme->is_huge_page) {
 				ret = remap_normal_pages(mm, vma, pme);
-				if (ret < 0)
+				if (ret)
 					goto free;
 			} else {
 				ret = remap_huge_pmd_pages(mm, vma, pme);
-				if (ret < 0)
+				if (ret)
 					goto free;
 			}
 			pme = (struct page_map_entry *)(next_pme(pme));
