@@ -271,7 +271,6 @@ struct hns_roce_ucontext {
 	struct list_head list; /* link all uctx to uctx_list on hr_dev */
 	pid_t pid; /* process id to which the uctx belongs */
 	struct hns_dca_ctx_debugfs dca_dbgfs;
-	u8 cq_bank_id;
 };
 
 struct hns_roce_pd {
@@ -1495,6 +1494,4 @@ void hns_roce_add_unfree_mtr(struct hns_roce_dev *hr_dev,
 void hns_roce_free_unfree_mtr(struct hns_roce_dev *hr_dev);
 int hns_roce_alloc_scc_param(struct hns_roce_dev *hr_dev);
 void hns_roce_dealloc_scc_param(struct hns_roce_dev *hr_dev);
-void hns_roce_put_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
-void hns_roce_get_cq_bankid_for_uctx(struct hns_roce_ucontext *uctx);
 #endif /* _HNS_ROCE_DEVICE_H */

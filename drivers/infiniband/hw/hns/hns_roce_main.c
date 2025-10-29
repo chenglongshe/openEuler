@@ -602,7 +602,6 @@ static int hns_roce_alloc_ucontext(struct ib_ucontext *uctx,
 	mutex_unlock(&hr_dev->uctx_list_mutex);
 
 	hns_roce_register_uctx_debugfs(hr_dev, context);
-	hns_roce_get_cq_bankid_for_uctx(context);
 
 	return 0;
 

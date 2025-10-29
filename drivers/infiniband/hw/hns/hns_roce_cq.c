@@ -118,7 +118,7 @@ static int alloc_cqn(struct hns_roce_dev *hr_dev, struct hns_roce_cq *hr_cq,
 	int id;
 
 	mutex_lock(&cq_table->bank_mutex);
-	bankid = select_cq_bankid(hr_dev, cq_table->bank, udata);
+	bankid = get_least_load_bankid_for_cq(cq_table->bank);
 	bank = &cq_table->bank[bankid];
 
 	id = ida_alloc_range(&bank->ida, bank->min, bank->max, GFP_KERNEL);
@@ -463,7 +463,7 @@ int hns_roce_create_cq(struct ib_cq *ib_cq, const struct ib_cq_init_attr *attr,
 		goto err_cq_buf;
 	}
 
-	ret = alloc_cqn(hr_dev, hr_cq, udata);
+	ret = alloc_cqn(hr_dev, hr_cq);
 	if (ret) {
 		ibdev_err(ibdev, "failed to alloc CQN, ret = %d.\n", ret);
 		goto err_cq_db;
