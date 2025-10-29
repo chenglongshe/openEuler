@@ -77,7 +77,6 @@
 #include <linux/ptrace.h>
 #include <linux/vmalloc.h>
 #include <linux/sched/sysctl.h>
-
 #include <linux/userswap.h>
 #include <linux/dynamic_pool.h>
 
@@ -91,9 +90,7 @@
 #include <asm/tlbflush.h>
 
 #include <linux/vm_object.h>
-#ifdef CONFIG_GMEM
 #include "gmem-internal.h"
-#endif
 
 #include "pgalloc-track.h"
 #include "internal.h"
@@ -5742,10 +5739,9 @@ out_map:
 static inline vm_fault_t create_huge_pmd(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-#ifdef CONFIG_GMEM
+
 	if (vma_is_peer_shared(vma))
 		return do_peer_shared_anonymous_page(vmf);
-#endif
 	if (vma_is_anonymous(vma))
 		return do_huge_pmd_anonymous_page(vmf);
 	if (vma->vm_ops->huge_fault)
@@ -5992,14 +5988,12 @@ retry_pud:
 	} else {
 		vmf.orig_pmd = pmdp_get_lockless(vmf.pmd);
 
-#ifdef CONFIG_GMEM
 		if (vma_is_peer_shared(vma) && pmd_none(*vmf.pmd) &&
 			(thp_disabled_by_hw() || vma_thp_disabled(vma, vma->vm_flags))) {
 			/* if transparent hugepage is not enabled, return pagefault failed */
 			gmem_err("transparent hugepage is not enabled\n");
 			return VM_FAULT_SIGBUS;
 		}
-#endif
 
 		if (unlikely(is_swap_pmd(vmf.orig_pmd))) {
 			VM_BUG_ON(thp_migration_supported() &&

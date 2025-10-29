@@ -452,7 +452,7 @@ enum gm_ret gm_as_destroy(struct gm_as *as)
 }
 EXPORT_SYMBOL_GPL(gm_as_destroy);
 
-enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev, enum gm_mmu_mode mode,
+enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev,
 			bool activate, struct gm_context **out_ctx)
 {
 	struct gm_context *ctx;
@@ -465,12 +465,6 @@ enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev, enum gm_mmu_mode 
 
 	ctx->as = as;
 	ctx->dev = dev;
-	ctx->pmap = NULL;
-	ret = dev->mmu->pmap_create(dev, &ctx->pmap);
-	if (ret) {
-		kmem_cache_free(gm_ctx_cache, ctx);
-		return ret;
-	}
 
 	INIT_LIST_HEAD(&ctx->gm_dev_link);
 	INIT_LIST_HEAD(&ctx->gm_as_link);

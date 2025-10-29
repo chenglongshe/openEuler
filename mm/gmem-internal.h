@@ -4,6 +4,7 @@
 
 #include <linux/gmem.h>
 #include <linux/mman.h>
+#ifdef CONFIG_GMEM
 
 #define gm_dev_is_peer(dev) (((dev)->capability & GM_DEV_CAP_PEER) != 0)
 
@@ -173,5 +174,22 @@ bool gm_mmap_check_flags(unsigned long flags);
 unsigned long gm_vm_mmap_pgoff(struct file *file, unsigned long addr,
 				unsigned long len, unsigned long prot,
 				unsigned long flag, unsigned long pgoff);
+
+vm_fault_t gm_host_fault_locked(struct vm_fault *vmf, unsigned int order);
+
+#define GMEM_MMAP_RETRY_TIMES 10 /* gmem retry times before OOM */
+
+#else
+
+static inline vm_fault_t do_peer_shared_anonymous_page(struct vm_fault *vmf) { return 0; }
+static inline unsigned long gmem_unmap_align(struct mm_struct *mm,
+			unsigned long start, size_t len) { return 0; }
+
+static inline void gmem_unmap_region(struct mm_struct *mm, unsigned long start, size_t len) { return; }
+static inline unsigned long gm_vm_mmap_pgoff(struct file *file, unsigned long addr,
+				unsigned long len, unsigned long prot,
+				unsigned long flag, unsigned long pgoff) { return 0; }
+
+#endif /* CONFIG_GMEM */
 
 #endif /* _GMEM_INTERNAL_H */

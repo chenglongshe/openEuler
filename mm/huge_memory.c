@@ -38,7 +38,6 @@
 #include <linux/page_owner.h>
 #include <linux/sched/sysctl.h>
 #include <linux/memory-tiers.h>
-
 #include <linux/compat.h>
 
 #include <asm/tlb.h>

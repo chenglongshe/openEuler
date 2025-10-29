@@ -432,6 +432,7 @@ unsigned long gm_vm_mmap_pgoff(struct file *file, unsigned long addr,
 	enum gm_ret gm_ret;
 
 retry:
+	flag &= ~MAP_PEER_SHARED;
 	ret = vm_mmap_pgoff(file, addr, len, prot, flag, pgoff);
 
 	if (!IS_ERR_VALUE(ret)) {

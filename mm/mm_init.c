@@ -30,9 +30,6 @@
 #include "internal.h"
 #include "slab.h"
 #include "shuffle.h"
-#ifdef CONFIG_GMEM
-#include "gmem-internal.h"
-#endif
 
 #include <asm/setup.h>
 

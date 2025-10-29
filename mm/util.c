@@ -27,11 +27,8 @@
 
 #include <linux/uaccess.h>
 #include <linux/oom.h>
-#ifdef CONFIG_GMEM
-#include <linux/vm_object.h>
 
 #include "gmem-internal.h"
-#endif
 
 #include "internal.h"
 #include "swap.h"
@@ -554,10 +551,8 @@ unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
 	unsigned long populate;
 	LIST_HEAD(uf);
 
-#ifdef CONFIG_GMEM
 	if (gmem_is_enabled() && flag & MAP_PEER_SHARED)
 		return gm_vm_mmap_pgoff(file, addr, len, prot, flag, pgoff);
-#endif
 
 	ret = security_mmap_file(file, prot, flag);
 	if (!ret) {

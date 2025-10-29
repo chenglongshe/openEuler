@@ -49,9 +49,7 @@
 #include <linux/ksm.h>
 
 #include <linux/vm_object.h>
-#ifdef CONFIG_GMEM
 #include "gmem-internal.h"
-#endif
 
 #include <linux/share_pool.h>
 
@@ -2787,7 +2785,6 @@ int do_vmi_munmap(struct vma_iterator *vmi, struct mm_struct *mm,
 	unsigned long end;
 	struct vm_area_struct *vma;
 
-#ifdef CONFIG_GMEM
 	if (gmem_is_enabled()) {
 		unsigned long ret = gmem_unmap_align(mm, start, len);
 
@@ -2796,7 +2793,6 @@ int do_vmi_munmap(struct vma_iterator *vmi, struct mm_struct *mm,
 		else if (ret)
 			len = ret;
 	}
-#endif
 
 	if ((offset_in_page(start)) || start > TASK_SIZE || len > TASK_SIZE-start)
 		return -EINVAL;
@@ -2832,10 +2828,8 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len,
 {
 	VMA_ITERATOR(vmi, mm, start);
 
-#ifdef CONFIG_GMEM
 	if (gmem_is_enabled())
 		gmem_unmap_region(mm, start, len);
-#endif
 	return do_vmi_munmap(&vmi, mm, start, len, uf, false);
 }
 
@@ -3120,10 +3114,8 @@ static int __vm_munmap(unsigned long start, size_t len, bool unlock)
 	if (sp_check_addr(start))
 		return -EINVAL;
 
-#ifdef CONFIG_GMEM
 	if (gmem_is_enabled())
 		gmem_unmap_region(mm, start, len);
-#endif
 
 	if (mmap_write_lock_killable(mm))
 		return -EINTR;
