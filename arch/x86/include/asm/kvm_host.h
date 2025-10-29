@@ -734,7 +734,6 @@ struct kvm_vcpu_arch {
 	u32 pkru;
 	u32 hflags;
 	u64 efer;
-	u64 host_debugctl;
 	u64 apic_base;
 	struct kvm_lapic *apic;    /* kernel irqchip context */
 	bool load_eoi_exitmap_pending;
@@ -1018,6 +1017,10 @@ struct kvm_vcpu_arch {
 #if IS_ENABLED(CONFIG_HYPERV)
 	hpa_t hv_root_tdp;
 #endif
+};
+
+struct kvm_vcpu_arch_ext {
+	u64 host_debugctl;
 };
 
 struct kvm_lpage_info {
