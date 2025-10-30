@@ -159,6 +159,8 @@ static void centaur_detect_vmx_virtcap(struct cpuinfo_x86 *c)
 		if (msr_ctl2 & X86_VMX_FEATURE_PROC_CTLS2_VPID)
 			set_cpu_cap(c, X86_FEATURE_VPID);
 	}
+	if ((cpuid_eax(0xC0000000) >= 0xC0000006) && (cpuid_eax(0xC0000006) & 0x1))
+		setup_force_cpu_cap(X86_FEATURE_PAUSEOPT);
 }
 
 static void init_centaur(struct cpuinfo_x86 *c)
