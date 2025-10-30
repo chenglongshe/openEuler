@@ -1015,6 +1015,8 @@ static int handshake(void __iomem *ptr, u32 mask, u32 done,
 
 	do {
 		result = readl(ptr);
+		if (result == ~(u32)0)
+			return -ENODEV;
 		result &= mask;
 		if (result == done)
 			return 0;
