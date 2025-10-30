@@ -47,6 +47,7 @@ obj-$(CONFIG_CRYPTO_MORUS640_SSE2) += morus640-sse2.o
 obj-$(CONFIG_CRYPTO_MORUS1280_SSE2) += morus1280-sse2.o
 
 obj-$(CONFIG_CRYPTO_SM3_ZHAOXIN_GMI) += sm3-zhaoxin-gmi.o
+obj-$(CONFIG_CRYPTO_SM4_ZHAOXIN_GMI) += sm4-zhaoxin-gmi.o
 
 # These modules require assembler to support AVX.
 ifeq ($(avx_supported),yes)
