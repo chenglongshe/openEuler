@@ -43,6 +43,7 @@
 #include <linux/uaccess.h>
 
 #include <acpi/processor.h>
+#include <acpi/cppc_acpi.h>
 
 #include <asm/msr.h>
 #include <asm/processor.h>
@@ -648,9 +649,67 @@ static int acpi_cpufreq_blacklist(struct cpuinfo_x86 *c)
 }
 #endif
 
+#ifdef CONFIG_ACPI_CPPC_LIB
+static bool cppc_highest_perf_diff;
+static struct cpumask core_prior_mask;
+/* The work item is needed to avoid CPU hotplug locking issues */
+static void sched_itmt_work_fn(struct work_struct *work)
+{
+	sched_set_itmt_support();
+}
+
+static DECLARE_WORK(sched_itmt_work, sched_itmt_work_fn);
+
+static void core_set_itmt_prio(int cpu)
+{
+	struct cppc_perf_caps perf_caps;
+	u64 highest_perf = 0;
+	static u32 max_highest_perf = 0, min_highest_perf = U32_MAX;
+	int ret;
+
+	ret = cppc_get_perf_caps(cpu, &perf_caps);
+	if (ret) {
+		pr_debug("CPU%d: Unable to get performance capabilities (%d)\n", cpu, ret);
+		return;
+	}
+
+	highest_perf = perf_caps.highest_perf;
+
+	sched_set_itmt_core_prio(highest_perf, cpu);
+	cpumask_set_cpu(cpu, &core_prior_mask);
+
+	if (max_highest_perf <= min_highest_perf) {
+		if (perf_caps.highest_perf > max_highest_perf)
+			max_highest_perf = perf_caps.highest_perf;
+
+		if (perf_caps.highest_perf < min_highest_perf)
+			min_highest_perf = perf_caps.highest_perf;
+
+		if (max_highest_perf > min_highest_perf) {
+			/*
+			 * This code can be run during CPU online under the
+			 * CPU hotplug locks, so sched_set_itmt_support()
+			 * cannot be called from here.  Queue up a work item
+			 * to invoke it.
+			 */
+			cppc_highest_perf_diff = true;
+		}
+	}
+
+	if (cppc_highest_perf_diff && cpumask_equal(&core_prior_mask, cpu_online_mask)) {
+		pr_debug("queue a work to set itmt enabled\n");
+		schedule_work(&sched_itmt_work);
+	}
+}
+#else
+static inline void core_set_itmt_prio(int cpu)
+{
+}
+#endif
+
 static int acpi_cpufreq_cpu_init(struct cpufreq_policy *policy)
 {
-	unsigned int i;
+	unsigned int i, j = 0;
 	unsigned int valid_states = 0;
 	unsigned int cpu = policy->cpu;
 	struct acpi_cpufreq_data *data;
@@ -718,6 +777,14 @@ static int acpi_cpufreq_cpu_init(struct cpufreq_policy *policy)
 			     topology_sibling_cpumask(cpu));
 		policy->shared_type = CPUFREQ_SHARED_TYPE_HW;
 		pr_info_once("overriding BIOS provided _PSD data\n");
+	}
+#endif
+
+#ifdef CONFIG_X86
+	if (c->x86_vendor == X86_VENDOR_CENTAUR || c->x86_vendor == X86_VENDOR_ZHAOXIN) {
+		for_each_cpu(j, policy->cpus) {
+			core_set_itmt_prio(j);
+		}
 	}
 #endif
 
