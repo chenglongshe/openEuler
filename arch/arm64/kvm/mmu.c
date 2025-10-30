@@ -1216,6 +1216,25 @@ static void kvm_mmu_split_memory_region(struct kvm *kvm, int slot)
 	write_unlock(&kvm->mmu_lock);
 }
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+void virtcca_enable_log_dirty(struct kvm *kvm, uint64_t start, uint64_t end)
+{
+	struct arm_smccc_res res;
+	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+	uint64_t s_start = cvm->ipa_start;
+	uint64_t s_end = cvm->ipa_start + cvm->ram_size;
+
+	if (end <= s_start || start >= s_end) {
+		return;
+	}
+
+	res = tmi_mem_region_protect(cvm->rd, start, end, true);
+	if (res.a1 != 0) {
+		pr_err("tmi_mem_region_protect failed!\n");
+	}
+}
+#endif
+
 /*
  * kvm_arch_mmu_enable_log_dirty_pt_masked() - enable dirty logging for selected pages.
  * @kvm:	The KVM pointer
@@ -1236,6 +1255,24 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,
 	phys_addr_t end = (base_gfn + __fls(mask) + 1) << PAGE_SHIFT;
 
 	lockdep_assert_held_write(&kvm->mmu_lock);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (kvm_is_realm(kvm)) {
+		struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+		if (end <= cvm->ipa_start || start >= cvm->ipa_start + cvm->ram_size) {
+			pr_err("ns world mig: virtcca_enable_log_dirty start %llx end %llx\n", start, end);
+			goto handle_ns_mem;
+		}
+
+		if (start >= cvm->swiotlb_end || end <= cvm->swiotlb_start) {
+			return;
+		}
+		start = (start < cvm->swiotlb_start) ? cvm->swiotlb_start : start;
+		end = (end < cvm->swiotlb_end) ? end : cvm->swiotlb_end;
+	}
+
+handle_ns_mem:
+#endif
 
 	stage2_wp_range(&kvm->arch.mmu, start, end);
 

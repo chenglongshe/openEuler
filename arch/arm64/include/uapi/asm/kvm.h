@@ -562,6 +562,24 @@ struct kvm_smccc_filter {
 #define KVM_HYPERCALL_EXIT_SMC		(1U << 0)
 #define KVM_HYPERCALL_EXIT_16BIT	(1U << 1)
 
+/* mig virtcca head*/
+#define KVM_DEV_VIRTCCA_MIG_ATTR	0x1
+
+struct kvm_dev_virtcca_mig_attr {
+#define KVM_DEV_VIRTCCA_MIG_ATTR_VERSION	0
+	__u32 version;
+/* 4KB buffer can hold 512 entries at most */
+#define VIRTCCA_MIG_BUF_LIST_PAGES_MAX		512
+	__u32 buf_list_pages;
+	__u32 max_migs;
+};
+
+#define VIRTCCA_MIG_STREAM_MBMD_MAP_OFFSET		0
+#define VIRTCCA_MIG_STREAM_GPA_LIST_MAP_OFFSET	1
+#define VIRTCCA_MIG_STREAM_MAC_LIST_MAP_OFFSET	2
+#define VIRTCCA_MIG_STREAM_BUF_LIST_MAP_OFFSET	4
+
+
 #endif
 
 #endif /* __ARM_KVM_H__ */

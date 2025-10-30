@@ -1493,6 +1493,11 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,
 					struct kvm_memory_slot *slot,
 					gfn_t gfn_offset,
 					unsigned long mask);
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+void virtcca_enable_log_dirty(struct kvm *kvm, uint64_t start, uint64_t end);
+#endif
+
 void kvm_arch_sync_dirty_log(struct kvm *kvm, struct kvm_memory_slot *memslot);
 
 #ifndef CONFIG_KVM_GENERIC_DIRTYLOG_READ_PROTECT
@@ -2367,6 +2372,8 @@ static inline bool kvm_is_visible_memslot(struct kvm_memory_slot *memslot)
 
 struct kvm_vcpu *kvm_get_running_vcpu(void);
 struct kvm_vcpu * __percpu *kvm_get_running_vcpus(void);
+/* migration: get the migvm according to the pid */
+struct kvm *kvm_get_target_kvm(pid_t pid);
 
 #ifdef CONFIG_HAVE_KVM_IRQ_BYPASS
 bool kvm_arch_has_irq_bypass(void);

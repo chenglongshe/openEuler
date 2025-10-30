@@ -2013,6 +2013,10 @@ int kvm_arch_vm_ioctl(struct file *filp, unsigned int ioctl, unsigned long arg)
 	case KVM_LOAD_USER_DATA: {
 		return kvm_load_user_data(kvm, arg);
 	}
+/* add the migcvm ioctl*/
+	case KVM_CVM_MIG_IOCTL: {
+		return kvm_migcvm_ioctl(kvm, arg);
+	}
 #endif
 	case KVM_CREATE_IRQCHIP: {
 		int ret;

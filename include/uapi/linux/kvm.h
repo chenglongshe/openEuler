@@ -1494,6 +1494,8 @@ enum kvm_device_type {
 #define KVM_DEV_TYPE_ARM_PV_TIME	KVM_DEV_TYPE_ARM_PV_TIME
 	KVM_DEV_TYPE_RISCV_AIA,
 #define KVM_DEV_TYPE_RISCV_AIA		KVM_DEV_TYPE_RISCV_AIA
+	KVM_DEV_TYPE_VIRTCCA_MIG_STREAM = 0x00C,
+#define KVM_DEV_TYPE_VIRTCCA_MIG_STREAM		KVM_DEV_TYPE_VIRTCCA_MIG_STREAM
 	KVM_DEV_TYPE_LOONGARCH_IPI,
 #define KVM_DEV_TYPE_LOONGARCH_IPI	KVM_DEV_TYPE_LOONGARCH_IPI
 	KVM_DEV_TYPE_LOONGARCH_EIOINTC,
@@ -1546,6 +1548,8 @@ struct kvm_numa_info {
 #define KVM_SET_IDENTITY_MAP_ADDR _IOW(KVMIO,  0x48, __u64)
 
 #define KVM_LOAD_USER_DATA _IOW(KVMIO, 0x49, struct kvm_user_data)
+/*virtcca migration*/
+#define KVM_CVM_MIG_IOCTL _IOWR(KVMIO, 0xf2, struct kvm_virtcca_mig_cmd)
 
 #define KVM_CAP_ARM_TMM 300  /* FIXME: Large number to prevent conflicts */
 
