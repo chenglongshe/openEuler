@@ -214,9 +214,6 @@ unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 			.prot = prot,
 		};
 
-		if (!gm_dev_is_peer(ctx->dev))
-			continue;
-
 		if (!ctx->dev->mmu->peer_va_alloc_fixed) {
 			pr_debug("gmem: mmu ops has no alloc_vma\n");
 			continue;
@@ -346,8 +343,6 @@ static void munmap_single_vma_in_peer_devices(struct mm_struct *mm, struct vm_ar
 	} while (addr += HPAGE_SIZE, addr != end);
 
 	list_for_each_entry_safe(ctx, tmp, &mm->gm_as->gm_ctx_list, gm_as_link) {
-		if (!gm_dev_is_peer(ctx->dev))
-			continue;
 		if (!ctx->dev->mmu->peer_va_free)
 			continue;
 

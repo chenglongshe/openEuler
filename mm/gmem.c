@@ -199,7 +199,7 @@ __setup("gmem=", setup_gmem);
  * The returned device pointer will be passed by new_dev.
  * A unique id will be assigned to the GMEM device, using Linux's xarray.
  */
-enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned long cap,
+enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data,
 		       struct gm_dev **new_dev)
 {
 	struct gm_dev *dev;
@@ -217,7 +217,6 @@ enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned long cap,
 		return GM_RET_NOMEM;
 	}
 
-	dev->capability = cap;
 	dev->mmu = mmu;
 	dev->dev_data = dev_data;
 	dev->current_ctx = NULL;
@@ -457,7 +456,6 @@ enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev,
 {
 	struct gm_context *ctx;
 	int nid;
-	int ret;
 
 	ctx = kmem_cache_alloc(gm_ctx_cache, GFP_KERNEL);
 	if (!ctx)

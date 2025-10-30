@@ -6,8 +6,6 @@
 #include <linux/mman.h>
 #ifdef CONFIG_GMEM
 
-#define gm_dev_is_peer(dev) (((dev)->capability & GM_DEV_CAP_PEER) != 0)
-
 /* h-NUMA topology */
 struct hnode {
 	unsigned int id;

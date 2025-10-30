@@ -92,15 +92,6 @@ struct gm_mmu {
 	enum gm_ret (*peer_hmemcpy)(struct gm_memcpy_t *gmc);
 };
 
-/**
- * unsigned long defines a composable flag to describe the capabilities of a device.
- *
- * @GM_DEV_CAP_REPLAYABLE: Memory accesses can be replayed to recover page faults.
- * @GM_DEV_CAP_PEER: The device has its own VMA/PA management, controlled by another peer OS
- */
-#define GM_DEV_CAP_REPLAYABLE	0x00000001
-#define GM_DEV_CAP_PEER		0x00000010
-
 #define NUM_IMPORT_PAGES   16 /* number of physical pages imported each time */
 
 struct gm_context {
@@ -120,11 +111,6 @@ struct gm_context {
 struct gm_dev {
 	int id;
 
-	/* identifies the device capability
-	 * For example, whether the device supports page faults or whether it has its
-	 * own OS that manages the VA and PA resources.
-	 */
-	unsigned long capability;
 	struct gm_mmu *mmu;
 	void *dev_data;
 	/*
@@ -188,7 +174,7 @@ struct gm_as {
 };
 
 /* GMEM Device KPI */
-enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data, unsigned long cap,
+enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data,
 				struct gm_dev **new_dev);
 int gm_dev_register_hnode(struct gm_dev *dev);
 enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long addr,
