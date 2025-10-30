@@ -173,14 +173,15 @@ release:
 	return ret;
 }
 
-unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
+int alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 						unsigned long flag)
 {
 	struct vm_area_struct *vma;
 	struct mm_struct *mm = current->mm;
 	struct gm_context *ctx, *tmp;
 	unsigned long prot = VM_NONE;
-	enum gm_ret ret;
+	enum gm_ret gm_ret;
+	int ret;
 
 	vma = find_vma(mm, addr);
 	if (!vma) {
@@ -219,9 +220,11 @@ unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 			continue;
 		}
 
-		ret = ctx->dev->mmu->peer_va_alloc_fixed(&gmf);
-		if (ret != GM_RET_SUCCESS) {
+		gm_ret = ctx->dev->mmu->peer_va_alloc_fixed(&gmf);
+		if (gm_ret != GM_RET_SUCCESS) {
 			gmem_err("device mmap failed\n");
+			if (gm_ret == GM_RET_NOMEM)
+				ret = -ENOMEM;
 			return ret;
 		}
 	}
@@ -424,25 +427,25 @@ unsigned long gm_vm_mmap_pgoff(struct file *file, unsigned long addr,
 	LIST_HEAD(reserve_list);
 	unsigned int retry_times = 0;
 	unsigned long ret;
-	enum gm_ret gm_ret;
+	int error = 0;
 
 retry:
 	flag &= ~MAP_PEER_SHARED;
-	ret = vm_mmap_pgoff(file, addr, len, prot, flag, pgoff);
+	error = vm_mmap_pgoff(file, addr, len, prot, flag, pgoff);
 
 	if (!IS_ERR_VALUE(ret)) {
 
-		gm_ret = alloc_va_in_peer_devices(ret, len, flag);
+		error = alloc_va_in_peer_devices(ret, len, flag);
 		/**
 		 * if alloc_va_in_peer_devices failed
 		 * add vma to reserve_list and release after find a proper vma
 		 */
-		if (gm_ret == GM_RET_NOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
+		if (error == -ENOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
 			retry_times++;
 			gmem_reserve_vma(mm, ret, len, &reserve_list);
 			goto retry;
-		} else if (gm_ret != GM_RET_SUCCESS) {
-			gmem_err("alloc vma ret %lu\n", ret);
+		} else if (error != 0) {
++			gmem_err("alloc vma ret %d\n", error);
 			gmem_reserve_vma(mm, ret, len, &reserve_list);
 			ret = -ENOMEM;
 		}

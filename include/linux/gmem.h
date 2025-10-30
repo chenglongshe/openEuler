@@ -174,17 +174,17 @@ struct gm_as {
 };
 
 /* GMEM Device KPI */
-enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data,
+int gm_dev_create(struct gm_mmu *mmu, void *dev_data,
 				struct gm_dev **new_dev);
 int gm_dev_register_hnode(struct gm_dev *dev);
 enum gm_ret gm_dev_fault_locked(struct mm_struct *mm, unsigned long addr,
 				struct gm_dev *dev, int behavior);
 
 /* GMEM address space KPI */
-enum gm_ret gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
+int gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
 				unsigned long cache_quantum, struct gm_as **new_as);
-enum gm_ret gm_as_destroy(struct gm_as *as);
-enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev,
+int gm_as_destroy(struct gm_as *as);
+int gm_as_attach(struct gm_as *as, struct gm_dev *dev,
 				bool activate, struct gm_context **out_ctx);
 
 int hmadvise_inner(int hnid, unsigned long start, size_t len_in, int behavior);

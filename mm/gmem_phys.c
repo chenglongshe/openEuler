@@ -309,7 +309,7 @@ enum gm_evict_ret gm_evict_page_locked(struct gm_page *gm_page)
 		.copy = true
 	};
 	enum gm_evict_ret ret = GM_EVICT_SUCCESS;
-	int err;
+	enum gm_ret gm_ret;
 
 	gm_dev = get_gm_dev(gm_page->hnid);
 	if (!gm_dev)
@@ -373,8 +373,8 @@ enum gm_evict_ret gm_evict_page_locked(struct gm_page *gm_page)
 		goto gm_mapping_unlock;
 	}
 
-	err = gm_dev->mmu->peer_unmap(&gmf);
-	if (err) {
+	gm_ret = gm_dev->mmu->peer_unmap(&gmf);
+	if (gm_ret != GM_RET_SUCCESS) {
 		gmem_err("%s: peer_unmap failed.", __func__);
 		ret = GM_EVICT_DEVERR;
 		goto dma_unmap;

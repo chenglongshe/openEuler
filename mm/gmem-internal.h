@@ -160,7 +160,7 @@ int __init gm_init_sysfs(void);
 void gm_deinit_sysfs(void);
 
 vm_fault_t do_peer_shared_anonymous_page(struct vm_fault *vmf);
-unsigned long alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
+int alloc_va_in_peer_devices(unsigned long addr, unsigned long len,
 				unsigned long flag);
 void gmem_reserve_vma(struct mm_struct *mm, unsigned long start,
 				size_t len, struct list_head *head);

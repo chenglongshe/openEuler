@@ -199,22 +199,22 @@ __setup("gmem=", setup_gmem);
  * The returned device pointer will be passed by new_dev.
  * A unique id will be assigned to the GMEM device, using Linux's xarray.
  */
-enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data,
+int gm_dev_create(struct gm_mmu *mmu, void *dev_data,
 		       struct gm_dev **new_dev)
 {
 	struct gm_dev *dev;
 
 	if (!gmem_is_enabled())
-		return GM_RET_FAILURE_UNKNOWN;
+		return -EINVAL;
 
 	dev = kmem_cache_alloc(gm_dev_cache, GFP_KERNEL);
 	if (!dev)
-		return GM_RET_NOMEM;
+		return -ENOMEM;
 
 	if (xa_alloc(&gm_dev_id_pool, &dev->id, dev, xa_limit_32b,
 		     GFP_KERNEL)) {
 		kmem_cache_free(gm_dev_cache, dev);
-		return GM_RET_NOMEM;
+		return -EAGAIN;
 	}
 
 	dev->mmu = mmu;
@@ -223,7 +223,7 @@ enum gm_ret gm_dev_create(struct gm_mmu *mmu, void *dev_data,
 	INIT_LIST_HEAD(&dev->gm_ctx_list);
 	*new_dev = dev;
 	nodes_clear(dev->registered_hnodes);
-	return GM_RET_SUCCESS;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(gm_dev_create);
 
@@ -413,7 +413,7 @@ vm_fault_t gm_host_fault_locked(struct vm_fault *vmf,
 }
 
 /* GMEM Virtual Address Space API */
-enum gm_ret gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
+int gm_as_create(unsigned long begin, unsigned long end, enum gm_as_alloc policy,
 			unsigned long cache_quantum, struct gm_as **new_as)
 {
 	struct gm_as *as;
@@ -434,11 +434,11 @@ enum gm_ret gm_as_create(unsigned long begin, unsigned long end, enum gm_as_allo
 	INIT_LIST_HEAD(&as->gm_ctx_list);
 
 	*new_as = as;
-	return GM_RET_SUCCESS;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(gm_as_create);
 
-enum gm_ret gm_as_destroy(struct gm_as *as)
+int gm_as_destroy(struct gm_as *as)
 {
 	struct gm_context *ctx, *tmp_ctx;
 
@@ -447,11 +447,11 @@ enum gm_ret gm_as_destroy(struct gm_as *as)
 
 	kmem_cache_free(gm_as_cache, as);
 
-	return GM_RET_SUCCESS;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(gm_as_destroy);
 
-enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev,
+int gm_as_attach(struct gm_as *as, struct gm_dev *dev,
 			bool activate, struct gm_context **out_ctx)
 {
 	struct gm_context *ctx;
@@ -459,7 +459,7 @@ enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev,
 
 	ctx = kmem_cache_alloc(gm_ctx_cache, GFP_KERNEL);
 	if (!ctx)
-		return GM_RET_NOMEM;
+		return -ENOMEM;
 
 	ctx->as = as;
 	ctx->dev = dev;
@@ -497,7 +497,7 @@ enum gm_ret gm_as_attach(struct gm_as *as, struct gm_dev *dev,
 	 */
 	for_each_node_mask(nid, dev->registered_hnodes)
 		node_set(nid, current->mems_allowed);
-	return GM_RET_SUCCESS;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(gm_as_attach);
 
@@ -620,7 +620,7 @@ static int gmem_unmap_vma_pages(struct vm_area_struct *vma, unsigned long start,
 	struct gm_mapping *gm_mapping;
 	struct vm_object *obj;
 	struct hnode *hnode;
-	int ret;
+	enum gm_ret gm_ret;
 
 	obj = vma->vm_obj;
 	if (!obj) {
@@ -645,9 +645,9 @@ static int gmem_unmap_vma_pages(struct vm_area_struct *vma, unsigned long start,
 		} else {
 			gmf.va = start;
 			gmf.dev = gm_mapping->dev;
-			ret = gm_mapping->dev->mmu->peer_unmap(&gmf);
-			if (ret) {
-				gmem_err("peer_unmap failed. ret %d\n", ret);
+			gm_ret = gm_mapping->dev->mmu->peer_unmap(&gmf);
+			if (gm_ret) {
+				gmem_err("peer_unmap failed. ret %d\n", gm_ret);
 				mutex_unlock(&gm_mapping->lock);
 				continue;
 			}
