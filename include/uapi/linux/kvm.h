@@ -443,6 +443,11 @@ struct kvm_run {
 		struct {
 			__u64 gprs[32];
 		} osi;
+		/* KVM_EXIT_MEMORY_FAULT */
+#define KVM_MEMORY_EXIT_FLAG_PRIVATE	(1ULL << 3)
+#define memory_fault_flags		osi.gprs[0]
+#define memory_fault_gpa		osi.gprs[1]
+#define memory_fault_size		osi.gprs[2]
 		/* KVM_EXIT_PAPR_HCALL */
 		struct {
 			__u64 nr;
@@ -534,13 +539,6 @@ struct kvm_run {
 #define KVM_NOTIFY_CONTEXT_INVALID	(1 << 0)
 			__u32 flags;
 		} notify;
-		/* KVM_EXIT_MEMORY_FAULT */
-		struct {
-#define KVM_MEMORY_EXIT_FLAG_PRIVATE	(1ULL << 3)
-			__u64 flags;
-			__u64 gpa;
-			__u64 size;
-		} memory_fault;
 		/* Fix the size of the union. */
 		char padding[256];
 	};
