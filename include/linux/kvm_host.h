@@ -612,10 +612,10 @@ struct kvm_memory_slot {
 	u16 as_id;
 
 #ifdef CONFIG_KVM_PRIVATE_MEM
-	struct {
+	KABI_EXTEND(struct {
 		struct file __rcu *file;
 		pgoff_t pgoff;
-	} gmem;
+	} gmem)
 #endif
 };
 
@@ -867,8 +867,10 @@ struct kvm {
 	struct mmu_notifier mmu_notifier;
 	unsigned long mmu_invalidate_seq;
 	long mmu_invalidate_in_progress;
-	gfn_t mmu_invalidate_range_start;
-	gfn_t mmu_invalidate_range_end;
+	KABI_REPLACE(unsigned long mmu_invalidate_range_start,
+		gfn_t mmu_invalidate_range_start)
+	KABI_REPLACE(unsigned long mmu_invalidate_range_end,
+		gfn_t mmu_invalidate_range_end)
 #endif
 	struct list_head devices;
 	u64 manual_dirty_log_protect;
@@ -887,13 +889,13 @@ struct kvm {
 #ifdef CONFIG_HAVE_KVM_PM_NOTIFIER
 	struct notifier_block pm_notifier;
 #endif
-#ifdef CONFIG_KVM_GENERIC_MEMORY_ATTRIBUTES
-	/* Protected by slots_locks (for writes) and RCU (for reads) */
-	struct xarray mem_attr_array;
-#endif
 	char stats_id[KVM_STATS_NAME_SIZE];
 #ifdef CONFIG_ARM64_HDBSS
 	KABI_EXTEND(bool enable_hdbss)
+#endif
+#ifdef CONFIG_KVM_GENERIC_MEMORY_ATTRIBUTES
+	/* Protected by slots_locks (for writes) and RCU (for reads) */
+	KABI_EXTEND(struct xarray mem_attr_array)
 #endif
 };
 
