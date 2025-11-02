@@ -12556,7 +12556,7 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
 	if (!kvm_is_vm_type_supported(type))
 		return -EINVAL;
 
-	kvm->arch.vm_type = type;
+	kvm->vm_type = type;
 
 	ret = kvm_page_track_init(kvm);
 	if (ret)
