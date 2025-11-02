@@ -897,6 +897,7 @@ struct kvm {
 	/* Protected by slots_locks (for writes) and RCU (for reads) */
 	KABI_EXTEND(struct xarray mem_attr_array)
 #endif
+	KABI_EXTEND(unsigned long vm_type)
 };
 
 #define kvm_err(fmt, ...) \
