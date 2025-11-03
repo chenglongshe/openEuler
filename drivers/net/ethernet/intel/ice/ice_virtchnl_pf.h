@@ -121,6 +121,7 @@ void ice_vc_process_vf_msg(struct ice_pf *pf, struct ice_rq_event_info *event);
 void ice_vc_notify_link_state(struct ice_pf *pf);
 void ice_vc_notify_reset(struct ice_pf *pf);
 bool ice_reset_all_vfs(struct ice_pf *pf, bool is_vflr);
+bool ice_is_vf_disabled(struct ice_vf *vf);
 int ice_reset_vf(struct ice_vf *vf, u32 flags);
 void ice_restore_all_vfs_msi_state(struct pci_dev *pdev);
 
