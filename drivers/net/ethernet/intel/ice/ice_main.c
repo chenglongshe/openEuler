@@ -1609,7 +1609,7 @@ static void ice_handle_mdd_event(struct ice_pf *pf)
 				 */
 				ice_print_vf_rx_mdd_event(vf);
 				mutex_lock(&pf->vf[i].cfg_lock);
-				ice_reset_vf(&pf->vf[i], false);
+				ice_reset_vf(&pf->vf[i], 0);
 				mutex_unlock(&pf->vf[i].cfg_lock);
 			}
 		}
