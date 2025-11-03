@@ -358,6 +358,9 @@ struct ub_bus_controller {
 	struct ub_bus_controller_ops *ops;
 	bool cluster;
 
+	/* ub memory decoder */
+	struct ub_mem_device *mem_device;
+
 	void *data;
 };
 
