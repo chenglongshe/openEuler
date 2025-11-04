@@ -29,60 +29,83 @@
 #include "dmub/dmub_srv.h"
 #include "core_types.h"
 
+#define DC_TRACE_LEVEL_MESSAGE(...)	do {} while (0) /* do nothing */
+
 #define MAX_PIPES 6
 
 /**
  * Convert dmcub psr state to dmcu psr state.
  */
-static void convert_psr_state(uint32_t *psr_state)
+static enum dc_psr_state convert_psr_state(uint32_t raw_state)
 {
-	if (*psr_state == 0)
-		*psr_state = 0;
-	else if (*psr_state == 0x10)
-		*psr_state = 1;
-	else if (*psr_state == 0x11)
-		*psr_state = 2;
-	else if (*psr_state == 0x20)
-		*psr_state = 3;
-	else if (*psr_state == 0x21)
-		*psr_state = 4;
-	else if (*psr_state == 0x30)
-		*psr_state = 5;
-	else if (*psr_state == 0x31)
-		*psr_state = 6;
-	else if (*psr_state == 0x40)
-		*psr_state = 7;
-	else if (*psr_state == 0x41)
-		*psr_state = 8;
-	else if (*psr_state == 0x42)
-		*psr_state = 9;
-	else if (*psr_state == 0x43)
-		*psr_state = 10;
-	else if (*psr_state == 0x44)
-		*psr_state = 11;
-	else if (*psr_state == 0x50)
-		*psr_state = 12;
-	else if (*psr_state == 0x51)
-		*psr_state = 13;
-	else if (*psr_state == 0x52)
-		*psr_state = 14;
-	else if (*psr_state == 0x53)
-		*psr_state = 15;
+	enum dc_psr_state state = PSR_STATE0;
+
+	if (raw_state == 0)
+		state = PSR_STATE0;
+	else if (raw_state == 0x10)
+		state = PSR_STATE1;
+	else if (raw_state == 0x11)
+		state = PSR_STATE1a;
+	else if (raw_state == 0x20)
+		state = PSR_STATE2;
+	else if (raw_state == 0x21)
+		state = PSR_STATE2a;
+	else if (raw_state == 0x30)
+		state = PSR_STATE3;
+	else if (raw_state == 0x31)
+		state = PSR_STATE3Init;
+	else if (raw_state == 0x40)
+		state = PSR_STATE4;
+	else if (raw_state == 0x41)
+		state = PSR_STATE4a;
+	else if (raw_state == 0x42)
+		state = PSR_STATE4b;
+	else if (raw_state == 0x43)
+		state = PSR_STATE4c;
+	else if (raw_state == 0x44)
+		state = PSR_STATE4d;
+	else if (raw_state == 0x50)
+		state = PSR_STATE5;
+	else if (raw_state == 0x51)
+		state = PSR_STATE5a;
+	else if (raw_state == 0x52)
+		state = PSR_STATE5b;
+	else if (raw_state == 0x53)
+		state = PSR_STATE5c;
+
+	return state;
 }
 
 /**
  * Get PSR state from firmware.
  */
-static void dmub_psr_get_state(struct dmub_psr *dmub, uint32_t *psr_state)
+static void dmub_psr_get_state(struct dmub_psr *dmub, enum dc_psr_state *state)
 {
-	struct dmub_srv *srv = dmub->ctx->dmub_srv->dmub;
+	uint32_t raw_state = 0;
+	uint32_t retry_count = 0;
 
-	// Send gpint command and wait for ack
-	dmub_srv_send_gpint_command(srv, DMUB_GPINT__GET_PSR_STATE, 0, 30);
+	do {
+		// Send gpint command and wait for ack
+		if (dc_wake_and_execute_gpint(dmub->ctx, DMUB_GPINT__GET_PSR_STATE, 0,
+					      &raw_state, DM_DMUB_WAIT_TYPE_WAIT_WITH_REPLY)) {
+			*state = convert_psr_state(raw_state);
+		} else {
+			// Return invalid state when GPINT times out
+			*state = PSR_STATE_INVALID;
+		}
+	} while (++retry_count <= 1000 && *state == PSR_STATE_INVALID);
 
-	dmub_srv_get_gpint_response(srv, psr_state);
-
-	convert_psr_state(psr_state);
+	// Assert if max retry hit
+	if (retry_count >= 1000 && *state == PSR_STATE_INVALID) {
+		ASSERT(0);
+		DC_TRACE_LEVEL_MESSAGE(DAL_TRACE_LEVEL_ERROR,
+				WPP_BIT_FLAG_Firmware_PsrState,
+				"Unable to get PSR state from FW.");
+	} else
+		DC_TRACE_LEVEL_MESSAGE(DAL_TRACE_LEVEL_VERBOSE,
+				WPP_BIT_FLAG_Firmware_PsrState,
+				"Got PSR state from FW. PSR state: %d, Retry count: %d",
+				*state, retry_count);
 }
 
 /**
@@ -123,7 +146,8 @@ static void dmub_psr_enable(struct dmub_psr *dmub, bool enable, bool wait)
 {
 	union dmub_rb_cmd cmd;
 	struct dc_context *dc = dmub->ctx;
-	uint32_t retry_count, psr_state = 0;
+	uint32_t retry_count;
+	enum dc_psr_state state = PSR_STATE0;
 
 	cmd.psr_enable.header.type = DMUB_CMD__PSR;
 
@@ -144,13 +168,13 @@ static void dmub_psr_enable(struct dmub_psr *dmub, bool enable, bool wait)
 	 */
 	if (wait) {
 		for (retry_count = 0; retry_count <= 1000; retry_count++) {
-			dmub_psr_get_state(dmub, &psr_state);
+			dmub_psr_get_state(dmub, &state);
 
 			if (enable) {
-				if (psr_state != 0)
+				if (state != PSR_STATE0)
 					break;
 			} else {
-				if (psr_state == 0)
+				if (state == PSR_STATE0)
 					break;
 			}
 
@@ -169,12 +193,12 @@ static void dmub_psr_enable(struct dmub_psr *dmub, bool enable, bool wait)
 static void dmub_psr_set_level(struct dmub_psr *dmub, uint16_t psr_level)
 {
 	union dmub_rb_cmd cmd;
-	uint32_t psr_state = 0;
+	enum dc_psr_state state = PSR_STATE0;
 	struct dc_context *dc = dmub->ctx;
 
-	dmub_psr_get_state(dmub, &psr_state);
+	dmub_psr_get_state(dmub, &state);
 
-	if (psr_state == 0)
+	if (state == PSR_STATE0)
 		return;
 
 	cmd.psr_set_level.header.type = DMUB_CMD__PSR;
@@ -269,11 +293,29 @@ static bool dmub_psr_copy_settings(struct dmub_psr *dmub,
 	return true;
 }
 
+/**
+ * Send command to PSR to force static ENTER and ignore all state changes until exit
+ */
+static void dmub_psr_force_static(struct dmub_psr *dmub)
+{
+	union dmub_rb_cmd cmd;
+	struct dc_context *dc = dmub->ctx;
+
+	cmd.psr_force_static.header.type = DMUB_CMD__PSR;
+	cmd.psr_force_static.header.sub_type = DMUB_CMD__PSR_FORCE_STATIC;
+	cmd.psr_enable.header.payload_bytes = 0;
+
+	dc_dmub_srv_cmd_queue(dc->dmub_srv, &cmd);
+	dc_dmub_srv_cmd_execute(dc->dmub_srv);
+	dc_dmub_srv_wait_idle(dc->dmub_srv);
+}
+
 static const struct dmub_psr_funcs psr_funcs = {
 	.psr_copy_settings		= dmub_psr_copy_settings,
 	.psr_enable			= dmub_psr_enable,
 	.psr_get_state			= dmub_psr_get_state,
 	.psr_set_level			= dmub_psr_set_level,
+	.psr_force_static		= dmub_psr_force_static,
 };
 
 /**

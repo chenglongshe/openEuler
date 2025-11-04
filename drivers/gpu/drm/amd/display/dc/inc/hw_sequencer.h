@@ -213,7 +213,8 @@ struct hw_sequencer_funcs {
 	/* Idle Optimization Related */
 	bool (*apply_idle_power_optimizations)(struct dc *dc, bool enable);
 #endif
-
+	void (*set_idle_state)(const struct dc *dc, bool allow_idle);
+	uint32_t (*get_idle_state)(const struct dc *dc);
 };
 
 void color_space_to_black_color(
