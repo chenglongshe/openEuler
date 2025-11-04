@@ -13573,6 +13573,19 @@ static int try_steal(struct rq *dst_rq, struct rq_flags *dst_rf)
 	}
 #endif	/* CONFIG_SCHED_SMT */
 
+#ifdef CONFIG_SCHED_CLUSTER
+	/*
+	 * Then try overloaded CPUs on the same cluster to preserve cache warmth further.
+	 */
+	for_each_cpu(src_cpu, cpu_clustergroup_mask(dst_cpu)) {
+		if (sparsemask_test_elem(overload_cpus, src_cpu) &&
+		    steal_from(dst_rq, dst_rf, &locked, src_cpu)) {
+			stolen = 1;
+			goto out;
+		}
+	}
+#endif  /* CONFIG_SCHED_CLUSTER */
+
 	/* Accept any suitable task in the LLC */
 
 	sparsemask_for_each(overload_cpus, dst_cpu, src_cpu) {
