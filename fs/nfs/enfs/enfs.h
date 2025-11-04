@@ -33,7 +33,7 @@
 #define ENFS_MAX_MOUNT_COUNT 256
 #define EXTEND_MAX_DNS_NAME_LEN 256
 
-#define ENFS_UNSTABLE_STATE_TIMEOUT	(30 * 60) /* seconds */
+#define ENFS_MAX_UNSTABLE_STATE_TIMEOUT	(30 * 60) /* seconds */
 #define ENFS_RECONNECT_TIME_CNT	3
 
 struct nfs_ip_list {

@@ -153,7 +153,7 @@ enfs_update_reconnect_time(
 
 	while (time->tail != time->head) {
 		if (now_ms - time->time[time->tail] <
-		    ENFS_UNSTABLE_STATE_TIMEOUT * 1000)
+		    enfs_get_unstable_state_timeout() * 1000)
 			break;
 		/* timed out */
 		time->tail = enfs_get_next_time_idx(time->tail);
@@ -165,7 +165,14 @@ static void enfs_check_reconnect(struct rpc_xprt *xprt)
 	struct enfs_xprt_context *ctx = NULL;
 	struct enfs_reconnect_time *time;
 	bool is_empty, is_full, is_normal;
-	enum enfs_path_state curr_state = pm_get_path_state(xprt);
+	enum enfs_path_state curr_state;
+
+	if (enfs_get_unstable_state_timeout() == 0) {
+		pm_set_path_state(xprt, PM_STATE_NORMAL);
+		return;
+	}
+
+	curr_state = pm_get_path_state(xprt);
 
 	xprt_get(xprt);
 
@@ -258,7 +265,7 @@ bool enfs_test_reconnect_time(void)
 	if (!match)
 		return false;
 
-	ms = begin_ms + 5000 + ENFS_UNSTABLE_STATE_TIMEOUT * 1000 + 1;
+	ms = begin_ms + 5000 + ENFS_MAX_UNSTABLE_STATE_TIMEOUT * 1000 + 1;
 	cookie += 1;
 	enfs_log_info("%lld ms, cookie:%d\n", ms, cookie);
 	enfs_update_reconnect_time(&time, ms, cookie);

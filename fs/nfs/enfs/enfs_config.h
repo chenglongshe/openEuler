@@ -51,6 +51,7 @@ int32_t enfs_get_config_link_count_per_mount(void);
 int32_t enfs_get_config_link_count_total(void);
 int32_t enfs_get_native_link_io_status(void);
 int32_t enfs_get_create_path_no_route(void);
+int32_t enfs_get_unstable_state_timeout(void);
 bool enfs_check_config_wwn(uint64_t wwn);
 bool enfs_whitelist_filte(char *ip_addr);
 int32_t enfs_config_load(void);
