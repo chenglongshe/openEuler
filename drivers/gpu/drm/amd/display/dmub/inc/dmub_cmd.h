@@ -104,6 +104,11 @@ union dmub_psr_debug_flags {
 	uint32_t u32All;
 };
 
+struct dmub_feature_caps {
+	uint8_t psr;
+	uint8_t reserved[7];
+};
+
 #if defined(__cplusplus)
 }
 #endif
@@ -122,6 +127,17 @@ union dmub_psr_debug_flags {
 
 /* Offset from the end of the file to the dmub_fw_meta_info */
 #define DMUB_FW_META_OFFSET 0x24
+
+/**
+ *
+ * PSR control version legacy
+ */
+#define DMUB_CMD_PSR_CONTROL_VERSION_UNKNOWN 0x0
+/**
+ * PSR control version with multi edp support
+ */
+#define DMUB_CMD_PSR_CONTROL_VERSION_1 0x1
+
 
 /**
  * struct dmub_fw_meta_info - metadata associated with fw binary
@@ -182,6 +198,11 @@ enum dmub_fw_boot_status_bit {
 	DMUB_FW_BOOT_STATUS_BIT_OPTIMIZED_INIT_DONE = (1 << 2),
 	DMUB_FW_BOOT_STATUS_BIT_RESTORE_REQUIRED = (1 << 3),
 };
+
+#define DMUB_IPS1_ALLOW_MASK 0x00000001
+#define DMUB_IPS2_ALLOW_MASK 0x00000002
+#define DMUB_IPS1_COMMIT_MASK 0x00000004
+#define DMUB_IPS2_COMMIT_MASK 0x00000008
 
 /* Register bit definition for SCRATCH15 */
 union dmub_fw_boot_options {
@@ -272,6 +293,7 @@ enum dmub_gpint_command {
 	 * ARGS: Stream mask, 1 bit per active stream index.
 	 */
 	DMUB_GPINT__IDLE_OPT_NOTIFY_STREAM_MASK = 8,
+	DMUB_GPINT__PSR_RESIDENCY = 9,
 };
 
 //==============================================================================
@@ -297,11 +319,13 @@ enum dmub_cmd_type {
 	DMUB_CMD__REG_SEQ_BURST_WRITE = 3,
 	DMUB_CMD__REG_REG_WAIT = 4,
 	DMUB_CMD__PLAT_54186_WA = 5,
+	DMUB_CMD__QUERY_FEATURE_CAPS = 6,
 	DMUB_CMD__PSR = 64,
 	DMUB_CMD__ABM = 66,
 	DMUB_CMD__HW_LOCK = 69,
 	DMUB_CMD__DP_AUX_ACCESS = 70,
 	DMUB_CMD__OUTBOX1_ENABLE = 71,
+	DMUB_CMD__IDLE_OPT = 72,
 	DMUB_CMD__VBIOS = 128,
 };
 
@@ -316,7 +340,8 @@ enum dmub_out_cmd_type {
 struct dmub_cmd_header {
 	unsigned int type : 8;
 	unsigned int sub_type : 8;
-	unsigned int reserved0 : 8;
+	unsigned int ret_status : 1;
+	unsigned int reserved0 : 7;
 	unsigned int payload_bytes : 6;  /* up to 60 bytes */
 	unsigned int reserved1 : 2;
 };
@@ -549,6 +574,7 @@ enum dmub_cmd_psr_type {
 	DMUB_CMD__PSR_ENABLE			= 2,
 	DMUB_CMD__PSR_DISABLE			= 3,
 	DMUB_CMD__PSR_SET_LEVEL			= 4,
+	DMUB_CMD__PSR_FORCE_STATIC		= 5,
 };
 
 enum psr_version {
@@ -560,6 +586,9 @@ struct dmub_cmd_psr_copy_settings_data {
 	union dmub_psr_debug_flags debug;
 	uint16_t psr_level;
 	uint8_t dpp_inst;
+	/* opp_inst and mpcc_inst will not be used in dmub fw,
+	 * dmub fw will get active opp by reading odm registers.
+	 */
 	uint8_t mpcc_inst;
 	uint8_t opp_inst;
 	uint8_t otg_inst;
@@ -601,6 +630,10 @@ struct dmub_cmd_psr_set_version_data {
 struct dmub_rb_cmd_psr_set_version {
 	struct dmub_cmd_header header;
 	struct dmub_cmd_psr_set_version_data psr_set_version_data;
+};
+
+struct dmub_rb_cmd_psr_force_static {
+	struct dmub_cmd_header header;
 };
 
 union dmub_hw_lock_flags {
@@ -744,6 +777,45 @@ struct dmub_rb_cmd_abm_init_config {
 	struct dmub_cmd_abm_init_config_data abm_init_config_data;
 };
 
+/**
+ * enum dmub_cmd_idle_opt_type - Idle optimization command type.
+ */
+enum dmub_cmd_idle_opt_type {
+	/**
+	 * DCN hardware restore.
+	 */
+	DMUB_CMD__IDLE_OPT_DCN_RESTORE = 0,
+
+	/**
+	 * DCN hardware save.
+	 */
+	DMUB_CMD__IDLE_OPT_DCN_SAVE_INIT = 1,
+
+	/**
+	 * DCN hardware notify idle.
+	 */
+	DMUB_CMD__IDLE_OPT_DCN_NOTIFY_IDLE = 2
+};
+
+struct dmub_dcn_notify_idle_cntl_data {
+	uint8_t driver_idle;
+	uint8_t pad[1];
+};
+
+struct dmub_rb_cmd_idle_opt_dcn_notify_idle {
+	struct dmub_cmd_header header; /**< header */
+	struct dmub_dcn_notify_idle_cntl_data cntl_data;
+};
+
+struct dmub_cmd_query_feature_caps_data {
+	struct dmub_feature_caps feature_caps;
+};
+
+struct dmub_rb_cmd_query_feature_caps {
+	struct dmub_cmd_header header;
+	struct dmub_cmd_query_feature_caps_data query_feature_caps_data;
+};
+
 union dmub_rb_cmd {
 	struct dmub_rb_cmd_lock_hw lock_hw;
 	struct dmub_rb_cmd_read_modify_write read_modify_write;
@@ -760,6 +832,7 @@ union dmub_rb_cmd {
 	struct dmub_rb_cmd_psr_copy_settings psr_copy_settings;
 	struct dmub_rb_cmd_psr_enable psr_enable;
 	struct dmub_rb_cmd_psr_set_level psr_set_level;
+	struct dmub_rb_cmd_psr_force_static psr_force_static;
 	struct dmub_rb_cmd_PLAT_54186_wa PLAT_54186_wa;
 	struct dmub_rb_cmd_abm_set_pipe abm_set_pipe;
 	struct dmub_rb_cmd_abm_set_backlight abm_set_backlight;
@@ -769,6 +842,8 @@ union dmub_rb_cmd {
 	struct dmub_rb_cmd_abm_init_config abm_init_config;
 	struct dmub_rb_cmd_dp_aux_access dp_aux_access;
 	struct dmub_rb_cmd_outbox1_enable outbox1_enable;
+	struct dmub_rb_cmd_query_feature_caps query_feature_caps;
+	struct dmub_rb_cmd_idle_opt_dcn_notify_idle idle_opt_notify_idle;
 };
 
 union dmub_rb_out_cmd {
@@ -831,7 +906,7 @@ static inline bool dmub_rb_push_front(struct dmub_rb *rb,
 {
 	uint64_t volatile *dst = (uint64_t volatile *)(rb->base_address) + rb->wrpt / sizeof(uint64_t);
 	const uint64_t *src = (const uint64_t *)cmd;
-	int i;
+	uint8_t i;
 
 	if (dmub_rb_full(rb))
 		return false;
@@ -868,14 +943,14 @@ static inline bool dmub_rb_out_push_front(struct dmub_rb *rb,
 }
 
 static inline bool dmub_rb_front(struct dmub_rb *rb,
-				 union dmub_rb_cmd  *cmd)
+				 union dmub_rb_cmd **cmd)
 {
-	uint8_t *rd_ptr = (uint8_t *)rb->base_address + rb->rptr;
+	uint8_t *rb_cmd = (uint8_t *)(rb->base_address) + rb->rptr;
 
 	if (dmub_rb_empty(rb))
 		return false;
 
-	dmub_memcpy(cmd, rd_ptr, DMUB_RB_CMD_SIZE);
+	*cmd = (union dmub_rb_cmd *)rb_cmd;
 
 	return true;
 }
@@ -885,7 +960,7 @@ static inline bool dmub_rb_out_front(struct dmub_rb *rb,
 {
 	const uint64_t volatile *src = (const uint64_t volatile *)(rb->base_address) + rb->rptr / sizeof(uint64_t);
 	uint64_t *dst = (uint64_t *)cmd;
-	int i;
+	uint8_t i;
 
 	if (dmub_rb_empty(rb))
 		return false;
@@ -917,7 +992,7 @@ static inline void dmub_rb_flush_pending(const struct dmub_rb *rb)
 
 	while (rptr != wptr) {
 		uint64_t volatile *data = (uint64_t volatile *)rb->base_address + rptr / sizeof(uint64_t);
-		int i;
+		uint8_t i;
 
 		for (i = 0; i < DMUB_RB_CMD_SIZE / sizeof(uint64_t); i++)
 			*data++;
@@ -935,6 +1010,17 @@ static inline void dmub_rb_init(struct dmub_rb *rb,
 	rb->capacity = init_params->capacity;
 	rb->rptr = init_params->read_ptr;
 	rb->wrpt = init_params->write_ptr;
+}
+
+static inline void dmub_rb_get_return_data(struct dmub_rb *rb,
+					   union dmub_rb_cmd *cmd)
+{
+	// Copy rb entry back into command
+	uint8_t *rd_ptr = (rb->rptr == 0) ?
+		(uint8_t *)rb->base_address + rb->capacity - DMUB_RB_CMD_SIZE :
+		(uint8_t *)rb->base_address + rb->rptr - DMUB_RB_CMD_SIZE;
+
+	dmub_memcpy(cmd, rd_ptr, DMUB_RB_CMD_SIZE);
 }
 
 #if defined(__cplusplus)

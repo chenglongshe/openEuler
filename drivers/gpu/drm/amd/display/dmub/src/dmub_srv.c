@@ -532,6 +532,33 @@ enum dmub_status dmub_srv_cmd_execute(struct dmub_srv *dmub)
 	return DMUB_STATUS_OK;
 }
 
+bool dmub_srv_is_hw_pwr_up(struct dmub_srv *dmub)
+{
+	if (!dmub->hw_funcs.is_hw_powered_up)
+		return true;
+
+	return dmub->hw_funcs.is_hw_powered_up(dmub) &&
+		dmub->hw_funcs.is_hw_init(dmub);
+}
+
+enum dmub_status dmub_srv_wait_for_hw_pwr_up(struct dmub_srv *dmub,
+					     uint32_t timeout_us)
+{
+	uint32_t i;
+
+	if (!dmub->hw_init)
+		return DMUB_STATUS_INVALID;
+
+	for (i = 0; i <= timeout_us; i += 100) {
+		if (dmub_srv_is_hw_pwr_up(dmub))
+			return DMUB_STATUS_OK;
+
+		udelay(100);
+	}
+
+	return DMUB_STATUS_TIMEOUT;
+}
+
 enum dmub_status dmub_srv_wait_for_auto_load(struct dmub_srv *dmub,
 					     uint32_t timeout_us)
 {

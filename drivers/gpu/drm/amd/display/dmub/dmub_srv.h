@@ -270,6 +270,8 @@ struct dmub_srv_hw_funcs {
 
 	bool (*is_hw_init)(struct dmub_srv *dmub);
 
+	bool (*is_hw_powered_up)(struct dmub_srv *dmub);
+
 	bool (*is_phy_init)(struct dmub_srv *dmub);
 
 	bool (*is_auto_load_done)(struct dmub_srv *dmub);
@@ -491,6 +493,24 @@ enum dmub_status dmub_srv_cmd_queue(struct dmub_srv *dmub,
  *   DMUB_STATUS_INVALID - unspecified error
  */
 enum dmub_status dmub_srv_cmd_execute(struct dmub_srv *dmub);
+
+/**
+ * dmub_srv_wait_for_hw_pwr_up() - Waits for firmware hardware power up is completed
+ * @dmub: the dmub service
+ * @timeout_us: the maximum number of microseconds to wait
+ *
+ * Waits until firmware hardware is powered up. The maximum
+ * wait time is given in microseconds to prevent spinning forever.
+ *
+ * Return:
+ *   DMUB_STATUS_OK - success
+ *   DMUB_STATUS_TIMEOUT - timed out
+ *   DMUB_STATUS_INVALID - unspecified error
+ */
+enum dmub_status dmub_srv_wait_for_hw_pwr_up(struct dmub_srv *dmub,
+					     uint32_t timeout_us);
+
+bool dmub_srv_is_hw_pwr_up(struct dmub_srv *dmub);
 
 /**
  * dmub_srv_wait_for_auto_load() - Waits for firmware auto load to complete

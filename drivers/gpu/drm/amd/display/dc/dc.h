@@ -504,6 +504,8 @@ struct dc_debug_options {
 	bool disable_dsc;
 	bool enable_dram_clock_change_one_display_vactive;
 	bool force_ignore_link_settings;
+	unsigned int ips2_eval_delay_us;
+	unsigned int ips2_entry_delay_us;
 };
 
 struct dc_debug_data {
@@ -599,9 +601,7 @@ struct dc {
 	/* Require to optimize clocks and bandwidth for added/removed planes */
 	bool optimized_required;
 	bool wm_optimized_required;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_0)
 	bool idle_optimizations_allowed;
-#endif
 
 	/* Require to maintain clocks and bandwidth for UEFI enabled HW */
 	int optimize_seamless_boot_streams;
