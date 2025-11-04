@@ -29,6 +29,9 @@
 #include <linux/syscore_ops.h>
 #include <linux/tick.h>
 #include <trace/events/power.h>
+#ifdef CONFIG_QOS_SCHED_SMART_GRID
+#include <linux/sched/isolation.h>
+#endif
 
 static LIST_HEAD(cpufreq_policy_list);
 
@@ -2849,7 +2852,9 @@ static void smart_grid_work_handler(struct work_struct *work)
 			continue;
 
 		for_each_cpu(cpu, sched_grid_zone_cpumask(gov_index)) {
-			if (cpu_is_offline(cpu))
+			/* bypass offline and isolated CPU */
+			if (housekeeping_test_cpu(cpu, HK_FLAG_DOMAIN) ||
+			    cpu_is_offline(cpu))
 				continue;
 
 			policy = cpufreq_cpu_acquire(cpu);
