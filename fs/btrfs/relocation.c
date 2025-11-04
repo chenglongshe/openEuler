@@ -2776,6 +2776,12 @@ again:
 			}
 		}
 
+		if (page->mapping != inode->i_mapping) {
+			unlock_page(page);
+			put_page(page);
+			goto again;
+		}
+
 		page_start = page_offset(page);
 		page_end = page_start + PAGE_SIZE - 1;
 
