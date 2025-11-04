@@ -114,6 +114,17 @@ config BLK_DEV_THROTTLING_LOW
 
 	Note, this is an experimental interface and could be changed someday.
 
+config BLK_DEV_SUPPORT_LEGACY_GLOBAL_LIMIT
+	bool "Block layer global limit in cgroup v1"
+	depends on BLK_DEV_THROTTLING=y
+	default n
+	help
+	blkio subsytem is not under default hierarchy in cgroup v1 by default,
+	Enabling this will support globlal limit in cgroup v1.
+
+	Note, a cmdline "blkcg_global_limit=1" is still required to enabled this
+	feature.
+
 config BLK_CMDLINE_PARSER
 	bool "Block device command line partition parser"
 	help
@@ -178,6 +189,21 @@ config BLK_DEBUG_FS_ZONED
        bool
        default BLK_DEBUG_FS && BLK_DEV_ZONED
 
+config BLK_DEBUG_FS_SWITCH
+	bool "Disk level switch to enable/disable debugfs dynamically"
+	depends on BLK_DEBUG_FS
+	depends on 64BIT
+	default y
+	help
+	After a disk is created, debugfs inode and dentry will be created
+	together, and the memory used for debugfs can't be freed until disk
+	removal.
+
+	Enabling this will add a disk level switch that can enable/disable
+	debugfs dynamically, so that user can disable debugfs if they care
+	about the memory overhead, in the meantime, debugfs can be enabled
+	again in demand.
+
 config BLK_SED_OPAL
 	bool "Logic for interfacing with Opal enabled SEDs"
 	help
@@ -218,6 +244,17 @@ config BLK_BIO_DISPATCH_ASYNC
 	performance. This commit introduces a new feature that enables
 	asynchronous I/O dispatch to designated CPUs, thereby relieving
 	the pressure on the busy CPUs.
+	If unsure, say N.
+
+config BLK_IO_HUNG_TASK_CHECK
+	bool "Enable io hung task check"
+	default n
+	depends on DETECT_HUNG_TASK
+	help
+	Enabling this lets the block layer detect hungtask for io, noted
+	if this is set, hungtask will complain about slow io even if such
+	io is not hanged. Be careful to enable hungtask panic in this case.
+
 	If unsure, say N.
 
 menu "Partition Types"
