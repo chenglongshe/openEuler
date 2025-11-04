@@ -513,4 +513,13 @@ config RANDOM_TRUST_BOOTLOADER
 	  believe its RNG facilities may be faulty. This may also be configured
 	  at boot time with "random.trust_bootloader=on/off".
 
+config RTOS_FIX_RANDOM_PERFORMANCE
+	bool "Fix random performance degrade on certain platform"
+	depends on ARM
+	default n
+	help
+	  It's observed that there is a performance degrade related to random on
+	  system with certain chip. The root cause is unknown and this config is
+	  meant to be a workaround for that issue.
+
 endmenu
