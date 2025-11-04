@@ -347,8 +347,10 @@ static void crng_make_state(u32 chacha_state[CHACHA_STATE_WORDS],
 		spin_lock_irqsave(&base_crng.lock, flags);
 		ready = crng_ready();
 		if (!ready) {
+#ifndef CONFIG_FIX_RANDOM_PERFORMANCE
 			if (crng_init == CRNG_EMPTY)
 				extract_entropy(base_crng.key, sizeof(base_crng.key));
+#endif
 			crng_fast_key_erasure(base_crng.key, chacha_state,
 					      random_data, random_data_len);
 		}
@@ -391,6 +393,21 @@ static void crng_make_state(u32 chacha_state[CHACHA_STATE_WORDS],
 	crng_fast_key_erasure(crng->key, chacha_state, random_data, random_data_len);
 	local_unlock_irqrestore(&crngs.lock, flags);
 }
+
+#ifdef CONFIG_FIX_RANDOM_PERFORMANCE
+/*
+ * Dummy function acting as a placeholder to 1380 performance degrade.
+ * This is a de-facto workaround produced from bunch of testing. The root
+ * casue of this performance issue is still unknown.
+ */
+static __aligned(64) void __used dummy(const void *input, size_t len, bool account)
+{
+}
+
+static __aligned(64) void __used dummy2(const void *input, size_t len, bool account)
+{
+}
+#endif // CONFIG_FIX_RANDOM_PERFORMANCE
 
 static void _get_random_bytes(void *buf, size_t len)
 {
@@ -860,6 +877,14 @@ void add_device_randomness(const void *buf, size_t len)
 	_mix_pool_bytes(&entropy, sizeof(entropy));
 	_mix_pool_bytes(buf, len);
 	spin_unlock_irqrestore(&input_pool.lock, flags);
+
+#ifdef CONFIG_FIX_RANDOM_PERFORMANCE
+	if (crng_init == CRNG_EMPTY && len) {
+		spin_lock_irqsave(&base_crng.lock, flags);
+		extract_entropy(base_crng.key, sizeof(base_crng.key));
+		spin_unlock_irqrestore(&base_crng.lock, flags);
+	}
+#endif
 }
 EXPORT_SYMBOL(add_device_randomness);
 
@@ -870,7 +895,17 @@ EXPORT_SYMBOL(add_device_randomness);
  */
 void add_hwgenerator_randomness(const void *buf, size_t len, size_t entropy)
 {
+#ifdef CONFIG_FIX_RANDOM_PERFORMANCE
+	unsigned long flags;
+#endif
 	mix_pool_bytes(buf, len);
+#ifdef CONFIG_FIX_RANDOM_PERFORMANCE
+	if (crng_init == CRNG_EMPTY) {
+		spin_lock_irqsave(&base_crng.lock, flags);
+		extract_entropy(base_crng.key, sizeof(base_crng.key));
+		spin_unlock_irqrestore(&base_crng.lock, flags);
+	}
+#endif
 	credit_init_bits(entropy);
 
 	/*
@@ -965,6 +1000,9 @@ static void mix_interrupt_randomness(struct timer_list *work)
 	 */
 	unsigned long pool[2];
 	unsigned int count;
+#ifdef CONFIG_FIX_RANDOM_PERFORMANCE
+	unsigned long flags;
+#endif
 
 	/* Check to see if we're running on the wrong CPU due to hotplug. */
 	local_irq_disable();
@@ -984,6 +1022,13 @@ static void mix_interrupt_randomness(struct timer_list *work)
 	local_irq_enable();
 
 	mix_pool_bytes(pool, sizeof(pool));
+#ifdef CONFIG_FIX_RANDOM_PERFORMANCE
+	if (crng_init == CRNG_EMPTY) {
+		spin_lock_irqsave(&base_crng.lock, flags);
+		extract_entropy(base_crng.key, sizeof(base_crng.key));
+		spin_unlock_irqrestore(&base_crng.lock, flags);
+	}
+#endif
 	credit_init_bits(clamp_t(unsigned int, (count & U16_MAX) / 64, 1, sizeof(pool) * 8));
 
 	memzero_explicit(pool, sizeof(pool));
@@ -1090,8 +1135,16 @@ static void add_timer_randomness(struct timer_rand_state *state, unsigned int nu
 	 */
 	if (in_irq())
 		this_cpu_ptr(&irq_randomness)->count += max(1u, bits * 64) - 1;
-	else
+	else {
+#ifdef CONFIG_FIX_RANDOM_PERFORMANCE
+		if (crng_init == CRNG_EMPTY) {
+			spin_lock_irqsave(&base_crng.lock, flags);
+			extract_entropy(base_crng.key, sizeof(base_crng.key));
+			spin_unlock_irqrestore(&base_crng.lock, flags);
+		}
+#endif
 		_credit_init_bits(bits);
+	}
 }
 
 void add_input_randomness(unsigned int type, unsigned int code, unsigned int value)
