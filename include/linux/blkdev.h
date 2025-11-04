@@ -551,6 +551,9 @@ struct request_queue {
 	unsigned int		sg_timeout;
 	unsigned int		sg_reserved_size;
 	int			node;
+	/*
+	 * Serializes all debugfs metadata operations using the above dentries.
+	 */
 	struct mutex		debugfs_mutex;
 #ifdef CONFIG_BLK_DEV_IO_TRACE
 	struct blk_trace __rcu	*blk_trace;
@@ -599,7 +602,6 @@ struct request_queue {
 	struct bio_set		bio_split;
 
 	struct dentry		*debugfs_dir;
-
 #ifdef CONFIG_BLK_DEBUG_FS
 	struct dentry		*sched_debugfs_dir;
 	struct dentry		*rqos_debugfs_dir;
@@ -663,6 +665,9 @@ struct request_queue {
 #define QUEUE_FLAG_HCTX_WAIT	30
 /* support to dispatch bio asynchronously */
 #define QUEUE_FLAG_DISPATCH_ASYNC 31
+#ifdef CONFIG_BLK_DEBUG_FS_SWITCH
+#define QUEUE_FLAG_DEBUGFS     32      /* supports debugfs */
+#endif
 
 #define QUEUE_FLAG_MQ_DEFAULT	((1 << QUEUE_FLAG_IO_STAT) |		\
 				 (1 << QUEUE_FLAG_SAME_COMP) |		\

@@ -78,6 +78,17 @@ static int __init precise_iostat_setup(char *str)
 __setup("precise_iostat=", precise_iostat_setup);
 
 /*
+ * Noted if this is set, hungtask will complain about slow io even if such io is
+ * not hanged. Be careful to enable hungtask panic in this case.
+ */
+#ifdef CONFIG_BLK_IO_HUNG_TASK_CHECK
+bool io_hung_task_check = true;
+#else
+bool io_hung_task_check;
+#endif
+module_param_named(io_hung_task_check, io_hung_task_check, bool, 0644);
+
+/*
  * For queue allocation
  */
 struct kmem_cache *blk_requestq_cachep;
@@ -2148,7 +2159,7 @@ void blk_io_schedule(void)
 	/* Prevent hang_check timer from firing at us during very long I/O */
 	unsigned long timeout = sysctl_hung_task_timeout_secs * HZ / 2;
 
-	if (timeout)
+	if (timeout && !io_hung_task_check)
 		io_schedule_timeout(timeout);
 	else
 		io_schedule();

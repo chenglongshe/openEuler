@@ -87,7 +87,7 @@ blk_status_t blk_execute_rq(struct request_queue *q, struct gendisk *bd_disk,
 	blk_execute_rq_nowait(q, bd_disk, rq, at_head, blk_end_sync_rq);
 
 	/* Prevent hang_check timer from firing at us during very long I/O */
-	hang_check = sysctl_hung_task_timeout_secs;
+	hang_check = sysctl_hung_task_timeout_secs && !io_hung_task_check;
 	if (hang_check)
 		while (!wait_for_completion_io_timeout(&wait, hang_check * (HZ/2)));
 	else

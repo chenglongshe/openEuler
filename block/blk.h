@@ -15,6 +15,7 @@
 #define BLK_MAX_TIMEOUT		(5 * HZ)
 
 extern struct dentry *blk_debugfs_root;
+extern bool io_hung_task_check;
 
 struct blk_flush_queue {
 	unsigned int		flush_pending_idx:1;
