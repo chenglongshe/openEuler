@@ -1347,6 +1347,8 @@ static int __init armv8_pmu_driver_init(void)
 }
 device_initcall(armv8_pmu_driver_init)
 
+extern struct clock_data cd;
+
 void arch_perf_update_userpage(struct perf_event *event,
 			       struct perf_event_mmap_page *userpg, u64 now)
 {
@@ -1361,21 +1363,21 @@ void arch_perf_update_userpage(struct perf_event *event,
 	do {
 		rd = sched_clock_read_begin(&seq);
 
-		if (rd->read_sched_clock != arch_timer_read_counter)
+		if (cd.read_sched_clock != arch_timer_read_counter)
 			return;
 
-		userpg->time_mult = rd->mult;
-		userpg->time_shift = rd->shift;
+		userpg->time_mult = cd.mult;
+		userpg->time_shift = cd.shift;
 		userpg->time_zero = rd->epoch_ns;
 		userpg->time_cycles = rd->epoch_cyc;
-		userpg->time_mask = rd->sched_clock_mask;
+		userpg->time_mask = cd.sched_clock_mask;
 
 		/*
 		 * Subtract the cycle base, such that software that
 		 * doesn't know about cap_user_time_short still 'works'
 		 * assuming no wraps.
 		 */
-		ns = mul_u64_u32_shr(rd->epoch_cyc, rd->mult, rd->shift);
+		ns = mul_u64_u32_shr(rd->epoch_cyc, cd.mult, cd.shift);
 		userpg->time_zero -= ns;
 
 	} while (sched_clock_read_retry(seq));
