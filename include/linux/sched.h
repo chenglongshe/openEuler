@@ -888,6 +888,9 @@ struct task_struct {
 #ifdef CONFIG_IOMMU_SVA
 	KABI_FILL_HOLE(unsigned		pasid_activated:1)
 #endif
+#ifdef CONFIG_PAGE_OWNER
+	KABI_FILL_HOLE(unsigned		in_page_owner:1)
+#endif
 
 	unsigned long			atomic_flags; /* Flags requiring atomic access. */
 

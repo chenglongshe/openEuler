@@ -62,6 +62,15 @@ config PAGE_OWNER
 
 	  If unsure, say N.
 
+config PAGE_OWNER_MODULE_STAT
+	bool "Track module allocation with page owner"
+	depends on PAGE_OWNER && MODULES
+	help
+	  This tracks if a page is allocated by modules, may help to find the
+	  alloc_page(s) problem in modules. Even if you include this feature
+	  on your build, it is disabled in default. You should pass "page_owner=on"
+	  to boot parameter in order to enable it.
+
 config PAGE_POISONING
 	bool "Poison pages after freeing"
 	select PAGE_POISONING_NO_SANITY if HIBERNATION

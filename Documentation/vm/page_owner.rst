@@ -64,9 +64,21 @@ pages are investigated and marked as allocated in initialization phase.
 Although it doesn't mean that they have the right owner information,
 at least, we can tell whether the page is allocated or not,
 more accurately. On 2GB memory x86-64 VM box, 13343 early allocated pages
-are catched and marked, although they are mostly allocated from struct
+are caught and marked, although they are mostly allocated from struct
 page extension feature. Anyway, after that, no page is left in
 un-tracking state.
+
+With CONFIG_PAGE_OWNER_MODULE_STAT config, page owner is able to track if
+the pages are allocated by modules. If a page is allocated by a module, the
+information dumped from /sys/kernel/debug/page_owner will show the module
+name. Users can use the user-space helper to analyze the allocation situation
+of modules. /sys/kernel/debug/page_owner_filter can be used to filter out the pages
+that are not allocated by modules. The legal value is "module" or "none". The default value
+is "none", which means do not filter out any page.
+
+Besides, the top N modules that allocate the most pages will be dumped
+when oom occurs or users read /sys/kernel/debug/page_owner_module_stats. The N value
+can be configured with /sys/kernel/debug/page_owner_show_max. The default N is 20.
 
 Usage
 =====
@@ -85,5 +97,118 @@ Usage
 	cat /sys/kernel/debug/page_owner > page_owner_full.txt
 	./page_owner_sort page_owner_full.txt sorted_page_owner.txt
 
+   The general output of ``page_owner_full.txt`` is as follows::
+
+	Page allocated via order XXX, ...
+	PFN XXX ...
+	 // Detailed stack
+
+	Page allocated via order XXX, ...
+	PFN XXX ...
+	 // Detailed stack
+
+   The ``page_owner_sort`` tool ignores ``PFN`` rows, puts the remaining rows
+   in buf, uses regexp to extract the page order value, counts the times
+   and pages of buf, and finally sorts them according to the parameter(s).
+
    See the result about who allocated each page
-   in the ``sorted_page_owner.txt``.
+   in the ``sorted_page_owner.txt``. General output::
+
+	XXX times, XXX pages:
+	Page allocated via order XXX, ...
+	 // Detailed stack
+
+   By default, ``page_owner_sort`` is sorted according to the times of buf.
+   If you want to sort by the page nums of buf, use the ``-m`` parameter.
+   The parameters related to modules depend on the kernel built with
+   CONFIG_PAGE_OWNER_MODULE_STAT. The detailed parameters are:
+
+   fundamental function::
+
+	Sort:
+		-a		Sort by memory allocation time.
+		-m		Sort by total memory.
+		-p		Sort by pid.
+		-P		Sort by tgid.
+		-n		Sort by task command name.
+		-r		Sort by memory release time.
+		-s		Sort by stack trace.
+		-t		Sort by times (default).
+		--sort <order>	Specify sorting order.  Sorting syntax is [+|-]key[,[+|-]key[,...]].
+				Choose a key from the **STANDARD FORMAT SPECIFIERS** section. The "+" is
+				optional since default direction is increasing numerical or lexicographic
+				order. Mixed use of abbreviated and complete-form of keys is allowed.
+
+		Examples:
+				./page_owner_sort <input> <output> --sort=n,+pid,-tgid
+				./page_owner_sort <input> <output> --sort=at
+
+   additional function::
+
+	Cull:
+		--cull <rules>
+				Specify culling rules.Culling syntax is key[,key[,...]].Choose a
+				multi-letter key from the **STANDARD FORMAT SPECIFIERS** section.
+
+		<rules> is a single argument in the form of a comma-separated list,
+		which offers a way to specify individual culling rules.  The recognized
+		keywords are described in the **STANDARD FORMAT SPECIFIERS** section below.
+		<rules> can be specified by the sequence of keys k1,k2, ..., as described in
+		the STANDARD SORT KEYS section below. Mixed use of abbreviated and
+		complete-form of keys is allowed.
+
+		Examples:
+				./page_owner_sort <input> <output> --cull=stacktrace
+				./page_owner_sort <input> <output> --cull=st,pid,name
+				./page_owner_sort <input> <output> --cull=n,f
+
+	Filter:
+		-f		Filter out the information of blocks whose memory has not been released.
+		-M		Filter out the information of blocks whose memory isn't allocated by modules.
+
+	Select:
+		--pid <pidlist>		Select by pid. This selects the blocks whose process ID
+					numbers appear in <pidlist>.
+		--tgid <tgidlist>	Select by tgid. This selects the blocks whose thread
+					group ID numbers appear in <tgidlist>.
+		--name <cmdlist>	Select by task command name. This selects the blocks whose
+					task command name appear in <cmdlist>.
+		--module <modulelist>	Select by module. This selects the information of blocks whose
+					memory is allocated by modules appear in <modulelist>.
+
+		<pidlist>, <tgidlist>, <cmdlist>, <modulelist> are single arguments in the form of a comma-separated list,
+		which offers a way to specify individual selecting rules.
+
+
+		Examples:
+				./page_owner_sort <input> <output> --pid=1
+				./page_owner_sort <input> <output> --tgid=1,2,3
+				./page_owner_sort <input> <output> --name name1,name2s
+
+STANDARD FORMAT SPECIFIERS
+==========================
+::
+
+  For --sort option:
+
+	KEY		LONG		DESCRIPTION
+	p		pid		process ID
+	tg		tgid		thread group ID
+	n		name		task command name
+	st		stacktrace	stack trace of the page allocation
+	T		txt		full text of block
+	ft		free_ts		timestamp of the page when it was released
+	at		alloc_ts	timestamp of the page when it was allocated
+	ator		allocator	memory allocator for pages
+	mod		module		the name of the module that the page is allocated by
+
+  For --cull option:
+
+	KEY		LONG		DESCRIPTION
+	p		pid		process ID
+	tg		tgid		thread group ID
+	n		name		task command name
+	f		free		whether the page has been released or not
+	st		stacktrace	stack trace of the page allocation
+	ator            allocator       memory allocator for pages
+	mod		module		the name of the module that the page is allocated by
