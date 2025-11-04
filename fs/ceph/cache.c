@@ -232,6 +232,9 @@ int ceph_readpage_from_fscache(struct inode *inode, struct page *page)
 	if (!cache_valid(ci))
 		return -ENOBUFS;
 
+	if (ceph_inode_is_shutdown(inode))
+		return -EIO;
+
 	ret = fscache_read_or_alloc_page(ci->fscache, page,
 					 ceph_readpage_from_fscache_complete, NULL,
 					 GFP_KERNEL);
@@ -288,6 +291,9 @@ void ceph_readpage_to_fscache(struct inode *inode, struct page *page)
 		return;
 
 	if (!cache_valid(ci))
+		return;
+
+	if (ceph_inode_is_shutdown(inode))
 		return;
 
 	ret = fscache_write_page(ci->fscache, page, i_size_read(inode),
