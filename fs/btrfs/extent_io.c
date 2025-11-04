@@ -4532,11 +4532,30 @@ static struct extent_map *get_extent_skip_holes(struct btrfs_inode *inode,
 		return NULL;
 
 	while (1) {
+		struct extent_state *cached_state = NULL;
+		u64 lockstart;
+		u64 lockend;
+
 		len = last - offset;
 		if (len == 0)
 			break;
 		len = ALIGN(len, sectorsize);
+		lockstart = round_down(offset, sectorsize);
+		lockend = round_up(offset + len, sectorsize) - 1;
+
+		/*
+		 * We are only locking for the delalloc range because that's the
+		 * only thing that can change here.  With fiemap we have a lock
+		 * on the inode, so no buffered or direct writes can happen.
+		 *
+		 * However mmaps and normal page writeback will cause this to
+		 * change arbitrarily.  We have to lock the extent lock here to
+		 * make sure that nobody messes with the tree while we're doing
+		 * btrfs_find_delalloc_in_range.
+		 */
+		lock_extent_bits(&inode->io_tree, lockstart, lockend, &cached_state);
 		em = btrfs_get_extent_fiemap(inode, offset, len);
+		unlock_extent_cached(&inode->io_tree, lockstart, lockend, &cached_state);
 		if (IS_ERR_OR_NULL(em))
 			return em;
 
@@ -4679,7 +4698,6 @@ int extent_fiemap(struct btrfs_inode *inode, struct fiemap_extent_info *fieinfo,
 	u64 isize = i_size_read(&inode->vfs_inode);
 	struct btrfs_key found_key;
 	struct extent_map *em = NULL;
-	struct extent_state *cached_state = NULL;
 	struct btrfs_path *path;
 	struct btrfs_root *root = inode->root;
 	struct fiemap_cache cache = { 0 };
@@ -4757,9 +4775,6 @@ int extent_fiemap(struct btrfs_inode *inode, struct fiemap_extent_info *fieinfo,
 		last = (u64)-1;
 		last_for_get_extent = isize;
 	}
-
-	lock_extent_bits(&inode->io_tree, start, start + len - 1,
-			 &cached_state);
 
 	em = get_extent_skip_holes(inode, start, last_for_get_extent);
 	if (!em)
@@ -4871,9 +4886,6 @@ out_free:
 		ret = emit_last_fiemap_cache(fieinfo, &cache);
 	free_extent_map(em);
 out:
-	unlock_extent_cached(&inode->io_tree, start, start + len - 1,
-			     &cached_state);
-
 out_free_ulist:
 	btrfs_free_path(path);
 	ulist_free(roots);
