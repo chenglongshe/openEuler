@@ -214,7 +214,11 @@ static void __exit jent_mod_exit(void)
 	crypto_unregister_rng(&jent_alg);
 }
 
+#if defined(CONFIG_CRYPTO_FIPS) && (defined(CONFIG_ARM64) || defined(CONFIG_X86))
 subsys_initcall(jent_mod_init);
+#else
+module_init(jent_mod_init);
+#endif
 module_exit(jent_mod_exit);
 
 MODULE_LICENSE("Dual BSD/GPL");
