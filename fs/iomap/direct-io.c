@@ -188,7 +188,9 @@ static void iomap_dio_bio_end_io(struct bio *bio)
 	/*
 	 * Flagged with IOMAP_DIO_INLINE_COMP, we can complete it inline
 	 */
-	if (dio->flags & IOMAP_DIO_INLINE_COMP) {
+	if ((dio->flags & IOMAP_DIO_INLINE_COMP) &&
+	    !(dio->size && (dio->flags & IOMAP_DIO_WRITE) &&
+	      file_inode(iocb->ki_filp)->i_mapping->nrpages)) {
 		iomap_dio_complete_work(&dio->aio.work);
 		goto release_bio;
 	}
