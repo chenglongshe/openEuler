@@ -6402,6 +6402,11 @@ static void free_mem_cgroup_per_node_info(struct mem_cgroup *memcg, int node)
 	kfree(pn);
 }
 
+struct mem_cgroup_padding {
+	u64 padding[6];
+	struct mem_cgroup memcg;
+} __attribute__((__packed__));
+
 static void __mem_cgroup_free(struct mem_cgroup *memcg)
 {
 	int node;
@@ -6410,7 +6415,8 @@ static void __mem_cgroup_free(struct mem_cgroup *memcg)
 		free_mem_cgroup_per_node_info(memcg, node);
 	free_percpu(memcg->vmstats_percpu);
 	memcg_free_swap_device(memcg);
-	kfree(memcg);
+
+	kfree(container_of(memcg, struct mem_cgroup_padding, memcg));
 }
 
 static void mem_cgroup_free(struct mem_cgroup *memcg)
@@ -6421,18 +6427,21 @@ static void mem_cgroup_free(struct mem_cgroup *memcg)
 
 static struct mem_cgroup *mem_cgroup_alloc(void)
 {
+	struct mem_cgroup_padding *memcg_padding;
 	struct mem_cgroup *memcg;
 	unsigned int size;
 	int node;
 	int __maybe_unused i;
 	long error = -ENOMEM;
 
-	size = sizeof(struct mem_cgroup);
+	size = sizeof(struct mem_cgroup_padding);
 	size += nr_node_ids * sizeof(struct mem_cgroup_per_node *);
 
-	memcg = kzalloc(size, GFP_KERNEL);
-	if (!memcg)
+	memcg_padding = kzalloc(size, GFP_KERNEL);
+	if (!memcg_padding)
 		return ERR_PTR(error);
+
+	memcg = &memcg_padding->memcg;
 
 	if (memcg_alloc_swap_device(memcg))
 		goto fail;
