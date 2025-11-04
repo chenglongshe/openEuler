@@ -889,6 +889,10 @@ struct task_struct {
 	KABI_FILL_HOLE(unsigned		pasid_activated:1)
 #endif
 
+#ifdef	CONFIG_CPU_SUP_INTEL
+	unsigned			reported_split_lock:1;
+#endif
+
 	unsigned long			atomic_flags; /* Flags requiring atomic access. */
 
 	struct restart_block		restart_block;

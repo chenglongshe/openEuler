@@ -1020,6 +1020,10 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	tsk->xinfo = NULL;
 #endif
 
+#ifdef CONFIG_CPU_SUP_INTEL
+	tsk->reported_split_lock = 0;
+#endif
+
 	return tsk;
 
 free_stack:
