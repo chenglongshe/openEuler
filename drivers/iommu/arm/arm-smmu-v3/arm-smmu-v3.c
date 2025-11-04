@@ -5064,8 +5064,10 @@ static int arm_smmu_device_hw_probe(struct arm_smmu_device *smmu)
 	 * broadcasted TLB invalidations that target EL2-E2H world. Don't enable
 	 * BTM in that case.
 	 */
+#ifdef CONFIG_SMMU_BTM_SUPPORT
 	if (reg & IDR0_BTM && (!vhe || reg & IDR0_HYP))
 		smmu->features |= ARM_SMMU_FEAT_BTM;
+#endif
 
 	/*
 	 * The coherency feature as set by FW is used in preference to the ID
