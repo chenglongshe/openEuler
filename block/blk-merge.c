@@ -13,6 +13,10 @@
 #include "blk.h"
 #include "blk-rq-qos.h"
 
+#ifndef __GENKSYMS__
+#include "blk-throttle.h"
+#endif
+
 /*
  * rq_straddles_atomic_write_boundary - check for boundary violation
  * @rq: request to check
@@ -395,8 +399,6 @@ void __blk_queue_split(struct bio **bio, unsigned int *nr_segs)
 		trace_block_split(q, split, (*bio)->bi_iter.bi_sector);
 		submit_bio_noacct(*bio);
 		*bio = split;
-
-		blk_throtl_charge_bio_split(*bio);
 	}
 }
 
