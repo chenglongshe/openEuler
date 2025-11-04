@@ -1344,6 +1344,10 @@ static int klp_init_patch(struct klp_patch *patch)
 	}
 #endif
 	if (patch->replace) {
+#ifdef CONFIG_LIVEPATCH_STOP_MACHINE_CONSISTENCY
+		pr_err("Replacing is not supported\n");
+		return -EINVAL;
+#endif
 		ret = klp_add_nops(patch);
 		if (ret)
 			return ret;
