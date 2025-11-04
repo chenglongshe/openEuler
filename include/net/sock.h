@@ -2683,6 +2683,11 @@ static inline bool sk_is_tcp(const struct sock *sk)
 	return sk->sk_type == SOCK_STREAM && sk->sk_protocol == IPPROTO_TCP;
 }
 
+static inline bool sk_is_stream_unix(const struct sock *sk)
+{
+	return sk->sk_family == AF_UNIX && sk->sk_type == SOCK_STREAM;
+}
+
 DECLARE_STATIC_KEY_FALSE(tcp_rx_skb_cache_key);
 /**
  * sk_eat_skb - Release a skb if it is no longer needed
