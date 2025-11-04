@@ -1324,7 +1324,7 @@ static void kvm_destroy_vm(struct kvm *kvm)
 
 	kvm_destroy_pm_notifier(kvm);
 	kvm_uevent_notify_change(KVM_EVENT_DESTROY_VM, kvm);
-#if IS_ENABLED(CONFIG_ETMEM)
+#if IS_ENABLED(CONFIG_ETMEM) || IS_ENABLED(CONFIG_KVM)
 	if (mm->kvm == kvm)
 		mm->kvm = NULL;
 #endif
@@ -5151,7 +5151,7 @@ static int kvm_dev_ioctl_create_vm(unsigned long type)
 		goto put_kvm;
 	}
 
-#if IS_ENABLED(CONFIG_ETMEM)
+#if IS_ENABLED(CONFIG_ETMEM) || IS_ENABLED(CONFIG_KVM)
 	if (kvm->mm->kvm == NULL)
 		kvm->mm->kvm = kvm;
 #endif
