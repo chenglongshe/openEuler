@@ -42,6 +42,7 @@
 
 struct dmub_srv;
 struct dc_dmub_srv;
+union dmub_rb_cmd;
 
 irq_handler_idx dm_register_interrupt(
 	struct dc_context *ctx,
@@ -294,6 +295,14 @@ unsigned long long dm_get_elapse_time_in_ns(struct dc_context *ctx,
 		__CTX->perf_trace->write_count, &__CTX->perf_trace->last_entry_read,\
 		&__CTX->perf_trace->last_entry_write, __func__, __LINE__)
 
+/*
+ * DMUB Interfaces
+ */
+bool dm_execute_dmub_cmd(const struct dc_context *ctx, union dmub_rb_cmd *cmd,
+			 enum dm_dmub_wait_type wait_type);
+
+bool dm_execute_dmub_cmd_list(const struct dc_context *ctx, unsigned int count,
+			      union dmub_rb_cmd *cmd, enum dm_dmub_wait_type wait_type);
 
 /*
  * Debug and verification hooks
