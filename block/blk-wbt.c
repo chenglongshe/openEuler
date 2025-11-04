@@ -25,11 +25,78 @@
 #include <linux/backing-dev.h>
 #include <linux/swap.h>
 
+#include "blk-stat.h"
 #include "blk-wbt.h"
 #include "blk-rq-qos.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/wbt.h>
+
+enum wbt_flags {
+	WBT_TRACKED		= 1,	/* write, tracked for throttling */
+	WBT_READ		= 2,	/* read */
+	WBT_SWAP		= 4,	/* write, from swap_writepage() */
+	WBT_DISCARD		= 8,	/* discard */
+
+	WBT_NR_BITS		= 4,	/* number of bits */
+};
+
+enum {
+	WBT_RWQ_BG		= 0,
+	WBT_RWQ_SWAP,
+	WBT_RWQ_DISCARD,
+	WBT_NUM_RWQ,
+};
+
+/*
+ * If current state is WBT_STATE_ON/OFF_DEFAULT, it can be covered to any other
+ * state, if current state is WBT_STATE_ON/OFF_MANUAL, it can only be covered
+ * to WBT_STATE_OFF/ON_MANUAL.
+ */
+enum {
+	WBT_STATE_ON_DEFAULT	= 1,	/* on by default */
+	WBT_STATE_ON_MANUAL	= 2,	/* on manually by sysfs */
+	WBT_STATE_OFF_DEFAULT	= 3,	/* off by default */
+	WBT_STATE_OFF_MANUAL	= 4,	/* off manually by sysfs */
+};
+
+struct rq_wb {
+	/*
+	 * Settings that govern how we throttle
+	 */
+	unsigned int wb_background;		/* background writeback */
+	unsigned int wb_normal;			/* normal writeback */
+
+	short enable_state;			/* WBT_STATE_* */
+
+	/*
+	 * Number of consecutive periods where we don't have enough
+	 * information to make a firm scale up/down decision.
+	 */
+	unsigned int unknown_cnt;
+
+	u64 win_nsec;				/* default window size */
+	u64 cur_win_nsec;			/* current window size */
+
+	struct blk_stat_callback *cb;
+
+	u64 sync_issue;
+	void *sync_cookie;
+
+	unsigned int wc;
+
+	unsigned long last_issue;		/* last non-throttled issue */
+	unsigned long last_comp;		/* last non-throttled comp */
+	unsigned long min_lat_nsec;
+	struct rq_qos rqos;
+	struct rq_wait rq_wait[WBT_NUM_RWQ];
+	struct rq_depth rq_depth;
+};
+
+static inline struct rq_wb *RQWB(struct rq_qos *rqos)
+{
+	return container_of(rqos, struct rq_wb, rqos);
+}
 
 static inline void wbt_clear_state(struct request *rq)
 {
@@ -105,8 +172,8 @@ static bool wb_recent_wait(struct rq_wb *rwb)
 static inline struct rq_wait *get_rq_wait(struct rq_wb *rwb,
 					  enum wbt_flags wb_acct)
 {
-	if (wb_acct & WBT_KSWAPD)
-		return &rwb->rq_wait[WBT_RWQ_KSWAPD];
+	if (wb_acct & WBT_SWAP)
+		return &rwb->rq_wait[WBT_RWQ_SWAP];
 	else if (wb_acct & WBT_DISCARD)
 		return &rwb->rq_wait[WBT_RWQ_DISCARD];
 
@@ -223,6 +290,16 @@ static u64 rwb_sync_issue_lat(struct rq_wb *rwb)
 
 	now = ktime_to_ns(ktime_get());
 	return now - issue;
+}
+
+static inline unsigned int wbt_inflight(struct rq_wb *rwb)
+{
+	unsigned int i, ret = 0;
+
+	for (i = 0; i < WBT_NUM_RWQ; i++)
+		ret += atomic_read(&rwb->rq_wait[i].inflight);
+
+	return ret;
 }
 
 enum {
@@ -459,7 +536,7 @@ static bool close_io(struct rq_wb *rwb)
 		time_before(now, rwb->last_comp + HZ / 10);
 }
 
-#define REQ_HIPRIO	(REQ_SYNC | REQ_META | REQ_PRIO)
+#define REQ_HIPRIO	(REQ_SYNC | REQ_META | REQ_PRIO | REQ_SWAP)
 
 static inline unsigned int get_limit(struct rq_wb *rwb, unsigned long rw)
 {
@@ -477,13 +554,13 @@ static inline unsigned int get_limit(struct rq_wb *rwb, unsigned long rw)
 
 	/*
 	 * At this point we know it's a buffered write. If this is
-	 * kswapd trying to free memory, or REQ_SYNC is set, then
+	 * swap trying to free memory, or REQ_SYNC is set, then
 	 * it's WB_SYNC_ALL writeback, and we'll use the max limit for
 	 * that. If the write is marked as a background write, then use
 	 * the idle limit, or go to normal if we haven't had competing
 	 * IO for a bit.
 	 */
-	if ((rw & REQ_HIPRIO) || wb_recent_wait(rwb) || current_is_kswapd())
+	if ((rw & REQ_HIPRIO) || wb_recent_wait(rwb))
 		limit = rwb->rq_depth.max_depth;
 	else if ((rw & REQ_BACKGROUND) || close_io(rwb)) {
 		/*
@@ -560,8 +637,8 @@ static enum wbt_flags bio_to_wbt_flags(struct rq_wb *rwb, struct bio *bio)
 	if (bio_op(bio) == REQ_OP_READ) {
 		flags = WBT_READ;
 	} else if (wbt_should_throttle(rwb, bio)) {
-		if (current_is_kswapd())
-			flags |= WBT_KSWAPD;
+		if (bio->bi_opf & REQ_SWAP)
+			flags |= WBT_SWAP;
 		if (bio_op(bio) == REQ_OP_DISCARD)
 			flags |= WBT_DISCARD;
 		flags |= WBT_TRACKED;

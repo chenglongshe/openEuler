@@ -16,6 +16,7 @@
 #include "blk-mq-debugfs.h"
 #include "blk-mq-sched.h"
 #include "blk-mq-tag.h"
+#include "blk-rq-qos.h"
 #include "blk-wbt.h"
 
 void blk_mq_sched_assign_ioc(struct request *rq)
