@@ -195,6 +195,7 @@ static inline void tracehook_notify_resume(struct pt_regs *regs)
 #endif
 
 	mem_cgroup_handle_over_high();
+	mem_cgroup_handle_over_file_high();
 	blkcg_maybe_throttle_current();
 #ifdef CONFIG_QOS_SCHED
 	sched_qos_offline_wait();

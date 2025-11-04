@@ -736,6 +736,24 @@ static unsigned long memcg_page_state(struct mem_cgroup *memcg, int idx)
 	return x;
 }
 
+static unsigned long  memcg_file_limit(struct mem_cgroup *memcg)
+{
+	unsigned long nr_pages, file_high;
+	unsigned long nr_reclaimed = 0;
+
+	mem_cgroup_flush_stats();
+	do {
+		nr_pages = memcg_page_state(memcg, NR_FILE_PAGES);
+		file_high = READ_ONCE(memcg->file_high);
+		if(nr_pages > file_high)
+			nr_reclaimed += try_to_free_mem_cgroup_pages(memcg, nr_pages - file_high,
+								     GFP_KERNEL, 0);
+	} while ((memcg = parent_mem_cgroup(memcg)) &&
+		 !mem_cgroup_is_root(memcg));
+
+	return nr_reclaimed;
+}
+
 /* idx can be of type enum memcg_stat_item or node_stat_item. */
 static unsigned long memcg_page_state_local(struct mem_cgroup *memcg, int idx)
 {
@@ -2444,6 +2462,7 @@ static void high_work_func(struct work_struct *work)
 	else
 #endif
 		reclaim_high(memcg, MEMCG_CHARGE_BATCH, GFP_KERNEL);
+	memcg_file_limit(memcg);
 }
 
 /*
@@ -2669,6 +2688,19 @@ out:
 	css_put(&memcg->css);
 }
 
+void mem_cgroup_handle_over_file_high(void)
+{
+	struct mem_cgroup *memcg;
+	int nr_retries = MAX_RECLAIM_RETRIES;
+	unsigned long nr_reclaimed = 0;
+
+	memcg = get_mem_cgroup_from_mm(current->mm);
+retry_reclaim:
+	nr_reclaimed = memcg_file_limit(memcg);
+	if (nr_reclaimed || nr_retries--)
+		goto retry_reclaim;
+	css_put(&memcg->css);
+}
 static int try_charge(struct mem_cgroup *memcg, gfp_t gfp_mask,
 		      unsigned int nr_pages)
 {
@@ -2828,16 +2860,18 @@ done_restock:
 	 * reclaim, the cost of mismatch is negligible.
 	 */
 	do {
-		bool mem_high, swap_high;
+		bool mem_high, swap_high, file_high;
 
 		mem_high = page_counter_read(&memcg->memory) >
 			READ_ONCE(memcg->memory.high);
 		swap_high = page_counter_read(&memcg->swap) >
 			READ_ONCE(memcg->swap.high);
+		file_high = memcg_page_state(memcg, NR_FILE_PAGES) >
+			READ_ONCE(memcg->file_high);
 
 		/* Don't bother a random interrupted task */
 		if (in_interrupt()) {
-			if (mem_high) {
+			if (mem_high || file_high) {
 				schedule_work(&memcg->high_work);
 				break;
 			}
@@ -2858,7 +2892,7 @@ done_restock:
 		}
 #endif
 
-		if (mem_high || swap_high) {
+		if (mem_high || swap_high || file_high) {
 			/*
 			 * The allocating tasks in this cgroup will need to do
 			 * reclaim or be throttled to prevent further growth
@@ -5666,6 +5700,31 @@ static ssize_t memory_high_write(struct kernfs_open_file *of,
 	return nbytes;
 }
 
+static int memory_file_high_show(struct seq_file *m, void *v)
+{
+	return seq_puts_memcg_tunable(m,
+	       READ_ONCE(mem_cgroup_from_seq(m)->file_high));
+}
+
+static ssize_t memory_file_high_write(struct kernfs_open_file *of,
+				      char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	unsigned long file_high;
+	int err;
+
+	buf = strstrip(buf);
+	err = page_counter_memparse(buf, "max", &file_high);
+	if (err)
+	        return err;
+
+	WRITE_ONCE(memcg->file_high, file_high);
+	memcg_file_limit(memcg);
+
+	return nbytes;
+}
+
+
 #ifdef CONFIG_MEMCG_V1_THRESHOLD_QOS
 static void __memcg_events_show(struct seq_file *m, atomic_long_t *events)
 {
@@ -6221,6 +6280,12 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.write = memory_high_write,
 	},
 	{
+		.name = "file_high",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_file_high_show,
+		.write = memory_file_high_write,
+	},
+	{
 		.name = "events",
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.file_offset = offsetof(struct mem_cgroup, events_file),
@@ -6503,6 +6568,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		return ERR_CAST(memcg);
 
 	page_counter_set_high(&memcg->memory, PAGE_COUNTER_MAX);
+	memcg->file_high = PAGE_COUNTER_MAX;
 	memcg->soft_limit = PAGE_COUNTER_MAX;
 #ifdef CONFIG_MEMCG_V1_THRESHOLD_QOS
 	memcg->high_async_ratio = HIGH_ASYNC_RATIO_BASE;

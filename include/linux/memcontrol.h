@@ -406,7 +406,7 @@ struct mem_cgroup {
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
 #endif
-	KABI_RESERVE(5)
+	KABI_USE(5, unsigned long file_high)
 #if defined(CONFIG_DYNAMIC_HUGETLB) && defined(CONFIG_ARM64)
 	KABI_USE(6, struct dhugetlb_pool *hpool)
 #else
@@ -1017,6 +1017,7 @@ unsigned long mem_cgroup_get_zone_lru_size(struct lruvec *lruvec,
 }
 
 void mem_cgroup_handle_over_high(void);
+void mem_cgroup_handle_over_file_high(void);
 
 unsigned long mem_cgroup_get_max(struct mem_cgroup *memcg);
 
