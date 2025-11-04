@@ -16,6 +16,7 @@
 #include "blk.h"
 #include "blk-mq.h"
 #include "blk-mq-debugfs.h"
+#include "blk-rq-qos.h"
 #include "blk-wbt.h"
 
 struct queue_sysfs_entry {

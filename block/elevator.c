@@ -43,6 +43,7 @@
 #include "blk.h"
 #include "blk-mq-sched.h"
 #include "blk-pm.h"
+#include "blk-rq-qos.h"
 #include "blk-wbt.h"
 
 static DEFINE_SPINLOCK(elv_list_lock);
