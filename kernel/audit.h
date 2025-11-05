@@ -338,7 +338,7 @@ extern void audit_filter_inodes(struct task_struct *tsk, struct audit_context *c
 extern struct list_head *audit_killed_trees(void);
 #else
 #define audit_signal_info(s,t) AUDIT_DISABLED
-#define audit_filter_inodes(t,c) AUDIT_DISABLED
+#define audit_filter_inodes(t, c) do { } while (0)
 #endif
 
 extern void audit_ctl_lock(void);
