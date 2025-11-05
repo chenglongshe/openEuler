@@ -25,5 +25,7 @@ obj-$(CONFIG_PPC32)			+= $(obj32-y)
 
 # Disable GCOV, KCOV & sanitizers in odd or sensitive code
 GCOV_PROFILE_ftrace.o := n
+PGO_PROFILE_ftrace.o := n
+PGO_PROFILE_ftrace_64_pg.o := n
 KCOV_INSTRUMENT_ftrace.o := n
 UBSAN_SANITIZE_ftrace.o := n

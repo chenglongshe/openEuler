@@ -33,8 +33,9 @@ CFLAGS_REMOVE_vgettimeofday.o = -ffeedback-generate
 CFLAGS_REMOVE_vgetcpu.o = -ffeedback-generate
 endif
 
-# Disable gcov profiling for VDSO code
+# Disable gcov and PGO profiling for VDSO code
 GCOV_PROFILE := n
+PGO_PROFILE := n
 
 # Force dependency
 $(obj)/vdso.o: $(obj)/vdso.so

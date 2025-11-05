@@ -63,6 +63,7 @@ ldflags-y := -Bsymbolic --no-undefined -soname=linux-vdso.so.1 \
 CFLAGS_REMOVE_vdso.o = -pg
 
 GCOV_PROFILE := n
+PGO_PROFILE := n
 UBSAN_SANITIZE := n
 KCOV_INSTRUMENT := n
 
