@@ -391,6 +391,7 @@ struct auto_affinity {
 	int			period_active;
 	struct affinity_domain	ad;
 	struct task_group	*tg;
+	struct list_head	af_list;
 #endif
 };
 
@@ -518,6 +519,7 @@ extern void start_auto_affinity(struct auto_affinity *auto_affi);
 extern void stop_auto_affinity(struct auto_affinity *auto_affi);
 extern int init_auto_affinity(struct task_group *tg);
 extern void tg_update_affinity_domains(int cpu, int online);
+extern int tg_rebuild_affinity_domains(int cpu, struct auto_affinity *auto_affi);
 
 #else
 static inline int init_auto_affinity(struct task_group *tg)
