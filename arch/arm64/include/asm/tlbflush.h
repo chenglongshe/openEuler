@@ -102,6 +102,12 @@ static inline unsigned long get_trans_granule(void)
  */
 #define TLBI_TTL_MASK		GENMASK_ULL(47, 44)
 
+/*
+ * This differs from upstream because we haven't backported the LP2
+ * enablement series. The behavior remains unchanged.
+ */
+#define TLBI_TTL_UNKNOWN       0
+
 #define __tlbi_level(op, addr, level) do {				\
 	u64 arg = addr;							\
 									\

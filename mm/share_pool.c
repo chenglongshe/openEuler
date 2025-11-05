@@ -2581,7 +2581,7 @@ static int sp_hugetlb_entry(pte_t *ptep, unsigned long hmask,
 			    unsigned long addr, unsigned long next,
 			    struct mm_walk *walk)
 {
-	pte_t pte = huge_ptep_get(ptep);
+	pte_t pte = huge_ptep_get(walk->mm, addr, ptep);
 	struct page *page = pte_page(pte);
 	struct sp_walk_data *sp_walk_data;
 
