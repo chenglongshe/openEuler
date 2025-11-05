@@ -18,6 +18,9 @@
 #include <linux/notifier.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
+#ifdef CONFIG_QOS_SCHED_SMART_GRID
+#include <linux/sched/grid_qos.h>
+#endif
 
 /*********************************************************************
  *                        CPUFREQ INTERFACE                          *
@@ -528,6 +531,15 @@ unsigned int cpufreq_driver_resolve_freq(struct cpufreq_policy *policy,
 unsigned int cpufreq_policy_transition_delay_us(struct cpufreq_policy *policy);
 int cpufreq_register_governor(struct cpufreq_governor *governor);
 void cpufreq_unregister_governor(struct cpufreq_governor *governor);
+
+#ifdef CONFIG_QOS_SCHED_SMART_GRID
+/* Implement in cpufreq.c */
+#ifdef CONFIG_CPU_FREQ
+void cpufreq_smart_grid_start_sync(void);
+#else
+static inline void cpufreq_smart_grid_start_sync(void) { return; }
+#endif
+#endif
 
 struct cpufreq_governor *cpufreq_default_governor(void);
 struct cpufreq_governor *cpufreq_fallback_governor(void);

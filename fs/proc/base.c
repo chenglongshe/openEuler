@@ -98,6 +98,10 @@
 #include <trace/events/oom.h>
 #include "internal.h"
 #include "fd.h"
+#ifdef CONFIG_QOS_SCHED_SMART_GRID
+#include <linux/sched/grid_qos.h>
+#include <linux/sched.h>
+#endif
 
 #include "../../lib/kstrtox.h"
 
@@ -3042,6 +3046,81 @@ static int proc_pid_patch_state(struct seq_file *m, struct pid_namespace *ns,
 }
 #endif /* CONFIG_LIVEPATCH */
 
+#ifdef CONFIG_QOS_SCHED_SMART_GRID
+static int smart_grid_level_show(struct seq_file *m, void *v)
+{
+	struct inode *inode = m->private;
+	struct task_struct *p;
+
+	p = get_proc_task(inode);
+	if (!p)
+		return -ESRCH;
+
+	if (p->_resvd != NULL && p->_resvd->grid_qos != NULL)
+		seq_printf(m, "%d\n", p->_resvd->grid_qos->stat.class_lvl);
+
+	put_task_struct(p);
+
+	return 0;
+}
+
+static int smart_grid_level_open(struct inode *inode, struct file *filp)
+{
+	return single_open(filp, smart_grid_level_show, inode);
+}
+
+static ssize_t smart_grid_level_write(struct file *file, const char __user *buf,
+				      size_t count, loff_t *offset)
+{
+	struct inode *inode = file_inode(file);
+	struct task_struct *p;
+	char buffer[TASK_COMM_LEN];
+	const size_t maxlen = sizeof(buffer) - 1;
+	unsigned int level = SCHED_GRID_QOS_TASK_LEVEL_MAX;
+	int ret = 0;
+	struct sched_grid_qos *qos;
+
+	memset(buffer, 0, sizeof(buffer));
+	if (copy_from_user(buffer, buf, count > maxlen ? maxlen : count))
+		return -EFAULT;
+
+	p = get_proc_task(inode);
+	if (!p)
+		return -ESRCH;
+
+	if (kstrtouint(buffer, 10, &level)) {
+		put_task_struct(p);
+		return -EINVAL;
+	}
+
+	if (level >= SCHED_GRID_QOS_TASK_LEVEL_MAX) {
+		put_task_struct(p);
+		return -EINVAL;
+	}
+
+	if (p->_resvd != NULL && p->_resvd->grid_qos != NULL &&
+	    p->_resvd->grid_qos->stat.set_class_lvl != NULL) {
+		qos = p->_resvd->grid_qos;
+		ret = qos->stat.set_class_lvl(&p->_resvd->grid_qos->stat,
+					      level);
+	}
+
+	put_task_struct(p);
+
+	if (ret)
+		return ret;
+	return count;
+}
+
+static const struct file_operations proc_pid_sg_level_operations = {
+	.open		= smart_grid_level_open,
+	.read		= seq_read,
+	.write		= smart_grid_level_write,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+#endif
+
 /*
  * Thread groups
  */
@@ -3064,6 +3143,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 	ONE("limits",	  S_IRUGO, proc_pid_limits),
 #ifdef CONFIG_SCHED_DEBUG
 	REG("sched",      S_IRUGO|S_IWUSR, proc_pid_sched_operations),
+#endif
+#ifdef CONFIG_QOS_SCHED_SMART_GRID
+	REG("smart_grid_level", 0644, proc_pid_sg_level_operations),
 #endif
 #ifdef CONFIG_SCHED_AUTOGROUP
 	REG("autogroup",  S_IRUGO|S_IWUSR, proc_pid_sched_autogroup_operations),

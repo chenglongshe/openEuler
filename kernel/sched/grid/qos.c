@@ -22,6 +22,7 @@
 #include <linux/sched.h>
 #include <linux/sched/grid_qos.h>
 #include "internal.h"
+#include <../kernel/sched/sched.h>
 
 static inline int qos_affinity_set(struct task_struct *p)
 {
@@ -150,4 +151,130 @@ int sched_grid_preferred_nid(int preferred_nid, nodemask_t *nodemask)
 		nd = first_node(nmask);
 
 	return nd;
+}
+
+static struct sched_grid_zone sg_zone;
+
+int __init sched_grid_zone_init(void)
+{
+	int index;
+
+	for (index = 0; index < SMART_GRID_ZONE_NR; index++)
+		cpumask_clear(&sg_zone.cpus[index]);
+
+	raw_spin_lock_init(&sg_zone.lock);
+	INIT_LIST_HEAD(&sg_zone.af_list_head);
+	return 0;
+}
+
+int sched_grid_zone_update(bool is_locked)
+{
+	struct list_head *pos;
+	struct auto_affinity *af_pos;
+	unsigned long flags;
+
+	if (!is_locked)
+		raw_spin_lock_irqsave(&sg_zone.lock, flags);
+
+	cpumask_clear(&sg_zone.cpus[SMART_GRID_ZONE_HOT]);
+	cpumask_clear(&sg_zone.cpus[SMART_GRID_ZONE_WARM]);
+
+	list_for_each(pos, &sg_zone.af_list_head) {
+		af_pos = list_entry(pos, struct auto_affinity, af_list);
+
+		/* when smart_grid not used we need calculate all task_group */
+		/* when smart_grid used we only calculate enabled task_group */
+		if (smart_grid_used() && af_pos->mode == 0)
+			continue;
+
+		cpumask_or(&sg_zone.cpus[SMART_GRID_ZONE_HOT],
+			   &sg_zone.cpus[SMART_GRID_ZONE_HOT],
+			   af_pos->ad.domains[af_pos->ad.curr_level]);
+		/* Update warm zone CPUs to max level first */
+		cpumask_or(&sg_zone.cpus[SMART_GRID_ZONE_WARM],
+			   &sg_zone.cpus[SMART_GRID_ZONE_WARM],
+			   af_pos->ad.domains[af_pos->ad.dcount - 1]);
+	}
+
+	/* Then reset warm zone CPUs without hot zone CPUs */
+	cpumask_andnot(&sg_zone.cpus[SMART_GRID_ZONE_WARM],
+		       &sg_zone.cpus[SMART_GRID_ZONE_WARM],
+		       &sg_zone.cpus[SMART_GRID_ZONE_HOT]);
+
+	if (!is_locked)
+		raw_spin_unlock_irqrestore(&sg_zone.lock, flags);
+
+	cpufreq_smart_grid_start_sync();
+	return 0;
+}
+
+int sched_grid_zone_add_af(struct auto_affinity *af)
+{
+	unsigned long flags;
+
+	if (af == NULL)
+		return -1;
+
+	raw_spin_lock_irqsave(&sg_zone.lock, flags);
+	list_add_tail(&af->af_list, &sg_zone.af_list_head);
+	sched_grid_zone_update(true);
+	raw_spin_unlock_irqrestore(&sg_zone.lock, flags);
+	return 0;
+}
+
+int sched_grid_zone_del_af(struct auto_affinity *af)
+{
+	unsigned long flags;
+
+	if (af == NULL)
+		return -1;
+
+	raw_spin_lock_irqsave(&sg_zone.lock, flags);
+	list_del(&af->af_list);
+	sched_grid_zone_update(true);
+	raw_spin_unlock_irqrestore(&sg_zone.lock, flags);
+	return 0;
+}
+
+struct cpumask *sched_grid_zone_cpumask(enum sg_zone_type zone)
+{
+	if (zone >= SMART_GRID_ZONE_NR)
+		return NULL;
+
+	return &sg_zone.cpus[zone];
+}
+
+/*
+ * Default smart_grid strategy was disable (=0).
+ * But, considering for inheritance of the pre-verion code.
+ * We make all the task to the highest qos_level (class_lvl = 0),
+ * when smart_grid strategy was disabled.
+ * Otherwise, When smart_grid strategy was enabled, we use the task's
+ * actually class_lvl.
+ */
+unsigned int sysctl_smart_grid_strategy_ctrl;
+
+struct cpumask *sched_grid_prefer_cpus(struct task_struct *p)
+{
+	struct affinity_domain *ad;
+	enum sg_zone_type current_zone;
+
+	ad = &task_group(p)->auto_affinity->ad;
+	/*
+	 * when smart_grid strategy was disabled,
+	 * We make all the task to the highest qos_level (class_lvl = 0)
+	 */
+	if (sysctl_smart_grid_strategy_ctrl == 0)
+		return ad->domains[ad->curr_level];
+
+	/* Only place the highest level task into hot zone */
+	current_zone = (p->_resvd->grid_qos->stat.class_lvl ==
+		       SCHED_GRID_QOS_TASK_LEVEL_HIGHEST) ?
+		       SMART_GRID_ZONE_HOT : SMART_GRID_ZONE_WARM;
+
+	/* Place the highest level task in current domain level itself */
+	if (current_zone == SMART_GRID_ZONE_HOT)
+		return ad->domains[ad->curr_level];
+
+	return &sg_zone.cpus[current_zone];
 }

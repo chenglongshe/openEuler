@@ -17,6 +17,15 @@ enum sched_grid_qos_class {
 	SCHED_GRID_QOS_CLASS_LEVEL_NR
 };
 
+/*
+ * SCHED_GRID_QOS_TASK_LEVEL was defined different QoS level.
+ * The lower number has the higher priority. (E.g. 0 was the highest)
+ * The enum sched_grid_qos_class defined the max level, the lowest level.
+ */
+#define SCHED_GRID_QOS_TASK_LEVEL_HIGHEST SCHED_GRID_QOS_CLASS_LEVEL_1
+#define SCHED_GRID_QOS_TASK_LEVEL_MAX	(SCHED_GRID_QOS_CLASS_LEVEL_NR)
+#define SCHED_GRID_QOS_TASK_LEVEL_DEFAULT (SCHED_GRID_QOS_CLASS_LEVEL_NR - 1)
+
 enum {
 	SCHED_GRID_QOS_IPS_INDEX = 0,
 	SCHED_GRID_QOS_MEMBOUND_RATIO_INDEX = 1,
@@ -50,7 +59,7 @@ struct sched_grid_qos_sample {
 
 struct sched_grid_qos_stat {
 	enum sched_grid_qos_class class_lvl;
-	int (*set_class_lvl)(struct sched_grid_qos_stat *qos_stat);
+	int (*set_class_lvl)(struct sched_grid_qos_stat *qos_stat, int level);
 	struct sched_grid_qos_sample sample[SCHED_GRID_QOS_SAMPLE_NR];
 };
 
@@ -84,7 +93,29 @@ void sched_grid_qos_free(struct task_struct *p);
 
 int sched_grid_preferred_interleave_nid(struct mempolicy *policy);
 int sched_grid_preferred_nid(int preferred_nid, nodemask_t *nodemask);
+
+enum sg_zone_type {
+	SMART_GRID_ZONE_HOT = 0,
+	SMART_GRID_ZONE_WARM,
+	SMART_GRID_ZONE_NR
+};
+
+struct auto_affinity;
+struct sched_grid_zone {
+	raw_spinlock_t lock;
+	struct cpumask cpus[SMART_GRID_ZONE_NR];
+	struct list_head af_list_head;	/* struct auto_affinity list head */
+};
+
+int __init sched_grid_zone_init(void);
+int sched_grid_zone_update(bool is_locked);
+int sched_grid_zone_add_af(struct auto_affinity *af);
+int sched_grid_zone_del_af(struct auto_affinity *af);
+struct cpumask *sched_grid_zone_cpumask(enum sg_zone_type zone);
+struct cpumask *sched_grid_prefer_cpus(struct task_struct *p);
 #else
+static inline int __init sched_grid_zone_init(void) { return 0; }
+
 static inline int
 sched_grid_preferred_interleave_nid(struct mempolicy *policy)
 {
