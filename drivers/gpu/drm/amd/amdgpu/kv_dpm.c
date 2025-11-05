@@ -163,6 +163,8 @@ static void sumo_construct_vid_mapping_table(struct amdgpu_device *adev,
 	u32 i, j;
 
 	for (i = 0; i < SUMO_MAX_HARDWARE_POWERLEVELS; i++) {
+		if (table[i].usVoltageIndex >= SUMO_MAX_NUMBER_VOLTAGES)
+			continue;
 		if (table[i].ulSupportedSCLK != 0) {
 			if (table[i].usVoltageIndex >= SUMO_MAX_NUMBER_VOLTAGES)
 				continue;
