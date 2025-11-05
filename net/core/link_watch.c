@@ -53,7 +53,11 @@ static unsigned char default_operstate(const struct net_device *dev)
 		else
 			iflink = dev->ifindex;
 
-		if (iflink == dev->ifindex)
+		/* If called from netdev_run_todo()/linkwatch_sync_dev(),
+		 * dev_net(dev) can be already freed, and RTNL is not held.
+		 */
+		if (dev->reg_state == NETREG_UNREGISTERED ||
+		    iflink == dev->ifindex)
 			return IF_OPER_DOWN;
 
 		ASSERT_RTNL();
