@@ -3154,6 +3154,9 @@ static int ext4_da_write_end(struct file *file,
 	if (unlikely(copied < len) && !PageUptodate(page))
 		copied = 0;
 
+	if (!page_private(page))
+		return -EIO;
+
 	start = pos & (PAGE_SIZE - 1);
 	end = start + copied - 1;
 
