@@ -1062,6 +1062,12 @@ static void __ris_msmon_read(void *arg)
 	 */
 	wmb();
 
+	/*
+	 * Selects the monitor instance associated to the specified PARTID
+	 * to read counter value.
+	 */
+	wmb();
+
 	switch (m->type) {
 	case mpam_feat_msmon_csu:
 		now = mpam_read_monsel_reg(msc, CSU);
