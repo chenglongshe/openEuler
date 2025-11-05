@@ -71,6 +71,10 @@ trap 'rm "$OUT"' EXIT
 	echo ""
 
 	dump_array "x86_vmx_tertiary_flags" "NVMX_TERTIARY_INTS*32" "VMX_TERTIARY_FEATURE_" "NVMXINTS*32" $3
+	echo ""
+
+	dump_array "x86_vmx_zx_tertiary_flags" "NVMX_ZX_TERTIARY_INTS*32" \
+		"VMX_ZX_TERTIARY_FEATURE_" "(NVMXINTS*32 + NVMX_TERTIARY_INTS*32)" $3
 	echo "#endif /* CONFIG_X86_VMX_FEATURE_NAMES */"
 ) > $OUT
 

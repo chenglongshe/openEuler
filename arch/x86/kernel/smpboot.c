@@ -104,6 +104,8 @@ DEFINE_PER_CPU_READ_MOSTLY(struct cpuinfo_x86, cpu_info);
 EXPORT_PER_CPU_SYMBOL(cpu_info);
 DEFINE_PER_CPU_READ_MOSTLY(struct extra_cpuinfo_x86, extra_cpu_info);
 EXPORT_PER_CPU_SYMBOL(extra_cpu_info);
+DEFINE_PER_CPU_READ_MOSTLY(struct extra_zx_cpuinfo_x86, extra_zx_cpu_info);
+EXPORT_PER_CPU_SYMBOL(extra_zx_cpu_info);
 
 struct mwait_cpu_dead {
 	unsigned int	control;
