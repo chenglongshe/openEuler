@@ -976,6 +976,7 @@ struct block_device *bdget_part(struct hd_struct *part)
 {
 	return bdget(part_devt(part));
 }
+EXPORT_SYMBOL_GPL(bdget_part);
 
 long nr_blockdev_pages(void)
 {
