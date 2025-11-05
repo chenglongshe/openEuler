@@ -1,0 +1,11 @@
+diff a/kernel/sched/rt.c b/kernel/sched/rt.c	(rejected hunks)
+@@ -704,7 +704,8 @@ static void do_balance_runtime(struct rt_rq *rt_rq)
+ 		 * or __disable_runtime() below sets a specific rq to inf to
+ 		 * indicate its been disabled and disallow stealing.
+ 		 */
+-		if (iter->rt_runtime == RUNTIME_INF)
++		if (iter->rt_runtime == RUNTIME_INF ||
++				iter->rt_runtime == RUNTIME_DISABLED)
+ 			goto next;
+ 
+ 		/*

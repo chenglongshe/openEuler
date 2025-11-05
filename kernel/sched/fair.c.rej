@@ -1,0 +1,52 @@
+diff a/kernel/sched/fair.c b/kernel/sched/fair.c	(rejected hunks)
+@@ -161,9 +161,12 @@ int __weak arch_asym_cpu_priority(int cpu)
+ #endif
+ 
+ #ifdef CONFIG_QOS_SCHED
+-
++struct qos_overload_checker {
++	struct hrtimer qos_overload_timer;
++	unsigned int cpu;
++};
+ static DEFINE_PER_CPU_SHARED_ALIGNED(struct list_head, qos_throttled_cfs_rq);
+-static DEFINE_PER_CPU_SHARED_ALIGNED(struct hrtimer, qos_overload_timer);
++static DEFINE_PER_CPU_SHARED_ALIGNED(struct qos_overload_checker, qos_overload_checker);
+ static DEFINE_PER_CPU(int, qos_cpu_overload);
+ unsigned int sysctl_overload_detect_period = 5000;  /* in ms */
+ unsigned int sysctl_offline_wait_interval = 100;  /* in ms */
+@@ -7951,14 +7954,17 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
+ }
+ 
+ #ifdef CONFIG_QOS_SCHED
++static struct hrtimer *qos_timer(int cpu) {
++	return &(per_cpu_ptr(&qos_overload_checker, cpu)->qos_overload_timer);
++}
+ static inline bool qos_timer_is_activated(int cpu)
+ {
+-	return hrtimer_active(per_cpu_ptr(&qos_overload_timer, cpu));
++	return hrtimer_active(qos_timer(cpu));
+ }
+ 
+ static inline void cancel_qos_timer(int cpu)
+ {
+-	hrtimer_cancel(per_cpu_ptr(&qos_overload_timer, cpu));
++	hrtimer_cancel(qos_timer(cpu));
+ }
+ 
+ static inline bool is_offline_task(struct task_struct *p)
+@@ -8183,10 +8189,13 @@ void sched_qos_offline_wait(void)
+ static enum hrtimer_restart qos_overload_timer_handler(struct hrtimer *timer)
+ {
+ 	struct rq_flags rf;
+-	struct rq *rq = this_rq();
++	struct qos_overload_checker *checker = container_of(timer,
++			struct qos_overload_checker, qos_overload_timer);
++	int cpu = checker->cpu;
++	struct rq *rq = cpu_rq(cpu);
+ 
+ 	rq_lock_irqsave(rq, &rf);
+-	__unthrottle_qos_cfs_rqs(smp_processor_id());
++	__unthrottle_qos_cfs_rqs(cpu);
+ 	__this_cpu_write(qos_cpu_overload, 1);
+ 
+ 	/* Determine whether we need to wake up potentially idle CPU. */
