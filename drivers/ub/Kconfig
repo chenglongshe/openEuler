@@ -12,8 +12,19 @@ menuconfig UB
          If you have a hardware that support UB protocol,
          Say y here. By Default this option is closed.
 
-if UB
 source "drivers/ub/ubus/Kconfig"
 source "drivers/ub/ubfi/Kconfig"
 source "drivers/ub/ubase/Kconfig"
+
+if UB
+
+config UB_URMA
+	tristate "Unified Bus (UB) urma support"
+	default m
+	help
+	  Unified remote memory access(URMA) support. This
+	  is the kernel side of the userspace urma support, which allows
+	  userspace processes to send and receive urma cmd. You will also
+	  need liburma from umdk
+
 endif # UB
