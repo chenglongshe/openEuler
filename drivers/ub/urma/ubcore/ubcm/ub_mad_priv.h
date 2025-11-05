@@ -158,7 +158,7 @@ struct ubmad_msg {
 
 	uint64_t msn; // Message sequence number
 
-	uint8_t payload[0];
+	uint8_t payload[];
 };
 
 /* poll */

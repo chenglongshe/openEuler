@@ -222,11 +222,10 @@ static const void *ubcore_net_namespace(const struct device *dev)
 	}
 
 	ubc_dev = ldev->ub_dev;
-	if (ubc_dev->transport_type == UBCORE_TRANSPORT_UB) {
+	if (ubc_dev->transport_type == UBCORE_TRANSPORT_UB)
 		return read_pnet(&ldev->net);
-	} else {
+	else
 		return &init_net;
-	}
 }
 
 static char *ubcore_devnode(const struct device *dev, umode_t *mode)

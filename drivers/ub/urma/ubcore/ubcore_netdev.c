@@ -282,7 +282,7 @@ void ubcore_fill_port_netdev(struct ubcore_device *dev, struct net_device *ndev,
 			*port_cnt = port_info->port_cnt;
 			up_write(&g_port_list_lock);
 			ubcore_log_info(
-				"Success to fill in port_list with port cnt: %hhu and dev_name %s",
+				"Success to fill in port_list with port cnt: %u and dev_name %s",
 				*port_cnt, port_info->dev_name);
 			return;
 		}
@@ -310,7 +310,7 @@ static int ubcore_add_new_port(struct ubcore_ndev_port *port_info,
 			port_info->valid_list[i] = true;
 			port_info->port_cnt++;
 			ubcore_log_info(
-				"ndev:%s dev_name: %s bound port%hhu: %hhu\n",
+				"ndev:%s dev_name: %s bound port%u: %u\n",
 				netdev_name(ndev), dev->dev_name, i, port_id);
 			break;
 		}
@@ -329,7 +329,7 @@ static int ubcore_port_duplicate_check(struct ubcore_ndev_port *port_info,
 		if (port_info->valid_list[i] &&
 		    port_info->port_list[i] == port_id) {
 			ubcore_log_err(
-				"ndev:%s dev_name: %s bound port%hhu: %hhu is already in the list\n",
+				"ndev:%s dev_name: %s bound port%u: %u is already in the list\n",
 				netdev_name(ndev), dev->dev_name, i, port_id);
 			return -1;
 		}
@@ -419,14 +419,14 @@ static int ubcore_del_port(struct ubcore_ndev_port *port_info, uint8_t port_id,
 			port_info->port_cnt--;
 			del = true;
 			ubcore_log_info(
-				"ndev:%s dev_name: %s bound port%hhu: %hhu has been deleted\n",
+				"ndev:%s dev_name: %s bound port%u: %u has been deleted\n",
 				netdev_name(ndev), dev->dev_name, i, port_id);
 			break;
 		}
 	}
 	if (!del) {
 		ubcore_log_info(
-			"ndev:%s dev_name: %s bound port: %hhu cannot be found\n",
+			"ndev:%s dev_name: %s bound port: %u cannot be found\n",
 			netdev_name(ndev), dev->dev_name, port_id);
 		return -1;
 	}

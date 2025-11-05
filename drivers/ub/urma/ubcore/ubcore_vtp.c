@@ -1406,11 +1406,11 @@ struct ubcore_vtpn *ubcore_connect_vtp_async(struct ubcore_device *dev,
 	ret = ubcore_send_req(dev, s->req);
 	if (ret != 0) {
 		ubcore_log_err(
-			"Failed to send req, msg_id = %u, opcode = %hu.\n",
+			"Failed to send req, msg_id = %u, opcode = %u.\n",
 			s->req->msg_id, (uint16_t)s->req->opcode);
 		if (!ubcore_set_session_finish(s)) {
 			ubcore_log_err(
-				"Failed to lock session or session state is finish, msg_id = %u, opcode = %hu.\n",
+				"Failed to lock session or session state is finish, msg_id = %u, opcode = %u.\n",
 				s->req->msg_id, (uint16_t)s->req->opcode);
 			(void)kref_put(&s->kref, ubcore_free_msg_session);
 			return vtpn;
@@ -1564,11 +1564,11 @@ int ubcore_disconnect_vtp_async(struct ubcore_vtpn *vtpn, int timeout,
 		ret = ubcore_send_req(dev, s->req);
 		if (ret != 0) {
 			ubcore_log_err(
-				"Failed to send req, msg_id = %u, opcode = %hu.\n",
+				"Failed to send req, msg_id = %u, opcode = %u.\n",
 				s->req->msg_id, (uint16_t)s->req->opcode);
 			if (!ubcore_set_session_finish(s)) {
 				ubcore_log_err(
-					"Failed to trylock_and_modify_state, msg_id = %u, opcode = %hu.\n",
+					"Failed to trylock_and_modify_state, msg_id = %u, opcode = %u.\n",
 					s->req->msg_id,
 					(uint16_t)s->req->opcode);
 				(void)kref_put(&s->kref,

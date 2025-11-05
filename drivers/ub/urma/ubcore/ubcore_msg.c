@@ -229,7 +229,7 @@ ubcore_asyn_send_ue2mue_msg(struct ubcore_device *dev, struct ubcore_req *req)
 	(void)kref_put(&s->kref, ubcore_free_msg_session);
 	if (ret != 0) {
 		ubcore_log_err(
-			"Failed to send req, msg_id = %u, opcode = %hu.\n",
+			"Failed to send req, msg_id = %u, opcode = %u.\n",
 			req->msg_id, (uint16_t)req->opcode);
 		ubcore_destroy_msg_session(s);
 		return NULL;
@@ -291,7 +291,7 @@ int ubcore_update_uvs_eid_ret(struct ubcore_update_eid_ctx *ctx)
 			return 1;
 
 		ubcore_log_err(
-			"waiting req reply timeout, msg_id = %u, opcode = %hu, leavetime =  %ld.\n",
+			"waiting req reply timeout, msg_id = %u, opcode = %u, leavetime =  %ld.\n",
 			ctx->req_msg->msg_id, (uint16_t)ctx->req_msg->opcode,
 			leave_time);
 		return -EAGAIN;

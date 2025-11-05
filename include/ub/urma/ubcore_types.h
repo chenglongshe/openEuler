@@ -1223,7 +1223,7 @@ struct ubcore_req {
 	uint32_t msg_id;
 	enum ubcore_msg_opcode opcode;
 	uint32_t len;
-	uint8_t data[0];
+	uint8_t data[];
 };
 
 struct ubcore_req_host {
@@ -1235,7 +1235,7 @@ struct ubcore_resp {
 	uint32_t msg_id;
 	enum ubcore_msg_opcode opcode;
 	uint32_t len;
-	uint8_t data[0];
+	uint8_t data[];
 };
 
 struct ubcore_resp_host {
