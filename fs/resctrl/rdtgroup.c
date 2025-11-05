@@ -3887,6 +3887,13 @@ static int rdtgroup_rename(struct kernfs_node *kn,
 		goto out;
 	}
 
+	entry = resctrl_find_free_rmid(new_prdtgrp->closid);
+	if (IS_ERR(entry)) {
+		rdt_last_cmd_puts("Destination has been out of RMIDs\n");
+		ret = PTR_ERR(entry);
+		goto out;
+	}
+
 	/*
 	 * Unlike RDT, the rmid and closid in MPAM have a hierarchical
 	 * relationship. Therefore, first check whether there are still
