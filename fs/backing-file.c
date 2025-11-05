@@ -12,6 +12,7 @@
 #include <linux/backing-file.h>
 #include <linux/splice.h>
 #include <linux/mm.h>
+#include <linux/fsnotify.h>
 
 #include "internal.h"
 
@@ -46,6 +47,8 @@ struct file *backing_file_open(const struct path *user_path, int flags,
 	if (error) {
 		fput(f);
 		f = ERR_PTR(error);
+	} else {
+		fsnotify_open(f);
 	}
 
 	return f;
