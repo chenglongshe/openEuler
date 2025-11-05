@@ -832,7 +832,10 @@ static inline bool fast_dput(struct dentry *dentry)
 		 * to be killed, so shouldn't fast put and retain in memory.
 		 */
 		spin_lock(&dentry->d_lock);
-		if (likely(!limit_negative_dentry(dentry))) {
+		d_flags = dentry->d_flags & (DCACHE_REFERENCED | DCACHE_LRU_LIST);
+		if ((d_flags != (DCACHE_REFERENCED | DCACHE_LRU_LIST)) ||
+				d_unhashed(dentry) ||
+				likely(!limit_negative_dentry(dentry))) {
 			spin_unlock(&dentry->d_lock);
 			return true;
 		}
