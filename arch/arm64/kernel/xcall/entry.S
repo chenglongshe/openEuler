@@ -151,13 +151,6 @@ alternative_else_nop_endif
 	sb
 	.endm /* .macro hw_xcal_restore_base_regs */
 
-SYM_CODE_START(no_xcall_entry)
-	kernel_entry 0, 64
-	mov	x0, sp
-	bl	el0t_64_sync_handler
-	b	ret_to_user
-SYM_CODE_END(no_xcall_entry)
-
 SYM_CODE_START(xcall_entry)
 	hw_xcall_save_base_regs
 	mov	x0, sp
