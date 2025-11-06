@@ -5,6 +5,7 @@
 
 #define pr_fmt(fmt)	"xcall: " fmt
 
+#include <linux/mmap_lock.h>
 #include <linux/namei.h>
 #include <linux/slab.h>
 #include <linux/xcall.h>
@@ -48,6 +49,77 @@ static long inv_xcall(struct pt_regs *regs)
 }
 
 #define inv_xcall_syscall ((unsigned long)inv_xcall)
+
+static long patch_syscall(struct pt_regs *regs);
+
+static long filter_ksyscall(struct pt_regs *regs)
+{
+	struct xcall_area *area = mm_xcall_area(current->mm);
+	unsigned int scno = (unsigned int)regs->regs[8];
+
+	/*
+	 * curerntly, some syscall uses svc 0 at two and more different
+	 * addresses, so it needs to hijack all of these svc 0.
+	 */
+	if (regs->syscallno & ESR_ELx_ISS_MASK)
+		return -ENOSYS;
+
+	cmpxchg(&(area->sys_call_table[scno]), filter_ksyscall, patch_syscall);
+	regs->pc -= AARCH64_INSN_SIZE;
+	return 0;
+}
+
+static long replay_syscall(struct pt_regs *regs)
+{
+	regs->pc -= AARCH64_INSN_SIZE;
+	return 0;
+}
+
+static long patch_syscall(struct pt_regs *regs)
+{
+	struct xcall_area *area = mm_xcall_area(current->mm);
+	unsigned int scno = (unsigned int)regs->regs[8];
+	syscall_fn_t syscall_fn;
+	unsigned long old;
+	int ret;
+
+	old = cmpxchg(&(area->sys_call_table[scno]), patch_syscall, replay_syscall);
+	if (old != (unsigned long)patch_syscall) {
+		syscall_fn = (syscall_fn_t)area->sys_call_table[scno];
+		return syscall_fn(regs);
+	}
+
+	regs->pc -= AARCH64_INSN_SIZE;
+
+	mmap_write_lock(current->mm);
+	ret = set_xcall_insn(current->mm, regs->pc, SVC_FFFF);
+	mmap_write_unlock(current->mm);
+
+	if (!ret) {
+		xchg(&(area->sys_call_table[scno]), filter_ksyscall);
+		pr_debug("patch svc ffff for scno %u\n", scno);
+		return 0;
+	}
+
+	/*
+	 * Upon patch svc 0xffff failed, it uses the functions defined
+	 * in sys_call_table to handle syscall this time, and try to
+	 * do patching next time.
+	 */
+	set_xcall_insn(current->mm, regs-pc, SVC_0000);
+	regs->pc += AARCH64_INSN_SIZE;
+	xchg(&(area->sys_call_table[scno]), patch_syscall);
+	return ret;
+}
+
+int xcall_pre_sstep_check(struct pt_regs *regs)
+{
+	struct xcall_area *area = mm_xcall_area(current->mm);
+	unsigned int scno = (unsigned int)regs->regs[8];
+
+	return area && (scno < NR_syscalls) &&
+		(area->sys_call_table[scno] != (unsigned long)inv_xcall);
+}
 
 static struct xcall *get_xcall(struct xcall *xcall)
 {
@@ -135,17 +207,19 @@ static int init_xcall(struct xcall *xcall, struct xcall_comm *comm)
 
 static int fill_xcall_syscall(struct xcall_area *area, struct xcall *xcall)
 {
+	unsigned int scno_offset, scno_count = 0;
 	struct xcall_prog_object *obj;
-	unsigned int scno_offset;
 
 	obj = xcall->program->objs;
-	while (obj->func) {
+	while (scno_count < xcall->program->nr_scno && obj->func) {
 		scno_offset = NR_syscalls + obj->scno;
 		if (area->sys_call_table[scno_offset] != inv_xcall_syscall)
 			return -EINVAL;
 
 		area->sys_call_table[scno_offset] = obj->func;
+		area->sys_call_table[obj->scno] = (unsigned long)patch_syscall;
 		obj += 1;
+		scno_count++;
 	}
 
 	return 0;
@@ -314,3 +388,9 @@ void xcall_prog_unregister(struct xcall_prog *prog)
 	spin_unlock(&prog_list_lock);
 }
 EXPORT_SYMBOL(xcall_prog_unregister);
+
+const syscall_fn_t *default_sys_call_table(void)
+{
+	return sys_call_table;
+}
+EXPORT_SYMBOL(default_sys_call_table);
