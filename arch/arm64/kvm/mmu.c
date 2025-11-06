@@ -1228,7 +1228,7 @@ void virtcca_enable_log_dirty(struct kvm *kvm, uint64_t start, uint64_t end)
 		return;
 	}
 
-	res = tmi_mem_region_protect(cvm->rd, start, end, true);
+	res = tmi_mem_region_protect(cvm->rd, start, end);
 	if (res.a1 != 0) {
 		pr_err("tmi_mem_region_protect failed!\n");
 	}

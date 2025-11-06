@@ -439,11 +439,11 @@ u64 tmi_get_swiotlb(uint64_t rd, uint64_t swiotlb_start_addr, uint64_t swiotlb_e
 	return res.a1;
 }
 
-struct arm_smccc_res tmi_mem_region_protect(u64 rd, u64 start, u64 end, bool protect)
+struct arm_smccc_res tmi_mem_region_protect(u64 rd, u64 start, u64 end)
 {
 	struct arm_smccc_res res;
 
-	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_MEM_REGION_PROTECT, rd, start, end, true, &res);
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_MEM_REGION_PROTECT, rd, start, end, &res);
 	return res;
 }
 

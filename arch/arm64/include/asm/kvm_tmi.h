@@ -552,7 +552,7 @@ u64 tmi_get_swiotlb(uint64_t rd, uint64_t swiotlb_start_addr, uint64_t swiotlb_e
 void virtcca_set_tmm_memslot(struct kvm *kvm, struct kvm_memory_slot *memslot);
 /* enable the migcvm ctl */
 int kvm_migcvm_ioctl(struct kvm *kvm, unsigned long arg);
-struct arm_smccc_res tmi_mem_region_protect(u64 rd, u64 start, u64 end, bool protect);
+struct arm_smccc_res tmi_mem_region_protect(u64 rd, u64 start, u64 end);
 u64 tmi_migvm_init(uint64_t rd, uint64_t numa_set);
 u64 tmi_migvm_clean(uint64_t migvm_rd);
 u64 tmi_bind_add(uint64_t rd, uint64_t migvm_rd);
