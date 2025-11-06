@@ -844,7 +844,44 @@ asmlinkage void noinstr el0_fast_syscall(struct pt_regs *regs)
 	fast_exit_to_user_mode(regs);
 }
 
-asmlinkage void noinstr el0_slow_syscall(struct pt_regs *regs) __alias(el0_svc);
+asmlinkage void el0_slow_syscall(struct pt_regs *regs) __alias(el0_svc);
+asmlinkage void __alias_el0_da(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_da);
+asmlinkage void __alias_el0_ia(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_ia);
+asmlinkage void __alias_el0_fpsimd_acc(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_fpsimd_acc);
+asmlinkage void __alias_el0_sve_acc(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_sve_acc);
+asmlinkage void __alias_el0_sme_acc(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_sme_acc);
+asmlinkage void __alias_el0_fpsimd_exc(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_fpsimd_exc);
+asmlinkage void __alias_el0_sys(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_sys);
+asmlinkage void __alias_el0_wfx(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_sys);
+asmlinkage void __alias_el0_sp(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_sp);
+asmlinkage void __alias_el0_pc(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_pc);
+asmlinkage void __alias_el0_undef(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_undef);
+asmlinkage void __alias_el0_bti(struct pt_regs *regs) __alias(el0_bti);
+asmlinkage void __alias_el0_mops(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_mops);
+asmlinkage void __alias_el0_breakpt(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_dbg);
+asmlinkage void __alias_el0_softstp(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_dbg);
+asmlinkage void __alias_el0_watchpt(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_dbg);
+asmlinkage void __alias_el0_brk64(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_dbg);
+asmlinkage void __alias_el0_fpac(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_fpac);
+asmlinkage void __alias_el0_inv(struct pt_regs *regs, unsigned long esr)
+	__alias(el0_inv);
 #endif /* CONFIG_FAST_SYSCALL */
 
 asmlinkage void noinstr el0t_64_sync_handler(struct pt_regs *regs)

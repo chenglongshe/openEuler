@@ -17,8 +17,9 @@ static inline int sw_xcall_init_task(struct task_struct *p, struct task_struct *
 		return -ENOMEM;
 
 	if (orig->xinfo) {
-		bitmap_copy(TASK_XINFO(p)->xcall_enable, TASK_XINFO(orig)->xcall_enable,
-			    __NR_syscalls);
+		memcpy(TASK_XINFO(p)->xcall_enable,
+		       TASK_XINFO(orig)->xcall_enable,
+		       (__NR_syscalls + 1) * sizeof(u8));
 	}
 
 	return 0;
@@ -38,8 +39,13 @@ void xcall_task_free(struct task_struct *p)
 		kfree(p->xinfo);
 }
 
-#define __NR_fast_syscalls	512
-static u8 fast_syscall_enabled[__NR_fast_syscalls + 1] = {
-	[0 ... __NR_fast_syscalls] = 0,
+static u8 default_xcall_info[__NR_syscalls + 1] = {
+	[0 ... __NR_syscalls] = 0,
 };
-asmlinkage DEFINE_PER_CPU(u8*, __cpu_fast_syscall) = fast_syscall_enabled;
+DEFINE_PER_CPU(u8*, __xcall_info) = default_xcall_info;
+
+void xcall_info_switch(struct task_struct *task)
+{
+	if (TASK_XINFO(task)->xcall_enable)
+		__this_cpu_write(__xcall_info, TASK_XINFO(task)->xcall_enable);
+}

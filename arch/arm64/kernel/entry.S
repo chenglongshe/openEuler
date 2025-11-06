@@ -552,6 +552,10 @@ tsk	.req	x28		// current thread_info
 
 	.text
 
+#ifdef CONFIG_FAST_SYSCALL
+#include "xcall/entry.S"
+#endif
+
 /*
  * Exception vectors.
  */
@@ -569,7 +573,11 @@ SYM_CODE_START(vectors)
 	kernel_ventry	1, h, 64, fiq		// FIQ EL1h
 	kernel_ventry	1, h, 64, error		// Error EL1h
 
+#ifdef CONFIG_FAST_SYSCALL
+	sync_ventry				// Synchronous 64-bit EL0
+#else
 	kernel_ventry	0, t, 64, sync		// Synchronous 64-bit EL0
+#endif
 	kernel_ventry	0, t, 64, irq		// IRQ 64-bit EL0
 	kernel_ventry	0, t, 64, fiq		// FIQ 64-bit EL0
 	kernel_ventry	0, t, 64, error		// Error 64-bit EL0
@@ -581,8 +589,6 @@ SYM_CODE_START(vectors)
 SYM_CODE_END(vectors)
 
 #ifdef CONFIG_ACTLR_XCALL_XINT
-#include "xcall/entry.S"
-
 	.align	11
 SYM_CODE_START(vectors_xcall_xint)
 	kernel_ventry	1, t, 64, sync		// Synchronous EL1t
@@ -595,7 +601,11 @@ SYM_CODE_START(vectors_xcall_xint)
 	kernel_ventry	1, h, 64, fiq		// FIQ EL1h
 	kernel_ventry	1, h, 64, error		// Error EL1h
 
+#ifdef CONFIG_FAST_SYSCALL
+	sync_ventry				// Synchronous 64-bit EL0
+#else
 	kernel_ventry	0, t, 64, sync		// Synchronous 64-bit EL0
+#endif
 	kernel_ventry	0, t, 64, irq		// IRQ 64-bit EL0
 	kernel_ventry	0, t, 64, fiq		// FIQ 64-bit EL0
 	kernel_ventry	0, t, 64, error		// Error 64-bit EL0
@@ -605,7 +615,7 @@ SYM_CODE_START(vectors_xcall_xint)
 	kernel_ventry	0, t, 32, fiq		// FIQ 32-bit EL0
 	kernel_ventry	0, t, 32, error		// Error 32-bit EL0
 SYM_CODE_END(vectors_xcall_xint)
-#endif
+#endif /* CONFIG_ACTLR_XCALL_XINT */
 
 #ifdef CONFIG_VMAP_STACK
 SYM_CODE_START_LOCAL(__bad_stack)
