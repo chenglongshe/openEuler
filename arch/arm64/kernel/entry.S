@@ -685,7 +685,7 @@ SYM_CODE_END(__bad_stack)
 	kernel_entry 0, 64
 #endif
 	mov	x0, sp
-	bl	el0t_64_fast_syscall_handler
+	bl	el0_fast_syscall
 #ifdef CONFIG_SECURITY_FEATURE_BYPASS
 	kernel_exit 0, xcall
 #else
@@ -797,7 +797,6 @@ SYM_CODE_END(el\el\ht\()_\regsize\()_\label)
 	entry_handler	0, t, 64, error
 
 #ifdef CONFIG_ACTLR_XCALL_XINT
-	entry_handler	0, t, 64, xcall
 	entry_handler	0, t, 64, xint
 #endif
 	entry_handler	0, t, 32, sync

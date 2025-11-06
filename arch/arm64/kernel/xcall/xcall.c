@@ -37,3 +37,9 @@ void xcall_task_free(struct task_struct *p)
 	if (static_branch_unlikely(&xcall_enable))
 		kfree(p->xinfo);
 }
+
+#define __NR_fast_syscalls	512
+static u8 fast_syscall_enabled[__NR_fast_syscalls + 1] = {
+	[0 ... __NR_fast_syscalls] = 0,
+};
+asmlinkage DEFINE_PER_CPU(u8*, __cpu_fast_syscall) = fast_syscall_enabled;

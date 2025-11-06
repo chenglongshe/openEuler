@@ -151,12 +151,55 @@ alternative_else_nop_endif
 	sb
 	.endm /* .macro hw_xcal_restore_base_regs */
 
-SYM_CODE_START(xcall_entry)
+#define __NR_fast_syscalls	512
+
+SYM_CODE_START_LOCAL(el0t_64_svc_entry)
+	/* Hijack SVC to dynamically load syscalls via '/proc/xcall/comm' */
+	ldr	x20, [sp, #S_SYSCALLNO]			// ESR.bits[25,18]
+	cmp	x20, 0
+	bne	el0t_64_xcall_entry
+
+	/* Hijack SVC to low overhead syscalls via '/prox/[pid]/xcall' */
+	ldr_this_cpu	x21, __cpu_fast_syscall, x20	// per_cpu table
+	and	x20, x8, #__NR_fast_syscalls - 1	// trunk syscno less than 512
+	ldrb	w20, [x21, x20]				// memory overhead is 512(B)
+	cmp	x20, 0
+	bne	el0t_fast_syscall
+
+	ldp	x20, x21, [sp, #16 * 10]
+	kernel_entry 0, 64
+	mov	x0, sp
+	bl	el0_slow_syscall
+	b	ret_to_user
+SYM_INNER_LABEL(el0t_64_xcall_entry, SYM_L_GLOBAL)
+	lsr	x20, x20, #4
+	adr	x21, .xcall_func_table
+	ldr	w20, [x21, x20, lsl #2]
+	add	x20, x20, x21
+	br	x20
+	/* ISS==0F~FF: Entry to optimized and customized syscalls
+	 */
+.xcall_func_table:
+	.rept 15
+	.word el0t_xcall_syscall - .xcall_func_table
+	.endr
+SYM_CODE_END(el0t_64_svc_entry)
+
+SYM_CODE_START_LOCAL(el0t_xcall_syscall)
+	ldp	x20, x21, [sp, #16 * 10]
 	hw_xcall_save_base_regs
 	mov	x0, sp
-	bl	el0t_64_xcall_handler
+	bl	el0_xcall_syscall
 	hw_xcal_restore_base_regs
-SYM_CODE_END(xcall_entry)
+SYM_CODE_END(el0t_xcall_syscall)
+
+SYM_CODE_START_LOCAL(el0t_fast_syscall)
+	ldp	x20, x21, [sp, #16 * 10]
+	hw_xcall_save_base_regs
+	mov	x0, sp
+	bl	el0_fast_syscall
+	hw_xcal_restore_base_regs
+SYM_CODE_END(el0t_fast_syscall)
 
 	.macro xcall_ventry
 	.align 7
@@ -170,6 +213,10 @@ SYM_CODE_END(xcall_entry)
 	msr	tpidrro_el0, xzr
 .Lskip_tramp_vectors_cleanup\@:
 	sub	sp, sp, #PT_REGS_SIZE
-	b	xcall_entry
+	stp	x20, x21, [sp, #16 * 10]
+	/* Decode ESR.ICC bits[25,18] for use later */
+	mrs	x21, esr_el1
+	ubfx	w20, w21, #16, #8
+	b	el0t_64_xcall_entry
 .org .Lventry_start\@ + 128	// Did we overflow the ventry slot?
 	.endm
