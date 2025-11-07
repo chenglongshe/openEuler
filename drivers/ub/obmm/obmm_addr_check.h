@@ -19,6 +19,7 @@ int free_uba_range(const struct obmm_uba_range *uba_range);
 
 enum obmm_addr_user {
 	OBMM_ADDR_USER_DIRECT_IMPORT,
+	OBMM_ADDR_USER_PREIMPORT,
 };
 struct obmm_addr_info {
 	enum obmm_addr_user user;
