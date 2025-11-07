@@ -23,6 +23,23 @@ extern "C" {
 #define OBMM_EXPORT_FLAG_FAST       0x2UL
 #define OBMM_EXPORT_FLAG_MASK       (OBMM_EXPORT_FLAG_ALLOW_MMAP | OBMM_EXPORT_FLAG_FAST)
 
+struct obmm_cmd_export_pid {
+	void *va; // in
+	__u64 length; // in
+	__u64 flags; // in
+	__u64 uba; // out
+	__u64 mem_id; // out
+	__u32 tokenid; // out
+	__s32 pid; // in
+	__s32 pxm_numa;
+	__u16 priv_len; // in
+	__u16 vendor_len; // in
+	__u8 deid[16];
+	__u8 seid[16];
+	const void *priv; // in
+	const void *vendor_info; // in
+} __attribute__((aligned(8)));
+
 /* For ordinary register requests, @length and @flags are input arguments while
  * @tokenid, @uba and @mem_id are values set by obmm kernel module. For
  * register request, @length, @flags, @tokenid and @uba are input to obmm
@@ -68,6 +85,7 @@ struct obmm_cmd_addr_query {
 #define OBMM_CMD_EXPORT      _IOWR('x', 0, struct obmm_cmd_export)
 #define OBMM_CMD_UNEXPORT    _IOW('x', 2, struct obmm_cmd_unexport)
 #define OBMM_CMD_ADDR_QUERY  _IOWR('x', 4, struct obmm_cmd_addr_query)
+#define OBMM_CMD_EXPORT_PID  _IOWR('x', 5, struct obmm_cmd_export_pid)
 
 /* cache maintenance operations (not states) */
 /* no cache maintenance (nops) */
