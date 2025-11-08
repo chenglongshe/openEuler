@@ -1961,8 +1961,26 @@ xfs_free_buftarg(
 	kmem_free(btp);
 }
 
+/*
+ * Configure this buffer target for hardware-assisted atomic writes if the
+ * underlying block device supports is congruent with the filesystem geometry.
+ */
+static inline void
+xfs_configure_buftarg_atomic_writes(
+	struct xfs_buftarg	*btp)
+{
+	unsigned int		min_bytes, max_bytes;
+
+	min_bytes = bdev_atomic_write_unit_min_bytes(btp->bt_bdev);
+	max_bytes = bdev_atomic_write_unit_max_bytes(btp->bt_bdev);
+
+	btp->bt_bdev_awu_min = min_bytes;
+	btp->bt_bdev_awu_max = max_bytes;
+}
+
+/* Configure a buffer target that abstracts a block device. */
 int
-xfs_setsize_buftarg(
+xfs_configure_buftarg(
 	xfs_buftarg_t		*btp,
 	unsigned int		sectorsize)
 {
@@ -1981,6 +1999,9 @@ xfs_setsize_buftarg(
 	btp->bt_logical_sectorsize = bdev_logical_block_size(btp->bt_bdev);
 	btp->bt_logical_sectormask = bdev_logical_block_size(btp->bt_bdev) - 1;
 
+	if (bdev_can_atomic_write(btp->bt_bdev))
+		xfs_configure_buftarg_atomic_writes(btp);
+
 	return 0;
 }
 
@@ -1993,7 +2014,7 @@ STATIC int
 xfs_setsize_buftarg_early(
 	xfs_buftarg_t		*btp)
 {
-	return xfs_setsize_buftarg(btp, bdev_logical_block_size(btp->bt_bdev));
+	return xfs_configure_buftarg(btp, bdev_logical_block_size(btp->bt_bdev));
 }
 
 struct xfs_buftarg *
@@ -2015,13 +2036,6 @@ xfs_alloc_buftarg(
 	btp->bt_bdev = bdev_handle->bdev;
 	btp->bt_daxdev = fs_dax_get_by_bdev(btp->bt_bdev, &btp->bt_dax_part_off,
 					    mp, ops);
-
-	if (bdev_can_atomic_write(btp->bt_bdev)) {
-		btp->bt_bdev_awu_min = bdev_atomic_write_unit_min_bytes(
-						btp->bt_bdev);
-		btp->bt_bdev_awu_max = bdev_atomic_write_unit_max_bytes(
-						btp->bt_bdev);
-	}
 
 	/*
 	 * Buffer IO error rate limiting. Limit it to no more than 10 messages
