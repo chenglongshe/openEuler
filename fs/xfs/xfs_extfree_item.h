@@ -88,4 +88,7 @@ xfs_efd_log_item_sizeof(
 extern struct kmem_cache	*xfs_efi_cache;
 extern struct kmem_cache	*xfs_efd_cache;
 
+unsigned int xfs_efi_log_space(unsigned int nr);
+unsigned int xfs_efd_log_space(unsigned int nr);
+
 #endif	/* __XFS_EXTFREE_ITEM_H__ */
