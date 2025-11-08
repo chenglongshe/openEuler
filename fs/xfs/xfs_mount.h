@@ -251,6 +251,12 @@ typedef struct xfs_mount {
 	/* cpus that have inodes queued for inactivation */
 	struct cpumask		m_inodegc_cpumask;
 
+	/*
+	 * Maximum length of an atomic write for files stored in this
+	 * collection of allocation groups, in fsblocks.
+	 */
+	xfs_extlen_t		m_awu_max;
+
 	KABI_EXTEND(struct shrinker_v2 *m_inodegc_shrinker)
 } xfs_mount_t;
 
