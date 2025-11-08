@@ -795,6 +795,10 @@ xfs_direct_write_iomap_begin(
 	if (offset + length > i_size_read(inode))
 		iomap_flags |= IOMAP_F_DIRTY;
 
+	/* HW-offload atomics are always used in this path */
+	if (flags & IOMAP_ATOMIC)
+		iomap_flags |= IOMAP_F_ATOMIC_BIO;
+
 	error = xfs_ilock_for_iomap(ip, flags, &lockmode);
 	if (error)
 		return error;
