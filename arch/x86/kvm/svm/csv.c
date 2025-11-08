@@ -18,6 +18,7 @@
 #include <asm/cacheflush.h>
 #include <asm/e820/api.h>
 #include <asm/csv.h>
+#include <linux/hugetlb.h>
 #include "kvm_cache_regs.h"
 #include "svm.h"
 #include "csv.h"
@@ -877,6 +878,8 @@ struct kvm_csv_info {
 	bool kvm_ext_valid;	/* if @kvm_ext field is valid */
 	u32 kvm_ext;		/* extensions supported by KVM */
 	u32 inuse_ext;		/* extensions inused by current VM */
+
+	struct list_head hugetlb_list;
 };
 
 struct kvm_svm_csv {
@@ -884,10 +887,21 @@ struct kvm_svm_csv {
 	struct kvm_csv_info csv_info;
 };
 
+enum csv_mem_type {
+	CSV_METADATA,
+	CSV_SEC_MEM,
+};
+
 struct secure_memory_region {
 	struct list_head list;
 	u64 npages;
 	u64 hpa;
+	enum csv_mem_type type;
+};
+
+struct csv3_hugetlb {
+	struct list_head list;
+	struct folio *folio;
 };
 
 static bool shared_page_insert(struct shared_page_mgr *mgr,
@@ -1031,6 +1045,7 @@ static int csv3_guest_init(struct kvm *kvm, struct kvm_sev_cmd *argp)
 	csv->nodemask = (unsigned long)params.nodemask;
 
 	INIT_LIST_HEAD(&csv->smr_list);
+	INIT_LIST_HEAD(&csv->hugetlb_list);
 	mutex_init(&csv->sp_lock);
 
 	return 0;
@@ -1043,43 +1058,170 @@ static bool csv3_is_mmio_pfn(kvm_pfn_t pfn)
 				     E820_TYPE_RAM);
 }
 
-static int csv3_set_guest_private_memory(struct kvm *kvm, struct kvm_sev_cmd *argp)
+static void csv3_free_1G_hugetlb_folios(struct kvm *kvm)
 {
-	struct kvm_memslots *slots = kvm_memslots(kvm);
-	struct kvm_memory_slot *memslot;
+	struct list_head *pos, *q;
+	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
+	struct csv3_hugetlb *hugetlb;
+
+	list_for_each_safe(pos, q, &csv->hugetlb_list) {
+		hugetlb = list_entry(pos, struct csv3_hugetlb, list);
+		if (hugetlb) {
+			folio_put(hugetlb->folio);
+			list_del(&hugetlb->list);
+			kfree(hugetlb);
+		}
+	}
+
+}
+
+static void csv3_free_smr_list(struct kvm *kvm)
+{
+	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
+	struct secure_memory_region *smr;
+	struct list_head *pos, *q;
+	enum csv_smr_source source = get_csv_smr_source();
+
+	list_for_each_safe(pos, q, &csv->smr_list) {
+		smr = list_entry(pos, struct secure_memory_region, list);
+		if (smr) {
+			if (source == USE_CMA)
+				csv_release_to_contiguous(smr->hpa, smr->npages << PAGE_SHIFT);
+
+			if (smr->type == CSV_METADATA)
+				csv_free_metadata(smr->hpa);
+
+			list_del(&smr->list);
+			kfree(smr);
+		}
+	}
+}
+
+static int csv3_init_smr_list(struct kvm *kvm)
+{
+	int i;
+	int smr_count;
+	struct secure_memory_region *smr;
+	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
+	u32 smr_entry_shift;
+	struct csv3_hugetlb *hugetlb;
+	struct list_head *pos, *q;
+	u64 hpa;
+	int ret = 0;
+
+	smr_entry_shift = csv_get_smr_entry_shift();
+	smr_count = PUD_SIZE / (1UL << smr_entry_shift);
+
+	list_for_each_safe(pos, q, &csv->hugetlb_list) {
+		hugetlb = list_entry(pos, struct csv3_hugetlb, list);
+		if (!hugetlb) {
+			WARN_ON(1);
+			continue;
+		}
+
+		hpa = folio_pfn(hugetlb->folio) << PAGE_SHIFT;
+		for (i = 0; i < smr_count; i++) {
+			smr = kzalloc(sizeof(*smr), GFP_KERNEL_ACCOUNT);
+			if (!smr) {
+				ret = -ENOMEM;
+				goto err;
+			}
+
+			smr->hpa = hpa + i * (1UL << smr_entry_shift);
+			list_add_tail(&smr->list, &csv->smr_list);
+		}
+	}
+
+	goto exit;
+
+err:
+	csv3_free_smr_list(kvm);
+
+exit:
+	return ret;
+}
+
+static int csv3_alloc_1G_hugetlb_folios(struct kvm *kvm, unsigned long size, nodemask_t *nodemask)
+{
+	struct folio *folio;
+	struct csv3_hugetlb *hugetlb;
+	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
+	int huge_count;
+	int i;
+	int node;
+	int ret = 0;
+
+	huge_count = ALIGN(size, PUD_SIZE) / PUD_SIZE;
+	node = numa_mem_id();
+
+	for (i = 0; i < huge_count; i++) {
+		hugetlb = kzalloc(sizeof(*hugetlb), GFP_KERNEL_ACCOUNT);
+		if (!hugetlb) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		folio = get_hugetlb_folio_nodemask(PUD_SIZE, node, nodemask, GFP_KERNEL, NULL);
+		if (!folio) {
+			kfree(hugetlb);
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		hugetlb->folio = folio;
+		list_add_tail(&hugetlb->list, &csv->hugetlb_list);
+	}
+
+	goto exit;
+err:
+	csv3_free_1G_hugetlb_folios(kvm);
+
+exit:
+	return ret;
+}
+
+static u64 csv3_get_smr(struct kvm *kvm)
+{
+	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
+	struct secure_memory_region *smr;
+	struct list_head *pos, *q;
+	u64 hpa = 0;
+
+	list_for_each_safe(pos, q, &csv->smr_list) {
+		smr = list_entry(pos, struct secure_memory_region, list);
+		if (smr) {
+			hpa = smr->hpa;
+			list_del(&smr->list);
+			kfree(smr);
+			break;
+		}
+	}
+
+	return hpa;
+}
+
+static int csv3_set_hugetlb_smr(struct kvm *kvm, unsigned long vm_size,
+				nodemask_t *nodemask, struct kvm_sev_cmd *argp)
+{
+
 	struct secure_memory_region *smr;
 	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
 	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
 	struct csv3_data_set_guest_private_memory *set_guest_private_memory;
 	struct csv3_data_memory_region *regions;
-	nodemask_t nodemask;
-	nodemask_t *nodemask_ptr;
 
 	LIST_HEAD(tmp_list);
 	struct list_head *pos, *q;
 	u32 i = 0, count = 0, remainder;
 	int ret = 0;
-	u64 size = 0, nr_smr = 0, nr_pages = 0;
+	u64 nr_smr = 0;
 	u32 smr_entry_shift;
-	int bkt;
 
-	unsigned int flags = FOLL_HWPOISON;
-	int npages;
-	struct page *page;
-
-	if (!csv3_guest(kvm))
-		return -ENOTTY;
+	bool metadata_allocated = false;
 
 	/* The smr_list should be initialized only once */
 	if (!list_empty(&csv->smr_list))
 		return -EFAULT;
-
-	nodes_clear(nodemask);
-	for_each_set_bit(i, &csv->nodemask, BITS_PER_LONG)
-		if (i < MAX_NUMNODES)
-			node_set(i, nodemask);
-
-	nodemask_ptr = csv->nodemask ? &nodemask : &node_online_map;
 
 	set_guest_private_memory = kzalloc(sizeof(*set_guest_private_memory),
 					GFP_KERNEL_ACCOUNT);
@@ -1092,19 +1234,104 @@ static int csv3_set_guest_private_memory(struct kvm *kvm, struct kvm_sev_cmd *ar
 		return -ENOMEM;
 	}
 
-	/* Get guest secure memory size */
-	kvm_for_each_memslot(memslot, bkt, slots) {
-		npages = get_user_pages_unlocked(memslot->userspace_addr, 1,
-						&page, flags);
-		if (npages != 1)
-			continue;
+	ret = csv3_alloc_1G_hugetlb_folios(kvm, vm_size, nodemask);
+	if (ret)
+		goto done;
 
-		nr_pages += memslot->npages;
+	ret = csv3_init_smr_list(kvm);
+	if (ret)
+		goto e_free_hugetlb;
 
-		put_page(page);
+	smr_entry_shift = csv_get_smr_entry_shift();
+	nr_smr = vm_size >> smr_entry_shift;
+	nr_smr += 1;
+	remainder = nr_smr;
+	for (i = 0; i < nr_smr; i++) {
+		smr = kzalloc(sizeof(*smr), GFP_KERNEL_ACCOUNT);
+		if (!smr) {
+			ret = -ENOMEM;
+			goto e_free_smr;
+		}
+
+		if (metadata_allocated == false) {
+			smr->hpa = csv_alloc_metadata();
+			smr->type = CSV_METADATA;
+			metadata_allocated = true;
+		} else {
+			smr->hpa = csv3_get_smr(kvm);
+			smr->type = CSV_SEC_MEM;
+		}
+		if (!smr->hpa) {
+			kfree(smr);
+			ret = -ENOMEM;
+			goto e_free_smr;
+		}
+
+		smr->npages = ((1UL << smr_entry_shift) >> PAGE_SHIFT);
+		list_add_tail(&smr->list, &tmp_list);
+
+		regions[count].size = (1UL << smr_entry_shift);
+		regions[count].base_address = smr->hpa;
+		count++;
+
+		if (count >= (PAGE_SIZE / sizeof(regions[0])) || (remainder == count)) {
+			set_guest_private_memory->nregions = count;
+			set_guest_private_memory->handle = sev->handle;
+			set_guest_private_memory->regions_paddr = __sme_pa(regions);
+
+			/* set secury memory region for launch enrypt data */
+			ret = hygon_kvm_hooks.sev_issue_cmd(kvm,
+						CSV3_CMD_SET_GUEST_PRIVATE_MEMORY,
+						set_guest_private_memory, &argp->error);
+			if (ret)
+				goto e_free_smr;
+
+			memset(regions, 0, PAGE_SIZE);
+			remainder -= count;
+			count = 0;
+		}
 	}
 
-	/*
+	list_splice(&tmp_list, &csv->smr_list);
+
+	goto done;
+
+e_free_smr:
+	if (!list_empty(&tmp_list)) {
+		list_for_each_safe(pos, q, &tmp_list) {
+			smr = list_entry(pos, struct secure_memory_region, list);
+			if (smr) {
+				if (smr->type == CSV_METADATA)
+					csv_free_metadata(smr->hpa);
+
+				list_del(&smr->list);
+				kfree(smr);
+			}
+		}
+	}
+
+e_free_hugetlb:
+	csv3_free_1G_hugetlb_folios(kvm);
+
+done:
+	kfree(set_guest_private_memory);
+	kfree(regions);
+
+	return ret;
+}
+
+
+/*
+ * Calculate the npt size according to the input VM size,
+ *
+ * return the SMR number of the npt size.
+ */
+static u32 csv3_get_vm_npt_smr_number(unsigned long vm_size)
+{
+	u64 nr_pages = vm_size >> PAGE_SHIFT;
+	u32 smr_entry_shift, nr_smr;
+	u64 size;
+/*
 	 * NPT secure memory size
 	 *
 	 * PTEs_entries = nr_pages
@@ -1121,9 +1348,53 @@ static int csv3_set_guest_private_memory(struct kvm *kvm, struct kvm_sev_cmd *ar
 	 *
 	 */
 	smr_entry_shift = csv_get_smr_entry_shift();
-	size = ALIGN((nr_pages << PAGE_SHIFT), 1UL << smr_entry_shift) +
-		ALIGN(nr_pages * 9, 1UL << smr_entry_shift);
+	size = ALIGN(nr_pages * 9, 1UL << smr_entry_shift);
 	nr_smr = size >> smr_entry_shift;
+
+	return nr_smr;
+}
+
+static int csv3_set_cma_smr(struct kvm *kvm, unsigned long vm_size,
+			    nodemask_t *nodemask, struct kvm_sev_cmd *argp)
+{
+	struct secure_memory_region *smr;
+	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
+	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
+	struct csv3_data_set_guest_private_memory *set_guest_private_memory;
+	struct csv3_data_memory_region *regions;
+
+	LIST_HEAD(tmp_list);
+	struct list_head *pos, *q;
+	u32 i = 0, count = 0, remainder;
+	int ret = 0;
+	u64 nr_smr = 0;
+	u32 smr_entry_shift;
+
+	/* The smr_list should be initialized only once */
+	if (!list_empty(&csv->smr_list))
+		return -EFAULT;
+
+	set_guest_private_memory = kzalloc(sizeof(*set_guest_private_memory),
+					GFP_KERNEL_ACCOUNT);
+	if (!set_guest_private_memory)
+		return -ENOMEM;
+
+	regions = kzalloc(PAGE_SIZE, GFP_KERNEL_ACCOUNT);
+	if (!regions) {
+		kfree(set_guest_private_memory);
+		return -ENOMEM;
+	}
+
+	smr_entry_shift = csv_get_smr_entry_shift();
+
+	if (!csv_smcr_num)
+		/* if csv_smcr_num is zero, vmsa/npt should be allocated from CMA */
+		nr_smr = (vm_size >> smr_entry_shift)
+				+ 1 + csv3_get_vm_npt_smr_number(vm_size);
+	else
+		/* otherwise, npt has been reserved, only need 1 smr for vmsa */
+		nr_smr = (vm_size >> smr_entry_shift) + 1;
+
 	remainder = nr_smr;
 	for (i = 0; i < nr_smr; i++) {
 		smr = kzalloc(sizeof(*smr), GFP_KERNEL_ACCOUNT);
@@ -1133,7 +1404,7 @@ static int csv3_set_guest_private_memory(struct kvm *kvm, struct kvm_sev_cmd *ar
 		}
 
 		smr->hpa = csv_alloc_from_contiguous((1UL << smr_entry_shift),
-						nodemask_ptr,
+						nodemask,
 						get_order(1 << smr_entry_shift));
 		if (!smr->hpa) {
 			kfree(smr);
@@ -1185,6 +1456,69 @@ e_free_smr:
 done:
 	kfree(set_guest_private_memory);
 	kfree(regions);
+
+	return ret;
+}
+
+
+static int csv3_set_guest_private_memory(struct kvm *kvm, struct kvm_sev_cmd *argp)
+{
+	struct kvm_memslots *slots = kvm_memslots(kvm);
+	struct kvm_memory_slot *memslot;
+	struct kvm_csv_info *csv = &to_kvm_svm_csv(kvm)->csv_info;
+	nodemask_t nodemask;
+	nodemask_t *nodemask_ptr;
+
+	u32 i = 0;
+	int ret = 0;
+	u32 smr_entry_shift;
+	int bkt;
+
+	unsigned int flags = FOLL_HWPOISON;
+	u64 npages, nr_pages = 0;
+	struct page *page;
+
+	unsigned long vm_size;
+	enum csv_smr_source source;
+
+	if (!csv3_guest(kvm))
+		return -ENOTTY;
+
+	nodes_clear(nodemask);
+	for_each_set_bit(i, &csv->nodemask, BITS_PER_LONG)
+		if (i < MAX_NUMNODES)
+			node_set(i, nodemask);
+
+	nodemask_ptr = csv->nodemask ? &nodemask : &node_online_map;
+
+	/* Get guest secure memory size */
+	kvm_for_each_memslot(memslot, bkt, slots) {
+		if (memslot->flags & KVM_MEM_READONLY)
+			continue;
+
+		npages = get_user_pages_unlocked(memslot->userspace_addr, 1,
+						&page, flags);
+		if (npages != 1)
+			continue;
+
+		nr_pages += memslot->npages;
+
+		put_page(page);
+	}
+
+	smr_entry_shift = csv_get_smr_entry_shift();
+	vm_size = ALIGN((nr_pages << PAGE_SHIFT), 1UL << smr_entry_shift);
+
+	source = get_csv_smr_source();
+	if (source == USE_HUGETLB) {
+		ret = csv3_set_hugetlb_smr(kvm, vm_size, nodemask_ptr, argp);
+	} else if (source == USE_CMA) {
+		ret = csv3_set_cma_smr(kvm, vm_size, nodemask_ptr, argp);
+	} else {
+		ret = -EFAULT;
+		WARN_ON(1);
+	}
+
 	return ret;
 }
 
@@ -2483,11 +2817,10 @@ static void csv_vm_destroy(struct kvm *kvm)
 	struct kvm_vcpu *vcpu;
 
 	struct list_head *smr_head = &csv->smr_list;
-	struct list_head *pos, *q;
-	struct secure_memory_region *smr;
 	struct shared_page *sp;
 	struct rb_node *node;
 	unsigned long i = 0;
+	enum csv_smr_source source = get_csv_smr_source();
 
 	if (csv3_guest(kvm)) {
 		mutex_lock(&csv->sp_lock);
@@ -2517,16 +2850,12 @@ static void csv_vm_destroy(struct kvm *kvm)
 		return;
 
 	/* free secure memory region */
-	if (!list_empty(smr_head)) {
-		list_for_each_safe(pos, q, smr_head) {
-			smr = list_entry(pos, struct secure_memory_region, list);
-			if (smr) {
-				csv_release_to_contiguous(smr->hpa, smr->npages << PAGE_SHIFT);
-				list_del(&smr->list);
-				kfree(smr);
-			}
-		}
-	}
+	if (!list_empty(smr_head))
+		csv3_free_smr_list(kvm);
+
+	if (source == USE_HUGETLB)
+		csv3_free_1G_hugetlb_folios(kvm);
+
 }
 
 static int csv3_handle_page_fault(struct kvm_vcpu *vcpu, gpa_t gpa,
