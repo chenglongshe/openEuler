@@ -151,7 +151,12 @@ int xcu_complete(struct xcu_op_handler_params *params)
  */
 int xcu_finish(struct xcu_op_handler_params *params)
 {
-	return 0;
+	if (!params->group->opt || !params->group->opt->finish) {
+		XSCHED_ERR("No function [finish] called.\n");
+		return -EINVAL;
+	}
+
+	return params->group->opt->finish(params);
 }
 
 /* This function runs a "alloc" callback for a given xcu_group
@@ -163,7 +168,46 @@ int xcu_finish(struct xcu_op_handler_params *params)
  */
 int xcu_alloc(struct xcu_op_handler_params *params)
 {
-	return 0;
+	if (!params->group->opt || !params->group->opt->alloc) {
+		XSCHED_ERR("No function [alloc] called.\n");
+		return -EINVAL;
+	}
+
+	return params->group->opt->alloc(params);
+}
+
+/* This function runs a "logic_alloc" callback for a given xcu_group
+ * and a given vstream that are passed within
+ * xcu_op_handler_params object.
+ *
+ * This handler provides an interface to implement allocation
+ * and registering memory of logic CQ buffer.
+ */
+int xcu_logic_alloc(struct xcu_op_handler_params *params)
+{
+	if (!params->group->opt || !params->group->opt->logic_alloc) {
+		XSCHED_ERR("No function [logic_alloc] called.\n");
+		return -EINVAL;
+	}
+
+	return params->group->opt->logic_alloc(params);
+}
+
+/* This function runs a "logic_free" callback for a given xcu_group
+ * and a given vstream that are passed within
+ * xcu_op_handler_params object.
+ *
+ * This handler provides an interface to implement deallocation
+ * and unregistering memory of a logic CQ buffer.
+ */
+int xcu_logic_free(struct xcu_op_handler_params *params)
+{
+	if (!params->group->opt || !params->group->opt->logic_free) {
+		XSCHED_ERR("No function [logic_free] called.\n");
+		return -EINVAL;
+	}
+
+	return params->group->opt->logic_free(params);
 }
 
 static struct xcu_group __xcu_group_root = {
