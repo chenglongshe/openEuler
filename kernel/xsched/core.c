@@ -32,10 +32,6 @@ extern struct xsched_group *root_xcg;
 DECLARE_BITMAP(xcu_online_mask, XSCHED_NR_CUS);
 struct xsched_cu *xsched_cu_mgr[XSCHED_NR_CUS];
 
-/* Storage list for contexts. */
-struct list_head xsched_ctx_list;
-DEFINE_MUTEX(xsched_ctx_list_mutex);
-
 static DEFINE_MUTEX(revmap_mutex);
 static DEFINE_HASHTABLE(ctx_revmap, XCU_HASH_ORDER);
 
@@ -216,14 +212,16 @@ void xsched_task_free(struct kref *kref)
 {
 	struct xsched_context *ctx;
 	vstream_info_t *vs, *tmp;
+	struct xsched_cu *xcu;
 
 	ctx = container_of(kref, struct xsched_context, kref);
+	xcu = ctx->xse.xcu;
 
 	/* Wait till xse dequeues */
 	while (READ_ONCE(ctx->xse.on_rq))
 		usleep_range(100, 200);
 
-	mutex_lock(&xsched_ctx_list_mutex);
+	mutex_lock(&xcu->ctx_list_lock);
 	list_for_each_entry_safe(vs, tmp, &ctx->vstream_list, ctx_node) {
 		list_del(&vs->ctx_node);
 		kfree(vs->data);
@@ -232,7 +230,8 @@ void xsched_task_free(struct kref *kref)
 
 	delete_ctx(ctx);
 	list_del(&ctx->ctx_node);
-	mutex_unlock(&xsched_ctx_list_mutex);
+	--xcu->nr_ctx;
+	mutex_unlock(&xcu->ctx_list_lock);
 
 	kfree(ctx);
 }
@@ -287,6 +286,7 @@ int vstream_bind_to_xcu(vstream_info_t *vstream_info)
 
 	/* Bind vstream to a xcu. */
 	vstream_info->xcu = xcu_found;
+	vstream_info->dev_id = xcu_found->id;
 	XSCHED_DEBUG("XCU bound to a vstream: type=%u, dev_id=%u, chan_id=%u.\n",
 		type, vstream_info->dev_id, vstream_info->channel_id);
 
@@ -371,8 +371,8 @@ int xsched_ctx_init_xse(struct xsched_context *ctx, struct vstream_info *vs)
 	}
 
 	xse->ctx = ctx;
-	if (likely(vs->xcu != NULL))
-		xse->xcu = vs->xcu;
+	BUG_ON(vs->xcu == NULL);
+	xse->xcu = vs->xcu;
 
 	err = xsched_xse_set_class(xse);
 	if (err) {
@@ -602,13 +602,20 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 	xcu->id = xcu_id;
 	xcu->state = XSCHED_XCU_NONE;
 	xcu->group = group;
+	xcu->nr_ctx = 0;
 
 	atomic_set(&xcu->pending_kicks_rt, 0);
 	atomic_set(&xcu->pending_kicks_cfs, 0);
 
 	INIT_LIST_HEAD(&xcu->vsm_list);
+	INIT_LIST_HEAD(&xcu->ctx_list);
 	init_waitqueue_head(&xcu->wq_xcu_idle);
 	mutex_init(&xcu->xcu_lock);
+	mutex_init(&xcu->ctx_list_lock);
+
+#ifdef CONFIG_XCU_VSTREAM
+	mutex_init(&xcu->vs_array_lock);
+#endif
 
 	/* Mark current XCU in a mask inside XCU root group. */
 	set_bit(xcu->id, xcu_group_root->xcu_mask);
@@ -624,22 +631,22 @@ static void xsched_xcu_init(struct xsched_cu *xcu, struct xcu_group *group,
 	xcu->worker = kthread_run(xsched_schedule, xcu, "xcu_%u", xcu->id);
 }
 
-/* Allocates xcu id in xcu_manager array. */
-static int alloc_xcu_id(void)
+/* Increment xcu id */
+static int nr_active_cu_inc(void)
 {
-	int xcu_id = -1;
+	int cur_num = -1;
 
 	spin_lock(&xcu_mgr_lock);
 	if (num_active_xcu >= XSCHED_NR_CUS)
 		goto out_unlock;
 
-	xcu_id = num_active_xcu;
+	cur_num = num_active_xcu;
 	num_active_xcu++;
-	XSCHED_DEBUG("Number of active xcu: %d.\n", num_active_xcu);
+	XSCHED_DEBUG("Number of active xcus: %d.\n", num_active_xcu);
 
 out_unlock:
 	spin_unlock(&xcu_mgr_lock);
-	return xcu_id;
+	return cur_num;
 }
 
 /* Adds vstream_metadata object to a specified vstream. */
@@ -701,14 +708,24 @@ struct vstream_metadata *xsched_vsm_fetch_first(struct vstream_info *vs)
 /*
  * Initialize and register xcu in xcu_manager array.
  */
-int xsched_xcu_register(struct xcu_group *group)
+int xsched_xcu_register(struct xcu_group *group, int phys_id)
 {
-	int xcu_id;
+	int xcu_cur_num;
 	struct xsched_cu *xcu;
 
-	xcu_id = alloc_xcu_id();
-	if (xcu_id < 0) {
-		XSCHED_ERR("Fail to alloc xcu id.\n");
+	/* Can be refactored in future because it's possible that
+	 * device contains more than 1 hardware task scheduler.
+	 */
+	if (phys_id >= XSCHED_NR_CUS) {
+		XSCHED_ERR("phys_id (%d) >= XSCHED_NR_CUS (%d).\n",
+			phys_id, XSCHED_NR_CUS);
+		return -EINVAL;
+	}
+
+	xcu_cur_num = nr_active_cu_inc();
+	if (xcu_cur_num < 0) {
+		XSCHED_ERR("Number of present XCU's exceeds %d: %d.\n",
+			XSCHED_NR_CUS, num_active_xcu);
 		return -ENOSPC;
 	};
 
@@ -719,18 +736,16 @@ int xsched_xcu_register(struct xcu_group *group)
 	};
 
 	group->xcu = xcu;
-	xsched_cu_mgr[xcu_id] = xcu;
+	xsched_cu_mgr[phys_id] = xcu;
 
 	/* Init xcu's internals. */
-	xsched_xcu_init(xcu, group, xcu_id);
+	xsched_xcu_init(xcu, group, phys_id);
 	return 0;
 }
 EXPORT_SYMBOL(xsched_xcu_register);
 
 int __init xsched_init(void)
 {
-	/* Initializing global XSched context list. */
-	INIT_LIST_HEAD(&xsched_ctx_list);
 	xcu_cg_init_common(root_xcg);
 	return 0;
 }
