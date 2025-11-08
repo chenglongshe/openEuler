@@ -39,6 +39,28 @@
 
 #define GET_VS_TASK_TYPE(vs_ptr) __GET_VS_TASK_TYPE((vs_ptr)->task_type)
 
+enum xsched_rq_state {
+	XRQ_STATE_INACTIVE = 0x00,
+	XRQ_STATE_IDLE = 0x01,
+	XRQ_STATE_BUSY = 0x02,
+	XRQ_STATE_SUBMIT = 0x04,
+	XRQ_STATE_WAIT_RUNNING = 0x08,
+};
+
+#define for_each_vstream_in_ctx(vs, ctx)                                       \
+	list_for_each_entry((vs), &((ctx)->vstream_list), ctx_node)
+
+
+/* Base XSched runqueue object structure that contains both mutual and
+ * individual parameters for different scheduling classes.
+ */
+struct xsched_rq {
+	struct xsched_entity *curr_xse;
+
+	int state;
+	int nr_running;
+};
+
 enum xcu_state {
 	XCU_INACTIVE,
 	XCU_IDLE,
@@ -69,9 +91,14 @@ struct xsched_cu {
 
 	struct task_struct *worker;
 
+	struct xsched_rq xrq;
+	struct list_head vsm_list;
+
 	struct xcu_group *group;
 
 	struct mutex xcu_lock;
+
+	atomic_t has_active;
 
 	wait_queue_head_t wq_xcu_idle;
 	wait_queue_head_t wq_xcu_running;
@@ -112,6 +139,53 @@ struct xsched_entity {
 	/* General purpose xse lock. */
 	spinlock_t xse_lock;
 };
+
+/* Increments pending kicks counter for an XCU that the given
+ * xsched entity is attached to and for xsched entity's xsched
+ * class.
+ */
+static inline int xsched_inc_pending_kicks_xse(struct xsched_entity *xse)
+{
+	/* Icrement pending kicks for current XSE. */
+	atomic_inc(&xse->kicks_pending_ctx_cnt);
+
+	return 0;
+}
+
+/* Decrements pending kicks counter for an XCU that the given
+ * xsched entity is attached to and for XSched entity's sched
+ * class.
+ */
+static inline int xsched_dec_pending_kicks_xse(struct xsched_entity *xse)
+{
+	/* Decrementing pending kicks for current XSE. */
+	atomic_dec(&xse->kicks_pending_ctx_cnt);
+
+	return 0;
+}
+
+/* Checks if there are pending kicks left on a given XCU for all
+ * xsched classes.
+ */
+static inline bool xsched_check_pending_kicks_xcu(struct xsched_cu *xcu)
+{
+	return 0;
+}
+
+static inline int xse_integrity_check(const struct xsched_entity *xse)
+{
+	if (!xse) {
+		XSCHED_ERR("xse is null @ %s\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!xse->class) {
+		XSCHED_ERR("xse->class is null @ %s\n", __func__);
+		return -EINVAL;
+	}
+
+	return 0;
+}
 
 struct xsched_context {
 	uint32_t fd;
@@ -170,4 +244,7 @@ struct xsched_cu *xcu_find(uint32_t *type,
 
 /* Vstream metadata proccesing functions.*/
 int xsched_vsm_add_tail(struct vstream_info *vs, vstream_args_t *arg);
-#endif /* !__LINUX_XSCHED_H__ */
+struct vstream_metadata *xsched_vsm_fetch_first(struct vstream_info *vs);
+void enqueue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
+void dequeue_ctx(struct xsched_entity *xse, struct xsched_cu *xcu);
+#endif /* __LINUX_XSCHED_H__ */
