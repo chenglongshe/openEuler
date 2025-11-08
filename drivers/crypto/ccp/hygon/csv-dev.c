@@ -692,6 +692,7 @@ int csv_platform_cmd_set_secure_memory_region(struct sev_device *sev, int *error
 	struct csv3_data_set_smr *cmd_set_smr;
 	struct csv3_data_set_smcr *cmd_set_smcr;
 	struct csv3_data_memory_region *smr_regions;
+	unsigned int smr_num;
 
 	if (!hygon_psp_hooks.sev_dev_hooks_installed) {
 		ret = -ENODEV;
@@ -709,7 +710,8 @@ int csv_platform_cmd_set_secure_memory_region(struct sev_device *sev, int *error
 		goto l_end;
 	}
 
-	smr_regions = kcalloc(csv_smr_num, sizeof(*smr_regions),  GFP_KERNEL);
+	smr_num = max_t(unsigned int, csv_smr_num, csv_smcr_num);
+	smr_regions = kcalloc(smr_num, sizeof(*smr_regions),  GFP_KERNEL);
 	if (!smr_regions) {
 		ret = -ENOMEM;
 		goto e_free_cmd_set_smr;
@@ -728,31 +730,45 @@ int csv_platform_cmd_set_secure_memory_region(struct sev_device *sev, int *error
 		goto e_free_smr_area;
 	}
 
-	cmd_set_smcr = kzalloc(sizeof(*cmd_set_smcr), GFP_KERNEL);
-	if (!cmd_set_smcr) {
-		ret = -ENOMEM;
+	if (csv_smcr && csv_smcr_num) {
+		for (i = 0; i < csv_smcr_num; i++) {
+			smr_regions[i].base_address = csv_smcr[i].start;
+			smr_regions[i].size = csv_smcr[i].size;
+		}
+		cmd_set_smr->smcr_flag = 0; /* 0 as SMCR memory flag */
+		cmd_set_smr->regions_paddr = __psp_pa(smr_regions);
+		cmd_set_smr->nregions = csv_smcr_num;
+		ret = hygon_psp_hooks.sev_do_cmd(CSV3_CMD_SET_SMR, cmd_set_smr, error);
+		if (ret)
+			pr_err("Fail to set SMCR, ret %#x, error %#x\n", ret, *error);
 		goto e_free_smr_area;
-	}
+	} else {
+		cmd_set_smcr = kzalloc(sizeof(*cmd_set_smcr), GFP_KERNEL);
+		if (!cmd_set_smcr) {
+			ret = -ENOMEM;
+			goto e_free_smr_area;
+		}
 
-	cmd_set_smcr->base_address = csv_alloc_from_contiguous(1UL << CSV_MR_ALIGN_BITS,
-						&node_online_map,
-						get_order(1 << CSV_MR_ALIGN_BITS));
-	if (!cmd_set_smcr->base_address) {
-		pr_err("Fail to alloc SMCR memory\n");
-		ret = -ENOMEM;
-		goto e_free_cmd_set_smcr;
-	}
+		cmd_set_smcr->base_address = csv_alloc_from_contiguous(1UL << CSV_MR_ALIGN_BITS,
+							&node_online_map,
+							get_order(1 << CSV_MR_ALIGN_BITS));
+		if (!cmd_set_smcr->base_address) {
+			pr_err("Fail to alloc SMCR memory\n");
+			ret = -ENOMEM;
+			goto e_free_cmd_set_smcr;
+		}
 
-	cmd_set_smcr->size = 1UL << CSV_MR_ALIGN_BITS;
-	ret = hygon_psp_hooks.sev_do_cmd(CSV3_CMD_SET_SMCR, cmd_set_smcr, error);
-	if (ret) {
-		if (*error == SEV_RET_INVALID_COMMAND)
-			ret = 0;
-		else
-			pr_err("set smcr ret %#x, error %#x\n", ret, *error);
+		cmd_set_smcr->size = 1UL << CSV_MR_ALIGN_BITS;
+		ret = hygon_psp_hooks.sev_do_cmd(CSV3_CMD_SET_SMCR, cmd_set_smcr, error);
+		if (ret) {
+			if (*error == SEV_RET_INVALID_COMMAND)
+				ret = 0;
+			else
+				pr_err("set smcr ret %#x, error %#x\n", ret, *error);
 
-		csv_release_to_contiguous(cmd_set_smcr->base_address,
-					1UL << CSV_MR_ALIGN_BITS);
+			csv_release_to_contiguous(cmd_set_smcr->base_address,
+						1UL << CSV_MR_ALIGN_BITS);
+		}
 	}
 
 e_free_cmd_set_smcr:
