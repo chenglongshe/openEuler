@@ -258,6 +258,13 @@ typedef struct bind_msg_s {
 } bind_msg_t;
 #pragma pack(pop)
 
+struct mig_cvm_update_info {
+	struct kvm_numa_info numa_info;
+	uint64_t swiotlb_start;
+	uint64_t swiotlb_end;
+	uint64_t cvm_ram_size;
+}
+
 int kvm_virtcca_mig_stream_ops_init(void);
 void kvm_virtcca_mig_stream_ops_exit(void);
 int virtcca_mig_capabilities_setup(struct virtcca_cvm *cvm);

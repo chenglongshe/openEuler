@@ -431,11 +431,11 @@ u64 tmi_set_tmm_memslot(uint64_t rd, uint64_t mig_memslot_param)
 	return res.a1;
 }
 
-u64 tmi_get_swiotlb(uint64_t rd, uint64_t swiotlb_start_addr, uint64_t swiotlb_end_addr)
+u64 tmi_update_cvm_info(uint64_t rd, uint64_t cvm_update_info_addr)
 {
 	struct arm_smccc_res res;
 
-	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_GET_SWIOTLB, rd, __pa(swiotlb_start_addr), __pa(swiotlb_end_addr), &res);
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_UPDATE_CVM_INFO, rd, __pa(cvm_update_info_addr), &res);
 	return res.a1;
 }
 

@@ -326,7 +326,7 @@ typedef enum tmi_tmm_mig_control_fid_e {
 	TMI_TMM_GET_MIG_CONFIG,
 	TMI_TMM_MIG_STREAM_CREATE,
 	TMI_TMM_SET_TMM_MEMSLOT,
-	TMI_TMM_GET_SWIOTLB,
+	TMI_TMM_MIG_UPDATE_CVM_INFO,
 	TMI_TMM_MIG_MEM_REGION_PROTECT,
 	TMI_TMM_MIG_IMPORT_COMMIT,
 	TMI_TMM_DUMP_CHECKSUM
@@ -548,7 +548,7 @@ struct arm_smccc_res tmi_export_mutable(uint64_t rd, uint64_t hpa_and_size_pa,
 					uint64_t page_or_list, uint64_t mig_cmd);
 u64 tmi_import_mutable(uint64_t rd, uint64_t hpa_and_size_pa,
 					uint64_t page_or_list, uint64_t mig_cmd);
-u64 tmi_get_swiotlb(uint64_t rd, uint64_t swiotlb_start_addr, uint64_t swiotlb_end_addr);
+u64 tmi_update_cvm_info(uint64_t rd, uint64_t cvm_update_info_addr);
 void virtcca_set_tmm_memslot(struct kvm *kvm, struct kvm_memory_slot *memslot);
 /* enable the migcvm ctl */
 int kvm_migcvm_ioctl(struct kvm *kvm, unsigned long arg);

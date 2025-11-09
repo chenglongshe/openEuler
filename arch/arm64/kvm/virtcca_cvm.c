@@ -693,14 +693,25 @@ int kvm_cvm_mig_map_range(struct kvm *kvm)
 	int idx;
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
 	struct kvm_numa_info *numa_info = &cvm->numa_info;
+	struct kvm_numa_node *numa_node;
 	gpa_t gpa;
 
 	curr_numa_set = kvm_get_first_binded_numa_set(kvm);
-
+	/* uefi boot */
+	if (cvm->ipa_start == UEFI_LOADER_START) {
+		gpa = cvm->ipa_start;
+		numa_node = &numa_info->numa_nodes[0];
+		ret = tmi_ttt_map_range(cvm->rd, gpa,
+						UEFI_SIZE,
+						curr_numa_set, numa_node->host_numa_nodes[0]);
+		if (ret) {
+			kvm_err("tmi_ttt_map_range failed: %d.\n", ret);
+			return ret;
+		}
+	}
 
 	for (idx = 0; idx < numa_info->numa_cnt; idx++) {
-		struct kvm_numa_node *numa_node = &numa_info->numa_nodes[idx];
-
+		numa_node = &numa_info->numa_nodes[idx];
 		gpa = numa_node->ipa_start;
 		if (gpa >= numa_node->ipa_start &&
 			gpa < numa_node->ipa_start + numa_node->ipa_size) {

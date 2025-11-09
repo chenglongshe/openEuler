@@ -593,36 +593,46 @@ static int virtcca_mig_stream_mmap(struct kvm_device *dev, struct vm_area_struct
 	return 0;
 }
 
-/* this function tmi call is just a dummy function for now */
 static int virtcca_mig_export_state_immutable(struct kvm *kvm, struct virtcca_mig_stream *stream,
 	uint64_t __user *data)
 {
 	struct virtcca_mig_page_list *page_list = &stream->page_list;
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
 	union virtcca_mig_stream_info stream_info = {.val = 0};
+	struct mig_cvm_update_info *update_info = NULL;
 	struct arm_smccc_res ret;
-	pr_info("debug: calling kvm ioctl virtcca_mig_export_state_immutable \n");
+	int res;
+
+	update_info = kmalloc(sizeof(struct mig_cvm_update_info), GFP_KERNEL);
+	if (!update_info) {
+		pr_err("virtcca_mig_export_state_immutable: kmalloc failed.");
+		return -ENOMEM;
+	}
+
+	update_info->numa_info = cvm->numa_info;
+	if (ret.a1 = tmi_update_cvm_info(cvm->rd, (uint64_t)update_info)) {
+		pr_err("tmi_update_cvm_info failed, err=%llx", ret.a1);
+		res = -EIO;
+		goto out;
+	}
 
 	ret = tmi_export_immutable(cvm->rd, stream->mbmd.hpa_and_size, page_list->info.val, stream_info.val);
-
 	if (ret.a1 == TMI_SUCCESS) {
 		stream->idx = stream->mbmd.data->migs_index;
-
 		if (copy_to_user(data, &ret.a2, sizeof(uint64_t))) {
-			return -EFAULT;
+			res = -EFAULT;
+			goto out;
 		}
 	} else {
 		pr_err("%s: failed, err=%lx\n", __func__, ret.a1);
-		return -EIO;
+		res = --EIO;
+		goto out;
 	}
 
-	ret.a1 = tmi_get_swiotlb(cvm->rd, (uint64_t)&cvm->swiotlb_start, (uint64_t)&cvm->swiotlb_end);
-	if (ret.a1) {
-		pr_err("tmi_get_swiotlb: failed, err=%lx\n", ret.a1);
-		return -EIO;
-	}
-
-	return 0;
+out:
+	if (update_info)
+		kfree(update_info);
+	return res;
 }
 
 static int virtcca_mig_import_state_immutable(struct kvm *kvm, struct virtcca_mig_stream *stream,
@@ -631,8 +641,9 @@ static int virtcca_mig_import_state_immutable(struct kvm *kvm, struct virtcca_mi
 	struct virtcca_mig_page_list *page_list = &stream->page_list;
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
 	union virtcca_mig_stream_info stream_info = {.val = 0};
-
+	struct mig_cvm_update_info *update_info = NULL;
 	uint64_t ret, npages;
+	int res;
 
 	if (copy_from_user(&npages, (void __user *)data, sizeof(uint64_t)))
 		return -EFAULT;
@@ -640,7 +651,6 @@ static int virtcca_mig_import_state_immutable(struct kvm *kvm, struct virtcca_mi
 	page_list->info.last_entry = npages - 1;
 
 	ret = tmi_import_immutable(cvm->rd, stream->mbmd.hpa_and_size, page_list->info.val, stream_info.val);
-
 	if (ret == TMI_SUCCESS) {
 		stream->idx = stream->mbmd.data->migs_index;
 	} else {
@@ -648,22 +658,35 @@ static int virtcca_mig_import_state_immutable(struct kvm *kvm, struct virtcca_mi
 		return -EIO;
 	}
 
+	update_info = kmalloc(sizeof(struct mig_cvm_update_info), GFP_KERNEL);
+	if (!update_info) {
+		pr_err("virtcca_mig_export_state_immutable: kmalloc failed.");
+		return -ENOMEM;
+	}
+
+	if (ret = tmi_update_cvm_info(cvm->rd, (uint64_t)update_info)) {
+		pr_err("tmi_update_cvm_info failed, err=%llx", res);
+		res = -EIO;
+		goto out;
+	}
+
+	cvm->numa_info = update_info->numa_info;
+	cvm->swiotlb_start = update_info->swiotlb_start;
+	cvm->swiotlb_end = update_info->swiotlb_end;
+	cvm->ram_size = update_info->ram_size;
+
 	ret = kvm_cvm_mig_map_range(kvm);
 	if (ret) {
 		pr_err("kvm_cvm_mig_map_range: failed, err=%llx\n", ret);
-		return -EIO;
+		res = -EIO;
 	}
 
-	ret = tmi_get_swiotlb(cvm->rd, (uint64_t)&cvm->swiotlb_start, (uint64_t)&cvm->swiotlb_end);
-	if (ret) {
-		pr_err("tmi_get_swiotlb: failed, err=%llx\n", ret);
-		return -EIO;
-	}
-
-	return ret;
+out:
+	if (update_info)
+		kfree(update_info);
+	return res;
 }
 
-/* this function tmi call is just a dummy function for now */
 static int virtcca_mig_export_state_mutable(struct kvm *kvm, struct virtcca_mig_stream *stream,
 	uint64_t __user *data)
 {
@@ -1283,12 +1306,6 @@ static int virtcca_mig_stream_create(struct kvm_device *dev, u32 type)
 	struct virtcca_mig_state *mig_state = cvm->mig_state;
 	struct virtcca_mig_stream *stream;
 	int ret;
-
-	ret = tmi_get_swiotlb(cvm->rd, (uint64_t)&cvm->swiotlb_start, (uint64_t)&cvm->swiotlb_end);
-	if (ret != TMI_SUCCESS) {
-		kvm_err("%s: failed, err=%i\n", __func__, ret);
-		return -EIO;
-	}
 
 	stream = (struct virtcca_mig_stream *)kzalloc(sizeof(struct virtcca_mig_stream), GFP_KERNEL_ACCOUNT);
 	if (!stream)
