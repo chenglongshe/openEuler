@@ -399,28 +399,33 @@ void mfs_cancel_all_events(struct mfs_sb_info *sbi)
 	struct mfs_event *event;
 	unsigned long index;
 
-	xa_lock(xa);
-	xa_for_each(xa, index, event) {
-		__xa_erase(xa, index);
-		syncer = event->syncer;
-		/*
-		 * Here should keep syncer (a stack variable), so we should
-		 * wakeup the syncer list in the protect of xa lock.
-		 */
-		if (syncer) {
-			spin_lock(&syncer->list_lock);
-			list_del(&event->link);
-			spin_unlock(&syncer->list_lock);
-			if (atomic_dec_return(&syncer->notback) == 0) {
-				atomic_cmpxchg(&syncer->res, 0, -EIO);
-				complete(&syncer->done);
+	while (!xa_empty(xa)) {
+		xa_lock(xa);
+		xa_for_each(xa, index, event) {
+			__xa_erase(xa, index);
+			syncer = event->syncer;
+			/*
+			 * Here should keep syncer (a stack variable), so we should
+			 * wakeup the syncer list in the protect of xa lock.
+			 */
+			if (syncer) {
+				spin_lock(&syncer->list_lock);
+				list_del(&event->link);
+				spin_unlock(&syncer->list_lock);
+				if (atomic_dec_return(&syncer->notback) == 0) {
+					atomic_cmpxchg(&syncer->res, 0, -EIO);
+					complete(&syncer->done);
+				}
 			}
+			put_mfs_event(event);
+			if (need_resched())
+				break;
 		}
-		put_mfs_event(event);
+		xa_unlock(xa);
+		cond_resched();
 	}
 	caches->next_ev = 0;
 	caches->next_msg = 0;
-	xa_unlock(xa);
 }
 
 int try_hook_fd(struct mfs_event *event)
