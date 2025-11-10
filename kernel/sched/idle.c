@@ -428,7 +428,12 @@ static void put_prev_task_idle(struct rq *rq, struct task_struct *prev)
 
 static void set_next_task_idle(struct rq *rq, struct task_struct *next, bool first)
 {
+#ifdef CONFIG_QOS_SCHED_SMT_EXPELLER
+	if (rq->nr_running == 0)
+		update_idle_core(rq);
+#else
 	update_idle_core(rq);
+#endif
 	schedstat_inc(rq->sched_goidle);
 }
 
