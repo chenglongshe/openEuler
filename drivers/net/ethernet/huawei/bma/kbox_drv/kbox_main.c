@@ -127,7 +127,8 @@ int __init kbox_init(void)
 		goto fail3;
 	}
 
-	if (kbox_printk_proc_init() != 0) {
+	ret = kbox_printk_proc_init();
+	if (ret) {
 		KBOX_MSG("kbox_printk_proc_init failed!\n");
 		goto fail4;
 	}
