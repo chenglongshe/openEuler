@@ -44,11 +44,6 @@ static ssize_t swap_pages_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
-	if (count < 0) {
-		ret = -EOPNOTSUPP;
-		goto out_mm;
-	}
-
 	data = memdup_user_nul(buf, count);
 	if (IS_ERR(data)) {
 		ret = PTR_ERR(data);
