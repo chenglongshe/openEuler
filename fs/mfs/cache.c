@@ -78,8 +78,6 @@ static long _ioc_done(struct mfs_cache_object *object,
 		return -EINVAL;
 	}
 	xas_store(&xas, NULL);
-	xas_unlock(&xas);
-
 	syncer = event->syncer;
 	if (done->ret)
 		atomic_cmpxchg(&syncer->res, 0, -EIO);
@@ -88,6 +86,8 @@ static long _ioc_done(struct mfs_cache_object *object,
 	spin_unlock(&syncer->list_lock);
 	if (atomic_dec_return(&syncer->notback) == 0)
 		complete(&syncer->done);
+	xas_unlock(&xas);
+
 	put_mfs_event(event);
 	return 0;
 }
@@ -366,9 +366,7 @@ void mfs_destroy_events(struct super_block *sb)
 		 */
 		pr_warn("Event remains:%lu\n", index);
 		__xa_erase(&caches->events, index);
-		xa_unlock(&caches->events);
 		put_mfs_event(event);
-		xa_lock(&caches->events);
 	}
 	xa_unlock(&caches->events);
 	xa_destroy(&caches->events);
@@ -379,19 +377,18 @@ void mfs_cancel_syncer_events(struct mfs_cache_object *object,
 {
 	struct mfs_sb_info *sbi = MFS_SB(object->mfs_inode->i_sb);
 	struct mfs_caches *caches = &sbi->caches;
-	struct mfs_event *event;
-	struct list_head tmp;
+	struct xarray *xa = &caches->events;
+	struct mfs_event *event, *nevent;
 
-	INIT_LIST_HEAD(&tmp);
+	xa_lock(xa);
 	spin_lock(&syncer->list_lock);
-	list_splice_init(&syncer->head, &tmp);
-	spin_unlock(&syncer->list_lock);
-
-	list_for_each_entry(event, &tmp, link) {
-		xa_erase(&caches->events, event->msg.id);
-		iput(event->object->mfs_inode);
-		kfree(event);
+	list_for_each_entry_safe(event, nevent, &syncer->head, link) {
+		__xa_erase(&caches->events, event->msg.id);
+		list_del(&event->link);
+		put_mfs_event(event);
 	}
+	spin_unlock(&syncer->list_lock);
+	xa_unlock(xa);
 }
 
 void mfs_cancel_all_events(struct mfs_sb_info *sbi)
@@ -405,18 +402,21 @@ void mfs_cancel_all_events(struct mfs_sb_info *sbi)
 	xa_lock(xa);
 	xa_for_each(xa, index, event) {
 		__xa_erase(xa, index);
-		xa_unlock(xa);
-		if (event->syncer) {
-			syncer = event->syncer;
-			if (atomic_dec_return(&syncer->notback) == 0)
-				complete(&syncer->done);
+		syncer = event->syncer;
+		/*
+		 * Here should keep syncer (a stack variable), so we should
+		 * wakeup the syncer list in the protect of xa lock.
+		 */
+		if (syncer) {
 			spin_lock(&syncer->list_lock);
-			list_del_init(&event->link);
+			list_del(&event->link);
 			spin_unlock(&syncer->list_lock);
+			if (atomic_dec_return(&syncer->notback) == 0) {
+				atomic_cmpxchg(&syncer->res, 0, -EIO);
+				complete(&syncer->done);
+			}
 		}
-		iput(event->object->mfs_inode);
-		kfree(event);
-		xa_lock(xa);
+		put_mfs_event(event);
 	}
 	caches->next_ev = 0;
 	caches->next_msg = 0;
