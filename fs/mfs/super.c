@@ -478,6 +478,9 @@ static void __exit exit_mfs_fs(void)
 {
 	mfs_dev_exit();
 	unregister_filesystem(&mfs_fs_type);
+
+	/* Make sure all delayed rcu free inodes are safe to be destroyed. */
+	rcu_barrier();
 	mfs_cache_exit();
 	kmem_cache_destroy(mfs_dentry_cachep);
 	kmem_cache_destroy(mfs_inode_cachep);
