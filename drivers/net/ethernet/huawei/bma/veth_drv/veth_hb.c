@@ -1645,6 +1645,9 @@ s32 veth_netdev_init(void)
 				 BSPVETH_DEV_NAME, NET_NAME_UNKNOWN,
 				 veth_netdev_func_init, 1);
 
+	if (!netdev)
+		return -ENOMEM;
+
 	/* register netdev */
 	l_ret = register_netdev(netdev);
 	if (l_ret < 0) {
