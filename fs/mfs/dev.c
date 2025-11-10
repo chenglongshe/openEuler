@@ -7,7 +7,6 @@
 #include <linux/idr.h>
 #include <linux/poll.h>
 #include <linux/list.h>
-#include "../mount.h"
 
 #include <trace/events/mfs.h>
 
@@ -24,7 +23,6 @@ static int mfs_dev_open(struct inode *inode, struct file *file)
 {
 	struct mfs_caches *caches;
 	struct mfs_sb_info *sbi;
-	struct mount *mnt;
 	unsigned minor = iminor(inode);
 
 	sbi = minor < U8_MAX ? idr_find(&mfs_dev_minor, minor) : NULL;
@@ -40,13 +38,6 @@ static int mfs_dev_open(struct inode *inode, struct file *file)
 		clear_bit(MFS_CACHE_OPENED, &caches->flags);
 		return -EBUSY;
 	}
-	mnt = list_first_entry(&sbi->sb->s_mounts, struct mount, mnt_instance);
-	/* during mounting or delete from s_mounts in umounting */
-	if (list_empty(&sbi->sb->s_mounts)) {
-		clear_bit(MFS_CACHE_OPENED, &caches->flags);
-		return -EBUSY;
-	}
-	sbi->mnt = mntget(&mnt->mnt);
 
 	file->private_data = sbi;
 	set_bit(MFS_CACHE_READY, &caches->flags);
@@ -61,7 +52,6 @@ static int mfs_dev_release(struct inode *inode, struct file *file)
 	clear_bit(MFS_CACHE_READY, &caches->flags);
 	smp_mb__after_atomic();
 	mfs_cancel_all_events(sbi);
-	mntput(sbi->mnt);
 	smp_mb__before_atomic();
 	clear_bit(MFS_CACHE_OPENED, &caches->flags);
 	return 0;

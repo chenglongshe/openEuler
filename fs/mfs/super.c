@@ -400,9 +400,12 @@ static void mfs_kill_sb(struct super_block *sb)
 	clear_bit(MFS_MOUNTED, &sbi->flags);
 	if (support_event(sbi)) {
 		while (test_bit(MFS_CACHE_OPENED, &caches->flags)) {
+			static DEFINE_RATELIMIT_STATE(busy_open, 30 * HZ, 1);
+
 			msleep(100);
-			printk_once(KERN_WARNING "Pending until close the /dev/mfs%u...\n",
-				    sbi->minor);
+			if (!__ratelimit(&busy_open))
+				continue;
+			pr_warn("Pending until close the /dev/mfs%u...\n", sbi->minor);
 		}
 		mfs_fs_dev_exit(sb);
 	}
