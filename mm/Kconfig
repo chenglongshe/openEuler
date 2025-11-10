@@ -521,6 +521,20 @@ config MEMCG_SWAP_QOS
 	  memcg swap control include memory force swapin, swapfile control
 	  and swap limit.
 
+config MEMCG_EARLY_OOM
+        bool "Enable aggressive memcg OOM killing under memory pressure"
+        depends on MEMCG
+        depends on X86 || ARM64
+        default n
+        help
+          MEMCG_EARLY_OOM makes memory cgroups trigger OOM killer earlier
+          and more aggressively when under memory pressure, rather than
+          attempting to reclaim very small amounts of file pages through
+          prolonged reclaim attempts.
+
+          Say "y" if you prefer fast OOM kills over prolonged reclaim
+          attempts.
+
 config ETMEM_SCAN
 	tristate "module: etmem page scan for etmem support"
 	depends on ETMEM
