@@ -226,7 +226,7 @@ int eufs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	struct inode *inode = mapping->host;
 	struct eufs_inode_info *vi = EUFS_I(inode);
 	umode_t mode;
-	int err;
+	int err = 0;
 	bool inode_is_dirty;
 
 	mode = inode->i_mode;
