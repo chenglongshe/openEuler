@@ -2470,11 +2470,62 @@ static bool inactive_is_low(struct lruvec *lruvec, enum lru_list inactive_lru)
 	return inactive * inactive_ratio < active;
 }
 
+#ifdef CONFIG_MEMCG_EARLY_OOM
+/* Check if swap usage is over the limit for cgroupv1. */
+static bool is_swap_over_limit(struct mem_cgroup *memcg)
+{
+	unsigned long mem_limit = READ_ONCE(memcg->memory.max);
+	unsigned long memsw_limit = READ_ONCE(memcg->memsw.max);
+
+	if (memsw_limit <= mem_limit)
+		return false;
+
+	return (page_counter_read(&memcg->memsw) -
+		page_counter_read(&memcg->memory)) >
+		(memsw_limit - mem_limit);
+}
+
+/*
+ * Check if file cache is too small to reclaim and anonymous pages are reclaimable.
+ * Returns true if:
+ *   1. File cache (+ free space) is below the minimum threshold (pages_min), AND
+ *   2. Anonymous pages are allowed to be deactivated, AND
+ *   3. Anonymous pages are abundant relative to reclaim priority
+ */
+static bool memcg_should_skip_file_reclaim(struct mem_cgroup *memcg,
+					struct scan_control *sc,
+					struct lruvec *lruvec)
+{
+	unsigned long file, anon, free;
+	unsigned long mem_limit, memsw_usage, mem_high;
+	unsigned long pages_min;
+
+	if (!cgroup_reclaim(sc))
+		return false;
+
+	file = lruvec_lru_size(lruvec, LRU_INACTIVE_FILE, sc->reclaim_idx) +
+		lruvec_lru_size(lruvec, LRU_ACTIVE_FILE, sc->reclaim_idx);
+	mem_limit = READ_ONCE(memcg->memory.max);
+	memsw_usage = page_counter_read(&memcg->memsw);
+	mem_high = READ_ONCE(memcg->memory.high);
+	anon = lruvec_lru_size(lruvec, LRU_INACTIVE_ANON, sc->reclaim_idx);
+	free = mem_limit > memsw_usage ? mem_limit - memsw_usage : 0;
+	pages_min = mem_limit > mem_high ? (mem_limit - mem_high) >> 2 : 0;
+
+	return (file + free <= pages_min) &&
+		!(sc->may_deactivate & DEACTIVATE_ANON) &&
+		(anon >> sc->priority);
+}
+#endif
+
 enum scan_balance {
 	SCAN_EQUAL,
 	SCAN_FRACT,
 	SCAN_ANON,
 	SCAN_FILE,
+#ifdef CONFIG_MEMCG_EARLY_OOM
+	SCAN_NONE,
+#endif
 };
 
 /*
@@ -2497,6 +2548,20 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	enum scan_balance scan_balance;
 	unsigned long ap, fp;
 	enum lru_list lru;
+
+#ifdef CONFIG_MEMCG_EARLY_OOM
+	/*
+	 * if both file and anon pages are deemed non-reclaimable,
+	 * we deliberately stop reclaiming early to trigger OOM killer
+	 * faster.
+	 */
+	if (cgroup_reclaim(sc) &&
+			is_swap_over_limit(memcg) &&
+			memcg_should_skip_file_reclaim(memcg, sc, lruvec)) {
+		scan_balance = SCAN_NONE;
+		goto out;
+	}
+#endif
 
 	if (sc->not_file) {
 		scan_balance = SCAN_ANON;
@@ -2543,7 +2608,12 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	/*
 	 * If the system is almost out of file pages, force-scan anon.
 	 */
+#ifdef CONFIG_MEMCG_EARLY_OOM
+	if (sc->file_is_tiny ||
+			memcg_should_skip_file_reclaim(memcg, sc, lruvec)) {
+#else
 	if (sc->file_is_tiny) {
+#endif
 		scan_balance = SCAN_ANON;
 		goto out;
 	}
@@ -2687,6 +2757,11 @@ out:
 			if ((scan_balance == SCAN_FILE) != file)
 				scan = 0;
 			break;
+#ifdef CONFIG_MEMCG_EARLY_OOM
+		case SCAN_NONE:
+			scan = 0;
+			break;
+#endif
 		default:
 			/* Look ma, no brain */
 			BUG();
