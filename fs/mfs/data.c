@@ -425,7 +425,7 @@ static vm_fault_t mfs_filemap_fault(struct vm_fault *vmf)
 	return ret;
 }
 
-vm_fault_t mfs_filemap_map_pages(struct vm_fault *vmf,
+static vm_fault_t mfs_filemap_map_pages(struct vm_fault *vmf,
 					pgoff_t start_pgoff, pgoff_t end_pgoff)
 {
 	struct file *cfile, *file = vmf->vma->vm_file;
