@@ -9,6 +9,11 @@
 
 #include "ubase_dev.h"
 
+struct ubase_pmem_init_func {
+	int (*init)(struct ubase_dev *udev);
+	void (*uninit)(struct ubase_dev *udev);
+};
+
 int ubase_prealloc_mem_init(struct ubase_dev *udev);
 void ubase_prealloc_mem_uninit(struct ubase_dev *udev);
 

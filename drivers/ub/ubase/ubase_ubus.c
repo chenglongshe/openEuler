@@ -352,10 +352,6 @@ static int ubase_ubus_resume(struct device *dev)
 
 static SIMPLE_DEV_PM_OPS(ubase_ubus_pm_ops, ubase_ubus_suspend, ubase_ubus_resume);
 
-static const struct device_driver ubase_ue_driver = {
-	.pm = &ubase_ubus_pm_ops,
-};
-
 static int ubase_ubus_virt_configure(struct ub_entity *ue, int bus_ue_id, bool is_en)
 {
 	struct ubase_dev *udev = dev_get_drvdata(&ue->dev);
