@@ -120,8 +120,8 @@ out:
 	return ret;
 }
 
-struct dentry *mfs_lookup(struct inode *dir, struct dentry *dentry,
-			     unsigned int flag)
+static struct dentry *mfs_lookup(struct inode *dir, struct dentry *dentry,
+				    unsigned int flag)
 {
 	struct path parent_lpath, parent_cpath, lpath, cpath;
 	struct dentry *ret, *parent;
@@ -217,17 +217,17 @@ static const char *mfs_get_link(struct dentry *dentry,
 	return p;
 }
 
-const struct inode_operations mfs_dir_iops = {
+static const struct inode_operations mfs_dir_iops = {
 	.lookup		= mfs_lookup,
 	.getattr	= mfs_getattr,
 };
 
-const struct inode_operations mfs_symlink_iops = {
+static const struct inode_operations mfs_symlink_iops = {
 	.getattr	= mfs_getattr,
 	.get_link	= mfs_get_link,
 };
 
-const struct inode_operations mfs_file_iops = {
+static const struct inode_operations mfs_file_iops = {
 	.getattr	= mfs_getattr,
 };
 
