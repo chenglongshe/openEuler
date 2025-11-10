@@ -101,7 +101,7 @@ static void mfs_d_release(struct dentry *dentry)
 	mfs_free_dentry_info(dentry);
 }
 
-const struct dentry_operations mfs_dops = {
+static const struct dentry_operations mfs_dops = {
 	.d_release	= mfs_d_release,
 };
 
@@ -138,7 +138,7 @@ static int mfs_show_options(struct seq_file *seq, struct dentry *root)
 	return 0;
 }
 
-const struct super_operations mfs_sops = {
+static const struct super_operations mfs_sops = {
 	.alloc_inode	= mfs_alloc_inode,
 	.free_inode	= mfs_free_inode,
 	.drop_inode	= generic_delete_inode,
@@ -183,7 +183,7 @@ static char *remove_trailing(char *s, char c)
 	return s;
 }
 
-char *_acquire_set_path(char *inputpath, struct path *target)
+static char *_acquire_set_path(char *inputpath, struct path *target)
 {
 	char *p, *realp, *path;
 	char *res;
