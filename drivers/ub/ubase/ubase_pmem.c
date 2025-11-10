@@ -232,16 +232,31 @@ static void ubase_unmap_udma_pmem(struct ubase_dev *udev)
 	pmem->dma_len = 0;
 }
 
-static const struct ubase_pmem_init_func {
-	int (*init)(struct ubase_dev *udev);
-	void (*uninit)(struct ubase_dev *udev);
-} ubase_pmem_init_map[] = {
-	{ ubase_init_comm_pmem_ctx, ubase_uninit_comm_pmem_ctx },
-	{ ubase_init_udma_pmem_ctx, ubase_uninit_udma_pmem_ctx },
-	{ ubase_alloc_comm_pmem, ubase_free_comm_pmem },
-	{ ubase_alloc_udma_pmem, ubase_free_udma_pmem },
-	{ ubase_map_comm_pmem, ubase_unmap_comm_pmem },
-	{ ubase_map_udma_pmem, ubase_unmap_udma_pmem },
+static struct ubase_pmem_init_func ubase_pmem_init_map[] = {
+	{ 
+		.init = ubase_init_comm_pmem_ctx,
+	  	.uninit = ubase_uninit_comm_pmem_ctx,
+	},
+	{ 
+		.init = ubase_init_udma_pmem_ctx,
+		.uninit = ubase_uninit_udma_pmem_ctx,
+	},
+	{
+		.init = ubase_alloc_comm_pmem,
+		.uninit = ubase_free_comm_pmem,
+	},
+	{
+		.init = ubase_alloc_udma_pmem,
+		.uninit = ubase_free_udma_pmem,
+	},
+	{
+		.init = ubase_map_comm_pmem,
+		.uninit = ubase_unmap_comm_pmem,
+	},
+	{
+		.init = ubase_map_udma_pmem,
+		.uninit = ubase_unmap_udma_pmem,
+	},
 };
 
 static int __ubase_prealloc_mem_init(struct ubase_dev *udev)
