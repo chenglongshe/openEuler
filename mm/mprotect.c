@@ -737,6 +737,19 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 	if (!vma)
 		goto out;
 
+	if (vma_is_peer_shared(vma)) {
+		struct vm_area_struct *vma_end;
+		start = ALIGN_DOWN(start, HPAGE_SIZE);
+		vma_end = find_vma(current->mm, end);
+		if (vma_end && vma_end->vm_start < end && vma_is_peer_shared(vma_end))
+			end = ALIGN(end, HPAGE_SIZE);
+		if (end <= start) {
+			error = -ENOMEM;
+			goto out;
+		}
+		len = end - start;
+	}
+
 	if (unlikely(grows & PROT_GROWSDOWN)) {
 		if (vma->vm_start >= end)
 			goto out;

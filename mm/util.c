@@ -28,6 +28,8 @@
 #include <linux/uaccess.h>
 #include <linux/oom.h>
 
+#include "gmem-internal.h"
+
 #include "internal.h"
 #include "swap.h"
 
@@ -549,6 +551,13 @@ unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
 	unsigned long populate;
 	LIST_HEAD(uf);
 
+#ifdef CONFIG_GMEM
+	int error = 0;
+	LIST_HEAD(reserve_list);
+	unsigned int retry_times = 0;
+retry:
+#endif
+
 	ret = security_mmap_file(file, prot, flag);
 	if (!ret) {
 		if (mmap_write_lock_killable(mm))
@@ -560,6 +569,27 @@ unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
 		if (populate)
 			mm_populate(ret, populate);
 	}
+
+#ifdef CONFIG_GMEM
+	if (!IS_ERR_VALUE(ret) && gmem_is_enabled() && flag & MAP_PEER_SHARED) {
+		error = alloc_va_in_peer_devices(ret, len, flag);
+		/**
+		 * if alloc_va_in_peer_devices failed
+		 * add vma to reserve_list and release after find a proper vma
+		 */
+		if (error == -ENOMEM && retry_times < GMEM_MMAP_RETRY_TIMES) {
+			retry_times++;
+			gmem_reserve_vma(mm, ret, len, &reserve_list);
+			goto retry;
+		} else if (error != 0) {
+			gmem_err("alloc vma ret %d\n", error);
+			gmem_reserve_vma(mm, ret, len, &reserve_list);
+			ret = -ENOMEM;
+		}
+		gmem_release_vma(mm, &reserve_list);
+	}
+#endif
+
 	return ret;
 }
 
