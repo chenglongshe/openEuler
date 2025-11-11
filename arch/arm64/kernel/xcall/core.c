@@ -1,0 +1,396 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2025 Huawei Limited.
+ */
+
+#define pr_fmt(fmt)	"xcall: " fmt
+
+#include <linux/mmap_lock.h>
+#include <linux/namei.h>
+#include <linux/slab.h>
+#include <linux/xcall.h>
+
+#include <asm/xcall.h>
+
+static DEFINE_SPINLOCK(xcall_list_lock);
+static LIST_HEAD(xcalls_list);
+static DEFINE_SPINLOCK(prog_list_lock);
+static LIST_HEAD(progs_list);
+
+/*
+ * Travel the list of all registered xcall_prog during module installation
+ * to find the xcall_prog.
+ */
+static struct xcall_prog *get_xcall_prog(const char *module)
+{
+	struct xcall_prog *p;
+
+	list_for_each_entry(p, &progs_list, list) {
+		if (!strcmp(module, p->name))
+			return p;
+	}
+	return NULL;
+}
+
+static struct xcall_prog *get_xcall_prog_locked(const char *module)
+{
+	struct xcall_prog *ret;
+
+	spin_lock(&prog_list_lock);
+	ret = get_xcall_prog(module);
+	spin_unlock(&prog_list_lock);
+
+	return ret;
+}
+
+static long inv_xcall(struct pt_regs *regs)
+{
+	return -ENOSYS;
+}
+
+#define inv_xcall_syscall ((unsigned long)inv_xcall)
+
+static long patch_syscall(struct pt_regs *regs);
+
+static long filter_ksyscall(struct pt_regs *regs)
+{
+	struct xcall_area *area = mm_xcall_area(current->mm);
+	unsigned int scno = (unsigned int)regs->regs[8];
+
+	/*
+	 * curerntly, some syscall uses svc 0 at two and more different
+	 * addresses, so it needs to hijack all of these svc 0.
+	 */
+	if (regs->syscallno & ESR_ELx_ISS_MASK)
+		return -ENOSYS;
+
+	cmpxchg(&(area->sys_call_table[scno]), filter_ksyscall, patch_syscall);
+	regs->pc -= AARCH64_INSN_SIZE;
+	return 0;
+}
+
+static long replay_syscall(struct pt_regs *regs)
+{
+	regs->pc -= AARCH64_INSN_SIZE;
+	return 0;
+}
+
+static long patch_syscall(struct pt_regs *regs)
+{
+	struct xcall_area *area = mm_xcall_area(current->mm);
+	unsigned int scno = (unsigned int)regs->regs[8];
+	syscall_fn_t syscall_fn;
+	unsigned long old;
+	int ret;
+
+	old = cmpxchg(&(area->sys_call_table[scno]), patch_syscall, replay_syscall);
+	if (old != (unsigned long)patch_syscall) {
+		syscall_fn = (syscall_fn_t)area->sys_call_table[scno];
+		return syscall_fn(regs);
+	}
+
+	regs->pc -= AARCH64_INSN_SIZE;
+
+	mmap_write_lock(current->mm);
+	ret = set_xcall_insn(current->mm, regs->pc, SVC_FFFF);
+	mmap_write_unlock(current->mm);
+
+	if (!ret) {
+		xchg(&(area->sys_call_table[scno]), filter_ksyscall);
+		pr_debug("patch svc ffff for scno %u\n", scno);
+		return 0;
+	}
+
+	/*
+	 * Upon patch svc 0xffff failed, it uses the functions defined
+	 * in sys_call_table to handle syscall this time, and try to
+	 * do patching next time.
+	 */
+	set_xcall_insn(current->mm, regs-pc, SVC_0000);
+	regs->pc += AARCH64_INSN_SIZE;
+	xchg(&(area->sys_call_table[scno]), patch_syscall);
+	return ret;
+}
+
+int xcall_pre_sstep_check(struct pt_regs *regs)
+{
+	struct xcall_area *area = mm_xcall_area(current->mm);
+	unsigned int scno = (unsigned int)regs->regs[8];
+
+	return area && (scno < NR_syscalls) &&
+		(area->sys_call_table[scno] != (unsigned long)inv_xcall);
+}
+
+static struct xcall *get_xcall(struct xcall *xcall)
+{
+	refcount_inc(&xcall->ref);
+	return xcall;
+}
+
+static void put_xcall(struct xcall *xcall)
+{
+	if (!refcount_dec_and_test(&xcall->ref))
+		return;
+
+	pr_info("free xcall resource.\n");
+	kfree(xcall->name);
+	if (xcall->program)
+		module_put(xcall->program->owner);
+
+	path_put(&xcall->binary_path);
+	kfree(xcall);
+}
+
+static struct xcall *find_xcall(const char *name, struct inode *binary)
+{
+	struct xcall *xcall;
+
+	list_for_each_entry(xcall, &xcalls_list, list) {
+		if ((name && !strcmp(name, xcall->name)) ||
+		    (binary && xcall->binary == binary))
+			return get_xcall(xcall);
+	}
+	return NULL;
+}
+
+static struct xcall *find_xcall_by_name_locked(const char *name)
+{
+	struct xcall *ret = NULL;
+
+	spin_lock(&xcall_list_lock);
+	ret = find_xcall(name, NULL);
+	spin_unlock(&xcall_list_lock);
+	return ret;
+}
+
+static struct xcall *insert_xcall_locked(struct xcall *xcall)
+{
+	struct xcall *ret = NULL;
+
+	spin_lock(&xcall_list_lock);
+	ret = find_xcall(NULL, xcall->binary);
+	if (!ret)
+		list_add(&xcall->list, &xcalls_list);
+	else
+		put_xcall(ret);
+	spin_unlock(&xcall_list_lock);
+	return ret;
+}
+
+static void delete_xcall(struct xcall *xcall)
+{
+	spin_lock(&xcall_list_lock);
+	list_del(&xcall->list);
+	spin_unlock(&xcall_list_lock);
+
+	put_xcall(xcall);
+}
+
+/* Init xcall with a given inode */
+static int init_xcall(struct xcall *xcall, struct xcall_comm *comm)
+{
+	struct xcall_prog *program = get_xcall_prog_locked(comm->module);
+
+	if (!program || !try_module_get(program->owner))
+		return -EINVAL;
+
+	if (kern_path(comm->binary, LOOKUP_FOLLOW, &xcall->binary_path))
+		return -EINVAL;
+
+	xcall->binary = d_real_inode(xcall->binary_path.dentry);
+	xcall->program = program;
+	refcount_set(&xcall->ref, 1);
+	INIT_LIST_HEAD(&xcall->list);
+
+	return 0;
+}
+
+static int fill_xcall_syscall(struct xcall_area *area, struct xcall *xcall)
+{
+	unsigned int scno_offset, scno_count = 0;
+	struct xcall_prog_object *obj;
+
+	obj = xcall->program->objs;
+	while (scno_count < xcall->program->nr_scno && obj->func) {
+		scno_offset = NR_syscalls + obj->scno;
+		if (area->sys_call_table[scno_offset] != inv_xcall_syscall)
+			return -EINVAL;
+
+		area->sys_call_table[scno_offset] = obj->func;
+		area->sys_call_table[obj->scno] = (unsigned long)patch_syscall;
+		obj += 1;
+		scno_count++;
+	}
+
+	return 0;
+}
+
+static struct xcall_area *create_xcall_area(struct mm_struct *mm)
+{
+	struct xcall_area *area;
+	int i;
+
+	area = kzalloc(sizeof(*area), GFP_KERNEL);
+	if (!area)
+		return NULL;
+
+	refcount_set(&area->ref, 1);
+
+	for (i = 0; i < NR_syscalls; i++) {
+		area->sys_call_table[i] = inv_xcall_syscall;
+		area->sys_call_table[i + NR_syscalls] = inv_xcall_syscall;
+	}
+
+	smp_store_release(&mm->xcall, area);
+	return area;
+}
+
+/*
+ * Initialize the xcall data of mm_struct data.
+ * And register xcall into one address space, which includes create
+ * the mm_struct associated xcall_area data
+ */
+int xcall_mmap(struct vm_area_struct *vma, struct mm_struct *mm)
+{
+	struct xcall_area *area;
+	struct xcall *xcall;
+
+	if (list_empty(&xcalls_list))
+		return 0;
+
+	spin_lock(&xcall_list_lock);
+	xcall = find_xcall(NULL, file_inode(vma->vm_file));
+	if (!xcall || !xcall->program) {
+		spin_unlock(&xcall_list_lock);
+		return -EINVAL;
+	}
+	spin_unlock(&xcall_list_lock);
+
+	area = mm_xcall_area(mm);
+	if (!area && !create_xcall_area(mm)) {
+		put_xcall(xcall);
+		return -ENOMEM;
+	}
+
+	area = (struct xcall_area *)READ_ONCE(mm->xcall);
+	// Each process is allowed to be associated with only one xcall.
+	if (!cmpxchg(&area->xcall, NULL, xcall) && !fill_xcall_syscall(area, xcall))
+		return 0;
+
+	put_xcall(xcall);
+	return -EINVAL;
+}
+
+void mm_init_xcall_area(struct mm_struct *mm, struct task_struct *p)
+{
+	struct xcall_area *area = mm_xcall_area(mm);
+
+	if (area)
+		refcount_inc(&area->ref);
+}
+
+void clear_xcall_area(struct mm_struct *mm)
+{
+	struct xcall_area *area = mm_xcall_area(mm);
+
+	if (!area)
+		return;
+
+	if (!refcount_dec_and_test(&area->ref))
+		return;
+
+	if (area->xcall)
+		put_xcall(area->xcall);
+
+	kfree(area);
+	mm->xcall = NULL;
+}
+
+int xcall_attach(struct xcall_comm *comm)
+{
+	struct xcall *xcall;
+	int ret;
+
+	xcall = kzalloc(sizeof(struct xcall), GFP_KERNEL);
+	if (!xcall)
+		return -ENOMEM;
+
+	ret = init_xcall(xcall, comm);
+	if (ret) {
+		kfree(xcall);
+		return ret;
+	}
+
+	xcall->name = kstrdup(comm->name, GFP_KERNEL);
+	if (!xcall->name) {
+		delete_xcall(xcall);
+		return -ENOMEM;
+	}
+
+	if (insert_xcall_locked(xcall)) {
+		delete_xcall(xcall);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int xcall_detach(struct xcall_comm *comm)
+{
+	struct xcall *xcall;
+
+	xcall = find_xcall_by_name_locked(comm->name);
+	if (!xcall)
+		return -EINVAL;
+
+	put_xcall(xcall);
+	delete_xcall(xcall);
+	return 0;
+}
+
+static int check_prog(struct xcall_prog *prog)
+{
+	struct xcall_prog_object *obj = prog->objs;
+
+	prog->nr_scno = 0;
+	while (prog->nr_scno < MAX_NR_SCNO && obj->func) {
+		if (obj->scno >= __NR_syscalls)
+			return -EINVAL;
+
+		prog->nr_scno++;
+		obj++;
+	}
+
+	pr_info("Successly registered syscall number: %d\n", prog->nr_scno);
+	return 0;
+}
+
+int xcall_prog_register(struct xcall_prog *prog)
+{
+	if (check_prog(prog))
+		return -EINVAL;
+
+	spin_lock(&prog_list_lock);
+	if (get_xcall_prog(prog->name)) {
+		spin_unlock(&prog_list_lock);
+		return -EBUSY;
+	}
+	list_add(&prog->list, &progs_list);
+	spin_unlock(&prog_list_lock);
+	return 0;
+}
+EXPORT_SYMBOL(xcall_prog_register);
+
+void xcall_prog_unregister(struct xcall_prog *prog)
+{
+	spin_lock(&prog_list_lock);
+	list_del(&prog->list);
+	spin_unlock(&prog_list_lock);
+}
+EXPORT_SYMBOL(xcall_prog_unregister);
+
+const syscall_fn_t *default_sys_call_table(void)
+{
+	return sys_call_table;
+}
+EXPORT_SYMBOL(default_sys_call_table);

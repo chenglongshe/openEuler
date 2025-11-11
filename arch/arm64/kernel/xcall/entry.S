@@ -151,33 +151,141 @@ alternative_else_nop_endif
 	sb
 	.endm /* .macro hw_xcal_restore_base_regs */
 
-SYM_CODE_START(no_xcall_entry)
-	ldp	x20, x21, [sp, #0]
+SYM_CODE_START_LOCAL(el0t_64_svc_entry)
+alternative_if_not ARM64_HAS_HW_XCALL_XINT
+	/* Hijack SVC to dynamically load syscalls via '/proc/xcall/comm' */
+	ldr	x20, [sp, #S_SYSCALLNO]			// ESR.bits[15,0]
+	cmp	x20, 0xfff
+	b.ge	el0t_64_xcall_entry
+alternative_else_nop_endif
+
+	/* Hijack SVC to low overhead syscalls via '/prox/[pid]/xcall' */
+	cmp 	x8, __NR_syscalls
+	b.ge	.slow_syscall
+	ldr_this_cpu	x21, __xcall_info, x20
+	ldrb	w20, [x21, x8]
+	cmp	x20, 0
+	bne	el0t_fast_syscall
+
+.slow_syscall:
+	ldp	x20, x21, [sp, #16 * 10]
 	kernel_entry 0, 64
 	mov	x0, sp
-	bl	el0t_64_sync_handler
+	bl	el0_slow_syscall
 	b	ret_to_user
-SYM_CODE_END(no_xcall_entry)
+SYM_INNER_LABEL(el0t_64_xcall_entry, SYM_L_GLOBAL)
+	lsr	x20, x20, #12
+	adr	x21, .xcall_func_table
+	ldr	w20, [x21, x20, lsl #2]
+	add	x20, x20, x21
+	br	x20
+	/* ISS==0F~FF: Entry to optimized and customized syscalls
+	 */
+.xcall_func_table:
+	.rept 16
+	.word el0t_xcall_syscall - .xcall_func_table
+	.endr
+SYM_CODE_END(el0t_64_svc_entry)
 
-SYM_CODE_START(xcall_entry)
-	ldp	x20, x21, [sp, #0]
+SYM_CODE_START_LOCAL(el0t_xcall_syscall)
+	ldp	x20, x21, [sp, #16 * 10]
 	hw_xcall_save_base_regs
 	mov	x0, sp
-	bl	el0t_64_xcall_handler
+	bl	el0_xcall_syscall
 	hw_xcal_restore_base_regs
-SYM_CODE_END(xcall_entry)
+SYM_CODE_END(el0t_xcall_syscall)
 
-SYM_CODE_START_LOCAL(el0t_64_hw_xcall)
-	stp	x20, x21, [sp, #0]
-	ldr_this_cpu	x21, __cpu_xcall_entry, x20
-	mov	x20, __NR_syscalls
-	/* x8 >= __NR_syscalls */
-	cmp	x8, __NR_syscalls
-	csel	x20, x8, x20, lt
-	ldr	x21, [x21, x20, lsl #3]
-	br	x21
-SYM_CODE_END(el0t_64_hw_xcall)
+SYM_CODE_START_LOCAL(el0t_fast_syscall)
+	ldp	x20, x21, [sp, #16 * 10]
+	hw_xcall_save_base_regs
+	mov	x0, sp
+	bl	el0_fast_syscall
+	hw_xcal_restore_base_regs
+SYM_CODE_END(el0t_fast_syscall)
 
+	.macro el0t_64_entry sym:req
+SYM_CODE_START_LOCAL(\sym\()_entry)
+	ldp	x20, x21, [sp, #16 * 10]
+	kernel_entry 0, 64
+	mov	x0, sp
+	ldr	x1, [sp, #(S_SYSCALLNO - 8)]	// ESR
+	bl	__alias_\sym
+	b	ret_to_user
+SYM_CODE_END(\sym\()_entry)
+	.endm
+
+	.macro el0t_64_entry_offset sym:req, num:req
+	.rept  \num
+	.word  el0t_64_sync_table - \sym\()_entry
+	.endr
+	.endm
+
+	/*
+	 * Early exception handlers
+	 */
+	el0t_64_entry	el0_undef
+	el0t_64_entry	el0_wfx
+	el0t_64_entry	el0_fpsimd_acc
+	el0t_64_entry	el0_bti
+	el0t_64_entry	el0_sys
+	el0t_64_entry	el0_sve_acc
+	el0t_64_entry	el0_fpac
+	el0t_64_entry	el0_sme_acc
+	el0t_64_entry	el0_ia
+	el0t_64_entry	el0_pc
+	el0t_64_entry	el0_da
+	el0t_64_entry	el0_sp
+	el0t_64_entry	el0_mops
+	el0t_64_entry	el0_fpsimd_exc
+	el0t_64_entry	el0_breakpt
+	el0t_64_entry	el0_softstp
+	el0t_64_entry	el0_watchpt
+	el0t_64_entry	el0_brk64
+	el0t_64_entry	el0_inv
+
+SYM_CODE_START_LOCAL(el0t_64_sync_table)
+	el0t_64_entry_offset	el0_undef,	1 	// 0x00
+	el0t_64_entry_offset	el0_wfx,	1	// 0x01
+	el0t_64_entry_offset	el0_inv,	5
+	el0t_64_entry_offset	el0_fpsimd_acc,	1	// 0x07
+	el0t_64_entry_offset	el0_inv,	5
+	el0t_64_entry_offset	el0_bti,	1	// 0x0D
+	el0t_64_entry_offset	el0_inv,	7
+	el0t_64_entry_offset	el0t_64_svc,	1	// 0x15
+	el0t_64_entry_offset	el0_inv,	2
+	el0t_64_entry_offset	el0_sys,	1	// 0x18
+	el0t_64_entry_offset	el0_sve_acc,	1	// 0x19
+	el0t_64_entry_offset	el0_inv,	2
+	el0t_64_entry_offset	el0_fpac,	1	// 0x1C
+	el0t_64_entry_offset	el0_sme_acc,	1	// 0x1D
+	el0t_64_entry_offset	el0_inv,	2
+	el0t_64_entry_offset	el0_ia,		1	// 0x20
+	el0t_64_entry_offset	el0_inv,	1
+	el0t_64_entry_offset	el0_pc,		1	// 0x22
+	el0t_64_entry_offset	el0_inv,	1
+	el0t_64_entry_offset	el0_da,		1	// 0x24
+	el0t_64_entry_offset	el0_inv,	1
+	el0t_64_entry_offset	el0_sp,		1	// 0x26
+	el0t_64_entry_offset	el0_mops,	1	// 0x27
+	el0t_64_entry_offset	el0_inv,	4
+	el0t_64_entry_offset	el0_fpsimd_exc,	1	// 0x2C
+	el0t_64_entry_offset	el0_inv,	3
+	el0t_64_entry_offset	el0_breakpt,	1	// 0x30
+	el0t_64_entry_offset	el0_inv,	1
+	el0t_64_entry_offset	el0_softstp,	1	// 0x32
+	el0t_64_entry_offset	el0_inv,	1
+	el0t_64_entry_offset	el0_watchpt,	1	// 0x34
+	el0t_64_entry_offset	el0_inv,	7
+	el0t_64_entry_offset	el0_brk64,	1	// 0x3C
+	el0t_64_entry_offset	el0_inv,	3
+SYM_CODE_END(el0t_64_sync_table)
+
+/***********************************************
+ *                                             *
+ *   Xcall exception entry code for 920G CPU   *
+ *                                             *
+ ***********************************************/
+#ifdef CONFIG_ACTLR_XCALL_XINT
 	.macro xcall_ventry
 	.align 7
 .Lventry_start\@:
@@ -190,6 +298,43 @@ SYM_CODE_END(el0t_64_hw_xcall)
 	msr	tpidrro_el0, xzr
 .Lskip_tramp_vectors_cleanup\@:
 	sub	sp, sp, #PT_REGS_SIZE
-	b	el0t_64_hw_xcall
+	stp	x20, x21, [sp, #16 * 10]
+	/* Decode ESR.ICC bits[24,17] for use later */
+	mrs	x21, esr_el1
+	ubfx	w20, w21, #16, #8
+	b	el0t_64_xcall_entry
+.org .Lventry_start\@ + 128	// Did we overflow the ventry slot?
+	.endm
+#endif /* CONFIG_ACTLR_XCALL_XINT */
+
+/****************************************************************
+ *                                                              *
+ *      Sync exception entry code for early CPUs before 920G    *
+ *                                                              *
+ ****************************************************************/
+	.macro sync_ventry
+	.align 7
+.Lventry_start\@:
+	/*
+	 * This must be the first instruction of the EL0 vector entries. It is
+	 * skipped by the trampoline vectors, to trigger the cleanup.
+	 */
+	b	.Lskip_tramp_vectors_cleanup\@
+	mrs	x30, tpidrro_el0
+	msr	tpidrro_el0, xzr
+.Lskip_tramp_vectors_cleanup\@:
+	sub	sp, sp, #PT_REGS_SIZE
+
+	/* Save ESR and ICC.bits[15,0] for use later */
+	stp	x20, x21, [sp, #16 * 10]
+	mrs	x20, esr_el1
+	uxth	w21, w20
+	stp 	x20, x21, [sp, #(S_SYSCALLNO - 8)]
+	/* Using jump table for different exception causes */
+	lsr	w21, w20, #ESR_ELx_EC_SHIFT
+	adr	x20, el0t_64_sync_table
+	ldr	w21, [x20, x21, lsl #2]
+	sub	x20, x20, x21
+	br	x20
 .org .Lventry_start\@ + 128	// Did we overflow the ventry slot?
 	.endm
