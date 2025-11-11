@@ -394,6 +394,7 @@ void nvme_complete_rq(struct request *req)
 {
 	struct nvme_ctrl *ctrl = nvme_req(req)->ctrl;
 
+	blk_glitch_detection_rq_acct(req, STAGE_RQ_DONE, NULL);
 	trace_nvme_complete_rq(req);
 	nvme_cleanup_cmd(req);
 
@@ -433,6 +434,7 @@ EXPORT_SYMBOL_GPL(nvme_complete_rq);
 
 void nvme_complete_batch_req(struct request *req)
 {
+	blk_glitch_detection_rq_acct(req, STAGE_RQ_DONE, NULL);
 	trace_nvme_complete_rq(req);
 	nvme_cleanup_cmd(req);
 	nvme_end_req_zoned(req);

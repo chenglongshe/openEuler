@@ -25,6 +25,7 @@
 #include "blk-rq-qos.h"
 #include "blk-cgroup.h"
 #include "blk-io-hierarchy/stats.h"
+#include "blk-glitch-detection.h"
 
 #define ALLOC_CACHE_THRESHOLD	16
 #define ALLOC_CACHE_MAX		256
@@ -231,6 +232,9 @@ void bio_uninit(struct bio *bio)
 		bio->pid = NULL;
 	}
 #endif
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	blk_glitch_put_bio_stats(bio);
+#endif
 	bio_hierarchy_end(bio);
 }
 EXPORT_SYMBOL(bio_uninit);
@@ -303,6 +307,10 @@ void bio_init(struct bio *bio, struct block_device *bdev, struct bio_vec *table,
 #ifdef CONFIG_BLK_IO_HIERARCHY_STATS
 	bio->hierarchy_time = 0;
 	INIT_LIST_HEAD(&bio->hierarchy_list);
+#endif
+
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	blk_glitch_get_bio_stats(bio);
 #endif
 }
 EXPORT_SYMBOL(bio_init);

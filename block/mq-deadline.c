@@ -844,6 +844,7 @@ static void dd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 	if (blk_mq_sched_try_insert_merge(q, rq, free))
 		return;
 
+	blk_glitch_detection_rq_acct(rq, STAGE_RQ_SCHED, NULL);
 	trace_block_rq_insert(rq);
 
 	if (flags & BLK_MQ_INSERT_AT_HEAD) {

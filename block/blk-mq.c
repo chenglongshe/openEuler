@@ -42,6 +42,7 @@
 #include "blk-mq-sched.h"
 #include "blk-rq-qos.h"
 #include "blk-io-hierarchy/stats.h"
+#include "blk-glitch-detection.h"
 
 static DEFINE_PER_CPU(struct llist_head, blk_cpu_done);
 static DEFINE_PER_CPU(call_single_data_t, blk_cpu_csd);
@@ -386,6 +387,9 @@ static struct request *blk_mq_rq_ctx_init(struct blk_mq_alloc_data *data,
 	rq->nr_phys_segments = 0;
 #if defined(CONFIG_BLK_DEV_INTEGRITY)
 	rq->nr_integrity_segments = 0;
+#endif
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	blk_glitch_init_rq_stats(rq);
 #endif
 	rq->end_io = NULL;
 	rq->end_io_data = NULL;
@@ -834,6 +838,7 @@ static void blk_complete_request(struct request *req)
 	struct bio *bio = req->bio;
 
 	trace_block_rq_complete(req, BLK_STS_OK, total_bytes);
+	blk_glitch_detection_rq_complete(req, BLK_STS_OK, total_bytes);
 
 	if (!bio)
 		return;
@@ -906,6 +911,7 @@ bool blk_update_request(struct request *req, blk_status_t error,
 	int total_bytes;
 
 	trace_block_rq_complete(req, error, nr_bytes);
+	blk_glitch_detection_rq_complete(req, error, nr_bytes);
 
 	if (!req->bio)
 		return false;
@@ -1308,6 +1314,8 @@ void blk_mq_start_request(struct request *rq)
 #endif
 	if (rq->bio && rq->bio->bi_opf & REQ_POLLED)
 	        WRITE_ONCE(rq->bio->bi_cookie, rq->mq_hctx->queue_num);
+
+	blk_glitch_detection_rq_acct(rq, STAGE_RQ_ISSUE, NULL);
 }
 EXPORT_SYMBOL(blk_mq_start_request);
 
@@ -1328,6 +1336,7 @@ static void blk_add_rq_to_plug(struct blk_plug *plug, struct request *rq)
 	struct request *last = rq_list_peek(&plug->mq_list);
 
 	rq_hierarchy_start_io_acct(rq, STAGE_PLUG);
+	blk_glitch_detection_rq_acct(rq, STAGE_RQ_PLUG, NULL);
 
 	if (!plug->rq_count) {
 		trace_block_plug(rq->q);
@@ -2561,6 +2570,7 @@ static void blk_mq_request_bypass_insert(struct request *rq, blk_insert_t flags)
 	struct blk_mq_hw_ctx *hctx = rq->mq_hctx;
 
 	rq_hierarchy_start_io_acct(rq, STAGE_HCTX);
+	blk_glitch_detection_rq_acct(rq, STAGE_RQ_SCHED, NULL);
 	spin_lock(&hctx->lock);
 	if (flags & BLK_MQ_INSERT_AT_HEAD)
 		list_add(&rq->queuelist, &hctx->dispatch);
@@ -2593,6 +2603,7 @@ static void blk_mq_insert_requests(struct blk_mq_hw_ctx *hctx,
 	 */
 	list_for_each_entry(rq, list, queuelist) {
 		BUG_ON(rq->mq_ctx != ctx);
+		blk_glitch_detection_rq_acct(rq, STAGE_RQ_SCHED, NULL);
 		trace_block_rq_insert(rq);
 		if (rq->cmd_flags & REQ_NOWAIT)
 			run_queue_async = true;
@@ -2656,6 +2667,7 @@ static void blk_mq_insert_request(struct request *rq, blk_insert_t flags)
 		q->elevator->type->ops.insert_requests(hctx, &list, flags);
 	} else {
 		trace_block_rq_insert(rq);
+		blk_glitch_detection_rq_acct(rq, STAGE_RQ_SCHED, NULL);
 
 		spin_lock(&ctx->lock);
 		if (flags & BLK_MQ_INSERT_AT_HEAD)
@@ -2998,7 +3010,9 @@ static struct request *blk_mq_get_new_requests(struct request_queue *q,
 	if (blk_mq_attempt_bio_merge(q, bio, nsegs))
 		return NULL;
 
+	blk_glitch_detection_bio_acct(bio, STAGE_BIO_RQS);
 	rq_qos_throttle(q, bio);
+	blk_glitch_detection_bio_acct(bio, STAGE_BIO_RQS_END);
 
 	if (plug) {
 		data.nr_tags = plug->nr_ios;
@@ -3112,6 +3126,7 @@ fail:
 
 done:
 	trace_block_getrq(bio);
+	blk_glitch_detection_rq_acct(rq, STAGE_RQ_GETRQ, bio);
 
 	rq_qos_track(q, rq, bio);
 
@@ -3481,6 +3496,10 @@ static int blk_mq_init_request(struct blk_mq_tag_set *set, struct request *rq,
 			       unsigned int hctx_idx, int node)
 {
 	int ret;
+
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	blk_glitch_get_rq_stats(rq);
+#endif
 
 	if (set->ops->init_request) {
 		ret = set->ops->init_request(set, rq, hctx_idx, node);
@@ -4548,6 +4567,7 @@ void blk_mq_exit_queue(struct request_queue *q)
 {
 	struct blk_mq_tag_set *set = q->tag_set;
 
+	blk_glitch_detection_debugfs_unregister(q);
 	blk_mq_unregister_default_hierarchy(q);
 	/* Checks hctx->flags & BLK_MQ_F_TAG_QUEUE_SHARED. */
 	blk_mq_exit_hw_queues(q, set, set->nr_hw_queues);

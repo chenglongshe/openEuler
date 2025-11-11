@@ -223,6 +223,22 @@ static inline bool blk_path_error(blk_status_t error)
 	return true;
 }
 
+enum stage_io_latency_group {
+	STAGE_BIO_ALLOC,
+	STAGE_BIO_THROTTLE,
+	STAGE_BIO_TH_END,
+	STAGE_BIO_RQS,
+	STAGE_BIO_RQS_END,
+	STAGE_BIO_NR,
+	STAGE_RQ_GETRQ = STAGE_BIO_NR,
+	STAGE_RQ_PLUG,
+	STAGE_RQ_SCHED,
+	STAGE_RQ_ISSUE,
+	STAGE_RQ_HARD,
+	STAGE_RQ_DONE,
+	STAGE_TOTAL_NR,
+};
+
 struct bio_issue {
 	u64 value;
 };
@@ -309,7 +325,11 @@ struct bio {
 #else
 	KABI_RESERVE(5)
 #endif
+#ifdef CONFIG_BLK_IO_GLITCH_DETECTION
+	KABI_USE(6, u64 *time_ns)
+#else
 	KABI_RESERVE(6)
+#endif
 	KABI_RESERVE(7)
 	KABI_RESERVE(8)
 

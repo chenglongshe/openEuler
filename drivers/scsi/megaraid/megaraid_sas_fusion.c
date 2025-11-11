@@ -3431,6 +3431,7 @@ megasas_build_and_issue_cmd_fusion(struct megasas_instance *instance,
 	 * Issue the command to the FW
 	 */
 
+	blk_glitch_detection_rq_acct(scsi_cmd_to_rq(scmd), STAGE_RQ_HARD, NULL);
 	megasas_sdev_busy_inc(instance, scmd);
 	megasas_fire_cmd_fusion(instance, req_desc);
 

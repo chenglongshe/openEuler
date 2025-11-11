@@ -42,3 +42,4 @@ obj-$(CONFIG_BLK_INLINE_ENCRYPTION_FALLBACK)	+= blk-crypto-fallback.o
 obj-$(CONFIG_BLOCK_HOLDER_DEPRECATED)	+= holder.o
 obj-$(CONFIG_BLK_IO_HIERARCHY_STATS)    += blk-io-hierarchy/
 obj-$(CONFIG_BPF_RVI)		+= bpf-rvi.o
+obj-$(CONFIG_BLK_IO_GLITCH_DETECTION)	+= blk-glitch-detection.o
