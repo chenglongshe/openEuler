@@ -10492,7 +10492,7 @@ void ia64_set_curr_task(int cpu, struct task_struct *p)
 /* task_group_lock serializes the addition/removal of task groups */
 static DEFINE_SPINLOCK(task_group_lock);
 
-#ifdef CONFIG_QOS_SCHED
+#if defined(CONFIG_QOS_SCHED) || defined(CONFIG_XCALL_SMT_QOS)
 static inline int alloc_qos_sched_group(struct task_group *tg,
 					struct task_group *parent)
 {
@@ -10500,7 +10500,9 @@ static inline int alloc_qos_sched_group(struct task_group *tg,
 
 	return 1;
 }
+#endif
 
+#ifdef CONFIG_QOS_SCHED
 static void sched_change_qos_group(struct task_struct *tsk, struct task_group *tg)
 {
 	struct sched_attr attr = {0};
@@ -10610,7 +10612,7 @@ struct task_group *sched_create_group(struct task_group *parent)
 	if (!alloc_fair_sched_group(tg, parent))
 		goto err;
 
-#ifdef CONFIG_QOS_SCHED
+#if defined(CONFIG_QOS_SCHED) || defined(CONFIG_XCALL_SMT_QOS)
 	if (!alloc_qos_sched_group(tg, parent))
 		goto err;
 #endif
@@ -11718,6 +11720,47 @@ static inline s64 cpu_soft_quota_read(struct cgroup_subsys_state *css,
 }
 #endif
 
+#ifdef CONFIG_XCALL_SMT_QOS
+static int pmu_tg_change_scheduler(struct task_group *tg, void *data)
+{
+	s64 qos_level = *(s64 *)data;
+
+	tg->qos_level = qos_level;
+
+	return 0;
+}
+
+static int pmu_cpu_qos_write(struct cgroup_subsys_state *css,
+			 struct cftype *cftype, s64 qos_level)
+{
+	struct task_group *tg = css_tg(css);
+
+	if (!tg->se[0])
+		return -EINVAL;
+
+	if (qos_level > QOS_LEVEL_HIGH_EX || qos_level < QOS_LEVEL_OFFLINE_EX)
+		return -EINVAL;
+
+	if (tg->qos_level == qos_level)
+		goto done;
+
+	if (tg->qos_level != QOS_LEVEL_ONLINE)
+		return -EINVAL;
+
+	rcu_read_lock();
+	walk_tg_tree_from(tg, pmu_tg_change_scheduler, tg_nop, (void *)(&qos_level));
+	rcu_read_unlock();
+done:
+	return 0;
+}
+
+static inline s64 pmu_cpu_qos_read(struct cgroup_subsys_state *css,
+			       struct cftype *cft)
+{
+	return css_tg(css)->qos_level;
+}
+#endif
+
 #ifdef CONFIG_BPF_SCHED
 void sched_settag(struct task_struct *tsk, s64 tag)
 {
@@ -11970,6 +12013,14 @@ static struct cftype cpu_legacy_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.read_s64 = cpu_soft_quota_read,
 		.write_s64 = cpu_soft_quota_write,
+	},
+#endif
+#ifdef CONFIG_XCALL_SMT_QOS
+	{
+		.name = "pmu_qos_level",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_s64 = pmu_cpu_qos_read,
+		.write_s64 = pmu_cpu_qos_write,
 	},
 #endif
 #ifdef CONFIG_BPF_SCHED

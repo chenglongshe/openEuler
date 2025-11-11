@@ -22,6 +22,9 @@ SECTIONS
 #ifdef CONFIG_TIME_NS
 	PROVIDE(_timens_data = _vdso_data + PAGE_SIZE);
 #endif
+#ifdef CONFIG_XCALL_SMT_QOS
+	PROVIDE(_qos_data = _vdso_data + PAGE_SIZE);
+#endif
 	. = VDSO_LBASE + SIZEOF_HEADERS;
 
 	.hash		: { *(.hash) }			:text
@@ -103,6 +106,7 @@ VERSION
 		__kernel_gettimeofday;
 		__kernel_clock_gettime;
 		__kernel_clock_getres;
+		__kernel_smt_qos_trampoline;
 	local: *;
 	};
 }
@@ -111,3 +115,6 @@ VERSION
  * Make the sigreturn code visible to the kernel.
  */
 VDSO_sigtramp		= __kernel_rt_sigreturn;
+#ifdef CONFIG_XCALL_SMT_QOS
+VDSO_smt_qos_trampoline	= __kernel_smt_qos_trampoline;
+#endif
