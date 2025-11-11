@@ -48,6 +48,7 @@
 #include <linux/sched/mm.h>
 #include <linux/ksm.h>
 #include <linux/share_pool.h>
+#include <linux/xcall.h>
 
 #include <linux/uaccess.h>
 #include <asm/cacheflush.h>
@@ -590,9 +591,12 @@ static inline void vma_complete(struct vma_prepare *vp,
 
 		if (!vp->skip_vma_uprobe) {
 			uprobe_mmap(vp->vma);
+			xcall_mmap(vp->vma, mm);
 
-			if (vp->adj_next)
+			if (vp->adj_next) {
 				uprobe_mmap(vp->adj_next);
+				xcall_mmap(vp->adj_next, mm);
+			}
 		}
 	}
 
@@ -622,8 +626,10 @@ again:
 			goto again;
 		}
 	}
-	if (vp->insert && vp->file)
+	if (vp->insert && vp->file) {
 		uprobe_mmap(vp->insert);
+		xcall_mmap(vp->insert, mm);
+	}
 	validate_mm(mm);
 }
 
@@ -2943,8 +2949,10 @@ expanded:
 			mm->locked_vm += (len >> PAGE_SHIFT);
 	}
 
-	if (file)
+	if (file) {
 		uprobe_mmap(vma);
+		xcall_mmap(vma, mm);
+	}
 
 	/*
 	 * New (or expanded) vma always get soft dirty status.
