@@ -20,23 +20,6 @@ static const struct class mfs_dev_class = {
 };
 static struct device *mfs_dev;
 
-static inline void mfs_finish_event(struct mfs_event *event, struct xa_state *xas)
-{
-	struct mfs_syncer *syncer = event->syncer;
-
-	if (unlikely(!xas || !event))
-		return;
-
-	if (syncer) {
-		if (xa_cmpxchg(xas->xa, xas->xa_index, event, NULL, 0) != event)
-			return;
-
-		if (atomic_dec_and_test(&syncer->notback))
-			complete(&syncer->done);
-		put_mfs_event(event);
-	}
-}
-
 static int mfs_dev_open(struct inode *inode, struct file *file)
 {
 	struct mfs_caches *caches;
@@ -105,32 +88,34 @@ static ssize_t mfs_dev_read(struct file *file, char __user *buf,
 		xas_unlock(&xas);
 		return 0;
 	}
+	if (event->syncer)
+		get_mfs_event(event);
 	xas_unlock(&xas);
 
 	msg = &event->msg;
 	n = msg->len;
-	if (n > blen)
-		return -EMSGSIZE;
+	if (n > blen) {
+		ret = -EMSGSIZE;
+		goto out;
+	}
 
 	ret = try_hook_fd(event);
 	if (ret < 0)
-		return ret;
+		goto out;
 
 	msg->fd = ret;
 	ret = 0;
+	if (copy_to_user(buf, msg, n)) {
+		ret = -EFAULT;
+		goto out;
+	}
 	xas_lock(&xas);
 	xas_clear_mark(&xas, MFS_EVENT_NEW);
 	caches->next_ev = xas.xa_index + 1;
-	if (event->syncer)
-		get_mfs_event(event);
-	else
+	if (!event->syncer)
 		xas_store(&xas, NULL);
 	xas_unlock(&xas);
-
-	if (copy_to_user(buf, msg, n))
-		ret = -EFAULT;
-	if (ret)
-		mfs_finish_event(event, &xas);
+out:
 	put_mfs_event(event);
 	trace_mfs_dev_read(file, msg->opcode, msg->id, msg->fd);
 	return ret ? ret : n;
