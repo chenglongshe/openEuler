@@ -81,6 +81,10 @@
 #include <linux/rtmutex.h>
 #endif
 
+#ifdef CONFIG_XCALL_SMT_QOS
+#include <asm/smt_qos.h>
+#endif
+
 /* shared constants to be used in various sysctls */
 const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
 EXPORT_SYMBOL(sysctl_vals);
@@ -2042,6 +2046,35 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= SYSCTL_ONE,
+		.extra2		= SYSCTL_INT_MAX,
+	},
+#endif
+#ifdef CONFIG_XCALL_SMT_QOS
+	{
+		.procname	= "xcall_vdso_delay_cycles",
+		.data		= &sysctl_delay_cycles,
+		.maxlen		= sizeof(sysctl_delay_cycles),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ONE,
+		.extra2		= SYSCTL_INT_MAX,
+	},
+	{
+		.procname	= "sample_interval_inst",
+		.data		= &sysctl_sample_interval_inst,
+		.maxlen		= sizeof(sysctl_sample_interval_inst),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= SYSCTL_INT_MAX,
+	},
+	{
+		.procname	= "sample_interval_cycles",
+		.data		= &sysctl_sample_interval_cycles,
+		.maxlen		= sizeof(sysctl_sample_interval_cycles),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
 		.extra2		= SYSCTL_INT_MAX,
 	},
 #endif
