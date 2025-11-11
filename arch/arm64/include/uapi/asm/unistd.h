@@ -36,3 +36,10 @@
 #define __ARCH_WANT_MEMFD_SECRET
 
 #include <asm-generic/unistd.h>
+
+#ifdef CONFIG_XCALL_SMT_QOS
+#ifndef __NR_vdso_wfxt_return
+#define __NR_vdso_wfxt_return (__NR_arch_specific_syscall + 11)
+#endif
+__SYSCALL(__NR_vdso_wfxt_return, sys_vdso_wfxt_return)
+#endif

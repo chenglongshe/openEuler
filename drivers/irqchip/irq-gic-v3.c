@@ -1008,7 +1008,8 @@ DECLARE_BITMAP(irqnr_xint_map, 1024);
 static bool can_set_xint(unsigned int hwirq)
 {
 	if (__get_intid_range(hwirq) == SGI_RANGE ||
-	    __get_intid_range(hwirq) == SPI_RANGE)
+	    __get_intid_range(hwirq) == SPI_RANGE ||
+	    __get_intid_range(hwirq) == PPI_RANGE)
 		return true;
 
 	return false;

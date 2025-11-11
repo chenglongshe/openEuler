@@ -71,4 +71,16 @@ config ACTLR_XCALL_XINT
 	  Use the 0x680 as the offset to the exception vector base address for
 	  the Armv8.8 NMI taken from EL0.
 
+config XCALL_SMT_QOS
+	bool "Xcall SMT QoS Optimization in Offline Mixed Deployment Scenarios"
+	depends on !QOS_SCHED && !QOS_SCHED_SMART_GRID && SCHED_SMT
+	depends on FAST_IRQ || ACTLR_XCALL_XINT
+	default n
+	help
+	  To reduce the interference of offline tasks on online tasks
+	  in scenarios where SMT (Simultaneous Multithreading) is used
+	  for mixed deployment of offline and online tasks, WFxT instructions
+	  that do not affect SMT performance are executed by injecting PMU
+	  interrupts on the CPU cores running the offline tasks.
+
 endmenu # "Turbo features selection"
