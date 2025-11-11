@@ -1058,6 +1058,11 @@ static inline pte_t pte_mkhuge(pte_t pte)
 {
 	return set_pte_bit(pte, __pgprot(_PAGE_LARGE));
 }
+
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	return clear_pte_bit(pte, __pgprot(_PAGE_LARGE));
+}
 #endif
 
 #define IPTE_GLOBAL	0

@@ -173,6 +173,7 @@ static inline pmd_t *pud_pgtable(pud_t pud)
 
 #define pte_huge(pte)		(pte_val(pte) && !(pte_val(pte) & PTE_TABLE_BIT))
 #define pte_mkhuge(pte)		(__pte(pte_val(pte) & ~PTE_TABLE_BIT))
+#define pte_clrhuge(pte)		(__pte(pte_val(pte) | PTE_TABLE_BIT))
 
 #define pmd_isset(pmd, val)	((u32)(val) == (val) ? pmd_val(pmd) & (val) \
 						: !!(pmd_val(pmd) & (val)))

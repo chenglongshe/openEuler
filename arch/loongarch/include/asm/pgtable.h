@@ -405,6 +405,12 @@ static inline pte_t pte_mkhuge(pte_t pte)
 	return pte;
 }
 
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	pte_val(pte) &= ~_PAGE_HUGE;
+	return pte;
+}
+
 #if defined(CONFIG_ARCH_HAS_PTE_SPECIAL)
 static inline int pte_special(pte_t pte)	{ return pte_val(pte) & _PAGE_SPECIAL; }
 static inline pte_t pte_mkspecial(pte_t pte)	{ pte_val(pte) |= _PAGE_SPECIAL; return pte; }

@@ -143,6 +143,13 @@ static inline pte_t pte_mkhuge(pte_t pte)
 
 #define pte_mkhuge pte_mkhuge
 
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	return __pte(pte_val(pte) & ~(_PAGE_SPS | _PAGE_HUGE));
+}
+
+#define pte_clrhuge pte_clrhuge
+
 static inline pte_basic_t pte_update(struct mm_struct *mm, unsigned long addr, pte_t *p,
 				     unsigned long clr, unsigned long set, int huge);
 
