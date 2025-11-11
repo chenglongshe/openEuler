@@ -1,0 +1,203 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (C) 2025 Huawei Limited.
+ */
+#include <linux/slab.h>
+#include <linux/xcall.h>
+#include <linux/string.h>
+#include <linux/proc_fs.h>
+#include <linux/module.h>
+#include <linux/seq_file.h>
+
+#include <asm/xcall.h>
+
+static LIST_HEAD(comm_list);
+static DECLARE_RWSEM(comm_rwsem);
+
+static void free_xcall_comm(struct xcall_comm *info)
+{
+	if (!info)
+		return;
+	kfree(info->name);
+	kfree(info->binary);
+	kfree(info->module);
+	kfree(info);
+}
+
+static struct xcall_comm *find_xcall_comm(struct xcall_comm *comm)
+{
+	struct xcall_comm *temp;
+
+	list_for_each_entry(temp, &comm_list, list) {
+		if (!strcmp(comm->name, temp->name))
+			return temp;
+	}
+
+	return NULL;
+}
+
+static void delete_xcall_comm_locked(struct xcall_comm *info)
+{
+	struct xcall_comm *ret;
+
+	down_write(&comm_rwsem);
+	ret = find_xcall_comm(info);
+	if (ret)
+		list_del(&ret->list);
+	up_write(&comm_rwsem);
+	free_xcall_comm(ret);
+}
+
+static void insert_xcall_comm_locked(struct xcall_comm *info)
+{
+	down_write(&comm_rwsem);
+	if (!find_xcall_comm(info))
+		list_add(&info->list, &comm_list);
+	up_write(&comm_rwsem);
+}
+
+static int parse_xcall_command(int argc, char **argv,
+			       struct xcall_comm *info)
+{
+	if (strlen(argv[0]) < 3)
+		return -ECANCELED;
+
+	if (argv[0][0] != '+' && argv[0][0] != '-')
+		return -ECANCELED;
+
+	if (argv[0][1] != ':')
+		return -ECANCELED;
+
+	if (argv[0][0] == '+' && argc != 3)
+		return -ECANCELED;
+
+	if (argv[0][0] == '-' && argc != 1)
+		return -ECANCELED;
+
+	info->name = kstrdup(&argv[0][2], GFP_KERNEL);
+	if (!info->name)
+		return -ENOMEM;
+
+	if (argv[0][0] == '-')
+		return '-';
+
+	info->binary = kstrdup(argv[1], GFP_KERNEL);
+	if (!info->binary)
+		goto binary_fail;
+
+	info->module = kstrdup(argv[2], GFP_KERNEL);
+	if (!info->module)
+		goto module_fail;
+
+	return argv[0][0];
+
+module_fail:
+	kfree(info->binary);
+binary_fail:
+	kfree(info->name);
+	return 'x';
+}
+
+/*
+ * /proc/xcall/comm
+ * Argument syntax:
+ *   +:COMM ELF_FILE [KERNEL_MODULE] : Attach a xcall
+ *   -:COMM							 : Detach a xcall
+ *
+ *   COMM:		: Unique string for attached xcall.
+ *   ELF_FILE		: Path to an executable or library.
+ *   KERNEL_MODULE	: Module name listed in /proc/modules provide xcall program.
+ */
+int proc_xcall_command(int argc, char **argv)
+{
+	struct xcall_comm *info;
+	int ret, op;
+
+	info = kzalloc(sizeof(*info), GFP_KERNEL);
+	if (!info)
+		return -ENOMEM;
+	INIT_LIST_HEAD(&info->list);
+
+	op = parse_xcall_command(argc, argv, info);
+	switch (op) {
+	case '+':
+		ret = xcall_attach(info);
+		if (!ret)
+			insert_xcall_comm_locked(info);
+		else
+			free_xcall_comm(info);
+		break;
+	case '-':
+		ret = xcall_detach(info);
+		if (!ret)
+			delete_xcall_comm_locked(info);
+		free_xcall_comm(info);
+		break;
+	default:
+		free_xcall_comm(info);
+		return -ECANCELED;
+	}
+
+	return ret;
+}
+
+static int xcall_comm_show(struct seq_file *m, void *v)
+{
+	struct xcall_comm *info;
+
+	down_read(&comm_rwsem);
+	list_for_each_entry(info, &comm_list, list) {
+		seq_printf(m, "+:%s %s %s\n",
+			   info->name, info->binary,
+			   info->module);
+	}
+	up_read(&comm_rwsem);
+	return 0;
+}
+
+static int xcall_comm_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xcall_comm_show, NULL);
+}
+
+static ssize_t xcall_comm_write(struct file *file,
+				const char __user *user_buf,
+				size_t nbytes, loff_t *ppos)
+{
+	int argc = 0, ret = 0;
+	char *raw_comm;
+	char **argv;
+
+	raw_comm = memdup_user_nul(user_buf, nbytes - 1);
+	if (IS_ERR(raw_comm))
+		return PTR_ERR(raw_comm);
+
+	argv = argv_split(GFP_KERNEL, raw_comm, &argc);
+	if (!argv) {
+		kfree(raw_comm);
+		return -ENOMEM;
+	}
+
+	ret = proc_xcall_command(argc, argv);
+
+	argv_free(argv);
+
+	kfree(raw_comm);
+
+	return ret ? ret : nbytes;
+}
+
+static const struct proc_ops xcall_comm_ops = {
+	.proc_open	= xcall_comm_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_write	= xcall_comm_write,
+};
+
+static int __init xcall_proc_init(void)
+{
+	proc_mkdir("xcall", NULL);
+	proc_create("xcall/comm", 0644, NULL, &xcall_comm_ops);
+	return 0;
+}
+module_init(xcall_proc_init);
