@@ -745,6 +745,19 @@ static void mpam_ris_hw_probe(struct mpam_msc_ris *ris)
 	}
 }
 
+static int mpam_pmg_max_hisi_workaround(struct mpam_msc *msc)
+{
+	static const struct midr_range cpus[] = {
+		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
+		{ /* sentinel */ }
+	};
+
+	if (!is_midr_in_range_list(cpus))
+		return msc->pmg_max;
+
+	return 0;
+}
+
 static int mpam_msc_hw_probe(struct mpam_msc *msc)
 {
 	u64 idr;
@@ -771,6 +784,7 @@ static int mpam_msc_hw_probe(struct mpam_msc *msc)
 	/* Use these values so partid/pmg always starts with a valid value */
 	msc->partid_max = FIELD_GET(MPAMF_IDR_PARTID_MAX, idr);
 	msc->pmg_max = FIELD_GET(MPAMF_IDR_PMG_MAX, idr);
+	msc->pmg_max = mpam_pmg_max_hisi_workaround(msc);
 
 	for (ris_idx = 0; ris_idx <= msc->ris_max; ris_idx++) {
 		spin_lock(&msc->part_sel_lock);
