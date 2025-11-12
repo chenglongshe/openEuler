@@ -16,4 +16,11 @@
 void kernel_neon_begin(void);
 void kernel_neon_end(void);
 
+#ifdef CONFIG_NEON_COPY_USER
+bool kernel_neon_copy_enabled(void);
+
+void kernel_neon_copy_begin(void);
+void kernel_neon_copy_end(void);
+#endif
+
 #endif /* ! __ASM_NEON_H */

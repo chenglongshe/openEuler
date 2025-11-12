@@ -1933,6 +1933,97 @@ void kernel_neon_end(void)
 }
 EXPORT_SYMBOL_GPL(kernel_neon_end);
 
+#ifdef CONFIG_NEON_COPY_USER
+DEFINE_STATIC_KEY_FALSE(kernel_neon_copy_user_used);
+bool kernel_neon_copy_enabled(void)
+{
+	return static_key_enabled(&kernel_neon_copy_user_used);
+}
+EXPORT_SYMBOL_GPL(kernel_neon_copy_enabled);
+
+/*
+ * kernel_neon_copy_begin(): only set FPSIMD context busy
+ *
+ * The caller must save the used FPSIMD registers to stack and restore registers
+ */
+void kernel_neon_copy_begin(void)
+{
+	get_cpu_fpsimd_context();
+}
+EXPORT_SYMBOL_GPL(kernel_neon_copy_begin);
+
+/*
+ * kernel_neon_copy_end(): relase FPSIMD context
+ *
+ * Must be called from a context in which kernel_neon_copy_begin() was previously
+ * called.
+ */
+void kernel_neon_copy_end(void)
+{
+	put_cpu_fpsimd_context();
+}
+EXPORT_SYMBOL_GPL(kernel_neon_copy_end);
+
+static int neon_copy_sysctl_handler(struct ctl_table *table, int write,
+	void *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret, val;
+	struct ctl_table tmp = {
+		.data	= &val,
+		.maxlen	= sizeof(val),
+		.mode	= table->mode,
+		.extra1	= SYSCTL_ZERO,
+		.extra2	= SYSCTL_ONE,
+	};
+	/* List of CPUs that support NEON copy */
+	static const struct midr_range hip12_cpus[] = {
+		MIDR_ALL_VERSIONS(MIDR_HISI_HIP12),
+		{ }
+	};
+
+	if (write && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (cpus_have_const_cap(ARM64_HAS_NO_FPSIMD))
+		return -EPERM;
+
+	if (!is_midr_in_range_list(hip12_cpus))
+		return -EPERM;
+
+	if (!write) {
+		if (static_key_enabled(&kernel_neon_copy_user_used))
+			val = 1;
+		else
+			val = 0;
+	}
+	ret = proc_dointvec_minmax(&tmp, write, buffer, lenp, ppos);
+	if (write && !ret) {
+		if (val)
+			static_branch_enable(&kernel_neon_copy_user_used);
+		else
+			static_branch_disable(&kernel_neon_copy_user_used);
+	}
+	return 0;
+}
+
+static struct ctl_table neon_copy_sysctl_table[] = {
+	{
+		.procname = "neon_copy_user",
+		.mode = 0644,
+		.proc_handler = neon_copy_sysctl_handler,
+	},
+	{ }
+};
+
+static int __init neon_copy_sysctl_init(void)
+{
+	if (!register_sysctl("kernel", neon_copy_sysctl_table))
+		return -EINVAL;
+	return 0;
+}
+core_initcall(neon_copy_sysctl_init);
+#endif
+
 #ifdef CONFIG_EFI
 
 static DEFINE_PER_CPU(struct user_fpsimd_state, efi_fpsimd_state);

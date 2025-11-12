@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (C) 2012 ARM Ltd.
+ * Copyright (C) 2025 Huawei Ltd.
  */
 
 #include <linux/linkage.h>
@@ -51,29 +51,28 @@
 	user_stp 9997f, \reg1, \reg2, \ptr, \val
 	.endm
 
-#ifdef CONFIG_NEON_COPY_USER
-	.macro ldneon reg1, reg2, reg3, reg4, ptr, val
-	b	9997f
+	.macro stneon reg1, reg2, reg3, reg4, ptr, val
+	user_stneon 9987f, \reg1, \reg2, \reg3, \reg4, \ptr, \val
 	.endm
 
-	.macro stneon reg1, reg2, reg3, reg4, ptr, val
-	b	9997f
+	.macro ldneon reg1, reg2, reg3, reg4, ptr, val
+	ld1 {\reg1, \reg2, \reg3, \reg4}, [\ptr]
+	add \ptr, \ptr, \val
 	.endm
-#endif
 
 end	.req	x5
 srcin	.req	x15
-SYM_FUNC_START(__arch_copy_to_user)
+SYM_FUNC_START(__arch_copy_to_user_neon)
 	add	end, x0, x2
 	mov	srcin, x1
-#ifdef CONFIG_NEON_COPY_USER
-	mov	x3, #0		/* disable neon copy */
-#endif
+	mov	x3, #1		/* enable neon copy */
 #include "copy_template.S"
 	mov	x0, #0
 	ret
 
 	// Exception fixups
+9987:	ld1	{V_a.16b, V_b.16b, V_c.16b, V_d.16b}, [sp]  /* restore current regs */
+	add	sp, sp, #64
 9997:	cmp	dst, dstin
 	b.ne	9998f
 	// Before being absolutely sure we couldn't copy anything, try harder
@@ -82,5 +81,5 @@ USER(9998f, sttrb tmp1w, [dst])
 	add	dst, dst, #1
 9998:	sub	x0, end, dst			// bytes not copied
 	ret
-SYM_FUNC_END(__arch_copy_to_user)
-EXPORT_SYMBOL(__arch_copy_to_user)
+SYM_FUNC_END(__arch_copy_to_user_neon)
+EXPORT_SYMBOL(__arch_copy_to_user_neon)

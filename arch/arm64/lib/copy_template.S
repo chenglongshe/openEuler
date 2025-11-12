@@ -18,14 +18,16 @@
  *	x0 - dest
  *	x1 - src
  *	x2 - n
+ *	x3 - useneon
  * Returns:
  *	x0 - dest
  */
 dstin	.req	x0
 src	.req	x1
 count	.req	x2
-tmp1	.req	x3
-tmp1w	.req	w3
+useneon	.req	x3
+tmp1	.req	x16
+tmp1w	.req	w16
 tmp2	.req	x4
 tmp2w	.req	w4
 dst	.req	x6
@@ -38,6 +40,12 @@ C_l	.req	x11
 C_h	.req	x12
 D_l	.req	x13
 D_h	.req	x14
+#ifdef CONFIG_NEON_COPY_USER
+V_a	.req	v20
+V_b	.req	v21
+V_c	.req	v22
+V_d	.req	v23
+#endif
 
 	mov	dst, dstin
 	cmp	count, #16
@@ -145,12 +153,16 @@ D_h	.req	x14
 	b.ne	.Ltail63
 	b	.Lexitfunc
 
+.Lcpy_body_large:
+#ifdef CONFIG_NEON_COPY_USER
+	tbnz	useneon, #0, .Lcpy_body_large_useneon
+#endif
 	/*
 	* Critical loop.  Start at a new cache line boundary.  Assuming
 	* 64 bytes per line this ensures the entire loop is in one line.
 	*/
 	.p2align	L1_CACHE_SHIFT
-.Lcpy_body_large:
+.Lcpy_body_large_usex:
 	/* pre-get 64 bytes data. */
 	ldp1	A_l, A_h, src, #16
 	ldp1	B_l, B_h, src, #16
@@ -178,4 +190,38 @@ D_h	.req	x14
 
 	tst	count, #0x3f
 	b.ne	.Ltail63
+
+#ifdef CONFIG_NEON_COPY_USER
+	b	.Lexitfunc
+
+.Lcpy_body_large_useneon:
+	/*
+	* Critical loop.  Start at a new cache line boundary.  Assuming
+	* 64 bytes per line this ensures the entire loop is in one line.
+	*/
+	.p2align	L1_CACHE_SHIFT
+	sub	sp, sp, #64
+	st1	{V_a.16b, V_b.16b, V_c.16b, V_d.16b}, [sp]  /* save current regs */
+	/* pre-get 64 bytes data. */
+	ldneon	V_a.16b, V_b.16b, V_c.16b, V_d.16b, src, #64
+
+1:
+	/*
+	* interlace the load of next 64 bytes data block with store of the last
+	* loaded 64 bytes data.
+	*/
+	stneon	V_a.16b, V_b.16b, V_c.16b, V_d.16b, dst, #64
+	ldneon	V_a.16b, V_b.16b, V_c.16b, V_d.16b, src, #64
+
+	subs	count, count, #64
+	b.ge	1b
+
+	stneon	V_a.16b, V_b.16b, V_c.16b, V_d.16b, dst, #64
+
+	ld1	{V_a.16b, V_b.16b, V_c.16b, V_d.16b}, [sp]  /* restore current regs */
+	add	sp, sp, #64
+
+	tst	count, #0x3f
+	b.ne	.Ltail63
+#endif
 .Lexitfunc:
