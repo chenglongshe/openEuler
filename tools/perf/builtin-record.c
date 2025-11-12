@@ -91,6 +91,7 @@ struct switch_output {
 	char		 **filenames;
 	int		 num_files;
 	int		 cur_file;
+	int		data_test;
 };
 
 struct thread_mask {
