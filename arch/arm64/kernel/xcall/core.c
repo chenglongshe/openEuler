@@ -23,17 +23,23 @@ static struct xcall_prog *get_xcall_prog(const char *module)
 {
 	struct xcall_prog *p;
 
-	spin_lock(&prog_list_lock);
 	list_for_each_entry(p, &progs_list, list) {
-		if (!strcmp(module, p->name)) {
-			spin_unlock(&prog_list_lock);
+		if (!strcmp(module, p->name))
 			return p;
-		}
 	}
-	spin_unlock(&prog_list_lock);
 	return NULL;
 }
 
+static struct xcall_prog *get_xcall_prog_locked(const char *module)
+{
+	struct xcall_prog *ret;
+
+	spin_lock(&prog_list_lock);
+	ret = get_xcall_prog(module);
+	spin_unlock(&prog_list_lock);
+
+	return ret;
+}
 
 static struct xcall *get_xcall(struct xcall *xcall)
 {
@@ -102,7 +108,7 @@ static void delete_xcall(struct xcall *xcall)
 /* Init xcall with a given inode */
 static int init_xcall(struct xcall *xcall, struct xcall_comm *comm)
 {
-	struct xcall_prog *program = get_xcall_prog(comm->module);
+	struct xcall_prog *program = get_xcall_prog_locked(comm->module);
 
 	if (!program || !try_module_get(program->owner))
 		return -EINVAL;
@@ -156,3 +162,53 @@ int xcall_detach(struct xcall_comm *comm)
 	delete_xcall(xcall);
 	return 0;
 }
+
+static int check_prog(struct xcall_prog *prog)
+{
+	struct xcall_prog_object *obj = prog->objs;
+
+	prog->nr_scno = 0;
+	while (obj && obj->func) {
+		if (obj->scno >= __NR_syscalls)
+			return -EINVAL;
+
+		prog->nr_scno++;
+		obj++;
+	}
+
+	if (!prog->nr_scno || prog->nr_scno > MAX_NR_SCNO)
+		return -EINVAL;
+
+	pr_info("Successly registered syscall number: %d\n", prog->nr_scno);
+	return 0;
+}
+
+int xcall_prog_register(struct xcall_prog *prog)
+{
+	if (!static_key_enabled(&xcall_enable))
+		return -EACCES;
+
+	if (check_prog(prog))
+		return -EINVAL;
+
+	spin_lock(&prog_list_lock);
+	if (get_xcall_prog(prog->name)) {
+		spin_unlock(&prog_list_lock);
+		return -EBUSY;
+	}
+	list_add(&prog->list, &progs_list);
+	spin_unlock(&prog_list_lock);
+	return 0;
+}
+EXPORT_SYMBOL(xcall_prog_register);
+
+void xcall_prog_unregister(struct xcall_prog *prog)
+{
+	if (!static_key_enabled(&xcall_enable))
+		return;
+
+	spin_lock(&prog_list_lock);
+	list_del(&prog->list);
+	spin_unlock(&prog_list_lock);
+}
+EXPORT_SYMBOL(xcall_prog_unregister);
