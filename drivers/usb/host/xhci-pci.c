@@ -305,11 +305,6 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
 		xhci->quirks |= XHCI_EP_CTX_BROKEN_DCS;
 	}
 
-	if (pdev->vendor == PCI_VENDOR_ID_ZHAOXIN &&
-		(pdev->device == 0x9202 ||
-		 pdev->device == 0x9203))
-		xhci->quirks |= XHCI_ZHAOXIN_TRB_FETCH;
-
 	if (pdev->vendor == PCI_VENDOR_ID_ASMEDIA &&
 		pdev->device == PCI_DEVICE_ID_ASMEDIA_1042_XHCI) {
 		/*
@@ -337,8 +332,15 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
 	if (pdev->vendor == PCI_VENDOR_ID_TI && pdev->device == 0x8241)
 		xhci->quirks |= XHCI_LIMIT_ENDPOINT_INTERVAL_7;
 
-	if (pdev->vendor == PCI_VENDOR_ID_ZHAOXIN && pdev->device == 0x9202)
-		xhci->quirks |= XHCI_RESET_ON_RESUME;
+	if (pdev->vendor == PCI_VENDOR_ID_ZHAOXIN) {
+		if (pdev->device == 0x9202) {
+			xhci->quirks |= XHCI_RESET_ON_RESUME;
+			xhci->quirks |= XHCI_ZHAOXIN_TRB_FETCH;
+		}
+
+		if (pdev->device == 0x9203)
+			xhci->quirks |= XHCI_ZHAOXIN_TRB_FETCH;
+	}
 
 	if ((pdev->vendor == PCI_VENDOR_ID_BROADCOM ||
 	     pdev->vendor == PCI_VENDOR_ID_CAVIUM) &&
