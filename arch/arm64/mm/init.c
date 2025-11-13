@@ -686,3 +686,23 @@ void dump_mem_limit(void)
 		pr_emerg("Memory Limit: none\n");
 	}
 }
+
+#define DISTANCE_MAX	(1 << DISTANCE_BITS)
+static int __init node_reclaim_distance_setup(char *str)
+{
+	int val;
+
+	if (kstrtoint(str, 0, &val))
+		return 0;
+
+	if (val < LOCAL_DISTANCE || val >= DISTANCE_MAX)
+		return 0;
+
+	if (val != RECLAIM_DISTANCE) {
+		node_reclaim_distance = val;
+		pr_info("force set node_reclaim_distance to %d\n", val);
+	}
+
+	return 0;
+}
+early_param("node_reclaim_distance", node_reclaim_distance_setup);
