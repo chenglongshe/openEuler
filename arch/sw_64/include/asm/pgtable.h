@@ -622,6 +622,12 @@ static inline pte_t pte_mkhuge(pte_t pte)
 	return pte;
 }
 
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	pte_val(pte) &= ~_PAGE_LEAF;
+	return pte;
+}
+
 static inline pte_t pte_mkspecial(pte_t pte)
 {
 	pte_val(pte) |= _PAGE_SPECIAL;

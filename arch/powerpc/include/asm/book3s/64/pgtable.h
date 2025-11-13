@@ -598,6 +598,11 @@ static inline pte_t pte_mkhuge(pte_t pte)
 	return pte;
 }
 
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	return pte;
+}
+
 static inline pte_t pte_mkdevmap(pte_t pte)
 {
 	return __pte_raw(pte_raw(pte) | cpu_to_be64(_PAGE_SPECIAL | _PAGE_DEVMAP));
@@ -1394,7 +1399,7 @@ extern int pmd_move_must_withdraw(struct spinlock *new_pmd_ptl,
  * slot information.
  */
 #define arch_needs_pgtable_deposit arch_needs_pgtable_deposit
-static inline bool arch_needs_pgtable_deposit(void)
+static inline bool arch_needs_pgtable_deposit(struct vm_area_struct *vma)
 {
 	if (radix_enabled())
 		return false;

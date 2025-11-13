@@ -420,6 +420,11 @@ static inline pte_t pte_mkhuge(pte_t pte)
 	return __pte(pte_val(pte) | __pte_default_huge_mask());
 }
 
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	return __pte(pte_val(pte) & ~__pte_default_huge_mask());
+}
+
 static inline bool is_default_hugetlb_pte(pte_t pte)
 {
 	unsigned long mask = __pte_default_huge_mask();
@@ -782,6 +787,7 @@ static inline pmd_t pmd_mkwrite_novma(pmd_t pmd)
 	return __pmd(pte_val(pte));
 }
 
+#define pmd_pgprot pmd_pgprot
 static inline pgprot_t pmd_pgprot(pmd_t entry)
 {
 	unsigned long val = pmd_val(entry);

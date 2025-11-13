@@ -912,6 +912,7 @@ static inline int pte_unused(pte_t pte)
  * young/old accounting is not supported, i.e _PAGE_PROTECT and _PAGE_INVALID
  * must not be set.
  */
+#define pte_pgprot pte_pgprot
 static inline pgprot_t pte_pgprot(pte_t pte)
 {
 	unsigned long pte_flags = pte_val(pte) & _PAGE_CHG_MASK;
@@ -1056,6 +1057,11 @@ static inline pte_t pte_mkspecial(pte_t pte)
 static inline pte_t pte_mkhuge(pte_t pte)
 {
 	return set_pte_bit(pte, __pgprot(_PAGE_LARGE));
+}
+
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	return clear_pte_bit(pte, __pgprot(_PAGE_LARGE));
 }
 #endif
 

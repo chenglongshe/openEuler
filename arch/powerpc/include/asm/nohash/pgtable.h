@@ -132,6 +132,13 @@ static inline pte_t pte_mkhuge(pte_t pte)
 }
 #endif
 
+#ifndef pte_clrhuge
+static inline pte_t pte_clrhuge(pte_t pte)
+{
+	return __pte(pte_val(pte));
+}
+#endif
+
 #ifndef pte_mkprivileged
 static inline pte_t pte_mkprivileged(pte_t pte)
 {
