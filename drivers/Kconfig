@@ -246,4 +246,6 @@ source "drivers/cpuinspect/Kconfig"
 
 source "drivers/arm/Kconfig"
 
+source "drivers/zcopy/Kconfig"
+
 endmenu
