@@ -209,3 +209,6 @@ obj-$(CONFIG_ROH)		+= roh/
 obj-$(CONFIG_HISI_VIRTCCA_CODA)	+= coda/
 
 obj-$(CONFIG_ARM_SPE_MEM_SAMPLING)		+= arm/mm_monitor/
+
+# PAGE_ATTACH zero-copy communication between processes
+obj-$(CONFIG_PAGEATTACH)	+= zcopy/
