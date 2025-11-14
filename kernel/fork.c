@@ -106,6 +106,7 @@
 #endif
 #include <linux/share_pool.h>
 #include <linux/tick.h>
+#include <linux/xcall.h>
 
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -1373,6 +1374,7 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 #if defined(CONFIG_DAMON_MEM_SAMPLING)
 	mm->damon_fifo = NULL;
 #endif
+	mm_init_xcall_area(mm, p);
 	mm_init_uprobes_state(mm);
 	hugetlb_count_init(mm);
 
@@ -1426,6 +1428,7 @@ static inline void __mmput(struct mm_struct *mm)
 {
 	VM_BUG_ON(atomic_read(&mm->mm_users));
 
+	clear_xcall_area(mm);
 	uprobe_clear_state(mm);
 	exit_aio(mm);
 	ksm_exit(mm);
