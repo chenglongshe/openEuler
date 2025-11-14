@@ -15,6 +15,7 @@
 #include <linux/mm_types_task.h>
 #include <linux/rmap.h>
 #include <linux/pgalloc.h>
+#include <asm/mte.h>
 #include <asm-generic/pgalloc.h>
 #include <asm/tlbflush.h>
 #include <asm/pgtable-hwdef.h>
@@ -85,6 +86,19 @@ static inline unsigned long __kallsyms_lookup_name(const char *symbol_name)
 		return 0;
 	return kallsyms_lookup_name_funcp(symbol_name);
 }
+
+#if USE_SPLIT_PTE_PTLOCKS
+#if ALLOC_SPLIT_PTLOCKS
+bool ptlock_alloc(struct page *page)
+{
+        return true;
+}
+
+void ptlock_free(struct page *page)
+{
+}
+#endif
+#endif
 
 static inline pud_t *zcopy_pud_alloc(struct mm_struct *mm, p4d_t *p4d,
 									unsigned long address)
@@ -454,6 +468,88 @@ static __always_inline unsigned long get_extent(enum pgt_entry entry,
 	return extent;
 }
 
+static void zcopy_pgtable_trans_huge_deposit(struct mm_struct *mm, pmd_t *pmdp,
+				pgtable_t pgtable)
+{
+	assert_spin_locked(pmd_lockptr(mm, pmdp));
+
+	/* FIFO */
+	if (!pmd_huge_pte(mm, pmdp))
+		INIT_LIST_HEAD(&pgtable->lru);
+	else
+		list_add(&pgtable->lru, &pmd_huge_pte(mm, pmdp)->lru);
+	pmd_huge_pte(mm, pmdp) = pgtable;
+}
+
+static int attach_huge_pmd(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
+		unsigned long dst_addr, unsigned long src_addr, pmd_t *dst_pmdp, pmd_t *src_pmdp)
+{
+	struct mm_struct *dst_mm, *src_mm;
+	spinlock_t *src_ptl, *dst_ptl;
+	struct page *src_thp_page;
+	struct folio *src_thp_folio;
+	pmd_t pmd, orig_pmd;
+	pgtable_t pgtable;
+	int ret = 0;
+
+	if (!vma_is_anonymous(dst_vma)) {
+		pr_err("dst_vma is %d\n",
+			vma_is_anonymous(dst_vma));
+		return -EINVAL;
+	}
+
+	dst_mm = dst_vma->vm_mm;
+	src_mm = src_vma->vm_mm;
+
+	/* alloc a pgtable for new pmdp */
+	pgtable = pte_alloc_one(dst_mm);
+	if (unlikely(!pgtable)) {
+		pr_err("pte_alloc_one failed\n");
+		return -ENOMEM;
+	}
+
+	dst_ptl = pmd_lockptr(dst_mm, dst_pmdp);
+	spin_lock_nested(dst_ptl, SINGLE_DEPTH_NESTING);
+	orig_pmd = *dst_pmdp;
+	/* check if exists old mappings */
+	if (!pmd_none(orig_pmd)) {
+		pte_free(dst_mm, pgtable);
+		spin_unlock(dst_ptl);
+		return -EAGAIN;
+	}
+	spin_unlock(dst_ptl);
+
+	src_ptl = pmd_lockptr(src_mm, src_pmdp);
+	spin_lock(src_ptl);
+	pmd = *src_pmdp;
+	src_thp_page = pmd_page(pmd);
+	if (unlikely(!PageHead(src_thp_page))) {
+		pr_err("VM assertion failed: it is not a head page\n");
+		spin_unlock(src_ptl);
+		return -EINVAL;
+	}
+
+	src_thp_folio = page_folio(src_thp_page);
+	folio_get(src_thp_folio);
+	if (unlikely(zcopy_folio_try_dup_anon_rmap(src_thp_folio, src_thp_page,
+							HPAGE_PMD_NR, src_vma, RMAP_LEVEL_PMD))) {
+		folio_put(src_thp_folio);
+		pte_free(src_mm, pgtable);
+		spin_unlock(src_ptl);
+		return -EAGAIN;
+	}
+	spin_unlock(src_ptl);
+
+	spin_lock_nested(dst_ptl, SINGLE_DEPTH_NESTING);
+	zcopy_add_mm_counter(dst_mm, MM_ANONPAGES, HPAGE_PMD_NR);
+	mm_inc_nr_ptes(dst_mm);
+	zcopy_pgtable_trans_huge_deposit(dst_mm, dst_pmdp, pgtable);
+	set_pmd_at(dst_mm, dst_addr, dst_pmdp, pmd);
+	zcopy_flush_tlb_mm_range(dst_vma->vm_mm, dst_addr, dst_addr + HPAGE_PMD_SIZE);
+	spin_unlock(dst_ptl);
+	return ret;
+}
+
 static int attach_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 			unsigned long dst_addr, unsigned long src_addr, unsigned long size)
 {
@@ -483,9 +579,13 @@ static int attach_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		}
 
 		if (pmd_trans_huge(*src_pmd)) {
-			/* Not support hugepage mapping */
-			ret = -EOPNOTSUPP;
-			break;
+			if (extent == HPAGE_PMD_SIZE) {
+				ret = attach_huge_pmd(dst_vma, src_vma, dst_addr, src_addr,
+							dst_pmd, src_pmd);
+				if (ret)
+					return ret;
+				continue;
+			}
 		} else if (is_swap_pmd(*src_pmd) || pmd_devmap(*src_pmd)) {
 			ret = -EOPNOTSUPP;
 			break;
