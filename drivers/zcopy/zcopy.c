@@ -16,6 +16,7 @@
 #include <linux/rmap.h>
 #include <linux/sched/mm.h>
 #include <linux/pgtable.h>
+#include <asm/mte.h>
 #include <asm-generic/pgalloc.h>
 #include <asm/tlbflush.h>
 #include <asm/pgtable-hwdef.h>
@@ -59,6 +60,25 @@ static int (*__zcopy_pud_alloc)(struct mm_struct *, p4d_t *, unsigned long);
 static unsigned long (*kallsyms_lookup_name_funcp)(const char *);
 
 static struct kretprobe __kretprobe;
+
+#if USE_SPLIT_PTE_PTLOCKS && ALLOC_SPLIT_PTLOCKS
+static struct kmem_cache *zcopy_page_ptl_cachep;
+bool ptlock_alloc(struct page *page)
+{
+	spinlock_t *ptl;
+
+	ptl = kmem_cache_alloc(zcopy_page_ptl_cachep, GFP_KERNEL);
+	if (!ptl)
+		return false;
+	page->ptl = ptl;
+	return true;
+}
+
+void ptlock_free(struct page *page)
+{
+	kmem_cache_free(zcopy_page_ptl_cachep, page->ptl);
+}
+#endif
 
 static unsigned long __kprobe_lookup_name(const char *symbol_name)
 {
@@ -211,6 +231,83 @@ static __always_inline unsigned long get_extent(enum pgt_entry entry,
 	return extent;
 }
 
+static void zcopy_pgtable_trans_huge_deposit(struct mm_struct *mm, pmd_t *pmdp,
+				pgtable_t pgtable)
+{
+	assert_spin_locked(pmd_lockptr(mm, pmdp));
+
+	/* FIFO */
+	if (!pmd_huge_pte(mm, pmdp))
+		INIT_LIST_HEAD(&pgtable->lru);
+	else
+		list_add(&pgtable->lru, &pmd_huge_pte(mm, pmdp)->lru);
+	pmd_huge_pte(mm, pmdp) = pgtable;
+}
+
+int attach_huge_pmd(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
+		unsigned long dst_addr, unsigned long src_addr, pmd_t *dst_pmdp, pmd_t *src_pmdp)
+{
+	struct mm_struct *dst_mm, *src_mm;
+	spinlock_t *src_ptl, *dst_ptl;
+	struct page *src_thp_page, *orig_thp_page;
+	pmd_t pmd, orig_pmd;
+	pgtable_t pgtable;
+
+
+	if (!vma_is_anonymous(dst_vma)) {
+		pr_err("dst_vma is %d\n",
+			vma_is_anonymous(dst_vma));
+		return -EINVAL;
+	}
+
+	dst_mm = dst_vma->vm_mm;
+	src_mm = src_vma->vm_mm;
+
+	/* alloc a pgtable for new pmdp */
+	pgtable = pte_alloc_one(dst_mm);
+	if (unlikely(!pgtable)) {
+		pr_err("pte_alloc_one failed\n");
+		return -ENOMEM;
+	}
+
+	src_ptl = pmd_lockptr(src_mm, src_pmdp);
+	dst_ptl = pmd_lockptr(dst_mm, dst_pmdp);
+
+	spin_lock(src_ptl);
+	pmd = *src_pmdp;
+	src_thp_page = pmd_page(pmd);
+	if (unlikely(!PageHead(src_thp_page))) {
+		pr_err("VM assertion failed: it is not a head page\n");
+		spin_unlock(src_ptl);
+		pte_free(src_mm, pgtable);
+		return -EINVAL;
+	}
+
+	get_page(src_thp_page);
+	atomic_inc(compound_mapcount_ptr(src_thp_page));
+	spin_unlock(src_ptl);
+
+	spin_lock_nested(dst_ptl, SINGLE_DEPTH_NESTING);
+	orig_pmd = *dst_pmdp;
+	/* umap the old page mappings */
+	if (!pmd_none(orig_pmd)) {
+		orig_thp_page = pmd_page(orig_pmd);
+		put_page(orig_thp_page);
+		atomic_dec(compound_mapcount_ptr(orig_thp_page));
+		zcopy_add_mm_counter(dst_mm, MM_ANONPAGES, -HPAGE_PMD_NR);
+		mm_dec_nr_ptes(dst_mm);
+	}
+
+	zcopy_add_mm_counter(dst_mm, MM_ANONPAGES, HPAGE_PMD_NR);
+	mm_inc_nr_ptes(dst_mm);
+	zcopy_pgtable_trans_huge_deposit(dst_mm, dst_pmdp, pgtable);
+	set_pmd_at(dst_mm, dst_addr, dst_pmdp, pmd);
+	flush_tlb_range(dst_vma, dst_addr, dst_addr + HPAGE_PMD_SIZE);
+	spin_unlock(dst_ptl);
+
+	return 0;
+}
+
 static int attach_ptes(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 			unsigned long dst_addr, unsigned long src_addr, pmd_t *dst_pmdp,
 			pmd_t *src_pmdp, unsigned long len)
@@ -294,9 +391,16 @@ static int attach_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		}
 
 		if (pmd_trans_huge(*src_pmd)) {
-			/* Not support hugepage mapping */
-			ret = -EOPNOTSUPP;
-			break;
+			if (extent == HPAGE_PMD_SIZE) {
+				ret = attach_huge_pmd(dst_vma, src_vma, dst_addr, src_addr,
+							dst_pmd, src_pmd);
+				if (ret)
+					return ret;
+				continue;
+			} else {
+				ret = -EOPNOTSUPP;
+				break;
+			}
 		} else if (is_swap_pmd(*src_pmd) || pmd_devmap(*src_pmd)) {
 			ret = -EOPNOTSUPP;
 			break;
@@ -456,6 +560,14 @@ static const struct file_operations zcopy_fops = {
 static int register_unexport_func(void)
 {
 	int ret;
+
+#if USE_SPLIT_PTE_PTLOCKS && ALLOC_SPLIT_PTLOCKS
+	zcopy_page_ptl_cachep
+		= (struct kmem_cache *)__kallsyms_lookup_name("page_ptl_cachep");
+	ret = REGISTER_CHECK(__zcopy_pud_alloc, "__pud_alloc");
+	if (ret)
+		goto out;
+#endif
 
 	kallsyms_lookup_name_funcp
 		= (unsigned long (*)(const char *))__kprobe_lookup_name("kallsyms_lookup_name");
