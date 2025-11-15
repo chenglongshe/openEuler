@@ -12,7 +12,7 @@
 #ifndef UBCORE_TP_H
 #define UBCORE_TP_H
 
-#include <ub/urma/ubcore_types.h>
+#include "ub/urma/ubcore_types.h"
 #include "ubcore_tp_table.h"
 #include "ubcore_netlink.h"
 
@@ -43,13 +43,6 @@ static inline bool ubcore_have_tp_ctrlplane_ops(struct ubcore_device *dev)
 	return (dev && dev->ops &&
 		dev->ops->get_tp_list && dev->ops->active_tp);
 }
-
-/* alpha */
-int ubcore_advise_tp(struct ubcore_device *dev, union ubcore_eid *remote_eid,
-		     struct ubcore_tp_advice *advice,
-		     struct ubcore_udata *udata);
-int ubcore_unadvise_tp(struct ubcore_device *dev,
-		       struct ubcore_tp_advice *advice);
 
 struct ubcore_nlmsg *ubcore_handle_restore_tp_req(struct ubcore_nlmsg *req);
 
