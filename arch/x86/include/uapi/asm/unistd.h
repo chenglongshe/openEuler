@@ -11,6 +11,7 @@
  * thing regardless.
  */
 #define __X32_SYSCALL_BIT	0x40000000
+#define __IGNORE_kabi_reserved454
 
 #ifndef __KERNEL__
 # ifdef __i386__
