@@ -52,13 +52,18 @@
 #include "internal.h"
 
 #include <trace/events/sched.h>
+#ifdef CONFIG_CORE_PATTERN_ISOLATION
+#include "mount.h"
+#endif
 
 static bool dump_vma_snapshot(struct coredump_params *cprm);
 static void free_vma_snapshot(struct coredump_params *cprm);
 
 int core_uses_pid;
 unsigned int core_pipe_limit;
+#ifndef CONFIG_CORE_PATTERN_ISOLATION
 char core_pattern[CORENAME_MAX_SIZE] = "core";
+#endif
 static int core_name_size = CORENAME_MAX_SIZE;
 
 struct core_name {
@@ -201,7 +206,12 @@ static int format_corename(struct core_name *cn, struct coredump_params *cprm,
 			   size_t **argv, int *argc)
 {
 	const struct cred *cred = current_cred();
+#ifdef CONFIG_CORE_PATTERN_ISOLATION
+	const char *pat_ptr = current->nsproxy->mnt_ns->core_pattern;
+#else
 	const char *pat_ptr = core_pattern;
+#endif
+
 	int ispipe = (*pat_ptr == '|');
 	bool was_space = false;
 	int pid_in_pattern = 0;
@@ -214,7 +224,7 @@ static int format_corename(struct core_name *cn, struct coredump_params *cprm,
 	cn->corename[0] = '\0';
 
 	if (ispipe) {
-		int argvs = sizeof(core_pattern) / 2;
+		int argvs = CORENAME_MAX_SIZE / 2;
 		(*argv) = kmalloc_array(argvs, sizeof(**argv), GFP_KERNEL);
 		if (!(*argv))
 			return -ENOMEM;

@@ -421,3 +421,11 @@ config RESCTRL
 	help
 	  Memory Partitioning and Monitoring. More exactly Memory system
 	  performance resource Partitioning and Monitoring
+
+config CORE_PATTERN_ISOLATION
+	bool "Core pattern isolation per mount namespace"
+	depends on COREDUMP
+	default n
+	help
+	  Userspace coredump file is generated according to the per mount
+	  namespace core_pattern string instead of the global one.

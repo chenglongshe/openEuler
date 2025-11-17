@@ -71,6 +71,9 @@
 #include <linux/coredump.h>
 #include <linux/latencytop.h>
 #include <linux/pid.h>
+#ifdef CONFIG_CORE_PATTERN_ISOLATION
+#include "../fs/mount.h"
+#endif
 
 #include "../lib/kstrtox.h"
 
@@ -1157,14 +1160,24 @@ static int proc_dopipe_max_size(struct ctl_table *table, int write,
 static void validate_coredump_safety(void)
 {
 #ifdef CONFIG_COREDUMP
+#ifdef CONFIG_CORE_PATTERN_ISOLATION
+	char *core_pattern = current->nsproxy->mnt_ns->core_pattern;
+#endif
 	if (suid_dumpable == SUID_DUMP_ROOT &&
 	    core_pattern[0] != '/' && core_pattern[0] != '|') {
-		printk(KERN_WARNING
-"Unsafe core_pattern used with fs.suid_dumpable=2.\n"
-"Pipe handler or fully qualified core dump path required.\n"
-"Set kernel.core_pattern before fs.suid_dumpable.\n"
+		pr_warn("Unsafe core_pattern used with fs.suid_dumpable=2.\n"
+			"Pipe handler or fully qualified core dump path required.\n"
+			"Set kernel.core_pattern before fs.suid_dumpable.\n"
 		);
 	}
+
+#ifdef CONFIG_CORE_PATTERN_ISOLATION
+	if (current->nsproxy->mnt_ns != init_task.nsproxy->mnt_ns
+		&& core_pattern[0] == '|') {
+		pr_warn("core_pattern with pipe is setted in container environment.\n"
+		"Pipe handler will be lookup in init mnt ns.\n");
+	}
+#endif
 #endif
 }
 
@@ -1181,9 +1194,21 @@ static int proc_dointvec_minmax_coredump(struct ctl_table *table, int write,
 static int proc_dostring_coredump(struct ctl_table *table, int write,
 		  void *buffer, size_t *lenp, loff_t *ppos)
 {
-	int error = proc_dostring(table, write, buffer, lenp, ppos);
+	int error;
+#ifdef CONFIG_CORE_PATTERN_ISOLATION
+	struct mnt_namespace *mnt = current->nsproxy->mnt_ns;
+
+	if (write)
+		proc_first_pos_non_zero_ignore(ppos, table);
+
+	error = _proc_do_string((char *)(mnt->core_pattern),
+		table->maxlen, write, (char __user *)buffer, lenp, ppos);
+#else
+	error = proc_dostring(table, write, buffer, lenp, ppos);
+#endif
 	if (!error)
 		validate_coredump_safety();
+
 	return error;
 }
 #endif
@@ -2006,7 +2031,11 @@ static struct ctl_table kern_table[] = {
 	},
 	{
 		.procname	= "core_pattern",
+#ifdef CONFIG_CORE_PATTERN_ISOLATION
+		.data		= NULL,
+#else
 		.data		= core_pattern,
+#endif
 		.maxlen		= CORENAME_MAX_SIZE,
 		.mode		= 0644,
 		.proc_handler	= proc_dostring_coredump,
