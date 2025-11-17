@@ -14,6 +14,7 @@
 #ifndef _UAPI__ASM_ARM_UNISTD_H
 #define _UAPI__ASM_ARM_UNISTD_H
 
+#define __IGNORE_kabi_reserved454
 #define __NR_OABI_SYSCALL_BASE	0x900000
 #define __NR_SYSCALL_MASK	0x0fffff
 

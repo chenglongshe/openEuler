@@ -9,6 +9,7 @@
  */
 #ifndef _UAPI_ASM_POWERPC_UNISTD_H_
 #define _UAPI_ASM_POWERPC_UNISTD_H_
+#define __IGNORE_kabi_reserved454
 
 #ifndef __powerpc64__
 #include <asm/unistd_32.h>
