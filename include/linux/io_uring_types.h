@@ -7,6 +7,37 @@
 #include <linux/llist.h>
 #include <uapi/linux/io_uring.h>
 
+enum {
+	/*
+	 * A hint to not wake right away but delay until there are enough of
+	 * tw's queued to match the number of CQEs the task is waiting for.
+	 *
+	 * Must not be used wirh requests generating more than one CQE.
+	 * It's also ignored unless IORING_SETUP_DEFER_TASKRUN is set.
+	 */
+	IOU_F_TWQ_LAZY_WAKE			= 1,
+};
+
+enum io_uring_cmd_flags {
+	IO_URING_F_COMPLETE_DEFER	= 1,
+	IO_URING_F_UNLOCKED		= 2,
+	/* the request is executed from poll, it should not be freed */
+	IO_URING_F_MULTISHOT		= 4,
+	/* executed by io-wq */
+	IO_URING_F_IOWQ			= 8,
+	/* int's last bit, sign checks are usually faster than a bit test */
+	IO_URING_F_NONBLOCK		= INT_MIN,
+
+	/* ctx state flags, for URING_CMD */
+	IO_URING_F_SQE128		= (1 << 8),
+	IO_URING_F_CQE32		= (1 << 9),
+	IO_URING_F_IOPOLL		= (1 << 10),
+
+	/* set when uring wants to cancel a previously issued command */
+	IO_URING_F_CANCEL		= (1 << 11),
+	IO_URING_F_TASK_DEAD		= (1 << 13),
+};
+
 struct io_wq_work_node {
 	struct io_wq_work_node *next;
 };
@@ -173,8 +204,8 @@ struct io_submit_state {
 
 	bool			plug_started;
 	bool			need_plug;
+	bool			cq_flush;
 	unsigned short		submit_nr;
-	unsigned int		cqes_count;
 	struct blk_plug		plug;
 };
 
@@ -264,6 +295,12 @@ struct io_ring_ctx {
 		 */
 		struct io_wq_work_list	iopoll_list;
 		bool			poll_multi_queue;
+
+		/*
+		 * Any cancelable uring_cmd is added to this list in
+		 * ->uring_cmd() by io_uring_cmd_insert_cancelable()
+		 */
+		struct hlist_head	cancelable_uring_cmd;
 	} ____cacheline_aligned_in_smp;
 
 	struct {
@@ -299,8 +336,6 @@ struct io_ring_ctx {
 		struct list_head	ltimeout_list;
 		unsigned		cq_last_tm_flush;
 	} ____cacheline_aligned_in_smp;
-
-	struct io_uring_cqe	completion_cqes[16];
 
 	spinlock_t		completion_lock;
 
@@ -381,8 +416,6 @@ struct io_ring_ctx {
 };
 
 struct io_tw_state {
-	/* ->uring_lock is taken, callbacks can use io_tw_lock to lock it */
-	bool locked;
 };
 
 enum {
