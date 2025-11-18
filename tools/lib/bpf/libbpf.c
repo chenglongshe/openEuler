@@ -8518,7 +8518,7 @@ int bpf_object__gen_loader(struct bpf_object *obj, struct gen_loader_opts *opts)
 		return -EFAULT;
 	if (!OPTS_VALID(opts, gen_loader_opts))
 		return -EINVAL;
-	gen = calloc(sizeof(*gen), 1);
+	gen = calloc(1, sizeof(*gen));
 	if (!gen)
 		return -ENOMEM;
 	gen->opts = opts;
