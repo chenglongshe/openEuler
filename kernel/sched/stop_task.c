@@ -57,10 +57,11 @@ enqueue_task_stop(struct rq *rq, struct task_struct *p, int flags)
 	add_nr_running(rq, 1);
 }
 
-static void
+static bool
 dequeue_task_stop(struct rq *rq, struct task_struct *p, int flags)
 {
 	sub_nr_running(rq, 1);
+	return true;
 }
 
 static void yield_task_stop(struct rq *rq)
@@ -68,7 +69,7 @@ static void yield_task_stop(struct rq *rq)
 	BUG(); /* the stop task should never yield, its pointless. */
 }
 
-static void put_prev_task_stop(struct rq *rq, struct task_struct *prev)
+static void put_prev_task_stop(struct rq *rq, struct task_struct *prev, struct task_struct *next)
 {
 	struct task_struct *curr = rq->curr;
 	u64 now, delta_exec;

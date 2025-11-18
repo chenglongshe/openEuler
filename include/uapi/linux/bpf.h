@@ -7349,6 +7349,7 @@ struct bpf_core_relo {
  */
 enum {
 	BPF_F_TIMER_ABS = (1ULL << 0),
+	BPF_F_TIMER_CPU_PIN = (1ULL << 1),
 };
 
 /* BPF numbers iterator state */

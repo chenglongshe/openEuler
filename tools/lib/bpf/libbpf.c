@@ -990,6 +990,19 @@ static bool bpf_map__is_struct_ops(const struct bpf_map *map)
 	return map->def.type == BPF_MAP_TYPE_STRUCT_OPS;
 }
 
+static bool is_valid_st_ops_program(struct bpf_object *obj,
+				    const struct bpf_program *prog)
+{
+	int i;
+
+	for (i = 0; i < obj->nr_programs; i++) {
+		if (&obj->programs[i] == prog)
+			return prog->type == BPF_PROG_TYPE_STRUCT_OPS;
+	}
+
+	return false;
+}
+
 /* Init the map's fields that depend on kern_btf */
 static int bpf_map__init_kern_struct_ops(struct bpf_map *map,
 					 const struct btf *btf,
@@ -1073,9 +1086,16 @@ static int bpf_map__init_kern_struct_ops(struct bpf_map *map,
 		if (btf_is_ptr(mtype)) {
 			struct bpf_program *prog;
 
-			prog = st_ops->progs[i];
+			/* Update the value from the shadow type */
+			prog = *(void **)mdata;
+			st_ops->progs[i] = prog;
 			if (!prog)
 				continue;
+			if (!is_valid_st_ops_program(map->obj, prog)) {
+				pr_warn("struct_ops init_kern %s: member %s is not a struct_ops program\n",
+					map->name, mname);
+				return -ENOTSUP;
+			}
 
 			kern_mtype = skip_mods_and_typedefs(kern_btf,
 							    kern_mtype->type,
@@ -1199,6 +1219,7 @@ static int init_struct_ops_maps(struct bpf_object *obj, const char *sec_name,
 		map->name = strdup(var_name);
 		if (!map->name)
 			return -ENOMEM;
+		map->btf_value_type_id = type_id;
 
 		map->def.type = BPF_MAP_TYPE_STRUCT_OPS;
 		map->def.key_size = sizeof(int);
@@ -3047,9 +3068,15 @@ static bool prog_needs_vmlinux_btf(struct bpf_program *prog)
 	return false;
 }
 
+static bool map_needs_vmlinux_btf(struct bpf_map *map)
+{
+	return bpf_map__is_struct_ops(map);
+}
+
 static bool obj_needs_vmlinux_btf(const struct bpf_object *obj)
 {
 	struct bpf_program *prog;
+	struct bpf_map *map;
 	int i;
 
 	/* CO-RE relocations need kernel BTF, only when btf_custom_path
@@ -3071,6 +3098,11 @@ static bool obj_needs_vmlinux_btf(const struct bpf_object *obj)
 		if (!prog->autoload)
 			continue;
 		if (prog_needs_vmlinux_btf(prog))
+			return true;
+	}
+
+	bpf_object__for_each_map(map, obj) {
+		if (map_needs_vmlinux_btf(map))
 			return true;
 	}
 
@@ -3995,7 +4027,7 @@ static int bpf_object__collect_externs(struct bpf_object *obj)
 
 static bool prog_is_subprog(const struct bpf_object *obj, const struct bpf_program *prog)
 {
-	return prog->sec_idx == obj->efile.text_shndx;
+	return prog->sec_idx == obj->efile.text_shndx && obj->nr_programs > 1;
 }
 
 struct bpf_program *
@@ -5161,6 +5193,10 @@ static int bpf_object__create_map(struct bpf_object *obj, struct bpf_map *map, b
 		create_attr.btf_value_type_id = 0;
 		map->btf_key_type_id = 0;
 		map->btf_value_type_id = 0;
+		break;
+	case BPF_MAP_TYPE_STRUCT_OPS:
+		create_attr.btf_value_type_id = 0;
+		break;
 	default:
 		break;
 	}
@@ -9133,7 +9169,9 @@ static struct bpf_map *find_struct_ops_map_by_offset(struct bpf_object *obj,
 	return NULL;
 }
 
-/* Collect the reloc from ELF and populate the st_ops->progs[] */
+/* Collect the reloc from ELF, populate the st_ops->progs[], and update
+ * st_ops->data for shadow type.
+ */
 static int bpf_object__collect_st_ops_relos(struct bpf_object *obj,
 					    Elf64_Shdr *shdr, Elf_Data *data)
 {
@@ -9247,6 +9285,14 @@ static int bpf_object__collect_st_ops_relos(struct bpf_object *obj,
 		}
 
 		st_ops->progs[member_idx] = prog;
+
+		/* st_ops->data will be exposed to users, being returned by
+		 * bpf_map__initial_value() as a pointer to the shadow
+		 * type. All function pointers in the original struct type
+		 * should be converted to a pointer to struct bpf_program
+		 * in the shadow type.
+		 */
+		*((struct bpf_program **)(st_ops->data + moff)) = prog;
 	}
 
 	return 0;
@@ -9701,6 +9747,12 @@ int bpf_map__set_initial_value(struct bpf_map *map,
 
 void *bpf_map__initial_value(struct bpf_map *map, size_t *psize)
 {
+	if (bpf_map__is_struct_ops(map)) {
+		if (psize)
+			*psize = map->def.value_size;
+		return map->st_ops->data;
+	}
+
 	if (!map->mmaped)
 		return NULL;
 	*psize = map->def.value_size;
