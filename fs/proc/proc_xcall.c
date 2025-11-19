@@ -61,12 +61,16 @@ static int xcall_open(struct inode *inode, struct file *filp)
 	return single_open(filp, xcall_show, inode);
 }
 
+static DEFINE_SPINLOCK(xcall_enable_write_lock);
+#define MAX_SYSNO_DIGITS	3
+#define MAX_BUF_SIZE		(1 + MAX_SYSNO_DIGITS + 1) // "!" + digits + '\0'
 static ssize_t xcall_write(struct file *file, const char __user *ubuf,
 				      size_t count, loff_t *offset)
 {
 	unsigned int sc_no = __NR_syscalls;
+	char buf[MAX_BUF_SIZE];
 	struct task_struct *p;
-	char buf[5];
+	int is_clear = 0;
 	int ret = 0;
 
 	if (!static_key_enabled(&xcall_enable))
@@ -76,13 +80,19 @@ static ssize_t xcall_write(struct file *file, const char __user *ubuf,
 	if (!p || !TASK_XINFO(p))
 		return -ESRCH;
 
-	memset(buf, '\0', 5);
-	if (!count || (count > 5) || copy_from_user(buf, ubuf, count)) {
+	memset(buf, '\0', MAX_BUF_SIZE);
+	if (!count || (count > MAX_BUF_SIZE)) {
 		ret = -EFAULT;
 		goto out;
 	}
 
-	if (kstrtouint((buf + (int)(buf[0] == '!')), 10, &sc_no)) {
+	if (copy_from_user(buf, ubuf, count > MAX_BUF_SIZE - 1 ? MAX_BUF_SIZE - 1 : count)) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	is_clear = (buf[0] == '!');
+	if (kstrtouint((buf + is_clear), 10, &sc_no)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -92,7 +102,12 @@ static ssize_t xcall_write(struct file *file, const char __user *ubuf,
 		goto out;
 	}
 
-	(TASK_XINFO(p))->xcall_enable[sc_no] = (int)(buf[0] != '!');
+	spin_lock(&xcall_enable_write_lock);
+	if (!is_clear && !(TASK_XINFO(p))->xcall_enable[sc_no])
+		(TASK_XINFO(p))->xcall_enable[sc_no] = 1;
+	else if (is_clear && (TASK_XINFO(p))->xcall_enable[sc_no])
+		(TASK_XINFO(p))->xcall_enable[sc_no] = 0;
+	spin_unlock(&xcall_enable_write_lock);
 	ret = 0;
 
 out:

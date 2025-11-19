@@ -279,6 +279,14 @@ void clear_xcall_area(struct mm_struct *mm)
 
 	if (area->xcall)
 		put_xcall(area->xcall);
+}
+
+void free_xcall_area(struct mm_struct *mm)
+{
+	struct xcall_area *area = mm_xcall_area(mm);
+
+	if (!area)
+		return;
 
 	kfree(area);
 	mm->xcall = NULL;
