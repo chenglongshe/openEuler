@@ -580,11 +580,13 @@ DECLARE_STATIC_KEY_FALSE(bpf_stats_enabled_key);
 		u64 __start = sched_clock();				\
 		unsigned long flags;					\
 		__ret = dfunc(ctx, (prog)->insnsi, (prog)->bpf_func);	\
-		__stats = this_cpu_ptr(prog->aux->stats);		\
-		flags = u64_stats_update_begin_irqsave(&__stats->syncp);\
-		__stats->cnt++;						\
-		__stats->nsecs += sched_clock() - __start;		\
-		u64_stats_update_end_irqrestore(&__stats->syncp, flags);\
+		if (likely(prog->aux && prog->aux->stats)) {			\
+			__stats = this_cpu_ptr(prog->aux->stats);		\
+			flags = u64_stats_update_begin_irqsave(&__stats->syncp);\
+			__stats->cnt++;						\
+			__stats->nsecs += sched_clock() - __start;		\
+			u64_stats_update_end_irqrestore(&__stats->syncp, flags);\
+		}								\
 	} else {							\
 		__ret = dfunc(ctx, (prog)->insnsi, (prog)->bpf_func);	\
 	}								\
