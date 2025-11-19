@@ -61,11 +61,13 @@ static int xcall_open(struct inode *inode, struct file *filp)
 	return single_open(filp, xcall_show, inode);
 }
 
+static DEFINE_SPINLOCK(xcall_enable_write_lock);
 static ssize_t xcall_write(struct file *file, const char __user *ubuf,
 				      size_t count, loff_t *offset)
 {
 	unsigned int sc_no = __NR_syscalls;
 	struct task_struct *p;
+	int is_clear = 0;
 	char buf[5];
 	int ret = 0;
 
@@ -82,7 +84,8 @@ static ssize_t xcall_write(struct file *file, const char __user *ubuf,
 		goto out;
 	}
 
-	if (kstrtouint((buf + (int)(buf[0] == '!')), 10, &sc_no)) {
+	is_clear = (buf[0] == '!');
+	if (kstrtouint((buf + is_clear), 10, &sc_no)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -92,7 +95,12 @@ static ssize_t xcall_write(struct file *file, const char __user *ubuf,
 		goto out;
 	}
 
-	(TASK_XINFO(p))->xcall_enable[sc_no] = (int)(buf[0] != '!');
+	spin_lock(&xcall_enable_write_lock);
+	if (!is_clear && !(TASK_XINFO(p))->xcall_enable[sc_no])
+		(TASK_XINFO(p))->xcall_enable[sc_no] = 1;
+	else if (is_clear && (TASK_XINFO(p))->xcall_enable[sc_no])
+		(TASK_XINFO(p))->xcall_enable[sc_no] = 0;
+	spin_unlock(&xcall_enable_write_lock);
 	ret = 0;
 
 out:
