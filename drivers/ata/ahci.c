@@ -1655,6 +1655,16 @@ static void ahci_intel_pcs_quirk(struct pci_dev *pdev, struct ahci_host_priv *hp
 	}
 }
 
+static bool is_zhaoxin_cpu(void)
+{
+#ifdef CONFIG_X86
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_ZHAOXIN ||
+	    boot_cpu_data.x86_vendor == X86_VENDOR_CENTAUR)
+		return true;
+#endif
+	return false;
+}
+
 static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	unsigned int board_id = ent->driver_data;
@@ -1768,6 +1778,9 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (pdev->vendor == 0x177d && pdev->device == 0xa01c)
 		hpriv->irq_handler = ahci_thunderx_irq_handler;
 #endif
+
+	if (pdev->vendor == PCI_VENDOR_ID_ZHAOXIN && !is_zhaoxin_cpu())
+		hpriv->flags |= AHCI_HFLAG_32BIT_ONLY
 
 	/* save initial config */
 	ahci_pci_save_initial_config(pdev, hpriv);
