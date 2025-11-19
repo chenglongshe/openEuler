@@ -975,7 +975,7 @@ void __mmdrop(struct mm_struct *mm)
 	mm_free_pgd(mm);
 	destroy_context(mm);
 	mmu_notifier_subscriptions_destroy(mm);
-	clear_xcall_area(mm);
+	free_xcall_area(mm);
 	check_mm(mm);
 	put_user_ns(mm->user_ns);
 	mm_pasid_drop(mm);
@@ -1429,6 +1429,7 @@ static inline void __mmput(struct mm_struct *mm)
 {
 	VM_BUG_ON(atomic_read(&mm->mm_users));
 
+	clear_xcall_area(mm);
 	uprobe_clear_state(mm);
 	exit_aio(mm);
 	ksm_exit(mm);
