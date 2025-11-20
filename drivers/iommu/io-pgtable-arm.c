@@ -21,7 +21,9 @@
 #include <asm/barrier.h>
 
 #include "io-pgtable-arm.h"
-
+#ifdef CONFIG_ARCH_PHYTIUM
+#include <asm/phytium_machine_types.h>
+#endif
 #define ARM_LPAE_MAX_ADDR_BITS		52
 #define ARM_LPAE_S2_MAX_CONCAT_PAGES	16
 #define ARM_LPAE_MAX_LEVELS		4
@@ -448,10 +450,15 @@ static int __arm_lpae_map(struct arm_lpae_io_pgtable *data, unsigned long iova,
 		pte = arm_lpae_install_table(cptep, ptep, 0, data);
 		if (pte)
 			__arm_lpae_free_pages(cptep, tblsz, cfg, data->iop.cookie);
-
+#ifdef CONFIG_ARCH_PHYTIUM
+	if (!typeof_ft2000plus()) {
+#endif
 #ifdef CONFIG_HISILICON_ERRATUM_162100602
 		if (lvl <= 2 && (cfg->quirks & IO_PGTABLE_QUIRK_HISI_ERRATA))
 			io_pgtable_tlb_flush_walk(&data->iop, iova, 0, ARM_LPAE_GRANULE(data));
+#endif
+#ifdef CONFIG_ARCH_PHYTIUM
+}
 #endif
 	} else if (!cfg->coherent_walk && !(pte & ARM_LPAE_PTE_SW_SYNC)) {
 		__arm_lpae_sync_pte(ptep, 1, cfg);
