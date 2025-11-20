@@ -223,10 +223,6 @@ static struct mmu_notifier_ops xcall_mmu_notifier_ops = {
 	.release = prefetch_pfi_release,
 };
 
-static struct mmu_notifier xcall_mmu_notifier = {
-	.ops = &xcall_mmu_notifier_ops,
-};
-
 static void xcall_cancel_work(unsigned int fd)
 {
 	struct prefetch_item *pfi = current_prefetch_items() + fd;
@@ -364,7 +360,8 @@ static long __do_sys_epoll_create(struct pt_regs *regs)
 		items[i].file = NULL;
 		set_prefetch_numa_cpu(&items[i]);
 	}
-	mmu_notifier_register(&xcall_mmu_notifier, current->mm);
+	area->xcall_mmu_notifier.ops = &xcall_mmu_notifier_ops;
+	mmu_notifier_register(&area->xcall_mmu_notifier, current->mm);
 	return ret;
 }
 

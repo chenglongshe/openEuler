@@ -4,6 +4,7 @@
 
 #include <linux/jump_label.h>
 #include <linux/mm_types.h>
+#include <linux/mmu_notifier.h>
 #include <linux/sched.h>
 #include <linux/xcall.h>
 #include <linux/refcount.h>
@@ -48,6 +49,7 @@ struct xcall_area {
 	refcount_t		ref;
 	struct xcall		*xcall;
 	void			*sys_call_data[NR_syscalls];
+	struct mmu_notifier	xcall_mmu_notifier;
 };
 
 extern const syscall_fn_t *default_sys_call_table(void);
