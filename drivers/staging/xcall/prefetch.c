@@ -35,7 +35,7 @@ static DEFINE_PER_CPU_ALIGNED(unsigned long, xcall_cache_miss);
 
 static struct workqueue_struct *rc_work;
 static struct cpumask xcall_mask;
-struct proc_dir_entry *xcall_proc_dir, *prefetch_dir, *xcall_mask_dir;
+struct proc_dir_entry *prefetch_proc_dir, *prefetch_dir, *xcall_mask_dir;
 
 enum cache_state {
 	XCALL_CACHE_NONE = 0,
@@ -526,14 +526,14 @@ struct xcall_prog xcall_prefetch_prog = {
 
 static int __init init_xcall_prefetch_procfs(void)
 {
-	xcall_proc_dir = proc_mkdir("xcall_feature", NULL);
-	if (!xcall_proc_dir)
+	prefetch_proc_dir = xcall_subdir_create("prefetch");
+	if (!prefetch_proc_dir)
 		return -ENOMEM;
-	prefetch_dir = proc_create("prefetch", 0640, xcall_proc_dir,
-				   &xcall_prefetch_fops);
+	prefetch_dir = xcall_proc_create("prefetch", 0640, prefetch_proc_dir,
+					 &xcall_prefetch_fops);
 	if (!prefetch_dir)
-		goto rm_xcall_proc_dir;
-	xcall_mask_dir = proc_create("cpu_list", 0640, xcall_proc_dir,
+		goto rm_prefetch_proc_dir;
+	xcall_mask_dir = proc_create("cpu_list", 0640, prefetch_proc_dir,
 				     &xcall_mask_fops);
 	if (!xcall_mask_dir)
 		goto rm_prefetch_dir;
@@ -543,8 +543,8 @@ static int __init init_xcall_prefetch_procfs(void)
 
 rm_prefetch_dir:
 	proc_remove(prefetch_dir);
-rm_xcall_proc_dir:
-	proc_remove(xcall_proc_dir);
+rm_prefetch_proc_dir:
+	proc_remove(prefetch_proc_dir);
 	return -ENOMEM;
 }
 
@@ -572,7 +572,7 @@ static int __init xcall_prefetch_init(void)
 remove_dir:
 	proc_remove(prefetch_dir);
 	proc_remove(xcall_mask_dir);
-	proc_remove(xcall_proc_dir);
+	proc_remove(prefetch_proc_dir);
 destroy_queue:
 	destroy_workqueue(rc_work);
 	return ret;
@@ -587,8 +587,8 @@ static void __exit xcall_prefetch_exit(void)
 		proc_remove(prefetch_dir);
 	if (xcall_mask_dir)
 		proc_remove(xcall_mask_dir);
-	if (xcall_proc_dir)
-		proc_remove(xcall_proc_dir);
+	if (prefetch_proc_dir)
+		proc_remove(prefetch_proc_dir);
 
 	xcall_prog_unregister(&xcall_prefetch_prog);
 }
