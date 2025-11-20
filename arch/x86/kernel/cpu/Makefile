@@ -27,6 +27,9 @@ obj-y			+= bugs.o
 obj-y			+= aperfmperf.o
 obj-y			+= cpuid-deps.o
 obj-y			+= umwait.o
+ifneq ($(filter y,$(CONFIG_CPU_SUP_CENTAUR) $(CONFIG_CPU_SUP_ZHAOXIN)),)
+obj-y			+= pauseopt.o
+endif
 
 obj-$(CONFIG_PROC_FS)	+= proc.o
 obj-$(CONFIG_X86_FEATURE_NAMES) += capflags.o powerflags.o
