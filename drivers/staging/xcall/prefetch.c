@@ -17,10 +17,14 @@
 
 #include <asm/xcall.h>
 
-#define MAX_FD 100
+#define MAX_FD 1024
 
 #define XCALL_CACHE_PAGE_ORDER 2
 #define XCALL_CACHE_BUF_SIZE ((1 << XCALL_CACHE_PAGE_ORDER) * PAGE_SIZE)
+
+#define current_epoll_events() \
+	((struct epoll_event *) \
+	((((struct xcall_area *)(current->mm->xcall))->sys_call_data)[__NR_epoll_ctl]))
 
 #define current_prefetch_items() \
 	((struct prefetch_item *) \
@@ -204,7 +208,12 @@ static void prefetch_pfi_release(struct mmu_notifier *mn, struct mm_struct *mm)
 {
 	struct xcall_area *area = mm_xcall_area(mm);
 	struct prefetch_item *prefetch_items = NULL;
+	struct epoll_event *events = NULL;
 	int i;
+
+	events = xchg(&area->sys_call_data[__NR_epoll_ctl], NULL);
+	if (events)
+		kfree(events);
 
 	prefetch_items = xchg(&area->sys_call_data[__NR_epoll_pwait], NULL);
 	if (!prefetch_items)
@@ -327,22 +336,25 @@ static long __do_sys_epoll_create(struct pt_regs *regs)
 	int i;
 	struct xcall_area *area = mm_xcall_area(current->mm);
 	struct prefetch_item *items = NULL;
+	struct epoll_events *events = NULL;
 
 	ret = default_sys_call_table()[__NR_epoll_create1](regs);
 	if (ret < 0)
 		return ret;
-
 	if (current_prefetch_items())
 		return ret;
 
+	events = kcalloc(MAX_FD, sizeof(struct epoll_event), GFP_KERNEL);
+	if (!events)
+		return ret;
+	if (cmpxchg(&area->sys_call_data[__NR_epoll_ctl], NULL, events))
+		goto free_events;
+
 	items = kcalloc(MAX_FD, sizeof(struct prefetch_item), GFP_KERNEL);
 	if (!items)
-		return -ENOMEM;
-
-	if (cmpxchg(&area->sys_call_data[__NR_epoll_pwait], NULL, items)) {
-		kfree(items);
-		return ret;
-	}
+		goto free_events;
+	if (cmpxchg(&area->sys_call_data[__NR_epoll_pwait], NULL, items))
+		goto free_items;
 
 	for (i = 0; i < MAX_FD; i++) {
 		items[i].cache_pages = alloc_pages(GFP_KERNEL_ACCOUNT | __GFP_ZERO,
@@ -360,8 +372,15 @@ static long __do_sys_epoll_create(struct pt_regs *regs)
 		items[i].file = NULL;
 		set_prefetch_numa_cpu(&items[i]);
 	}
+
 	area->xcall_mmu_notifier.ops = &xcall_mmu_notifier_ops;
 	mmu_notifier_register(&area->xcall_mmu_notifier, current->mm);
+	return ret;
+
+free_items:
+	kfree(items);
+free_events:
+	kfree(events);
 	return ret;
 }
 
@@ -406,7 +425,7 @@ static long __do_sys_epoll_pwait(struct pt_regs *regs)
 {
 	void __user *buf = (void *)regs->regs[1];
 	struct prefetch_item *pfi = NULL;
-	struct epoll_event events[MAX_FD] = {0};
+	struct epoll_event *events = current_epoll_events();
 	int i, fd, cpu, prefetch_task_num;
 	long ret;
 
