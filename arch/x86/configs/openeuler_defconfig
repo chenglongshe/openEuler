@@ -3731,6 +3731,7 @@ CONFIG_I2C_VIAPRO=m
 # ACPI drivers
 #
 CONFIG_I2C_SCMI=m
+CONFIG_I2C_ZHAOXIN_SMBUS=m
 
 #
 # I2C system bus drivers (mostly embedded / system-on-chip)
