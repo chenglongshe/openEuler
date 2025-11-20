@@ -474,7 +474,7 @@ static long __do_sys_read(struct pt_regs *regs)
 
 /* MANDATORY */
 struct xcall_prog xcall_prefetch_prog = {
-	.name		= "xcall_prefetch",
+	.name		= "prefetch",
 	.owner		= THIS_MODULE,
 	.objs		= {
 		{
