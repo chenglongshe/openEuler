@@ -370,6 +370,11 @@ static struct ate_acpi_oem_info hisi_161010101_oem_info[] = {
 #ifdef CONFIG_HISILICON_ERRATUM_165010801
 static struct ate_acpi_oem_info hisi_165010801_oem_info[] = {
 	{
+		.oem_id         = "HISI  ",
+		.oem_table_id   = "HIP09   ",
+		.oem_revision   = 0,
+	},
+	{
 		.oem_id		= "HISI  ",
 		.oem_table_id	= "HIP12   ",
 		.oem_revision	= 0,
