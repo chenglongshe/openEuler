@@ -389,13 +389,11 @@ static long __do_sys_epoll_ctl(struct pt_regs *regs)
 		file = fget(fd);
 		if (!file)
 			return ret;
+		if (sock_from_file(file))
+			cmpxchg(&pfi->file, NULL, file);
+		fput(file);
+		break;
 
-		if (!sock_from_file(file)) {
-			fput(file);
-			return ret;
-		}
-		if (cmpxchg(&pfi->file, NULL, file))
-			fput(file);
 		break;
 	case EPOLL_CTL_DEL:
 		xcall_cancel_work(fd);
@@ -456,7 +454,6 @@ static long __do_sys_close(struct pt_regs *regs)
 		pfi_old_file = pfi->file;
 		pfi_new_file = cmpxchg(&pfi->file, pfi_old_file, NULL);
 		if (pfi_new_file == pfi_old_file) {
-			fput(pfi_old_file);
 			atomic_set(&pfi->state, XCALL_CACHE_NONE);
 			pfi->len = 0;
 			pfi->pos = 0;
