@@ -74,6 +74,17 @@ struct enfs_xprt_context {
 	u32 protocol; // TCP or UDP or RDMA
 	int64_t lastTime;
 	struct enfs_reconnect_time reconnect_time;
+	/* latency-based unstable detection */
+	s64 latency_last_sample_ms;
+	u64 latency_last_ops_sum;
+	s64 latency_last_exec_ms_sum;
+	/* circular buffer within detect period */
+	s8 latency_head;
+	s8 latency_tail;
+	s64 latency_event_time_ms[30];
+	/* record cause/time for unstable entered due to latency */
+	s64 latency_unstable_enter_ms;
+	bool latency_unstable_active;
 	u32 reserve[30];
 };
 
