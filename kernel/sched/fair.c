@@ -1336,6 +1336,48 @@ static void update_tg_load_avg(struct cfs_rq *cfs_rq)
 }
 #endif /* CONFIG_SMP */
 
+static s64 update_curr_se(struct rq *rq, struct sched_entity *curr)
+{
+	u64 now = rq_clock_task(rq);
+	s64 delta_exec;
+
+	delta_exec = now - curr->exec_start;
+	if (unlikely(delta_exec <= 0))
+		return delta_exec;
+
+	curr->exec_start = now;
+	curr->sum_exec_runtime += delta_exec;
+
+	if (schedstat_enabled()) {
+		struct sched_statistics *stats;
+
+		stats = __schedstats_from_se(curr);
+		__schedstat_set(stats->exec_max,
+				max_t(u64, delta_exec, stats->exec_max));
+	}
+
+	return delta_exec;
+}
+static inline void update_curr_task(struct task_struct *p, s64 delta_exec)
+{
+	account_group_exec_runtime(p, delta_exec);
+	cgroup_account_cputime(p, delta_exec);
+}
+/*
+ * Used by other classes to account runtime.
+ */
+s64 update_curr_common(struct rq *rq)
+{
+	struct task_struct *curr = rq->curr;
+	s64 delta_exec;
+
+	delta_exec = update_curr_se(rq, &curr->se);
+	if (likely(delta_exec > 0))
+		update_curr_task(curr, delta_exec);
+
+	return delta_exec;
+}
+
 /*
  * Update the current task's runtime statistics.
  */
@@ -7659,7 +7701,7 @@ static void set_next_buddy(struct sched_entity *se);
  * decreased. We remove the task from the rbtree and
  * update the fair scheduling stats:
  */
-static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+static bool dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &p->se;
@@ -7738,6 +7780,8 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 dequeue_throttle:
 	util_est_update(&rq->cfs, p, task_sleep);
 	hrtick_update(rq);
+
+	return true;
 }
 
 #ifdef CONFIG_SMP
@@ -9591,7 +9635,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	/*
 	 * BATCH and IDLE tasks do not preempt others.
 	 */
-	if (unlikely(p->policy != SCHED_NORMAL))
+	if (unlikely(!normal_policy(p->policy)))
 		return;
 
 	cfs_rq = cfs_rq_of(se);
@@ -10417,7 +10461,7 @@ static struct task_struct *__pick_next_task_fair(struct rq *rq)
 /*
  * Account for a descheduled task:
  */
-static void put_prev_task_fair(struct rq *rq, struct task_struct *prev)
+static void put_prev_task_fair(struct rq *rq, struct task_struct *prev, struct task_struct *next)
 {
 	struct sched_entity *se = &prev->se;
 	struct cfs_rq *cfs_rq;

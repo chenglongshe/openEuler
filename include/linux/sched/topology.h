@@ -291,6 +291,13 @@ unsigned long arch_scale_cpu_capacity(int cpu)
 }
 #endif
 
+#ifndef arch_scale_hw_pressure
+static __always_inline
+unsigned long arch_scale_hw_pressure(int cpu)
+{
+	return 0;
+}
+#endif
 #ifndef arch_scale_thermal_pressure
 static __always_inline
 unsigned long arch_scale_thermal_pressure(int cpu)

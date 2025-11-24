@@ -1592,7 +1592,8 @@ struct bpf_prog {
 				enforce_expected_attach_type:1, /* Enforce expected_attach_type checking at attach time */
 				call_get_stack:1, /* Do we call bpf_get_stack() or bpf_get_stackid() */
 				call_get_func_ip:1, /* Do we call get_func_ip() */
-				tstamp_type_access:1; /* Accessed __sk_buff->tstamp_type */
+				tstamp_type_access:1, /* Accessed __sk_buff->tstamp_type */
+				sleepable:1;	/* BPF program is sleepable */
 	enum bpf_prog_type	type;		/* Type of BPF program */
 	enum bpf_attach_type	expected_attach_type; /* For some prog types */
 	u32			len;		/* Number of filter blocks */
@@ -1699,6 +1700,16 @@ struct bpf_link_primer {
 	u32 id;
 };
 
+#define __bpf_kfunc_start_defs()					       \
+	__diag_push();							       \
+	__diag_ignore_all("-Wmissing-declarations",			       \
+			  "Global kfuncs as their definitions will be in BTF");\
+	__diag_ignore_all("-Wmissing-prototypes",			       \
+			  "Global kfuncs as their definitions will be in BTF")
+
+#define __bpf_kfunc_end_defs() __diag_pop()
+#define __bpf_hook_start() __bpf_kfunc_start_defs()
+#define __bpf_hook_end() __bpf_kfunc_end_defs()
 struct bpf_struct_ops_value;
 struct btf_member;
 
@@ -1765,6 +1776,8 @@ struct bpf_struct_ops {
 	int (*validate)(void *kdata);
 	const struct btf_type *type;
 	const struct btf_type *value_type;
+	void *cfi_stubs;
+	struct module *owner;
 	const char *name;
 	struct btf_func_model func_models[BPF_STRUCT_OPS_MAX_NR_MEMBERS];
 	u32 type_id;
