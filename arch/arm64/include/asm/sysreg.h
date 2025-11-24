@@ -129,6 +129,8 @@
  * System registers, organised loosely by encoding but grouped together
  * where the architected name contains an index. e.g. ID_MMFR<n>_EL1.
  */
+#define SYS_ALLINT_CLR			sys_reg(0, 1, 4, 0, 0)
+#define SYS_ALLINT_SET			sys_reg(0, 1, 4, 1, 0)
 #define SYS_SVCR_SMSTOP_SM_EL0		sys_reg(0, 3, 4, 2, 3)
 #define SYS_SVCR_SMSTART_SM_EL0		sys_reg(0, 3, 4, 3, 3)
 #define SYS_SVCR_SMSTOP_SMZA_EL0	sys_reg(0, 3, 4, 6, 3)
@@ -338,7 +340,10 @@
 #define SYS_SPSR_EL1			sys_reg(3, 0, 4, 0, 0)
 #define SYS_ELR_EL1			sys_reg(3, 0, 4, 0, 1)
 
+#define SYS_ALLINT			sys_reg(3, 0, 4, 3, 0)
+
 #define SYS_ICC_PMR_EL1			sys_reg(3, 0, 4, 6, 0)
+#define SYS_ICC_NMIAR1_EL1		sys_reg(3, 0, 12, 9, 5)
 
 #define SYS_AFSR0_EL1			sys_reg(3, 0, 5, 1, 0)
 #define SYS_AFSR1_EL1			sys_reg(3, 0, 5, 1, 1)
@@ -360,6 +365,12 @@
 
 #define SYS_PAR_EL1_F			BIT(0)
 #define SYS_PAR_EL1_FST			GENMASK(6, 1)
+
+#define ID_AA64PFR1_NMI_MASK		GENMASK(39, 36)
+#define HCRX_EL2_TALLINT		BIT(6)
+#define HCRX_EL2_TALLINT_MASK		GENMASK(6, 6)
+#define ALLINT_ALLINT			BIT(13)
+#define ISR_EL1_IS			BIT(10)
 
 /*** Statistical Profiling Extension ***/
 
@@ -1198,6 +1209,8 @@
 
 #define SCTLR_EL1_BT1		(BIT(36))
 #define SCTLR_EL1_BT0		(BIT(35))
+#define SCTLR_EL1_SPINTMASK	(BIT(62))
+#define SCTLR_EL1_NMI		(BIT(61))
 #define SCTLR_EL1_UCI		(BIT(26))
 #define SCTLR_EL1_E0E		(BIT(24))
 #define SCTLR_EL1_SPAN		(BIT(23))
@@ -1345,6 +1358,7 @@
 #define ID_AA64PFR1_MPAMFRAC_SHIFT	16
 #define ID_AA64PFR1_RASFRAC_SHIFT	12
 #define ID_AA64PFR1_MTE_SHIFT		8
+#define ID_AA64PFR1_NMI_SHIFT		36
 #define ID_AA64PFR1_SSBS_SHIFT		4
 #define ID_AA64PFR1_BT_SHIFT		0
 
@@ -1357,6 +1371,9 @@
 #define ID_AA64PFR1_MTE_NI		0x0
 #define ID_AA64PFR1_MTE_EL0		0x1
 #define ID_AA64PFR1_MTE			0x2
+
+#define ID_AA64PFR1_NMI_IMP_DEF		0x1
+#define ID_AA64PFR1_NMI_IMP_NI		0x0
 
 /* id_aa64zfr0 */
 #define ID_AA64ZFR0_F64MM_SHIFT		56
@@ -1445,6 +1462,7 @@
 #define ID_AA64MMFR1_TWED_SHIFT		32
 #define ID_AA64MMFR1_XNX_SHIFT		28
 #define ID_AA64MMFR1_SPECSEI_SHIFT	24
+#define ID_AA64MMFR1_HCX_SHIFT		40
 #define ID_AA64MMFR1_PAN_SHIFT		20
 #define ID_AA64MMFR1_LOR_SHIFT		16
 #define ID_AA64MMFR1_HPD_SHIFT		12

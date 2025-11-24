@@ -14,6 +14,8 @@ extern bool arch_trigger_cpumask_backtrace(const cpumask_t *mask,
 
 struct pt_regs;
 
+int set_handle_nmi_irq(void (*handle_irq)(struct pt_regs *));
+
 static inline int nr_legacy_irqs(void)
 {
 	return 0;

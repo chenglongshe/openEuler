@@ -1293,7 +1293,7 @@ u64 hw_nmi_get_sample_period(int watchdog_thresh)
 {
 	u64 cpu_freq;
 
-	if (!gic_supports_nmi())
+	if (!gic_supports_pseudo_nmis())
 		return 0;
 
 	if (hardlockup_enable != 0) {

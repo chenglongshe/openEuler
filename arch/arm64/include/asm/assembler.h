@@ -32,21 +32,54 @@
 	wx\n	.req	w\n
 	.endr
 
+	.macro	disable_allint
+#ifdef CONFIG_ARM64_NMI
+alternative_if ARM64_HAS_NMI
+	msr_s	SYS_ALLINT_SET, xzr
+alternative_else_nop_endif
+#endif
+	.endm
+
+	.macro	enable_allint
+#ifdef CONFIG_ARM64_NMI
+alternative_if ARM64_HAS_NMI
+	msr_s	SYS_ALLINT_CLR, xzr
+alternative_else_nop_endif
+#endif
+	.endm
+
+	.macro	restore_allint, flags
+#ifdef CONFIG_ARM64_NMI
+alternative_if ARM64_HAS_NMI
+	and	\flags, \flags, #PSR_A_BIT
+	.if	\flags == PSR_A_BIT
+	msr_s	SYS_ALLINT_SET, xzr
+	.else
+	msr_s	SYS_ALLINT_CLR, xzr
+	.endif
+alternative_else_nop_endif
+#endif
+	.endm
+
 	.macro save_and_disable_daif, flags
+	disable_allint
 	mrs	\flags, daif
 	msr	daifset, #0xf
 	.endm
 
 	.macro disable_daif
+	disable_allint
 	msr	daifset, #0xf
 	.endm
 
 	.macro enable_daif
 	msr	daifclr, #0xf
+	enable_allint
 	.endm
 
 	.macro	restore_daif, flags:req
 	msr	daif, \flags
+	restore_allint \flags
 	.endm
 
 	/* IRQ is the lowest priority flag, unconditionally unmask the rest. */

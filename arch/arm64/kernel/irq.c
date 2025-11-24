@@ -67,3 +67,27 @@ void __init init_IRQ(void)
 		local_daif_restore(DAIF_PROCCTX_NOIRQ);
 	}
 }
+
+static void default_handle_nmi_irq(struct pt_regs *regs)
+{
+	panic("Superpriority IRQ taken without a root NMI IRQ handler\n");
+}
+
+static void default_handle_nmi_fiq(struct pt_regs *regs)
+{
+	panic("Superpriority FIQ taken without a root NMI FIQ handler\n");
+}
+
+void (*handle_arch_nmi_irq)(struct pt_regs *) __ro_after_init = default_handle_nmi_irq;
+void (*handle_arch_nmi_fiq)(struct pt_regs *) __ro_after_init = default_handle_nmi_fiq;
+
+int __init set_handle_nmi_irq(void (*handle_nmi_irq)(struct pt_regs *))
+{
+	if (handle_arch_nmi_irq != default_handle_nmi_irq)
+		return -EBUSY;
+
+	handle_arch_nmi_irq = handle_nmi_irq;
+	pr_info("Root superpriority IRQ handler: %ps\n", handle_nmi_irq);
+	return 0;
+}
+
