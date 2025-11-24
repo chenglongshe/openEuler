@@ -116,6 +116,47 @@ static void set_xprt_close_wait(struct rpc_xprt *xprt)
 
 }
 
+static inline s8 enfs_latency_next_idx(s8 idx, int cap)
+{
+	return (idx + 1) % cap;
+}
+
+static void enfs_latency_prune_old(struct enfs_xprt_context *ctx, s64 now_ms)
+{
+	int cap = ARRAY_SIZE(ctx->latency_event_time_ms);
+	s64 window_ms = (s64)enfs_get_latency_detect_period_min() * 60 * 1000;
+
+	while (ctx->latency_tail != ctx->latency_head) {
+		s64 t = ctx->latency_event_time_ms[ctx->latency_tail];
+
+		if (now_ms - t <= window_ms)
+			break;
+		ctx->latency_tail = enfs_latency_next_idx(ctx->latency_tail, cap);
+	}
+}
+
+static void enfs_latency_push_event(struct enfs_xprt_context *ctx, s64 now_ms)
+{
+	int cap = ARRAY_SIZE(ctx->latency_event_time_ms);
+	int next = enfs_latency_next_idx(ctx->latency_head, cap);
+
+	if (next == ctx->latency_tail) // full, drop oldest
+		ctx->latency_tail = enfs_latency_next_idx(ctx->latency_tail, cap);
+	ctx->latency_event_time_ms[ctx->latency_head] = now_ms;
+	ctx->latency_head = next;
+}
+
+static int enfs_latency_event_count(struct enfs_xprt_context *ctx)
+{
+	int cap = ARRAY_SIZE(ctx->latency_event_time_ms);
+	int head = ctx->latency_head;
+	int tail = ctx->latency_tail;
+
+	if (head >= tail)
+		return head - tail;
+	return cap - tail + head;
+}
+
 static inline s8 enfs_get_next_time_idx(s8 idx)
 {
 	return (idx + 1) % (ENFS_RECONNECT_TIME_CNT + 1);
