@@ -950,6 +950,9 @@ config NUMA_BALANCING_DEFAULT_ENABLED
 	  If set, automatic NUMA balancing will be enabled if running on a NUMA
 	  machine.
 
+config ARCH_SUPPORTS_SCHED_SOFT_QUOTA
+	bool
+
 menuconfig CGROUPS
 	bool "Control Group support"
 	select KERNFS
@@ -1178,9 +1181,6 @@ config SCHED_SOFT_DOMAIN
 #
 # For architectures that want to enable the support for SCHED_SOFT_QUOTA
 #
-config ARCH_SUPPORTS_SCHED_SOFT_QUOTA
-	bool
-
 config SCHED_SOFT_QUOTA
 	bool "More flexible use of CPU quota"
 	depends on ARCH_SUPPORTS_SCHED_SOFT_QUOTA
