@@ -1293,10 +1293,9 @@ int ice_reset_vf(struct ice_vf *vf, u32 flags)
 	struct ice_hw *hw;
 	bool rsd = false;
 	u8 promisc_m;
+	int err = 0;
 	u32 reg;
 	int i;
-
-	lockdep_assert_held(&vf->cfg_lock);
 
 	dev = ice_pf_to_dev(pf);
 
@@ -1321,6 +1320,11 @@ int ice_reset_vf(struct ice_vf *vf, u32 flags)
 			vf->vf_id);
 		return 0;
 	}
+
+	if (flags & ICE_VF_RESET_LOCK)
+		mutex_lock(&vf->cfg_lock);
+	else
+		lockdep_assert_held(&vf->cfg_lock);
 
 	/* Set VF disable bit state here, before triggering reset */
 	set_bit(ICE_VF_STATE_DIS, vf->vf_states);
@@ -1380,12 +1384,17 @@ int ice_reset_vf(struct ice_vf *vf, u32 flags)
 
 	if (ice_vf_rebuild_vsi_with_release(vf)) {
 		dev_err(dev, "Failed to release and setup the VF%u's VSI\n", vf->vf_id);
-		return -EFAULT;
+		err = -EFAULT;
+		goto out_unlock;
 	}
 
 	ice_vf_post_vsi_rebuild(vf);
 
-	return 0;
+out_unlock:
+	if (flags & ICE_VF_RESET_LOCK)
+		mutex_unlock(&vf->cfg_lock);
+
+	return err;
 }
 
 /**

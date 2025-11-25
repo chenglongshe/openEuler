@@ -107,6 +107,7 @@ struct ice_vf {
 /* Flags for controlling behavior of ice_reset_vf */
 enum ice_vf_reset_flags {
 	ICE_VF_RESET_VFLR = BIT(0), /* Indicate a VFLR reset */
+	ICE_VF_RESET_LOCK = BIT(1), /* Acquire the VF cfg_lock */
 };
 
 #ifdef CONFIG_PCI_IOV
