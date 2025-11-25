@@ -218,6 +218,7 @@ struct ubase_bus_eid {
 bool ubase_adev_ubl_supported(struct auxiliary_device *adev);
 bool ubase_adev_ctrlq_supported(struct auxiliary_device *adev);
 bool ubase_adev_eth_mac_supported(struct auxiliary_device *adev);
+bool ubase_adev_mac_stats_supported(struct auxiliary_device *aux_dev);
 bool ubase_adev_prealloc_supported(struct auxiliary_device *aux_dev);
 
 struct ubase_resource_space *ubase_get_io_base(struct auxiliary_device *adev);
@@ -256,5 +257,9 @@ int ubase_activate_dev(struct auxiliary_device *adev);
 int ubase_deactivate_dev(struct auxiliary_device *adev);
 
 int ubase_get_bus_eid(struct auxiliary_device *adev, struct ubase_bus_eid *eid);
+
+int ubase_get_dev_mac(struct auxiliary_device *adev, u8 *dev_addr, u8 addr_len);
+int ubase_set_dev_mac(struct auxiliary_device *adev, const u8 *dev_addr,
+		      u8 addr_len);
 
 #endif
