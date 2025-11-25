@@ -421,6 +421,26 @@ static void pm_ping_call_done(struct rpc_task *task, void *data)
 	}
 	ktime = ktime_get();
 	ctx->lastTime = ktime_to_ms(ktime);
+
+	/* unconditional recovery for latency-based unstable after configured
+	 * minutes if probe succeeds
+	 */
+	if (task->tk_status >= 0 && ctx->latency_unstable_active) {
+		s64 now_ms = ctx->lastTime;
+		s64 recover_ms = (s64)enfs_get_latency_recover_min() * 60 * 1000;
+
+		if (ctx->latency_unstable_enter_ms &&
+		    now_ms - ctx->latency_unstable_enter_ms >= recover_ms) {
+			pm_set_path_state(xprt, PM_STATE_NORMAL);
+			ctx->latency_unstable_active = false;
+			ctx->latency_unstable_enter_ms = 0;
+			/* reset latency window */
+			ctx->latency_tail = ctx->latency_head = 0;
+			ctx->latency_last_sample_ms = 0;
+			ctx->latency_last_ops_sum = 0;
+			ctx->latency_last_exec_ms_sum = 0;
+		}
+	}
 	xprt_put(xprt);
 }
 
