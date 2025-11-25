@@ -1264,13 +1264,16 @@ static bool ice_is_vf_disabled(struct ice_vf *vf)
 /**
  * ice_reset_vf - Reset a particular VF
  * @vf: pointer to the VF structure
- * @is_vflr: true if VFLR was issued, false if not
+ * @flags: flags controlling behavior of the reset
+ *
+ * Flags:
+ *   ICE_VF_RESET_VFLR - Indicates a reset is due to VFLR event
  *
  * Returns 0 if the VF is currently in reset, if the resets are disabled, or
  * if the VF resets successfully. Returns an error code if the VF fails to
  * rebuild.
  */
-int ice_reset_vf(struct ice_vf *vf, bool is_vflr)
+int ice_reset_vf(struct ice_vf *vf, u32 flags)
 {
 	struct ice_pf *pf = vf->pf;
 	struct ice_vsi *vsi;
@@ -1299,7 +1302,7 @@ int ice_reset_vf(struct ice_vf *vf, bool is_vflr)
 
 	/* Set VF disable bit state here, before triggering reset */
 	set_bit(ICE_VF_STATE_DIS, vf->vf_states);
-	ice_trigger_vf_reset(vf, is_vflr, false);
+	ice_trigger_vf_reset(vf, flags & ICE_VF_RESET_VFLR, false);
 
 	vsi = pf->vsi[vf->lan_vsi_idx];
 
@@ -1739,7 +1742,7 @@ void ice_process_vflr_event(struct ice_pf *pf)
 		if (reg & BIT(bit_idx)) {
 			/* GLGEN_VFLRSTAT bit will be cleared in ice_reset_vf */
 			mutex_lock(&vf->cfg_lock);
-			ice_reset_vf(vf, true);
+			ice_reset_vf(vf, ICE_VF_RESET_VFLR);
 			mutex_unlock(&vf->cfg_lock);
 		}
 	}
@@ -1752,7 +1755,7 @@ void ice_process_vflr_event(struct ice_pf *pf)
 static void ice_vc_reset_vf(struct ice_vf *vf)
 {
 	ice_vc_notify_vf_reset(vf);
-	ice_reset_vf(vf, false);
+	ice_reset_vf(vf, 0);
 }
 
 /**
@@ -2023,7 +2026,7 @@ err:
 static void ice_vc_reset_vf_msg(struct ice_vf *vf)
 {
 	if (test_bit(ICE_VF_STATE_INIT, vf->vf_states))
-		ice_reset_vf(vf, false);
+		ice_reset_vf(vf, 0);
 }
 
 /**
