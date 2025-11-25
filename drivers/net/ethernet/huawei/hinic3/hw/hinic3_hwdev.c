@@ -2022,6 +2022,17 @@ u8 hinic3_max_pf_num(void *hwdev)
 }
 EXPORT_SYMBOL(hinic3_max_pf_num);
 
+void *hinic3_ppf_hwdev(void *hwdev)
+{
+	struct hinic3_hwdev *dev = hwdev;
+
+	if (!dev)
+		return NULL;
+
+	return dev->ppf_hwdev;
+}
+EXPORT_SYMBOL(hinic3_ppf_hwdev);
+
 void hinic3_fault_event_report(void *hwdev, u16 src, u16 level)
 {
 	if (!hwdev)

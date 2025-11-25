@@ -26,10 +26,13 @@
 #include "hinic3_common.h"
 #include "mag_mpu_cmd_defs.h"
 
-#define BIFUR_RESOURCE_PF_SSID	0x5a1
+#ifndef __UEFI__
+#include "hinic3_bond.h"
+#include "hinic3_dev_mgmt.h"
+#endif
+
 #define CAP_INFO_MAX_LEN	512
 #define DEVICE_VENDOR_MAX_LEN		17
-#define READ_RSFEC_REGISTER_DELAY_TIME_MS		500
 
 struct parse_tlv_info g_page_info = {0};
 struct drv_tag_mag_cmd_get_xsfp_tlv_rsp g_xsfp_tlv_info = {0};
@@ -117,10 +120,67 @@ out:
 }
 EXPORT_SYMBOL(hinic3_get_phy_port_stats);
 
+int hinic3_get_phy_port_speed(void *hwdev, struct mag_port_speed *speed,
+			      struct mag_speed_info *info)
+{
+	struct mag_cmd_get_port_speed *port_speed = NULL;
+	struct mag_cmd_port_speed_info speed_info = {};
+	u16 out_size;
+	struct hinic3_nic_io *nic_io = NULL;
+	int err;
+
+	if (hwdev == NULL) {
+		pr_err("Do get mac speed cmd failed for invalid param\n");
+		return -EINVAL;
+	}
+
+	nic_io = hinic3_get_service_adapter(hwdev, SERVICE_T_NIC);
+	if (!nic_io) {
+		pr_err("Do get nic io cmd failed for invalid param, hwdev:0x%llx\n",
+		       (u64)hwdev);
+		return -EINVAL;
+	}
+
+	out_size = sizeof(struct mag_cmd_get_port_speed) +
+		   sizeof(struct mag_port_speed) * info->length;
+	port_speed = kzalloc(out_size, GFP_KERNEL);
+	if (!port_speed) {
+		nic_err(nic_io->dev_hdl,
+			"Failed to malloc mag_cmd_get_port_speed\n");
+		return -ENOMEM;
+	}
+
+	speed_info.port_id = hinic3_physical_port_id(hwdev);
+	memcpy(&(speed_info.info), info, sizeof(*info));
+
+	err = mag_msg_to_mgmt_sync(hwdev, MAG_CMD_GET_PORT_SPEED,
+					&speed_info, sizeof(speed_info),
+					port_speed, &out_size);
+	if (err != 0 || out_size == 0 || port_speed->head.status != 0) {
+		nic_err(nic_io->dev_hdl,
+			"Failed to get port statistics, err: %d, status: 0x%x, out size: 0x%x\n",
+			err, port_speed->head.status, out_size);
+		err = -EIO;
+		goto out;
+	}
+
+	port_speed->speed = (struct mag_port_speed *)
+			    ((char *)port_speed +
+			     sizeof(struct mag_cmd_get_port_speed));
+	memcpy(speed, port_speed->speed,
+	       sizeof(struct mag_port_speed) * info->length);
+
+out:
+	kfree(port_speed);
+
+	return err;
+}
+EXPORT_SYMBOL(hinic3_get_phy_port_speed);
+
 int hinic3_get_phy_rsfec_stats(void *hwdev, struct mag_cmd_rsfec_stats *stats)
 {
-	struct mag_cmd_get_mag_cnt *port_stats = NULL;
-	struct mag_cmd_get_mag_cnt stats_info;
+	struct mag_cmd_get_rsfec_cnt *port_stats = NULL;
+	struct mag_cmd_get_rsfec_cnt stats_info;
 	u16 out_size = sizeof(*port_stats);
 	struct hinic3_nic_io *nic_io = NULL;
 	int err;
@@ -138,11 +198,11 @@ int hinic3_get_phy_rsfec_stats(void *hwdev, struct mag_cmd_rsfec_stats *stats)
 		goto out;
 	}
 
-	memset(&stats_info, 0, sizeof(stats_info));
+	(void)memset(&stats_info, 0, sizeof(stats_info));
 	stats_info.port_id = hinic3_physical_port_id(hwdev);
 
-	err = mag_msg_to_mgmt_sync(hwdev, MAG_CMD_GET_MAG_CNT,
-				   &stats_info, sizeof(stats_info),
+	err = mag_msg_to_mgmt_sync(hwdev, MAG_CMD_GET_RSFEC_CNT, &stats_info,
+				   sizeof(stats_info),
 				   port_stats, &out_size);
 	if (err || !out_size || port_stats->head.status) {
 		nic_err(nic_io->dev_hdl,
@@ -151,22 +211,8 @@ int hinic3_get_phy_rsfec_stats(void *hwdev, struct mag_cmd_rsfec_stats *stats)
 		err = -EIO;
 		goto out;
 	}
-	/* 读2遍, 清除误码残留 */
-	msleep(READ_RSFEC_REGISTER_DELAY_TIME_MS);
 
-	err = mag_msg_to_mgmt_sync(hwdev, MAG_CMD_GET_MAG_CNT, &stats_info,
-				   sizeof(stats_info),
-	port_stats, &out_size);
-	if (err || !out_size || port_stats->head.status) {
-		nic_err(nic_io->dev_hdl,
-			"Failed to get rsfec statistics, err: %d, status: 0x%x, out size: 0x%x\n",
-			err, port_stats->head.status, out_size);
-		err = -EIO;
-		goto out;
-	}
-
-	memcpy(stats, &port_stats->mag_csr[MAG_RX_RSFEC_ERR_CW_CNT],
-	       sizeof(u32));
+	stats->rx_err_lane_phy = port_stats->rx_err_lane;
 
 out:
 	kfree(port_stats);
@@ -643,6 +689,33 @@ void print_port_info(struct hinic3_nic_io *nic_io,
 		 port_info->cur_link_machine_state);
 }
 
+#ifndef __UEFI__
+#define BIFUR_MAX_PORT_ID 2
+void hinic3_get_link_state_in_bifur_scene(
+				struct mag_cmd_get_link_status *get_link,
+				struct hinic3_nic_io *nic_io,
+				struct mag_cmd_get_link_status *in_param)
+{
+	bool in_bifur_scene = false;
+	struct pci_dev *pdev = NULL;
+
+	if (nic_io->pcidev_hdl != NULL) {
+		pdev = nic_io->pcidev_hdl;
+		if (pdev->subsystem_device == BIFUR_RESOURCE_PF_SSID)
+			in_bifur_scene = true;
+
+	}
+
+	if (in_bifur_scene != true ||
+	    in_param == NULL ||
+	    in_param->port_id >= BIFUR_MAX_PORT_ID) {
+		return;
+	}
+	get_link->status = hinic3_get_bifur_link_status(nic_io->hwdev,
+							in_param->port_id);
+}
+#endif
+
 static int hinic3_get_vf_link_status_msg_handler(struct hinic3_nic_io *nic_io,
 						 u16 vf_id, void *buf_in,
 						 u16 in_size, void *buf_out,
@@ -658,8 +731,13 @@ static int hinic3_get_vf_link_status_msg_handler(struct hinic3_nic_io *nic_io,
 	if (link_forced)
 		get_link->status = link_up ?
 					HINIC3_LINK_UP : HINIC3_LINK_DOWN;
-	else
+	else {
 		get_link->status = nic_io->link_status;
+#ifndef __UEFI__
+		hinic3_get_link_state_in_bifur_scene(get_link, nic_io,
+				(struct mag_cmd_get_link_status *)buf_in);
+#endif
+	}
 
 	get_link->head.status = 0;
 	*out_size = sizeof(*get_link);
@@ -707,12 +785,13 @@ static void link_status_event_handler(void *hwdev, void *buf_in,
 {
 	struct mag_cmd_get_link_status *link_status = NULL;
 	struct mag_cmd_get_link_status *ret_link_status = NULL;
-	struct hinic3_event_info event_info = {0};
+	struct hinic3_event_info event_info = {};
 	struct hinic3_event_link_info *link_info = (void *)event_info.event_data;
 	struct hinic3_nic_io *nic_io = NULL;
 #ifndef __UEFI__
 	struct pci_dev *pdev = NULL;
 #endif
+
 	/* Ignore link change event */
 	if (hinic3_is_bm_slave_host(hwdev))
 		return;
@@ -734,16 +813,15 @@ static void link_status_event_handler(void *hwdev, void *buf_in,
 
 	event_info.service = EVENT_SRV_NIC;
 	event_info.type = link_status->status ?
-				EVENT_NIC_LINK_UP : EVENT_NIC_LINK_DOWN;
+			EVENT_NIC_LINK_UP : EVENT_NIC_LINK_DOWN;
 
 	hinic3_event_callback(hwdev, &event_info);
 
 #ifndef __UEFI__
-	if (nic_io->pcidev_hdl) {
+	if (nic_io->pcidev_hdl != NULL) {
 		pdev = nic_io->pcidev_hdl;
-		if (pdev->subsystem_device == BIFUR_RESOURCE_PF_SSID) {
+		if (pdev->subsystem_device == BIFUR_RESOURCE_PF_SSID)
 			return;
-		}
 	}
 #endif
 

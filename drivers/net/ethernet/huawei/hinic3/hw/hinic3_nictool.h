@@ -15,6 +15,12 @@
 
 #define MAX_CARD_NUM (64)
 
+enum mac_speed_status {
+	STOP_STATUS,
+	RUN_STATUS,
+	READY_STATUS,
+};
+
 int nictool_k_init(void *hwdev, void *chip_node);
 void nictool_k_uninit(void *hwdev, void *chip_node);
 

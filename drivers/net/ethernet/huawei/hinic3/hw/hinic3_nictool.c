@@ -45,6 +45,11 @@ struct hw_drv_module_handle {
 	hw_driv_module		driv_func;
 };
 
+struct nictool_private_data {
+	u32 cmd;
+	struct hinic3_lld_dev *lld_dev;
+};
+
 static int get_single_card_info(struct hinic3_lld_dev *lld_dev, const void *buf_in,
 				u32 in_size, void *buf_out, u32 *out_size)
 {
@@ -180,6 +185,11 @@ static int get_pf_dev_info(struct hinic3_lld_dev *lld_dev, const void *buf_in, u
 	struct card_node *card_info = hinic3_get_chip_node_by_lld(lld_dev);
 	int id, err;
 
+	if (card_info == NULL) {
+		pr_err("Invalid card info\n");
+		return -EINVAL;
+	}
+
 	if (!buf_out || *out_size != sizeof(struct pf_dev_info) * PF_DEV_INFO_NUM) {
 		pr_err("Invalid parameter: out_buf_size %u, expect %lu\n",
 		       *out_size, sizeof(*dev_info) * PF_DEV_INFO_NUM);
@@ -240,6 +250,11 @@ static int free_knl_mem(struct hinic3_lld_dev *lld_dev, const void *buf_in, u32 
 	struct card_node *card_info = hinic3_get_chip_node_by_lld(lld_dev);
 	int id, err;
 
+	if (card_info == NULL) {
+		pr_err("Invalid card info\n");
+		return -EINVAL;
+	}
+
 	err = sscanf(card_info->chip_name, HINIC3_CHIP_NAME "%d", &id);
 	if (err < 0) {
 		pr_err("Failed to get card id\n");
@@ -294,6 +309,11 @@ static int get_card_func_info(struct hinic3_lld_dev *lld_dev, const void *buf_in
 	struct card_node *card_info = hinic3_get_chip_node_by_lld(lld_dev);
 	int err, id = 0;
 
+	if (card_info == NULL) {
+		pr_err("Invalid card info\n");
+		return -EINVAL;
+	}
+
 	err = card_info_param_valid(card_info->chip_name, buf_out, *out_size, &id);
 	if (err)
 		return err;
@@ -325,6 +345,11 @@ static int get_pf_cap_info(struct hinic3_lld_dev *lld_dev, const void *buf_in, u
 	struct card_node *card_info = hinic3_get_chip_node_by_lld(lld_dev);
 	struct svc_cap_info *svc_cap_info_in = (struct svc_cap_info *)buf_in;
 	struct svc_cap_info *svc_cap_info_out = (struct svc_cap_info *)buf_out;
+
+	if (card_info == NULL) {
+		pr_err("Invalid card info\n");
+		return -EINVAL;
+	}
 
 	if (*out_size != sizeof(struct svc_cap_info) || in_size != sizeof(struct svc_cap_info) ||
 	    !buf_in || !buf_out) {
@@ -370,7 +395,7 @@ static int get_hw_drv_version(struct hinic3_lld_dev *lld_dev, const void *buf_in
 	}
 
 	snprintf(ver_info->ver, sizeof(ver_info->ver), "%s  %s", HINIC3_DRV_VERSION,
-		 "2025-05-08_00:00:08");
+		 "2025-11-17_00:00:00");
 
 	return 0;
 }
@@ -419,28 +444,6 @@ static int get_mbox_cnt(struct hinic3_lld_dev *lld_dev, const void *buf_in,
 }
 #endif
 
-struct hw_drv_module_handle hw_driv_module_cmd_handle[] = {
-	{FUNC_TYPE,		get_func_type},
-	{GET_FUNC_IDX,		get_func_id},
-	{GET_HW_STATS,		(hw_driv_module)get_hw_driver_stats},
-	{CLEAR_HW_STATS,	clear_hw_driver_stats},
-	{GET_SELF_TEST_RES,	get_self_test_result},
-	{GET_CHIP_FAULT_STATS,	(hw_driv_module)get_chip_faults_stats},
-	{GET_SINGLE_CARD_INFO,	(hw_driv_module)get_single_card_info},
-	{IS_DRV_IN_VM,		is_driver_in_vm},
-	{GET_CHIP_ID,		get_all_chip_id_cmd},
-	{GET_PF_DEV_INFO,	get_pf_dev_info},
-	{CMD_FREE_MEM,		free_knl_mem},
-	{GET_CHIP_INFO,		get_card_func_info},
-	{GET_FUNC_CAP,		get_pf_cap_info},
-	{GET_DRV_VERSION,	get_hw_drv_version},
-	{GET_PF_ID,		get_pf_id},
-#ifndef __HIFC__
-	{GET_OS_HOT_REPLACE_INFO, get_os_hot_replace_info},
-	{GET_MBOX_CNT,		(hw_driv_module)get_mbox_cnt},
-#endif
-};
-
 static int alloc_tmp_buf(void *hwdev, struct msg_module *nt_msg, u32 in_size,
 			 void **buf_in, u32 out_size, void **buf_out)
 {
@@ -476,6 +479,27 @@ static void free_tmp_buf(void *hwdev, struct msg_module *nt_msg,
 static int send_to_hw_driver(struct hinic3_lld_dev *lld_dev, struct msg_module *nt_msg,
 			     const void *buf_in, u32 in_size, void *buf_out, u32 *out_size)
 {
+	struct hw_drv_module_handle hw_driv_module_cmd_handle[] = {
+		{FUNC_TYPE,		get_func_type},
+		{GET_FUNC_IDX,		get_func_id},
+		{GET_HW_STATS,		(hw_driv_module)get_hw_driver_stats},
+		{CLEAR_HW_STATS,	clear_hw_driver_stats},
+		{GET_SELF_TEST_RES,	get_self_test_result},
+		{GET_CHIP_FAULT_STATS,	(hw_driv_module)get_chip_faults_stats},
+		{GET_SINGLE_CARD_INFO,	(hw_driv_module)get_single_card_info},
+		{IS_DRV_IN_VM,		is_driver_in_vm},
+		{GET_CHIP_ID,		get_all_chip_id_cmd},
+		{GET_PF_DEV_INFO,	get_pf_dev_info},
+		{CMD_FREE_MEM,		free_knl_mem},
+		{GET_CHIP_INFO,		get_card_func_info},
+		{GET_FUNC_CAP,		get_pf_cap_info},
+		{GET_DRV_VERSION,	get_hw_drv_version},
+		{GET_PF_ID,		get_pf_id},
+	#ifndef __HIFC__
+		{GET_OS_HOT_REPLACE_INFO, get_os_hot_replace_info},
+		{GET_MBOX_CNT,		(hw_driv_module)get_mbox_cnt},
+	#endif
+	};
 	int index, num_cmds = (int)(sizeof(hw_driv_module_cmd_handle) /
 				sizeof(hw_driv_module_cmd_handle[0]));
 	enum driver_cmd_type cmd_type =
@@ -579,6 +603,7 @@ static int cmd_parameter_valid(struct msg_module *nt_msg, unsigned long arg,
 	}
 
 	nt_msg->device_name[IFNAMSIZ - 1] = '\0';
+	nt_msg->ib_device_name[IB_DEVICE_NAME_MAX - 1] = '\0';
 
 	return 0;
 }
@@ -594,17 +619,25 @@ static struct hinic3_lld_dev *get_lld_dev_by_nt_msg(struct msg_module *nt_msg)
 	} else if (nt_msg->module == SEND_TO_CUSTOM_DRIVER &&
 		   nt_msg->msg_formate == CMD_CUSTOM_BOND_GET_CHIP_NAME) {
 		lld_dev = hinic3_get_lld_dev_by_dev_name(nt_msg->device_name, SERVICE_T_MAX);
-	} else if (nt_msg->module == SEND_TO_VBS_DRIVER || nt_msg->module == SEND_TO_BIFUR_DRIVER) {
+	} else if (nt_msg->module == SEND_TO_VBS_DRIVER ||
+		   nt_msg->module == SEND_TO_BIFUR_DRIVER ||
+		   nt_msg->msg_formate == BOND_DEFAULT_OFFLOAD) {
 		lld_dev = hinic3_get_lld_dev_by_chip_name(nt_msg->device_name);
 	} else  if (nt_msg->module >= SEND_TO_SRV_DRV_BASE && nt_msg->module < SEND_TO_DRIVER_MAX &&
 		nt_msg->msg_formate != GET_DRV_VERSION) {
 		lld_dev = hinic3_get_lld_dev_by_dev_name(nt_msg->device_name,
 							 nt_msg->module - SEND_TO_SRV_DRV_BASE);
+		if (!lld_dev && nt_msg->module == SEND_TO_ROCE_DRIVER)
+			lld_dev = hinic3_get_lld_dev_by_dev_name(
+					nt_msg->ib_device_name, SERVICE_T_ROCE);
 	} else {
 		lld_dev = hinic3_get_lld_dev_by_chip_name(nt_msg->device_name);
 		if (!lld_dev)
 			lld_dev = hinic3_get_lld_dev_by_dev_name(nt_msg->device_name,
 								 SERVICE_T_MAX);
+		if (!lld_dev)
+			lld_dev = hinic3_get_lld_dev_by_dev_name(
+					nt_msg->ib_device_name, SERVICE_T_ROCE);
 	}
 
 	return lld_dev;
@@ -637,6 +670,13 @@ static long hinicadm_k_unlocked_ioctl(struct file *pfile, unsigned long arg)
 	if (nt_msg.msg_formate == DEV_NAME_TEST) {
 		lld_dev_put(lld_dev);
 		return 0;
+	}
+
+	if (pfile->private_data != NULL) {
+		struct nictool_private_data *private_data =
+			(struct nictool_private_data *)pfile->private_data;
+		private_data->cmd = nt_msg.msg_formate;
+		private_data->lld_dev = lld_dev;
 	}
 
 	ret = alloc_tmp_buf(hinic3_get_sdk_hwdev_by_lld(lld_dev), &nt_msg,
@@ -755,11 +795,44 @@ static long dbgtool_k_unlocked_ioctl(struct file *pfile,
 
 static int nictool_k_release(struct inode *pnode, struct file *pfile)
 {
+	if (pfile->private_data != NULL) {
+		struct nictool_private_data *private_data =
+			(struct nictool_private_data *)pfile->private_data;
+		if (private_data->cmd == SET_MAC_SPEED_STATUS) {
+			struct msg_module nt_msg;
+			enum mac_speed_status buf_in = STOP_STATUS;
+			int ret = 0;
+
+			nt_msg.module = SEND_TO_NIC_DRIVER;
+			nt_msg.msg_formate = SET_MAC_SPEED_STATUS;
+			ret = nictool_exec_cmd(private_data->lld_dev, &nt_msg,
+						 (void *)&buf_in,
+						 sizeof(enum mac_speed_status),
+						 NULL, NULL);
+			if (ret != 0) {
+				pr_err("Nictool k release failed, module: %u, ret: %d.\n",
+					nt_msg.module, ret);
+				return ret;
+			}
+		}
+		kfree(pfile->private_data);
+		pfile->private_data = NULL;
+	}
+
 	return 0;
 }
 
 static int nictool_k_open(struct inode *pnode, struct file *pfile)
 {
+	struct nictool_private_data *private_data =
+		       (struct nictool_private_data *)
+		       kzalloc(sizeof(struct nictool_private_data), GFP_KERNEL);
+	if (private_data == NULL) {
+		pr_err("Failed to allocate nictool_private_data\n");
+		return -ENOMEM;
+	}
+	pfile->private_data = (void *)private_data;
+
 	return 0;
 }
 
@@ -801,7 +874,7 @@ static int hinic3_mem_mmap(struct file *filp, struct vm_area_struct *vma)
 	}
 
 	/* old version of tool set vma->vm_pgoff to 0 */
-	phy_addr = offset ? offset : g_card_phy_addr[card_id];
+	phy_addr = (offset != 0) ? offset : g_card_phy_addr[card_id];
 
 	/* check phy_addr valid */
 	if (phy_addr != g_card_phy_addr[card_id]) {

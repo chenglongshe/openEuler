@@ -7,7 +7,9 @@
 #ifdef HAVE_PAGE_POOL_SUPPORT
 #include <net/page_pool/helpers.h>
 #endif
-
+#ifdef HAVE_XDP_SUPPORT
+#include <net/xdp.h>
+#endif
 #include <linux/types.h>
 #include <linux/device.h>
 #include <linux/mm_types.h>
@@ -39,6 +41,8 @@
 #define HINIC3_RQ_CQE_SEPARATE	0
 #define HINIC3_RQ_CQE_INTEGRATE	1
 
+#define HINIC3_CQE_COAL_EN 1
+
 struct hinic3_rxq_stats {
 	u64				packets;
 	u64				bytes;
@@ -46,19 +50,28 @@ struct hinic3_rxq_stats {
 	u64				csum_errors;
 	u64				other_errors;
 	u64				dropped;
-	u64				xdp_dropped;
 	u64				rx_buf_empty;
 
 	u64				alloc_skb_err;
 	u64				alloc_rx_buf_err;
-	u64				xdp_large_pkt;
 	u64				restore_drop_sge;
 	u64				rsvd2;
+#ifdef HAVE_XDP_SUPPORT
+	u64				xdp_dropped;
+	u64				xdp_redirected;
+	u64				xdp_large_pkt;
+#endif
 #ifdef HAVE_NDO_GET_STATS64
 	struct u64_stats_sync		syncp;
 #else
 	struct u64_stats_sync_empty	syncp;
 #endif
+};
+
+/* record hw ci combaDMA by ucode in CQE Coalescing scenario */
+struct hinic3_rx_ci_index {
+	u32 current_hw_ci;
+	u32 rsvd[3];
 };
 
 struct hinic3_rx_info {
@@ -97,12 +110,18 @@ struct hinic3_rxq {
 
 	u32			irq_id;
 	u16			msix_entry_idx;
+#ifdef HAVE_XDP_SUPPORT
+	u16			xdp_headroom_flag;
+#else
 	u16			rsvd3;
+#endif
 
+	struct hinic3_rx_ci_index *rx_ci_index;
 	struct hinic3_rx_info	*rx_info;
 	struct hinic3_io_queue	*rq;
 #ifdef HAVE_XDP_SUPPORT
 	struct bpf_prog		*xdp_prog;
+	struct xdp_rxq_info xdp_rxq;
 #endif
 
 	struct hinic3_irq	*irq_cfg;
@@ -172,5 +191,7 @@ void hinic3_rx_get_cqe_info(void *rx_cqe, void *cqe_info, u8 cqe_mode);
 void hinic3_rx_get_compact_cqe_info(void *rx_cqe, void *cqe_info, u8 cqe_mode);
 
 void hinic3_rxq_check_work_handler(struct work_struct *work);
+
+void hinic3_cmd_vf_lag(void *hwdev, u16 func_id, u16 channel);
 
 #endif

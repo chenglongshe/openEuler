@@ -148,6 +148,13 @@ struct hinic3_lld_dev *hinic3_get_ppf_lld_dev(struct hinic3_lld_dev *lld_dev);
 struct hinic3_lld_dev *hinic3_get_ppf_lld_dev_unsafe(struct hinic3_lld_dev *lld_dev);
 
 /**
+ * @brief hinic3_get_chip_node_by_lld -
+ * get chip node device by current function's lld device
+ * @param lld_dev: current function's lld device
+ **/
+struct card_node *hinic3_get_chip_node_by_lld(struct hinic3_lld_dev *lld_dev);
+
+/**
  * @brief uld_dev_hold - get reference to uld_dev
  * @param lld_dev: lld device
  * @param type: uld service type

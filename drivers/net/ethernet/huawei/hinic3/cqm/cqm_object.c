@@ -73,7 +73,9 @@ struct tag_cqm_qpc_mpt *cqm_object_qpc_mpt_create(void *ex_handle, u32 service_t
 		fake_func_id = index_num / cqm_handle->func_capability.fake_vf_qpc_number;
 		relative_index = index_num % cqm_handle->func_capability.fake_vf_qpc_number;
 
-		if ((s32)fake_func_id >= cqm_get_child_func_number(cqm_handle)) {
+		if (((s32)fake_func_id >=
+		      cqm_get_child_func_number(cqm_handle)) ||
+		      (fake_func_id >= CQM_FAKE_FUNC_MAX)) {
 			cqm_err(handle->dev_hdl, CQM_WRONG_VALUE(fake_func_id));
 			return NULL;
 		}

@@ -14,6 +14,17 @@
 			(((_id) >= BOND_FIRST_ID) && ((_id) <= BOND_MAX_ID))
 #define BOND_ID_IS_INVALID(_id) (!(BOND_ID_IS_VALID(_id)))
 
+#define MAX_FUNC_NUM (1024)
+#define U32_BITS_NUM 32
+#define FUNC_OFFLOAD_BITMAP_LEN  (MAX_FUNC_NUM / U32_BITS_NUM)
+
+#define ARRAY_BITMAP_SET(bm, bit)      \
+		((bm)[(bit) / U32_BITS_NUM] |= (1LU << ((bit) % U32_BITS_NUM)))
+#define ARRAY_BITMAP_CLR(bm, bit)      \
+		((bm)[(bit) / U32_BITS_NUM] &= ~(1LU << ((bit) % U32_BITS_NUM)))
+#define ARRAY_BITMAP_JUDGE(bm, bit)     \
+		((bm)[(bit) / U32_BITS_NUM] & (1LU << ((bit) % U32_BITS_NUM)))
+
 enum bond_group_id {
 	BOND_FIRST_ID = 1,
 	BOND_MAX_ID = 4,
@@ -69,5 +80,10 @@ struct tag_bond_get {
 	struct tag_bond_port_stat stat[BOND_PORT_MAX_NUM];
 	struct tag_bond_port_attr attr[BOND_PORT_MAX_NUM];
 };
+
+#define TX_BIFUR_EN(bifur_en, bond_mode) \
+		   (((bifur_en) != 0) && \
+		   (((bond_mode) == OVS_BOND_MODE_BALANCE) || \
+		   ((bond_mode)) == OVS_BOND_MODE_LACP))
 
 #endif /** BOND_COMMON_DEFS_H */

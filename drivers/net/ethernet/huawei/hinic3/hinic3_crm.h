@@ -8,7 +8,7 @@
 
 #include "mpu_cmd_base_defs.h"
 
-#define HINIC3_DRV_VERSION "17.7.8.101"
+#define HINIC3_DRV_VERSION "17.12.2.102"
 #define HINIC3_DRV_DESC "Intelligent Network Interface Card Driver"
 #define HIUDK_DRV_DESC "Intelligent Network Unified Driver"
 
@@ -422,7 +422,9 @@ struct card_node {
 	u32 rsvd1;
 	atomic_t channel_busy_cnt;
 	void *priv_data;
-	u64 rsvd2;
+	u8 hw_bus_num;
+	u8 board_type;
+	u8 rsvd[3];
 };
 
 #define HINIC3_SYNFW_TIME_PERIOD	(60 * 60 * 1000)
@@ -1045,6 +1047,13 @@ u16 hinic3_func_max_vf(void *hwdev); /* Obtain service_cap.max_vf */
 u8 hinic3_max_pf_num(void *hwdev);
 
 /* *
+ * @brief hinic3_ppf_hwdev - get ppf hwdev
+ * @param hwdev: device pointer to hwdev
+ * @retval ppf device pointer to hwdev
+ */
+void *hinic3_ppf_hwdev(void *hwdev);
+
+/* *
  * @brief hinic3_host_pf_num - get current host pf number
  * @param hwdev: device pointer to hwdev
  * @retval non-zero: pf number
@@ -1273,6 +1282,9 @@ int hinic3_mbox_to_host_sync(void *hwdev, enum hinic3_mod_type mod,
 			     void *buf_out, u16 *out_size, u32 timeout, u16 channel);
 
 int hinic3_get_func_vroce_enable(void *hwdev, u16 glb_func_idx, u8 *en);
+
+void hinic3_set_bifur_link_status(void *hwdev, u8 port_id, u8 status);
+u8 hinic3_get_bifur_link_status(void *hwdev, u8 port_id);
 
 void hinic3_module_get(void *hwdev, enum hinic3_service_type type);
 void hinic3_module_put(void *hwdev, enum hinic3_service_type type);

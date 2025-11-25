@@ -18,7 +18,7 @@
 #include "vram_common.h"
 
 #define HINIC3_NIC_DRV_NAME	"hinic3"
-#define HINIC3_NIC_DRV_VERSION	"17.7.8.101"
+#define HINIC3_NIC_DRV_VERSION	"17.12.2.102"
 
 #define HINIC3_FUNC_IS_VF(hwdev)	(hinic3_func_type(hwdev) == TYPE_VF)
 
@@ -259,6 +259,9 @@ struct hinic3_nic_dev {
 	struct hinic3_lld_dev	*lld_dev;
 	void			*hwdev;
 
+	/* Currently, 1 indicates is_in_kexec. */
+	u32 state;
+
 	int			poll_weight;
 	u32			rsvd1;
 	unsigned long		*vlan_bitmap;
@@ -311,6 +314,7 @@ struct hinic3_nic_dev {
 	struct hinic3_txq	*txqs;
 	struct hinic3_rxq	*rxqs;
 	struct hinic3_dyna_txrxq_params q_params;
+	u8 cqe_coal_en; /* use in rx */
 	u8 cqe_mode; /* rx_cqe */
 
 	u16			num_qp_irq;
@@ -336,6 +340,7 @@ struct hinic3_nic_dev {
 
 #ifdef HAVE_XDP_SUPPORT
 	struct bpf_prog		*xdp_prog;
+	bool remove_flag;
 #endif
 
 	struct delayed_work	periodic_work;
@@ -447,6 +452,7 @@ void hinic3_link_status_change(struct hinic3_nic_dev *nic_dev, bool status);
 #ifdef HAVE_XDP_SUPPORT
 bool hinic3_is_xdp_enable(struct hinic3_nic_dev *nic_dev);
 int hinic3_xdp_max_mtu(struct hinic3_nic_dev *nic_dev);
+int hinic3_safe_switch_channels(struct hinic3_nic_dev *nic_dev);
 #endif
 
 #ifdef HAVE_UDP_TUNNEL_NIC_INFO

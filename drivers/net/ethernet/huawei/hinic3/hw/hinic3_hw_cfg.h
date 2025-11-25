@@ -258,7 +258,7 @@ struct svc_cap_info {
 struct cfg_eq {
 	enum hinic3_service_type type;
 	int eqn;
-	int free; /* 1 - alocated, 0- freed */
+	int freed; /* 1 - alocated, 0- freed */
 };
 
 struct cfg_eq_info {
@@ -274,7 +274,7 @@ struct cfg_eq_info {
 
 struct irq_alloc_info_st {
 	enum hinic3_service_type type;
-	int free;                /* 1 - alocated, 0- freed */
+	int freed;                /* 1 - alocated, 0- freed */
 	struct irq_info info;
 };
 
