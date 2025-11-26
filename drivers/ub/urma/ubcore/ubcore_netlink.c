@@ -454,22 +454,6 @@ ubcore_get_migrate_vtp_req(struct ubcore_vtp *vtp,
 	return req;
 }
 
-void ubcore_report_migrate_vtp(struct ubcore_device *dev,
-			       struct ubcore_vtp *vtp,
-			       enum ubcore_event_type event_type)
-{
-	struct ubcore_nlmsg *req_msg;
-
-	req_msg = ubcore_get_migrate_vtp_req(vtp, event_type, dev);
-	if (req_msg == NULL) {
-		ubcore_log_err("Failed to get migrate vtp switch req");
-		return;
-	}
-	ubcore_log_info("Success to nowait send migrate vtp request");
-
-	kfree(req_msg);
-}
-
 struct ubcore_nlmsg *ubcore_nl_send_wait(struct ubcore_device *dev,
 					 struct ubcore_nlmsg *req,
 					 struct ubcore_uvs_instance *uvs)
