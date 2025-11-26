@@ -13,53 +13,7 @@
 
 #include <asm/xcall.h>
 
-static LIST_HEAD(comm_list);
-static DECLARE_RWSEM(comm_rwsem);
-
 struct proc_dir_entry *root_xcall_dir;
-
-static void free_xcall_comm(struct xcall_comm *info)
-{
-	if (!info)
-		return;
-	kfree(info->name);
-	kfree(info->binary);
-	kfree(info->module);
-	path_put(&info->binary_path);
-	kfree(info);
-}
-
-static struct xcall_comm *find_xcall_comm(struct xcall_comm *comm)
-{
-	struct xcall_comm *temp;
-
-	list_for_each_entry(temp, &comm_list, list) {
-		if (!strcmp(comm->name, temp->name))
-			return temp;
-	}
-
-	return NULL;
-}
-
-static void delete_xcall_comm_locked(struct xcall_comm *info)
-{
-	struct xcall_comm *ret;
-
-	down_write(&comm_rwsem);
-	ret = find_xcall_comm(info);
-	if (ret)
-		list_del(&ret->list);
-	up_write(&comm_rwsem);
-	free_xcall_comm(ret);
-}
-
-static void insert_xcall_comm_locked(struct xcall_comm *info)
-{
-	down_write(&comm_rwsem);
-	if (!find_xcall_comm(info))
-		list_add(&info->list, &comm_list);
-	up_write(&comm_rwsem);
-}
 
 static int is_absolute_path(const char *path)
 {
@@ -147,16 +101,11 @@ int proc_xcall_command(int argc, char **argv)
 	switch (op) {
 	case '+':
 		ret = xcall_attach(info);
-		if (!ret)
-			insert_xcall_comm_locked(info);
-		else
-			free_xcall_comm(info);
 		break;
 	case '-':
 		ret = xcall_detach(info);
-		if (!ret)
-			delete_xcall_comm_locked(info);
-		free_xcall_comm(info);
+		kfree(info->name);
+		kfree(info);
 		break;
 	default:
 		kfree(info);
@@ -168,15 +117,8 @@ int proc_xcall_command(int argc, char **argv)
 
 static int xcall_comm_show(struct seq_file *m, void *v)
 {
-	struct xcall_comm *info;
+	xcall_info_show(m);
 
-	down_read(&comm_rwsem);
-	list_for_each_entry(info, &comm_list, list) {
-		seq_printf(m, "+:%s %s %s\n",
-			   info->name, info->binary,
-			   info->module);
-	}
-	up_read(&comm_rwsem);
 	return 0;
 }
 

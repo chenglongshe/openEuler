@@ -111,12 +111,25 @@ static struct xcall *get_xcall(struct xcall *xcall)
 	return xcall;
 }
 
+static void free_xcall_comm(struct xcall_comm *info)
+{
+	if (!info)
+		return;
+
+	kfree(info->name);
+	kfree(info->binary);
+	kfree(info->module);
+	path_put(&info->binary_path);
+	kfree(info);
+}
+
 static void put_xcall(struct xcall *xcall)
 {
 	if (!refcount_dec_and_test(&xcall->ref))
 		return;
 
-	kfree(xcall->name);
+	free_xcall_comm(xcall->info);
+
 	if (xcall->program)
 		module_put(xcall->program->owner);
 
@@ -128,7 +141,7 @@ static struct xcall *find_xcall(const char *name, struct inode *binary)
 	struct xcall *xcall;
 
 	list_for_each_entry(xcall, &xcalls_list, list) {
-		if ((name && !strcmp(name, xcall->name)) ||
+		if ((name && !strcmp(name, xcall->info->name)) ||
 		    (binary && xcall->binary == binary))
 			return get_xcall(xcall);
 	}
@@ -140,7 +153,7 @@ static struct xcall *insert_xcall_locked(struct xcall *xcall)
 	struct xcall *ret = NULL;
 
 	spin_lock(&xcall_list_lock);
-	ret = find_xcall(xcall->name, xcall->binary);
+	ret = find_xcall(xcall->info->name, xcall->binary);
 	if (!ret)
 		list_add(&xcall->list, &xcalls_list);
 	else
@@ -166,6 +179,7 @@ static int init_xcall(struct xcall *xcall, struct xcall_comm *comm)
 	if (!program || !try_module_get(program->owner))
 		return -EINVAL;
 
+	xcall->info = comm;
 	xcall->binary = d_real_inode(comm->binary_path.dentry);
 	xcall->program = program;
 	refcount_set(&xcall->ref, 1);
@@ -284,25 +298,35 @@ void clear_xcall_area(struct mm_struct *mm)
 	mm->xcall = NULL;
 }
 
+void xcall_info_show(struct seq_file *m)
+{
+	struct xcall *xcall;
+
+	spin_lock(&xcall_list_lock);
+	list_for_each_entry(xcall, &xcalls_list, list) {
+		seq_printf(m, "+:%s %s %s\n",
+			   xcall->info->name, xcall->info->binary,
+			   xcall->info->module);
+	}
+	spin_unlock(&xcall_list_lock);
+}
+
 int xcall_attach(struct xcall_comm *comm)
 {
 	struct xcall *xcall;
 	int ret;
 
 	xcall = kzalloc(sizeof(struct xcall), GFP_KERNEL);
-	if (!xcall)
+	if (!xcall) {
+		free_xcall_comm(comm);
 		return -ENOMEM;
+	}
 
 	ret = init_xcall(xcall, comm);
 	if (ret) {
+		free_xcall_comm(comm);
 		kfree(xcall);
 		return ret;
-	}
-
-	xcall->name = kstrdup(comm->name, GFP_KERNEL);
-	if (!xcall->name) {
-		delete_xcall(xcall);
-		return -ENOMEM;
 	}
 
 	if (insert_xcall_locked(xcall)) {
