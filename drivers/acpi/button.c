@@ -436,16 +436,37 @@ static void acpi_lid_notify(acpi_handle handle, u32 event, void *data)
 	acpi_lid_update_state(device, true);
 }
 
+/* ACPI power notifier chain */
+static BLOCKING_NOTIFIER_HEAD(acpi_power_chain_head);
+int register_acpi_power_notifier(struct notifier_block *nb)
+{
+        return blocking_notifier_chain_register(&acpi_power_chain_head, nb);
+}
+EXPORT_SYMBOL(register_acpi_power_notifier);
+int unregister_acpi_power_notifier(struct notifier_block *nb)
+{
+        return blocking_notifier_chain_unregister(&acpi_power_chain_head, nb);
+}
+EXPORT_SYMBOL(unregister_acpi_power_notifier);
+
 static void acpi_button_notify(acpi_handle handle, u32 event, void *data)
 {
 	struct acpi_device *device = data;
 	struct acpi_button *button;
 	struct input_dev *input;
-	int keycode;
+	int keycode, ret;
 
 	if (event != ACPI_BUTTON_NOTIFY_STATUS) {
 		acpi_handle_debug(device->handle, "Unsupported event [0x%x]\n",
 				  event);
+		return;
+	}
+
+	printk("acpi_button_notify: blocking_notifier_call_chain start\n");
+	ret = blocking_notifier_call_chain(&acpi_power_chain_head, 0, NULL);
+	printk("acpi_button_notify: blocking_notifier_call_chain end\n");
+	if (ret == NOTIFY_BAD) {
+		printk("acpi_power notifier chain: return NOTIFY_BAD, stop poweroff\n");
 		return;
 	}
 
