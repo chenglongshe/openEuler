@@ -261,7 +261,7 @@ static int hinic3_mac_filter_sync(struct hinic3_nic_dev *nic_dev,
 
 	/* there are errors when add mac to hw, delete all mac in hw */
 	hinic3_undo_add_filter_entries(mac_filter_list, &tmp_add_list);
-	/* VF don't support to enter promisc mode,
+	/* VF doesn't support to enter promisc mode,
 	 * so we can't delete any other uc mac
 	 */
 	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev) || !uc) {

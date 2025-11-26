@@ -96,7 +96,7 @@ int hinic3_dbg_get_sq_info(void *hwdev, u16 q_id, struct nic_sq_info *sq_info,
 	sq_info->q_depth = sq->wq.q_depth;
 	sq_info->wqebb_size = sq->wq.wqebb_size;
 
-	sq_info->ci_addr = sq->cons_idx_addr;
+	sq_info->ci_addr = sq->tx.cons_idx_addr;
 
 	sq_info->cla_addr = sq->wq.wq_block_paddr;
 	sq_info->slq_handle = sq;

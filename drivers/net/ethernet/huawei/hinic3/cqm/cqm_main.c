@@ -488,6 +488,7 @@ static void cqm_service_capability_init_roce(struct tag_cqm_handle *cqm_handle, 
 		func_cap->hash_basic_size = CQM_HASH_BUCKET_SIZE_64;
 	}
 	func_cap->qpc_alloc_static = true;
+	func_cap->scqc_alloc_static = true;
 	func_cap->scqc_number += roce_own_cap->max_cqs;
 	func_cap->scqc_basic_size = GET_MAX(rdma_cap->cqc_entry_sz,
 					    func_cap->scqc_basic_size);
@@ -898,12 +899,6 @@ static int cqm_capability_init_timer(struct hinic3_hwdev *handle)
 			 func_cap->timer_vf_num, func_cap->timer_vf_id_start);
 
 		total_timer_num = func_cap->timer_pf_num + func_cap->timer_vf_num;
-		if (IS_SLAVE_HOST(handle)) {
-			total_timer_num *= CQM_TIMER_NUM_MULTI;
-			cqm_info(handle->dev_hdl,
-				 "timer init: need double tw resources, total_timer_num=0x%x\n",
-				 total_timer_num);
-		}
 	}
 
 	func_cap->timer_enable = service_capability->timer_en;

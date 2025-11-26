@@ -121,6 +121,8 @@ struct mqm_eqm_vram_name_s {
 	char vram_name[VRAM_NAME_MAX_LEN];
 };
 
+#define BIFUR_MAX_LINK_STATUS_NUM 4
+
 struct hinic3_hwdev {
 	void *adapter_hdl;  /* pointer to hinic3_pcidev or NDIS_Adapter */
 	void *pcidev_hdl;   /* pointer to pcidev or Handler */
@@ -196,7 +198,8 @@ struct hinic3_hwdev {
 	enum hinic3_func_mode	func_mode;
 	enum hinic3_hot_plug_mode hot_plug_mode;
 	enum hinic3_os_hot_replace_mode hot_replace_mode;
-	u32 rsvd3;
+
+	u8 bifur_link_status[BIFUR_MAX_LINK_STATUS_NUM];
 
 	DECLARE_BITMAP(func_probe_in_host, MAX_FUNCTION_NUM);
 	DECLARE_BITMAP(netdev_setup_state, MAX_FUNCTION_NUM);
@@ -234,5 +237,6 @@ struct hinic3_hwdev {
 #define COMM_SUPPORT_ONLY_ENHANCE_CMDQ(hwdev) COMM_FEATURE_QW0(hwdev, ONLY_ENHANCE_CMDQ)
 
 void set_func_host_mode(struct hinic3_hwdev *hwdev, enum hinic3_func_mode mode);
+void *hinic3_get_service_adapter(void *hwdev, enum hinic3_service_type type);
 
 #endif

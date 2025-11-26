@@ -22,6 +22,7 @@
 #include "nic_mpu_cmd_defs.h"
 #include "mag_mpu_cmd.h"
 #include "mag_mpu_cmd_defs.h"
+#include "hinic3_nictool.h"
 
 typedef int (*nic_driv_module)(struct hinic3_nic_dev *nic_dev,
 			       const void *buf_in, u32 in_size,
@@ -48,7 +49,7 @@ static int get_nic_drv_version(void *buf_out, const u32 *out_size)
 	}
 
 	snprintf(ver_info->ver, sizeof(ver_info->ver), "%s  %s",
-		 HINIC3_NIC_DRV_VERSION, "2025-05-08_00:00:08");
+		 HINIC3_NIC_DRV_VERSION, "2025-11-17_00:00:00");
 
 	return 0;
 }
@@ -1026,6 +1027,81 @@ static int get_xsfp_info(struct hinic3_nic_dev *nic_dev, const void *buf_in,
 	return 0;
 }
 
+static int set_mac_speed_status(struct hinic3_nic_dev *nic_dev,
+				const void *buf_in,
+				u32 in_size, void *buf_out, u32 *out_size)
+{
+	enum mac_speed_status *status = (enum mac_speed_status *)buf_in;
+
+	if (buf_in == NULL) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+				"Do set mac speed status failed for invalid param.\n");
+		return -EINVAL;
+	}
+
+	if (in_size != (u32)sizeof(*status)) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+			  "Unexpect buf size from user, in_size: %u, expect: %lu\n",
+			  in_size, sizeof(*status));
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int get_netdev_func_id(struct hinic3_nic_dev *nic_dev,
+			      const void *buf_in,
+			      u32 in_size, void *buf_out, u32 *out_size)
+{
+	if ((buf_out == NULL) || (out_size == NULL))
+		return -EINVAL;
+
+	if (*out_size != sizeof(u16))
+		return -EINVAL;
+
+	*((u16 *)buf_out) = hinic3_global_func_id(nic_dev->hwdev);
+
+	return 0;
+}
+
+static int bond_default_offload(struct hinic3_nic_dev *nic_dev,
+				const void *buf_in,
+				u32 in_size, void *buf_out, u32 *out_size)
+{
+	struct mag_cmd_bond_default_offload *offload_in =
+				(struct mag_cmd_bond_default_offload *)buf_in;
+	struct mag_cmd_bond_default_offload *offload_out =
+				(struct mag_cmd_bond_default_offload *)buf_out;
+	int ret = 0;
+
+	if ((buf_in == NULL) || (buf_out == NULL) || (out_size == NULL)) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+				"Do bond default offload failed for invalid param.\n");
+		return -EINVAL;
+	}
+
+	if (*out_size != sizeof(*offload_out) ||
+	    in_size != sizeof(*offload_in)) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+			  "Unexpect buf size from user, in_size: %u, out_size: %u, expect: %zu\n",
+			  in_size, *out_size, sizeof(*offload_in));
+		return -EINVAL;
+	}
+
+	if (memcpy(offload_out, offload_in, sizeof(*offload_in)) != 0)
+		return -ENOMEM;
+
+	if (ret == -ENODEV) {
+		offload_out->head.status = MT_EIO;
+		return 0;
+	}
+	if (ret == -EXDEV) {
+		offload_out->head.status = MT_EINVAL;
+		return 0;
+	}
+	return ret;
+}
+
 static const struct nic_drv_module_handle nic_driv_module_cmd_handle[] = {
 	{TX_INFO,		get_tx_info},
 	{Q_NUM,			get_q_num},
@@ -1051,7 +1127,10 @@ static const struct nic_drv_module_handle nic_driv_module_cmd_handle[] = {
 	{GET_XSFP_PRESENT,	get_xsfp_present},
 	{GET_XSFP_INFO,		get_xsfp_info},
 	{GET_XSFP_INFO_COMP_CMIS,	get_xsfp_tlv_info},
-	{SET_RX_PF_BW_LIMIT,	set_rx_pf_bw_limit}
+	{SET_RX_PF_BW_LIMIT,	set_rx_pf_bw_limit},
+	{SET_MAC_SPEED_STATUS, set_mac_speed_status},
+	{GET_FUNC_ID, get_netdev_func_id},
+	{BOND_DEFAULT_OFFLOAD, bond_default_offload}
 };
 
 static int send_to_nic_driver(struct hinic3_nic_dev *nic_dev,

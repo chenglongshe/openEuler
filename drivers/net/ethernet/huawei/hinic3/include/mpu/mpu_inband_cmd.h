@@ -53,6 +53,12 @@ enum hinic3_mgmt_cmd {
 	COMM_MGMT_CMD_GET_SDI_INFO, /**< get sdi info @see comm_cmd_sdi_info */
 	COMM_MGMT_CMD_ROOT_CTX_LOAD, /* get root context info @see comm_cmd_root_ctx_load_req_s */
 	COMM_MGMT_CMD_GET_HW_BOND, /**< get bond info @see comm_cmd_hw_bond_infos */
+	/**< save mpu and npu version @see mpu_and_npu_version_s */
+	COMM_MGMT_CMD_MPU_AND_NPU_VER,
+	/**< get pf id by func id, which includes vf_id and pf_id */
+	COMM_MGMT_CMD_GET_PF_BY_FUNC,
+	/**< pf bus info @see struct cmd_get_pf_bus_info_s */
+	COMM_MGMT_CMD_GET_PF_BUS_BY_DEV,
 
 	COMM_MGMT_CMD_UPDATE_FW = 80, /* update firmware @see cmd_update_fw @see comm_info_head */
 	COMM_MGMT_CMD_ACTIVE_FW, /**< cold active firmware @see cmd_active_firmware */

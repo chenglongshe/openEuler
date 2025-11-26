@@ -36,6 +36,9 @@ struct hinic3_txq_stats {
 	u64	busy;
 	u64	wake;
 	u64	dropped;
+	u64 xdp_dropped;
+	u64 xdp_xmits;
+	u64	map_xdpf_err;
 
 	/* Subdivision statistics show in private tool */
 	u64	skb_pad_err;
@@ -70,6 +73,11 @@ union hinic3_ip {
 	unsigned char *hdr;
 };
 
+struct hinic3_xdp_tx_info {
+	struct xdp_frame *xdpf;
+	struct hinic3_dma_info *dma_info;
+};
+
 struct hinic3_tx_info {
 	struct sk_buff		*skb;
 
@@ -98,6 +106,7 @@ struct hinic3_txq {
 	u32			q_depth;
 	u32			rsvd2;
 
+	struct hinic3_xdp_tx_info *xdp_tx_info;
 	struct hinic3_tx_info	*tx_info;
 	struct hinic3_io_queue	*sq;
 
@@ -142,6 +151,28 @@ int hinic3_flush_txqs(struct net_device *netdev);
 void hinic3_set_txq_cos(struct hinic3_nic_dev *nic_dev, u16 start_qid,
 			u16 q_num, u8 cos);
 
+int hinic3_maybe_stop_tx(struct hinic3_txq *txq, u16 wqebb_cnt);
+
+u32 hinic3_tx_offload(struct sk_buff *skb,
+		      struct hinic3_offload_info *offload_info,
+		      struct hinic3_queue_info *queue_info,
+		      struct hinic3_txq *txq);
+
+int tx_map_skb(struct hinic3_nic_dev *nic_dev, struct sk_buff *skb,
+	       u16 valid_nr_frags, struct hinic3_txq *txq,
+	       struct hinic3_tx_info *tx_info,
+	       struct hinic3_sq_wqe_combo *wqe_combo);
+
+void hinic3_prepare_sq_ctrl(struct hinic3_sq_wqe_combo *wqe_combo,
+			    struct hinic3_queue_info *queue_info,
+			    int nr_descs, u16 owner);
+
+void get_pkt_stats(struct hinic3_tx_info *tx_info, struct sk_buff *skb);
+
+u16 hinic3_set_wqe_combo(struct hinic3_txq *txq,
+				struct hinic3_sq_wqe_combo *wqe_combo,
+				u16 num_sge, u16 *curr_pi);
+
 void hinic3_tx_set_wqebb_cnt(void *wqe_combo, u32 offload, u16 num_sge);
 
 void hinic3_tx_set_compact_offload_wqebb_cnt(void *wqe_combo, u32 offload, u16 num_sge);
@@ -162,4 +193,21 @@ static inline __sum16 csum_magic(union hinic3_ip *ip, unsigned short proto)
 		csum_ipv6_magic(&ip->v6->saddr, &ip->v6->daddr, 0, proto, 0);
 }
 
+int tx_map_xdpf(struct hinic3_nic_dev *nic_dev, struct xdp_frame *frame,
+		struct hinic3_txq *txq, struct hinic3_xdp_tx_info *tx_info,
+		struct hinic3_sq_wqe_combo *wqe_combo);
+
+void hinic3_prepare_xdp_sq_ctrl(struct hinic3_sq_wqe_combo *wqe_combo,
+				u16 owner);
+
+int hinic3_xdp_xmit_frame(struct hinic3_nic_dev *nic_dev,
+			  struct hinic3_txq *txq, struct xdp_frame *xdpf);
+
+int hinic3_xdp_xmit_frames(struct net_device *dev, int n,
+			   struct xdp_frame **frames, u32 flags);
+bool hinic3_xmit_xdp_buff(struct net_device *netdev, u16 q_id,
+			  struct xdp_buff *xdp);
+
+struct xdp_frame *xdp_convert_to_frame(struct xdp_buff *xdp,
+				       struct hinic3_nic_dev *nic_dev);
 #endif

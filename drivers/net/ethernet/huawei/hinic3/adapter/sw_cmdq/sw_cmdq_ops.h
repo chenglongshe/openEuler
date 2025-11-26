@@ -14,6 +14,11 @@ struct hinic3_qp_ctxt_header {
 	u16	rsvd;
 };
 
+struct hinic3_rq_ctxt_block {
+	struct hinic3_qp_ctxt_header	cmdq_hdr;
+	struct hinic3_rq_ctxt		rq_ctxt[HINIC3_Q_CTXT_MAX];
+};
+
 struct hinic3_clean_queue_ctxt {
 	struct hinic3_qp_ctxt_header cmdq_hdr;
 	u32 rsvd;
@@ -35,4 +40,5 @@ struct hinic3_vlan_ctx {
 	u32 vlan_sel;
 };
 
+void hinic3_get_cqe_coalesce_info(void *hwdev, u8 *state, u8 *max_num);
 #endif

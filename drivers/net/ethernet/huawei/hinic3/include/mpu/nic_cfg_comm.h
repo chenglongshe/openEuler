@@ -25,6 +25,12 @@ enum nic_rss_hash_type {
 	NIC_RSS_HASH_TYPE_MAX	/* MUST BE THE LAST ONE */
 };
 
+enum hinic3_nic_capture_packet_mode {
+	ROCE_CAPTURE_PKT_MODE = 0,
+	NIC_CAPTURE_PKT_MODE,
+	CAPTURE_PKT_MAX
+};
+
 #define NIC_RSS_INDIR_SIZE	256
 #define NIC_RSS_KEY_SIZE		40
 

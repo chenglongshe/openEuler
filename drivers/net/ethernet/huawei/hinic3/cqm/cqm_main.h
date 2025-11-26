@@ -367,11 +367,14 @@ s32 cqm_fake_vf_num_set(void *ex_handle, u16 fake_vf_num_cfg);
 #define CQM_FUNCTION_FAIL(x) "%s: " #x " return failure\n", __func__
 #define CQM_WRONG_VALUE(x)   "%s: " #x " %u is wrong\n", __func__, (u32)(x)
 
-#define cqm_err(dev, format, ...)  dev_err(dev, "[CQM]" format, ##__VA_ARGS__)
-#define cqm_warn(dev, format, ...) dev_warn(dev, "[CQM]" format, ##__VA_ARGS__)
+#define cqm_err(dev, format, ...) \
+	dev_err_ratelimited(dev, "[CQM]" format, ##__VA_ARGS__)
+#define cqm_warn(dev, format, ...) \
+	dev_warn_ratelimited(dev, "[CQM]" format, ##__VA_ARGS__)
 #define cqm_notice(dev, format, ...) \
-	dev_notice(dev, "[CQM]" format, ##__VA_ARGS__)
-#define cqm_info(dev, format, ...) dev_info(dev, "[CQM]" format, ##__VA_ARGS__)
+	dev_notice_ratelimited(dev, "[CQM]" format, ##__VA_ARGS__)
+#define cqm_info(dev, format, ...) \
+	dev_info_ratelimited(dev, "[CQM]" format, ##__VA_ARGS__)
 #ifdef __CQM_DEBUG__
 #define cqm_dbg(format, ...) pr_info("[CQM]" format, ##__VA_ARGS__)
 #else

@@ -60,6 +60,10 @@ enum mag_cmd {
 	MAG_CMD_GET_PCS_ERR_CNT = 154, /* pcs err count @see struct mag_cmd_event_port_info */
 	MAG_CMD_GET_MAG_CNT = 155, /* fec code count @see struct mag_cmd_get_mag_cnt */
 	MAG_CMD_DUMP_ANTRAIN_INFO = 156, /* dump anlt info @see mag_cmd_dump_antrain_info */
+	/* < rsfec code count @see struct mag_cmd_get_rsfec_cnt */
+	MAG_CMD_GET_RSFEC_CNT = 157,
+	/* < get speed info @see struct mag_cmd_get_port_speed_info */
+	MAG_CMD_GET_PORT_SPEED = 158,
 
 	/* patch reserve cmd */
 	MAG_CMD_PATCH_RSVD_0 = 200,

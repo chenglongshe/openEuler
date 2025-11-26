@@ -53,11 +53,36 @@ enum nic_feature_cap {
 };
 
 #define NIC_F_ALL_MASK 0x7FBFFFF /* 使能所有属性 */
+#define FLOW_BIFUR_CMD_SET 0
+#define FLOW_BIFUR_CMD_GET 1
+#define VF_LAG_VF_NUM_PER_GROUP 32
+#define VF_LAG_VF_NUM_GROUP_NUM 128
+#define MAX_VF_ID 4096
+#define VF_LAG_BOND_MIN_SLAVE_NUM 2
 
 struct hinic3_mgmt_msg_head {
 	u8 status;
 	u8 version;
 	u8 rsvd0[6];
+};
+
+struct mpu_vf_lag_bitmap {
+	u32 vf_bit_map[VF_LAG_VF_NUM_GROUP_NUM];
+};
+
+struct mpu_vf_lag_bitmap *get_g_vf_lag_bitmap(void);
+
+struct hinic3_vf_lag_cmd {
+	struct hinic3_mgmt_msg_head msg_head;
+
+	u16 func_id;
+	u8 opcode; /* 0 -> set, 1 -> get */
+	u8 en_flag; /* 0 -> disable, 1 -> enable  */
+	u8 bond_active_num;
+	u8 bond_active_bitmap;
+	u8 mac_sync_flag;
+	u8 rsvd;
+	struct mpu_vf_lag_bitmap vf_lag_bitmap;
 };
 
 #define NIC_MAX_FEATURE_QWORD	4
@@ -215,6 +240,14 @@ struct hinic3_port_stats {
 	struct hinic3_phy_fpga_port_stats stats;
 };
 
+#define HINIC3_CMD_MAX_DP_DATA_NUM 50
+struct hinic3_cmd_get_dp_info_resp {
+	struct hinic3_mgmt_msg_head head;
+	u16 length;
+	u16 rsv;
+	u64 value[HINIC3_CMD_MAX_DP_DATA_NUM];
+};
+
 struct hinic3_cmd_vport_stats {
 	struct hinic3_mgmt_msg_head msg_head;
 
@@ -321,6 +354,8 @@ struct hinic3_rq_cqe_ctx {
 };
 
 #define DFX_SM_TBL_BUF_MAX (768)
+#define MAC_SHADOW_TBL_8_4_SIZE 12
+#define VF_LAG_TABLE_ARG_NUM 64
 
 struct nic_cmd_dfx_sm_table {
 	struct hinic3_mgmt_msg_head msg_head;
@@ -340,7 +375,7 @@ struct hinic3_cmd_vlan_offload {
 /* ucode capture cfg info */
 struct nic_cmd_capture_info {
 	struct hinic3_mgmt_msg_head msg_head;
-	u32 op_type;
+	u32 op_type;  /* 0 -- roce, 1 -- nic */
 	u32 func_port;
 	u32 is_en_trx;
 	u32 offset_cos;
@@ -376,12 +411,57 @@ struct hinic3_cmd_local_lro_state {
 	u8 state; /* 0: disable, 1: enable */
 };
 
+/* lro_cfg data_type */
+#define LRO_OP_SET 1
+#define LRO_OP_GET 0
+
+enum {
+	NIC_SOFT_LRO_DISABLE = 0,
+	NIC_HW_LRO_MAX_LEN,
+	NIC_HW_LRO_MAX_NUM,
+	NIC_HW_LRO_TIMEOUT,
+	NIC_LRO_CFG_MAX
+};
+
+struct hinic3_cmd_lro_cfg {
+	struct hinic3_mgmt_msg_head msg_head;
+
+	u16 func_id;
+	u8 data;
+	u8 data_type;
+	u8 opcode; /* 0: get state, 1: set state */
+	u8 rsvd1[3];
+};
+
 struct hinic3_cmd_gtp_inner_parse_status {
 	struct hinic3_mgmt_msg_head msg_head;
 
 	u16 func_id;
 	u8 opcode; /* 0: get state, 1: set state */
 	u8 status; /* 0: disable, 1: enable */
+};
+
+#define HINIC3_CMD_TYPE_STATE 0
+#define HINIC3_CMD_TYPE_NUM 1
+
+struct hinic3_cmd_cqe_coalesce_offload {
+	struct hinic3_mgmt_msg_head msg_head;
+
+	u16 func_id;
+	u8 opcode; /* 0: get state, 1: set state */
+	u8 optype; /* 0: state, 1: max_num */
+	u8 state; /* 0: disable, 1: enable */
+	u8 max_num;
+	u8 rsvd[2];
+};
+
+struct hinic3_cmd_cqe_coalesce_timer {
+	struct hinic3_mgmt_msg_head msg_head;
+
+	u8 opcode; /* 1: set timer value, 0: get timer value */
+	u8 rsvd1;
+	u16 rsvd2;
+	u32 timer;
 };
 
 struct hinic3_cmd_vf_vlan_config {

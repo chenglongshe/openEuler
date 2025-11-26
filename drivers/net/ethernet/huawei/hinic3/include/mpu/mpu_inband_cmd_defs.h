@@ -362,7 +362,7 @@ struct hinic3_board_info {
 	u8 board_id;		/**< board id */
 	u32 rsvd;
 	u32 service_en_bitmap;	/**< service en bitmap */
-	u8 scenes_id;		/**< scenes id */
+	u8 scenes_id;		/**< scene id */
 	u8 cfg_template_id;	/**< cfg template index */
 	u8 hardware_id;		/**< hardware id */
 	u8 spu_en;		/**< spu enable flag */
@@ -418,6 +418,14 @@ struct comm_cmd_hw_pf_infos {
 	struct mgmt_msg_head head;
 
 	struct hinic3_hw_pf_infos infos; /**< all pf info  @see struct hinic3_hw_pf_infos */
+};
+
+struct comm_cmd_get_pf_by_func {
+	struct mgmt_msg_head head;
+
+	u16 func_id;
+	u8 pf_id;
+	u8 rsvd1;
 };
 
 struct comm_cmd_bdf_info {
@@ -807,6 +815,12 @@ struct cmd_get_bdf_info_s {
 	struct pf_bdf_info	pf_bdf_info[CMD_MAX_MAX_PF_NUM];
 	struct vf_bdf_info	vf_bdf_info[CMD_MAX_MAX_PF_NUM];
 	u32 vf_num; /**< vf num */
+};
+
+struct cmd_get_pf_bus_info_s {
+	struct mgmt_msg_head head;
+	u8 bus_num;
+	u8 rsv[3];
 };
 
 #define CPI_TCAM_DBG_CMD_SET_TASK_ENABLE_VALID 0x1

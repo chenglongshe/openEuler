@@ -4,6 +4,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": [COMM]" fmt
 
 #include <net/addrconf.h>
+
 #include <linux/kernel.h>
 #include <linux/pci.h>
 #include <linux/device.h>
@@ -383,7 +384,7 @@ out:
 static int get_dynamic_uld_dev_name(struct hinic3_pcidev *dev, enum hinic3_service_type type,
 				    char *ifname)
 {
-	u32 out_size = IFNAMSIZ;
+	u32 out_size = type == SERVICE_T_ROCE ? IB_DEVICE_NAME_MAX : IFNAMSIZ;
 
 	if (!g_uld_info[type].ioctl)
 		return -EFAULT;
@@ -392,7 +393,30 @@ static int get_dynamic_uld_dev_name(struct hinic3_pcidev *dev, enum hinic3_servi
 				      NULL, 0, ifname, &out_size);
 }
 
-static bool is_pcidev_match_dev_name(const char *dev_name, struct hinic3_pcidev *dev,
+static bool judge_by_ib_dev_list(const char *dev_name)
+{
+	struct card_node *chip_node = NULL;
+	struct hinic3_pcidev *dev = NULL;
+	char ib_dev_name[IB_DEVICE_NAME_MAX] = {0};
+
+	list_for_each_entry(chip_node, &g_hinic3_chip_list, node) {
+		list_for_each_entry(dev, &chip_node->func_list, node) {
+			if (dev->uld_dev[SERVICE_T_ROCE] == NULL)
+				continue;
+
+			if (get_dynamic_uld_dev_name(dev, SERVICE_T_ROCE,
+						    (char *)ib_dev_name) != 0)
+				continue;
+
+			if (strcmp(ib_dev_name, dev_name) == 0)
+				return true;
+		}
+	}
+	return false;
+}
+
+static bool is_pcidev_match_dev_name(const char *dev_name,
+				     struct hinic3_pcidev *dev,
 				     enum hinic3_service_type type)
 {
 	enum hinic3_service_type i;
@@ -404,8 +428,14 @@ static bool is_pcidev_match_dev_name(const char *dev_name, struct hinic3_pcidev 
 
 	if (type == SERVICE_T_MAX) {
 		for (i = SERVICE_T_OVS; i < SERVICE_T_MAX; i++) {
-			if (!strncmp(dev->uld_dev_name[i], dev_name, IFNAMSIZ))
+			if (i == SERVICE_T_ROCE &&
+			    judge_by_ib_dev_list(dev_name))
 				return true;
+			else if ((i != SERVICE_T_ROCE) &&
+				   (strncmp(dev->uld_dev_name[i],
+				   dev_name, IFNAMSIZ) == 0))
+				return true;
+
 		}
 	} else {
 		if (!strncmp(dev->uld_dev_name[type], dev_name, IFNAMSIZ))
@@ -421,22 +451,30 @@ static bool is_pcidev_match_dev_name(const char *dev_name, struct hinic3_pcidev 
 	return false;
 }
 
-static struct hinic3_lld_dev *get_lld_dev_by_dev_name(const char *dev_name,
-						      enum hinic3_service_type type, bool hold)
+static struct hinic3_lld_dev *get_lld_from_ib_dev_list(const char *dev_name,
+						       bool hold)
 {
 	struct card_node *chip_node = NULL;
 	struct hinic3_pcidev *dev = NULL;
-
-	lld_hold();
+	char ib_dev_name[IB_DEVICE_NAME_MAX] = {0};
 
 	list_for_each_entry(chip_node, &g_hinic3_chip_list, node) {
 		list_for_each_entry(dev, &chip_node->func_list, node) {
-			if (is_pcidev_match_dev_name(dev_name, dev, type)) {
-				if (hold)
-					lld_dev_hold(&dev->lld_dev);
-				lld_put();
-				return &dev->lld_dev;
-			}
+			if (dev->uld_dev[SERVICE_T_ROCE] == NULL)
+				continue;
+
+			if (get_dynamic_uld_dev_name(dev, SERVICE_T_ROCE,
+						    (char *)ib_dev_name) != 0)
+				continue;
+
+			if (strcmp(ib_dev_name, dev_name) != 0)
+				continue;
+
+			if (hold)
+				lld_dev_hold(&dev->lld_dev);
+
+			lld_put();
+			return &dev->lld_dev;
 		}
 	}
 
@@ -445,7 +483,46 @@ static struct hinic3_lld_dev *get_lld_dev_by_dev_name(const char *dev_name,
 	return NULL;
 }
 
-struct hinic3_lld_dev *hinic3_get_lld_dev_by_chip_and_port(const char *chip_name, u8 port_id)
+static struct hinic3_lld_dev *get_lld_by_uld_name(const char *dev_name,
+						  enum hinic3_service_type type,
+						  bool hold)
+{
+	struct card_node *chip_node = NULL;
+	struct hinic3_pcidev *dev = NULL;
+	bool flag;
+
+	list_for_each_entry(chip_node, &g_hinic3_chip_list, node) {
+		list_for_each_entry(dev, &chip_node->func_list, node) {
+			flag = is_pcidev_match_dev_name(dev_name, dev, type);
+			if (!flag)
+				continue;
+
+			if (hold)
+				lld_dev_hold(&dev->lld_dev);
+
+			lld_put();
+			return &dev->lld_dev;
+		}
+	}
+	lld_put();
+
+	return NULL;
+}
+
+static struct hinic3_lld_dev *get_lld_dev_by_dev_name(const char *dev_name,
+						enum hinic3_service_type type,
+						bool hold)
+{
+	lld_hold();
+	if (type == SERVICE_T_ROCE) {
+		return get_lld_from_ib_dev_list(dev_name, hold);
+	} else {
+		return get_lld_by_uld_name(dev_name, type, hold);
+	}
+}
+
+struct hinic3_lld_dev *hinic3_get_lld_dev_by_chip_and_port(
+					      const char *chip_name, u8 port_id)
 {
 	struct card_node *chip_node = NULL;
 	struct hinic3_pcidev *dev = NULL;
@@ -457,7 +534,8 @@ struct hinic3_lld_dev *hinic3_get_lld_dev_by_chip_and_port(const char *chip_name
 				continue;
 
 			if (hinic3_physical_port_id(dev->hwdev) == port_id &&
-			    !strncmp(chip_node->chip_name, chip_name, IFNAMSIZ)) {
+			    !strncmp(chip_node->chip_name, chip_name,
+			    IFNAMSIZ)) {
 				lld_dev_hold(&dev->lld_dev);
 				lld_put();
 
@@ -703,9 +781,12 @@ void hinic3_get_os_hot_replace_info(void *oshr_info)
 struct card_node *hinic3_get_chip_node_by_lld(struct hinic3_lld_dev *lld_dev)
 {
 	struct hinic3_pcidev *pci_adapter = pci_get_drvdata(lld_dev->pdev);
+	if (!pci_adapter)
+		return NULL;
 
 	return pci_adapter->chip_node;
 }
+EXPORT_SYMBOL(hinic3_get_chip_node_by_lld);
 
 static struct card_node *hinic3_get_chip_node_by_hwdev(const void *hwdev)
 {

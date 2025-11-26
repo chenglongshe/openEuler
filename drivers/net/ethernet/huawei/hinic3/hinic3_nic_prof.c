@@ -7,7 +7,6 @@
 #include <linux/netdevice.h>
 #include <linux/device.h>
 #include <linux/types.h>
-#include <linux/errno.h>
 
 #include "ossl_knl.h"
 #include "hinic3_nic_dev.h"

@@ -30,7 +30,8 @@
 #include "hinic3_rx.h"
 #include "hinic3_dcb.h"
 #include "hinic3_nic_prof.h"
-
+#include "hinic3_bond.h"
+#include "sw_cmdq_ops.h"
 #include "nic_npu_cmd.h"
 
 #include "vram_common.h"
@@ -39,6 +40,10 @@
 
 #define HINIC3_LRO_DEFAULT_COAL_PKT_SIZE		32
 #define HINIC3_LRO_DEFAULT_TIME_LIMIT			16
+#define HINIC3_SOFT_LRO_ENABLE				0
+#define HINIC3_SOFT_LRO_DISABLE				1
+#define HINIC3_LRO_MAX_COL_NUM				15
+
 #define HINIC3_WAIT_FLUSH_QP_RESOURCE_TIMEOUT		100
 static void hinic3_nic_set_rx_mode(struct net_device *netdev)
 {
@@ -541,12 +546,13 @@ int hinic3_vport_up(struct hinic3_nic_dev *nic_dev)
 	queue_delayed_work(nic_dev->workq, &nic_dev->moderation_task,
 			   HINIC3_MODERATONE_DELAY);
 	if (test_bit(HINIC3_RXQ_RECOVERY, &nic_dev->flags))
-		queue_delayed_work(nic_dev->workq,
-				   &nic_dev->rxq_check_work, HZ);
+		queue_delayed_work(nic_dev->workq, &nic_dev->rxq_check_work,
+				   HZ);
 
 	hinic3_print_link_message(nic_dev, link_status);
 
-	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev))
+	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev) &&
+		!hinic3_is_bond_offload(nic_dev->lld_dev))
 		hinic3_notify_all_vfs_link_changed(nic_dev->hwdev, link_status);
 
 	return 0;
@@ -618,10 +624,11 @@ void hinic3_vport_down(struct hinic3_nic_dev *nic_dev)
 	cancel_delayed_work_sync(&nic_dev->moderation_task);
 
 	if (hinic3_get_chip_present_flag(nic_dev->hwdev)) {
-		if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev))
+		if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev) &&
+			!hinic3_is_bond_offload(nic_dev->lld_dev))
 			hinic3_notify_all_vfs_link_changed(nic_dev->hwdev, 0);
 
-		if (is_in_kexec != 0)
+		if (nic_dev->state != 0)
 			nicif_info(nic_dev, drv, nic_dev->netdev, "Skip changing mag status!\n");
 		else
 			hinic3_maybe_set_port_state(nic_dev, false);
@@ -631,12 +638,26 @@ void hinic3_vport_down(struct hinic3_nic_dev *nic_dev)
 					HINIC3_CHANNEL_NIC);
 
 		hinic3_flush_txqs(nic_dev->netdev);
-
 		if (is_in_kexec == 0)
 			msleep(HINIC3_WAIT_FLUSH_QP_RESOURCE_TIMEOUT);
 		else
 			(void)hinic3_flush_rq_and_check(nic_dev, glb_func_id);
+
 		hinic3_flush_qps_res(nic_dev->hwdev);
+	}
+}
+
+static void hinic3_cqe_paddr_pass(struct hinic3_dyna_txrxq_params *q_params,
+				  struct hinic3_dyna_qp_params *qp_params)
+{
+	struct hinic3_dyna_rxq_res *rqres = NULL;
+	struct hinic3_io_queue *rq = NULL;
+	u32 idx;
+
+	for (idx = 0; idx < q_params->num_qps; idx++) {
+		rqres = &q_params->rxqs_res[idx];
+		rq = &qp_params->rqs[idx];
+		rq->cqe_start_paddr = rqres->cqe_start_paddr;
 	}
 }
 
@@ -683,6 +704,8 @@ int hinic3_change_channel_settings(struct hinic3_nic_dev *nic_dev,
 	if (reopen_handler)
 		reopen_handler(nic_dev, priv_data);
 
+	hinic3_cqe_paddr_pass(trxq_params, &new_qp_params);
+
 	err = hinic3_open_channel(nic_dev, &new_qp_params, trxq_params);
 	if (err)
 		goto open_channel_err;
@@ -705,10 +728,9 @@ open_channel_err:
 	return err;
 }
 
-int hinic3_open(struct net_device *netdev)
+static int hinic3_pre_open(struct net_device *netdev)
 {
 	struct hinic3_nic_dev *nic_dev = netdev_priv(netdev);
-	struct hinic3_dyna_qp_params qp_params = {0};
 	int err;
 
 	if (test_bit(HINIC3_INTF_UP, &nic_dev->flags)) {
@@ -717,10 +739,21 @@ int hinic3_open(struct net_device *netdev)
 	}
 
 	err = hinic3_init_nicio_res(nic_dev->hwdev);
-	if (err) {
+	if (err != 0)
 		nicif_err(nic_dev, drv, netdev, "Failed to init nicio resources\n");
+
+	return err;
+}
+
+int hinic3_open(struct net_device *netdev)
+{
+	struct hinic3_nic_dev *nic_dev = netdev_priv(netdev);
+	struct hinic3_dyna_qp_params qp_params = {0};
+	int err;
+
+	err = hinic3_pre_open(netdev);
+	if (err != 0)
 		return err;
-	}
 
 	err = hinic3_setup_num_qps(nic_dev);
 	if (err) {
@@ -732,6 +765,8 @@ int hinic3_open(struct net_device *netdev)
 					     &nic_dev->q_params, true);
 	if (err)
 		goto alloc_channel_res_err;
+
+	hinic3_cqe_paddr_pass(&nic_dev->q_params, &qp_params);
 
 	err = hinic3_open_channel(nic_dev, &qp_params, &nic_dev->q_params);
 	if (err)
@@ -784,6 +819,22 @@ static void hinic3_delete_napi(struct hinic3_nic_dev *nic_dev)
 
 	hinic3_free_irq_vram(nic_dev, &nic_dev->q_params);
 }
+
+#ifdef HAVE_XDP_SUPPORT
+int hinic3_safe_switch_channels(struct hinic3_nic_dev *nic_dev)
+{
+	struct hinic3_dyna_txrxq_params q_params = {0};
+
+	q_params = nic_dev->q_params;
+	q_params.sq_depth = nic_dev->q_params.sq_depth;
+	q_params.rq_depth = nic_dev->q_params.rq_depth;
+	q_params.txqs_res = NULL;
+	q_params.rxqs_res = NULL;
+	q_params.irq_cfg = NULL;
+
+	return hinic3_change_channel_settings(nic_dev, &q_params, NULL, NULL);
+}
+#endif
 
 int hinic3_close(struct net_device *netdev)
 {
@@ -1433,6 +1484,8 @@ static int set_feature_lro(struct hinic3_nic_dev *nic_dev,
 	netdev_features_t changed = wanted_features ^ features;
 	bool en = !!(wanted_features & NETIF_F_LRO);
 	int err;
+	u8 cqe_coal_state, cqe_coal_max_num;
+	u8 lro_soft_en = HINIC3_SOFT_LRO_ENABLE;
 
 	if (!(changed & NETIF_F_LRO))
 		return 0;
@@ -1445,9 +1498,18 @@ static int set_feature_lro(struct hinic3_nic_dev *nic_dev,
 	}
 #endif
 
+	if (en) {
+		hinic3_get_cqe_coalesce_info(nic_dev->hwdev,
+					&cqe_coal_state, &cqe_coal_max_num);
+		lro_soft_en = (cqe_coal_state == 1) ? HINIC3_SOFT_LRO_DISABLE :
+						      HINIC3_SOFT_LRO_ENABLE;
+	}
 	err = hinic3_set_rx_lro_state(nic_dev->hwdev, en,
 				      HINIC3_LRO_DEFAULT_TIME_LIMIT,
-				      HINIC3_LRO_DEFAULT_COAL_PKT_SIZE);
+				      HINIC3_LRO_DEFAULT_COAL_PKT_SIZE,
+				      HINIC3_SOFT_LRO_ENABLE,
+				      HINIC3_LRO_DEFAULT_COAL_PKT_SIZE,
+				      HINIC3_LRO_MAX_COL_NUM);
 	if (err) {
 		hinic3_err(nic_dev, drv, "%s lro failed\n",
 			   SET_FEATURES_OP_STR(en));
@@ -1560,12 +1622,8 @@ static int set_features(struct hinic3_nic_dev *nic_dev,
 	return 0;
 }
 
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-static int hinic3_set_features(struct net_device *netdev, u32 features)
-#else
 static int hinic3_set_features(struct net_device *netdev,
 			       netdev_features_t features)
-#endif
 {
 	struct hinic3_nic_dev *nic_dev = netdev_priv(netdev);
 
@@ -1580,12 +1638,8 @@ int hinic3_set_hw_features(struct hinic3_nic_dev *nic_dev)
 			    nic_dev->netdev->features);
 }
 
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-static u32 hinic3_fix_features(struct net_device *netdev, u32 features)
-#else
 static netdev_features_t hinic3_fix_features(struct net_device *netdev,
 					     netdev_features_t features)
-#endif
 {
 	netdev_features_t features_tmp = features;
 
@@ -1902,9 +1956,9 @@ static int hinic3_xdp_setup(struct hinic3_nic_dev *nic_dev,
 	int max_mtu = hinic3_xdp_max_mtu(nic_dev);
 	int q_id;
 
-	if (nic_dev->netdev->mtu > max_mtu) {
+	if (nic_dev->netdev->mtu > (u32)max_mtu) {
 		nicif_err(nic_dev, drv, nic_dev->netdev,
-			  "Failed to setup xdp program, the current MTU %d is larger than max allowed MTU %d\n",
+			  "Failed to setup xdp program, the current MTU %u is larger than max allowed MTU %d\n",
 			  nic_dev->netdev->mtu, max_mtu);
 		NL_SET_ERR_MSG_MOD(extack,
 				   "MTU too large for loading xdp program");
@@ -1926,6 +1980,9 @@ static int hinic3_xdp_setup(struct hinic3_nic_dev *nic_dev,
 	if (old_prog)
 		bpf_prog_put(old_prog);
 
+	if (!nic_dev->remove_flag)
+		return hinic3_safe_switch_channels(nic_dev);
+
 	return 0;
 }
 
@@ -1940,12 +1997,6 @@ static int hinic3_xdp(struct net_device *netdev, struct netdev_xdp *xdp)
 	switch (xdp->command) {
 	case XDP_SETUP_PROG:
 		return hinic3_xdp_setup(nic_dev, xdp->prog, xdp->extack);
-#ifdef HAVE_XDP_QUERY_PROG
-	case XDP_QUERY_PROG:
-		xdp->prog_id = nic_dev->xdp_prog ?
-			nic_dev->xdp_prog->aux->id : 0;
-		return 0;
-#endif
 	default:
 		return -EINVAL;
 	}
@@ -1965,26 +2016,13 @@ static const struct net_device_ops hinic3_netdev_ops = {
 
 	.ndo_tx_timeout = hinic3_tx_timeout,
 	.ndo_select_queue = hinic3_select_queue,
-#ifdef HAVE_RHEL7_NETDEV_OPS_EXT_NDO_CHANGE_MTU
-	.extended.ndo_change_mtu = hinic3_change_mtu,
-#else
 	.ndo_change_mtu = hinic3_change_mtu,
-#endif
 	.ndo_set_mac_address = hinic3_set_mac_addr,
 	.ndo_validate_addr = eth_validate_addr,
 
 #if defined(NETIF_F_HW_VLAN_TX) || defined(NETIF_F_HW_VLAN_CTAG_TX)
 	.ndo_vlan_rx_add_vid = hinic3_vlan_rx_add_vid,
 	.ndo_vlan_rx_kill_vid = hinic3_vlan_rx_kill_vid,
-#endif
-
-#ifdef HAVE_RHEL7_NET_DEVICE_OPS_EXT
-	/* RHEL7 requires this to be defined to enable extended ops.  RHEL7
-	 * uses the function get_ndo_ext to retrieve offsets for extended
-	 * fields from with the net_device_ops struct and ndo_size is checked
-	 * to determine whether or not the offset is valid.
-	 */
-	.ndo_size		= sizeof(const struct net_device_ops),
 #endif
 
 #ifdef IFLA_VF_MAX
@@ -2004,11 +2042,7 @@ static const struct net_device_ops hinic3_netdev_ops = {
 #endif
 
 #ifdef HAVE_NDO_SET_VF_TRUST
-#ifdef HAVE_RHEL7_NET_DEVICE_OPS_EXT
-	.extended.ndo_set_vf_trust = hinic3_ndo_set_vf_trust,
-#else
 	.ndo_set_vf_trust	= hinic3_ndo_set_vf_trust,
-#endif /* HAVE_RHEL7_NET_DEVICE_OPS_EXT */
 #endif /* HAVE_NDO_SET_VF_TRUST */
 
 	.ndo_get_vf_config	= hinic3_ndo_get_vf_config,
@@ -2021,19 +2055,13 @@ static const struct net_device_ops hinic3_netdev_ops = {
 	.ndo_set_rx_mode = hinic3_nic_set_rx_mode,
 
 #ifdef HAVE_XDP_SUPPORT
+	.ndo_xdp_xmit = hinic3_xdp_xmit_frames,
 #ifdef HAVE_NDO_BPF_NETDEV_BPF
 	.ndo_bpf = hinic3_xdp,
 #else
 	.ndo_xdp = hinic3_xdp,
 #endif
 #endif
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-};
-
-/* RHEL6 keeps these operations in a separate structure */
-static const struct net_device_ops_ext hinic3_netdev_ops_ext = {
-	.size = sizeof(struct net_device_ops_ext),
-#endif /* HAVE_RHEL6_NET_DEVICE_OPS_EXT */
 
 #ifdef HAVE_NDO_SET_VF_LINK_STATE
 	.ndo_set_vf_link_state	= hinic3_ndo_set_vf_link_state,
@@ -2059,20 +2087,7 @@ static const struct net_device_ops hinic3vf_netdev_ops = {
 	.ndo_tx_timeout = hinic3_tx_timeout,
 	.ndo_select_queue = hinic3_select_queue,
 
-#ifdef HAVE_RHEL7_NET_DEVICE_OPS_EXT
-	/* RHEL7 requires this to be defined to enable extended ops.  RHEL7
-	 * uses the function get_ndo_ext to retrieve offsets for extended
-	 * fields from with the net_device_ops struct and ndo_size is checked
-	 * to determine whether or not the offset is valid.
-	 */
-	 .ndo_size = sizeof(const struct net_device_ops),
-#endif
-
-#ifdef HAVE_RHEL7_NETDEV_OPS_EXT_NDO_CHANGE_MTU
-	.extended.ndo_change_mtu = hinic3_change_mtu,
-#else
 	.ndo_change_mtu = hinic3_change_mtu,
-#endif
 	.ndo_set_mac_address = hinic3_set_mac_addr,
 	.ndo_validate_addr = eth_validate_addr,
 
@@ -2087,39 +2102,22 @@ static const struct net_device_ops hinic3vf_netdev_ops = {
 
 	.ndo_set_rx_mode = hinic3_nic_set_rx_mode,
 
-#ifdef HAVE_XDP_SUPPORT
 #ifdef HAVE_NDO_BPF_NETDEV_BPF
-		.ndo_bpf = hinic3_xdp,
+	.ndo_bpf = hinic3_xdp,
 #else
-		.ndo_xdp = hinic3_xdp,
+	.ndo_xdp = hinic3_xdp,
 #endif
-#endif
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-};
 
-/* RHEL6 keeps these operations in a separate structure */
-static const struct net_device_ops_ext hinic3vf_netdev_ops_ext = {
-	.size = sizeof(struct net_device_ops_ext),
-#endif /* HAVE_RHEL6_NET_DEVICE_OPS_EXT */
-
-#ifdef HAVE_NDO_SET_FEATURES
 	.ndo_fix_features = hinic3_fix_features,
 	.ndo_set_features = hinic3_set_features,
-#endif /* HAVE_NDO_SET_FEATURES */
 };
 
 void hinic3_set_netdev_ops(struct hinic3_nic_dev *nic_dev)
 {
 	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev)) {
 		nic_dev->netdev->netdev_ops = &hinic3_netdev_ops;
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-		set_netdev_ops_ext(nic_dev->netdev, &hinic3_netdev_ops_ext);
-#endif /* HAVE_RHEL6_NET_DEVICE_OPS_EXT */
 	} else {
 		nic_dev->netdev->netdev_ops = &hinic3vf_netdev_ops;
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-		set_netdev_ops_ext(nic_dev->netdev, &hinic3vf_netdev_ops_ext);
-#endif /* HAVE_RHEL6_NET_DEVICE_OPS_EXT */
 	}
 }
 
