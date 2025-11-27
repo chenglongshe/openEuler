@@ -1350,8 +1350,10 @@ static void kvm_destroy_vm(struct kvm *kvm)
 
 	kvm_destroy_pm_notifier(kvm);
 	kvm_uevent_notify_change(KVM_EVENT_DESTROY_VM, kvm);
+#if IS_ENABLED(CONFIG_ETMEM)
 	if (mm->kvm == kvm)
 		mm->kvm = NULL;
+#endif
 	kvm_destroy_vm_debugfs(kvm);
 
 	/**
@@ -5207,9 +5209,10 @@ static int kvm_dev_ioctl_create_vm(unsigned long type)
 		r = PTR_ERR(file);
 		goto put_kvm;
 	}
-
+#if IS_ENABLED(CONFIG_ETMEM)
 	if (kvm->mm->kvm == NULL)
 		kvm->mm->kvm = kvm;
+#endif
 	/*
 	 * Don't call kvm_put_kvm anymore at this point; file->f_op is
 	 * already set, with ->release() being kvm_vm_release().  In error

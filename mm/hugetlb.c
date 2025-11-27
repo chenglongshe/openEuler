@@ -3267,9 +3267,6 @@ static bool try_hugetlb_reclaim_notify(struct hstate *h, struct mm_struct *mm,
 	if (!IS_ENABLED(CONFIG_RECLAIM_NOTIFY))
 		return false;
 
-	if (!IS_ENABLED(CONFIG_KVM))
-		return false;
-
 	if (!numa_remote_enabled)
 		return false;
 
@@ -3278,11 +3275,6 @@ static bool try_hugetlb_reclaim_notify(struct hstate *h, struct mm_struct *mm,
 
 	if (hstate_is_gigantic(h))
 		return false;
-
-#if IS_ENABLED(CONFIG_KVM)
-	if (!mm->kvm)
-		return false;
-#endif
 
 	if (h->surplus_huge_pages >= h->nr_overcommit_huge_pages) {
 		gfp_mask = htlb_alloc_mask(h);
