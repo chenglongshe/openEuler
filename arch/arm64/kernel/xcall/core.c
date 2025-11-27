@@ -117,6 +117,8 @@ static void put_xcall(struct xcall *xcall)
 		return;
 
 	kfree(xcall->name);
+	free_xcall_comm(xcall->info);
+
 	if (xcall->program)
 		module_put(xcall->program->owner);
 
@@ -284,6 +286,19 @@ void clear_xcall_area(struct mm_struct *mm)
 	mm->xcall = NULL;
 }
 
+void xcall_info_show(struct seq_file *m)
+{
+	struct xcall *xcall;
+
+	spin_lock(&xcall_list_lock);
+	list_for_each_entry(xcall, &xcalls_list, list) {
+		seq_printf(m, "+:%s %s %s\n",
+			   xcall->info->name, xcall->info->binary,
+			   xcall->info->module);
+	}
+	spin_unlock(&xcall_list_lock);
+}
+
 int xcall_attach(struct xcall_comm *comm)
 {
 	struct xcall *xcall;
@@ -310,6 +325,7 @@ int xcall_attach(struct xcall_comm *comm)
 		return -EINVAL;
 	}
 
+	xcall->info = comm;
 	return 0;
 }
 
