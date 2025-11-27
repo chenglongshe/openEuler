@@ -200,17 +200,27 @@ static int get_async_prefetch_cpu(struct prefetch_item *pfi)
 	return pfi->cpu;
 }
 
-static void xcall_mm_release(struct mmu_notifier *mn, struct mm_struct *mm)
+static void prefetch_pfi_release(struct mmu_notifier *mn, struct mm_struct *mm)
 {
 	struct xcall_area *area = mm_xcall_area(mm);
-	void *area_private_data = NULL;
+	struct prefetch_item *prefetch_items = NULL;
+	int i;
 
-	area_private_data = xchg(&area->sys_call_data[__NR_epoll_pwait], NULL);
-	kfree(area_private_data);
+	prefetch_items = xchg(&area->sys_call_data[__NR_epoll_pwait], NULL);
+	if (!prefetch_items)
+		return;
+
+	for (i = 0; i < MAX_FD; i++) {
+		cancel_work_sync(&prefetch_items[i].work);
+		if (prefetch_items[i].cache_pages)
+			__free_pages(prefetch_items[i].cache_pages, XCALL_CACHE_PAGE_ORDER);
+		prefetch_items[i].cache = NULL;
+	}
+	kfree(prefetch_items);
 }
 
 static struct mmu_notifier_ops xcall_mmu_notifier_ops = {
-	.release = xcall_mm_release,
+	.release = prefetch_pfi_release,
 };
 
 static struct mmu_notifier xcall_mmu_notifier = {
