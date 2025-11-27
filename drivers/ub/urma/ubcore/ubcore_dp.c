@@ -124,3 +124,4 @@ int ubcore_rearm_jfc(struct ubcore_jfc *jfc, bool solicited_only)
 	return dev_ops->rearm_jfc(jfc, solicited_only);
 }
 EXPORT_SYMBOL(ubcore_rearm_jfc);
+
