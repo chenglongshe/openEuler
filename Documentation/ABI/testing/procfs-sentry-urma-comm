@@ -1,0 +1,57 @@
+What:		/proc/sentry_urma_comm/client_info
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Configure and display URMA communication client information.
+
+		Write Format:
+			"server_eid1,server_eid2,...;server_eid3,server_eid4,... client_jetty_id"
+
+		Read Format:
+			"server_eid:eid1,eid2,..., client_jetty_id:jetty_id"
+
+		Examples:
+			echo "2001:0db8:85a3:0000:0000:8a2e:0370:7334,2001:0db8:85a3:0000:0000:8a2e:0370:7335; \
+			2001:0db8:85a3:0000:0000:8a2e:0370:7336,2001:0db8:85a3:0000:0000:8a2e:0370:7337 100" \
+			> /proc/sentry_urma_comm/client_info
+
+			# Read current configuration
+			cat /proc/sentry_urma_comm/client_info
+			server_eid:2001:0db8:85a3:0000:0000:8a2e:0370:7334,2001:0db8:85a3:0000:0000:8a2e: \
+			0370:7335;2001:0db8:85a3:0000:0000:8a2e:0370:7336,2001:0db8:85a3:0000:0000:8a2e:0370: \
+			7337, client_jetty_id:100
+
+		Notes:
+		- URMA communication connections are automatically established after successful configuration
+		- Supports multi-die architecture, each die can configure multiple server EIDs
+		- The first EID must match the locally configured EID
+		- Jetty ID range: [3, 1023]
+		- EID addresses must use full IPv6 format: 128-bit numbers separated every 4 bits by colons
+
+What:		/proc/sentry_urma_comm/heartbeat
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Control heartbeat detection function of the URMA communication module.
+
+		Write Values:
+			"on"  - Enable heartbeat detection
+			"off" - Disable heartbeat detection
+
+		Read Values:
+			"on" or "off" - Current heartbeat detection status
+
+		Examples:
+			# Enable heartbeat detection
+			echo "on" > /proc/sentry_urma_comm/heartbeat
+
+			# Disable heartbeat detection
+			echo "off" > /proc/sentry_urma_comm/heartbeat
+
+			# Check current status
+			cat /proc/sentry_urma_comm/heartbeat
+
+		Function Details:
+		- Heartbeat interval: 60 seconds
+		- Automatically detects connection status and attempts to rebuild broken connections
+		- Automatically disables lock operations in system panic mode to prevent deadlocks

@@ -1,0 +1,118 @@
+What:		/proc/sentry_reporter/oom
+Date:		February 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Control OOM (Out Of Memory) event reporting functionality.
+
+		Write Values:
+			"on"  - Enable OOM event reporting
+			"off" - Disable OOM event reporting
+
+		Read Values:
+			"on" or "off" - Current OOM event reporting status
+
+		Examples:
+			# Enable OOM event reporting
+			echo "on" > /proc/sentry_reporter/oom
+
+			# Disable OOM event reporting
+			echo "off" > /proc/sentry_reporter/oom
+
+			# Check current status
+			cat /proc/sentry_reporter/oom
+			on
+
+		Function Details:
+		- Monitors system low memory events
+		- Supports both synchronous and asynchronous reclaim modes
+		- Configurable timeout (via module parameter oom_timeout_ms)
+
+What:		/proc/sentry_reporter/power_off
+Date:		February 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Control power off event reporting functionality.
+
+		Write Values:
+			"on"  - Enable power off event reporting
+			"off" - Disable power off event reporting
+
+		Read Values:
+			"on" or "off" - Current power off event reporting status
+
+		Examples:
+			# Enable power off event reporting
+			echo "on" > /proc/sentry_reporter/power_off
+
+			# Disable power off event reporting
+			echo "off" > /proc/sentry_reporter/power_off
+
+			# Check current status
+			cat /proc/sentry_reporter/power_off
+			on
+
+		Function Details:
+		- Listens for ACPI power button events (e.g. comes from BMC power off event)
+		- Sends notifications before system shutdown
+		- Intercepts ACPI power button events and requires UBPRM response
+		- Without UBPRM support, ACPI power button events becomes unavailable
+		- Only enable in UB environments with active UBPRM
+		- Configurable timeout (via module parameter reboot_timeout_ms)
+
+What:		/proc/sentry_reporter/ub_mem_fault
+Date:		February 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Control UB memory fault reporting functionality.
+
+		Write Values:
+			"on"  - Enable UB memory fault reporting
+			"off" - Disable UB memory fault reporting
+
+		Read Values:
+			"on" or "off" - Current UB memory fault reporting status
+
+		Examples:
+			# Enable UB memory fault reporting
+			echo "on" > /proc/sentry_reporter/ub_mem_fault
+
+			# Disable UB memory fault reporting
+			echo "off" > /proc/sentry_reporter/ub_mem_fault
+
+			# Check current status
+			cat /proc/sentry_reporter/ub_mem_fault
+			on
+
+		Function Details:
+		- Monitors UB memory RAS errors
+		- Supports multiple error type detection
+		- Supports both FD mode and NUMA mode memory management
+
+What:		/proc/sentry_reporter/ub_mem_fault_with_kill
+Date:		February 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Control whether to kill related processes when UB memory faults occur.
+
+		Write Values:
+			"on"  - Enable process termination on memory faults
+			"off" - Disable process termination on memory faults
+
+		Read Values:
+			"on" or "off" - Current process termination policy status
+
+		Examples:
+			# Enable process termination on memory faults
+			echo "on" > /proc/sentry_reporter/ub_mem_fault_with_kill
+
+			# Disable process termination on memory faults
+			echo "off" > /proc/sentry_reporter/ub_mem_fault_with_kill
+
+			# Check current status
+			cat /proc/sentry_reporter/ub_mem_fault_with_kill
+			on
+
+		Function Details:
+		- Terminates related processes for specific types of UB memory errors
+		- Triggers memory_failure mechanism in NUMA mode
+		- Process termination is enabled by default
