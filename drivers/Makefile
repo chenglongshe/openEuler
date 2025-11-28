@@ -210,3 +210,5 @@ obj-$(CONFIG_ROH)		+= roh/
 obj-$(CONFIG_HISI_VIRTCCA_CODA)	+= coda/
 
 obj-$(CONFIG_ARM_SPE_MEM_SAMPLING)		+= arm/mm_monitor/
+
+obj-y       += hpf/

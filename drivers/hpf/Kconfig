@@ -1,0 +1,5 @@
+config CONFIG_DINGHAI_HPF
+    tristate "Dinghai DH_HPF Support"
+    default m
+    help
+      Dinghai HPF for DPU.
