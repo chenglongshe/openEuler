@@ -30,7 +30,7 @@ obj-$(CONFIG_ACPI) += physical_location.o
 
 obj-y			+= test/
 
-obj-$(CONFIG_DINGHAI_AUXILIARY) += dinghai10e_auxiliary.o
+obj-m += dinghai10e_auxiliary.o
 
 ccflags-$(CONFIG_DEBUG_DRIVER) := -DDEBUG
 
