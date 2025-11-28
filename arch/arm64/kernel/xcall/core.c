@@ -277,6 +277,9 @@ void clear_xcall_area(struct mm_struct *mm)
 	if (!refcount_dec_and_test(&area->ref))
 		return;
 
+	if (area->xcall_mmu_notifier.mm == mm && atomic_read(&mm->mm_count) > 1)
+		mmu_notifier_unregister(&area->xcall_mmu_notifier, mm);
+
 	if (area->xcall)
 		put_xcall(area->xcall);
 
