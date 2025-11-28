@@ -233,8 +233,7 @@ static int page_pool_init(struct page_pool *pool,
 	/* Driver calling page_pool_create() also call page_pool_destroy() */
 	refcount_set(&pool->user_cnt, 1);
 
-	if (pool->p.flags & PP_FLAG_DMA_MAP)
-		get_device(pool->p.dev);
+	xa_init_flags(&pool->dma_mapped, XA_FLAGS_ALLOC1);
 
 	return 0;
 }
@@ -347,9 +346,24 @@ static void page_pool_dma_sync_for_device(struct page_pool *pool,
 					 pool->p.dma_dir);
 }
 
-static bool page_pool_dma_map(struct page_pool *pool, struct page *page)
+static unsigned long page_get_dma_index(struct page *page)
+{
+	return (page->pp_magic & PP_DMA_INDEX_MASK) >> PP_DMA_INDEX_SHIFT;
+}
+
+static void page_set_dma_index(struct page *page, unsigned long id)
+{
+	unsigned long magic;
+
+	magic = page->pp_magic | (id << PP_DMA_INDEX_SHIFT);
+	page->pp_magic = magic;
+}
+
+static bool page_pool_dma_map(struct page_pool *pool, struct page *page, gfp_t gfp)
 {
 	dma_addr_t dma;
+	int err;
+	u32 id;
 
 	/* Setup DMA mapping: use 'struct page' area for storing DMA-addr
 	 * since dma_addr_t can be either 32 or 64 bits and does not always fit
@@ -363,7 +377,23 @@ static bool page_pool_dma_map(struct page_pool *pool, struct page *page)
 	if (dma_mapping_error(pool->p.dev, dma))
 		return false;
 
+	if (in_softirq())
+		err = xa_alloc(&pool->dma_mapped, &id, page, PP_DMA_INDEX_LIMIT,
+			       gfp);
+	else
+		err = xa_alloc_bh(&pool->dma_mapped, &id, page,
+				  PP_DMA_INDEX_LIMIT, gfp);
+
+	if (err) {
+		WARN_ONCE(err != -ENOMEM, "couldn't track DMA mapping, please report to netdev@");
+		dma_unmap_page_attrs(pool->p.dev, dma, PAGE_SIZE << pool->p.order,
+				     pool->p.dma_dir,
+				     DMA_ATTR_SKIP_CPU_SYNC | DMA_ATTR_WEAK_ORDERING);
+		return false;
+	}
+
 	page_pool_set_dma_addr(page, dma);
+	page_set_dma_index(page, id);
 
 	if (pool->p.flags & PP_FLAG_DMA_SYNC_DEV)
 		page_pool_dma_sync_for_device(pool, page, pool->p.max_len);
@@ -397,7 +427,7 @@ static struct page *__page_pool_alloc_page_order(struct page_pool *pool,
 		return NULL;
 
 	if ((pool->p.flags & PP_FLAG_DMA_MAP) &&
-	    unlikely(!page_pool_dma_map(pool, page))) {
+	    unlikely(!page_pool_dma_map(pool, page, gfp))) {
 		put_page(page);
 		return NULL;
 	}
@@ -444,7 +474,7 @@ static struct page *__page_pool_alloc_pages_slow(struct page_pool *pool,
 	for (i = 0; i < nr_pages; i++) {
 		page = pool->alloc.cache[i];
 		if ((pp_flags & PP_FLAG_DMA_MAP) &&
-		    unlikely(!page_pool_dma_map(pool, page))) {
+		    unlikely(!page_pool_dma_map(pool, page, gfp))) {
 			put_page(page);
 			continue;
 		}
@@ -509,12 +539,26 @@ static s32 page_pool_inflight(struct page_pool *pool)
 static __always_inline
 void __page_pool_release_page_dma(struct page_pool *pool, struct page *page)
 {
+	struct page *old;
+	unsigned long id;
 	dma_addr_t dma;
 
 	if (!(pool->p.flags & PP_FLAG_DMA_MAP))
 		/* Always account for inflight pages, even if we didn't
 		 * map them
 		 */
+		return;
+
+	id = page_get_dma_index(page);
+	if (!id)
+		return;
+
+	if (in_softirq())
+		old = xa_cmpxchg(&pool->dma_mapped, id, page, NULL, 0);
+	else
+		old = xa_cmpxchg_bh(&pool->dma_mapped, id, page, NULL, 0);
+
+	if (old != page)
 		return;
 
 	dma = page_pool_get_dma_addr(page);
@@ -524,6 +568,7 @@ void __page_pool_release_page_dma(struct page_pool *pool, struct page *page)
 			     PAGE_SIZE << pool->p.order, pool->p.dma_dir,
 			     DMA_ATTR_SKIP_CPU_SYNC | DMA_ATTR_WEAK_ORDERING);
 	page_pool_set_dma_addr(page, 0);
+	page_set_dma_index(page, 0);
 }
 
 /* Disconnects a page (from a page_pool).  API users can have a need
@@ -609,9 +654,13 @@ __page_pool_put_page(struct page_pool *pool, struct page *page,
 	if (likely(page_ref_count(page) == 1 && !page_is_pfmemalloc(page))) {
 		/* Read barrier done in page_ref_count / READ_ONCE */
 
-		if (pool->p.flags & PP_FLAG_DMA_SYNC_DEV)
+		if (pool->p.flags & PP_FLAG_DMA_SYNC_DEV) {
+			/* re-check under rcu_read_lock() to sync with page_pool_scrub() */
+			rcu_read_lock();
 			page_pool_dma_sync_for_device(pool, page,
 						      dma_sync_size);
+			rcu_read_unlock();
+		}
 
 		if (allow_direct && in_softirq() &&
 		    page_pool_recycle_in_cache(page, pool))
@@ -813,8 +862,7 @@ static void page_pool_free(struct page_pool *pool)
 
 	ptr_ring_cleanup(&pool->ring, NULL);
 
-	if (pool->p.flags & PP_FLAG_DMA_MAP)
-		put_device(pool->p.dev);
+	xa_destroy(&pool->dma_mapped);
 
 #ifdef CONFIG_PAGE_POOL_STATS
 	free_percpu(pool->recycle_stats);
@@ -841,8 +889,28 @@ static void page_pool_empty_alloc_cache_once(struct page_pool *pool)
 
 static void page_pool_scrub(struct page_pool *pool)
 {
+	unsigned long id;
+	void *ptr;
+
 	page_pool_empty_alloc_cache_once(pool);
-	pool->destroy_cnt++;
+	if (!pool->destroy_cnt++ && pool->p.flags & PP_FLAG_DMA_MAP) {
+		if (pool->p.flags & PP_FLAG_DMA_SYNC_DEV) {
+			/* Disable page_pool_dma_sync_for_device() */
+			pool->p.flags &= ~PP_FLAG_DMA_SYNC_DEV;
+
+			/* Make sure all concurrent returns that may see the old
+			 * value of dma_sync (and thus perform a sync) have
+			 * finished before doing the unmapping below. Skip the
+			 * wait if the device doesn't actually need syncing, or
+			 * if there are no outstanding mapped pages.
+			 */
+			if (!xa_empty(&pool->dma_mapped))
+				synchronize_net();
+		}
+
+		xa_for_each(&pool->dma_mapped, id, ptr)
+			__page_pool_release_page_dma(pool, ptr);
+	}
 
 	/* No more consumers should exist, but producers could still
 	 * be in-flight.
