@@ -233,7 +233,17 @@ static int page_pool_init(struct page_pool *pool,
 	/* Driver calling page_pool_create() also call page_pool_destroy() */
 	refcount_set(&pool->user_cnt, 1);
 
-	xa_init_flags(&pool->dma_mapped, XA_FLAGS_ALLOC1);
+	pool->dma_mapped = kmalloc(sizeof(*pool->dma_mapped), GFP_KERNEL);
+	if (!pool->dma_mapped) {
+#ifdef CONFIG_PAGE_POOL_STATS
+		free_percpu(pool->recycle_stats);
+#endif
+		ptr_ring_cleanup(&pool->ring, NULL);
+
+		return -ENOMEM;
+	}
+
+	xa_init_flags(pool->dma_mapped, XA_FLAGS_ALLOC1);
 
 	return 0;
 }
@@ -369,9 +379,9 @@ static int page_pool_register_dma_index(struct page_pool *pool,
 		goto out;
 
 	if (in_softirq())
-		err = xa_alloc(&pool->dma_mapped, &id, page, PP_DMA_INDEX_LIMIT, gfp);
+		err = xa_alloc(pool->dma_mapped, &id, page, PP_DMA_INDEX_LIMIT, gfp);
 	else
-		err = xa_alloc_bh(&pool->dma_mapped, &id, page, PP_DMA_INDEX_LIMIT, gfp);
+		err = xa_alloc_bh(pool->dma_mapped, &id, page, PP_DMA_INDEX_LIMIT, gfp);
 	if (err) {
 		WARN_ONCE(err != -ENOMEM, "couldn't track DMA mapping, please report to netdev@");
 		goto out;
@@ -396,9 +406,9 @@ static int page_pool_release_dma_index(struct page_pool *pool,
 		return -1;
 
 	if (in_softirq())
-		old = xa_cmpxchg(&pool->dma_mapped, id, page, NULL, 0);
+		old = xa_cmpxchg(pool->dma_mapped, id, page, NULL, 0);
 	else
-		old = xa_cmpxchg_bh(&pool->dma_mapped, id, page, NULL, 0);
+		old = xa_cmpxchg_bh(pool->dma_mapped, id, page, NULL, 0);
 	if (old != page)
 		return -1;
 
@@ -888,7 +898,8 @@ static void page_pool_free(struct page_pool *pool)
 
 	ptr_ring_cleanup(&pool->ring, NULL);
 
-	xa_destroy(&pool->dma_mapped);
+	xa_destroy(pool->dma_mapped);
+	kfree(pool->dma_mapped);
 
 #ifdef CONFIG_PAGE_POOL_STATS
 	free_percpu(pool->recycle_stats);
@@ -930,11 +941,11 @@ static void page_pool_scrub(struct page_pool *pool)
 			 * wait if the device doesn't actually need syncing, or
 			 * if there are no outstanding mapped pages.
 			 */
-			if (!xa_empty(&pool->dma_mapped))
+			if (!xa_empty(pool->dma_mapped))
 				synchronize_net();
 		}
 
-		xa_for_each(&pool->dma_mapped, id, ptr)
+		xa_for_each(pool->dma_mapped, id, ptr)
 			__page_pool_release_page_dma(pool, ptr);
 	}
 

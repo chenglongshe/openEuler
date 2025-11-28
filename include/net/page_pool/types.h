@@ -172,8 +172,6 @@ struct page_pool {
 	 */
 	struct ptr_ring ring;
 
-	struct xarray dma_mapped;
-
 #ifdef CONFIG_PAGE_POOL_STATS
 	/* recycle stats are per-cpu to avoid locking */
 	struct page_pool_recycle_stats __percpu *recycle_stats;
@@ -188,7 +186,7 @@ struct page_pool {
 
 	u64 destroy_cnt;
 
-	KABI_RESERVE(1)
+	KABI_USE(1, struct xarray *dma_mapped)
 	KABI_RESERVE(2)
 };
 
