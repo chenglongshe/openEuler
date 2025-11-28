@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2022-2025. All rights reserved.
+ * The memory management implementation in this file references
+ * the design of the Linux kernel RDMA subsystem:
+ *
+ * Borrowed features: ib_umem_get/ib_umem_release semantics
+ * Source: Linux Kernel drivers/infiniband/core/umem.c
+ * Original copyright: Copyright (c) Linux kernel developers, under GPL-2.0
+ * Link: https://github.com/torvalds/linux/tree/master/drivers/infiniband/core
  *
  * Description: ubcore device add and remove ops file
  * Author: Fan Yizhen

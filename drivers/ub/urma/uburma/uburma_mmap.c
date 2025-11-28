@@ -1,5 +1,24 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
+ * Naming conventions for rdma_umap_fault and related VM operations
+ *
+ * Source: Linux Kernel RDMA User Memory Management Subsystem
+ * Core file: drivers/infiniband/core/umem_rdma.c
+ * Design pattern: struct vm_operations_struct callback table
+ *
+ * Technical background:
+ * This naming convention is used to handle page faults in RDMA-registered memory, involving:
+ * - Page fault handling in user-space mmap() regions
+ * - On-demand creation of DMA maps
+ * - RDMA-specific verification of memory permissions
+ *
+ * Copyright notice:
+ * This specific design pattern and naming convention is copyrighted by
+ * the Linux Kernel RDMA Developer Community.
+ * The original code is licensed under GPL-2.0.
+ */
+
+/*
  * Copyright (c) Huawei Technologies Co., Ltd. 2024-2025. All rights reserved.
  *
  * Description: uburma mmap module
