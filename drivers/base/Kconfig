@@ -253,4 +253,10 @@ config FW_DEVLINK_SYNC_STATE_TIMEOUT
 	  command line option on every system/board your kernel is expected to
 	  work on.
 
+config DINGHAI_AUXILIARY
+       tristate "Dinghai AUXILIARY Support"
+       default m
+       help
+         Enable Dinghai AUXILIARY module Support
+
 endmenu
