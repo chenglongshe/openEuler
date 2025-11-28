@@ -1,0 +1,86 @@
+config NET_VENDOR_DINGHAI
+    tristate "Dinghai Devices"
+    default y
+    help
+      If you have a Ethernet DINGHAI device belonging to this
+	  class, say y.
+
+if NET_VENDOR_DINGHAI
+
+config DINGHAI_DH_CMD
+    tristate "Dinghai DH_CMD Support"
+    default m
+    help
+      Command interface for Dinghai devices.
+
+config DINGHAI_EN_AUX
+    tristate "Dinghai Auxiliary Support"
+    default y
+    help
+      Auxiliary functionality for Dinghai devices.
+
+config DINGHAI_NP
+    tristate "Dinghai NP Support"
+    default m
+    depends on DINGHAI_DH_CMD
+    help
+      Network Processor (NP) support. Requires DINGHAI_DH_CMD.
+
+config DINGHAI_PTP
+    tristate "Dinghai PTP Support"
+    default m
+    depends on DINGHAI_DH_CMD && PTP_1588_CLOCK
+    help
+      Precision Time Protocol (PTP) support. Requires DINGHAI_DH_CMD and PTP_1588_CLOCK.
+
+config DINGHAI_TSN
+    bool "Dinghai Support TSN Macro"
+    default y
+    help
+      Enable TSN-related compile-time macros.
+
+config DINGHAI_TSN_M
+    tristate "Dinghai TSN Module Support"
+    default m
+    help
+      TSN runtime module support.
+
+config ZXDH_SF
+    tristate "Dinghai SF Support"
+    default y
+    help
+      Sub-Function (SF) support.
+
+config ZXDH_MSGQ
+    tristate "Dinghai MSGQ Support"
+    default m
+    help
+      Message queue support.
+
+config DINGHAI_SEC
+    tristate "Dinghai SEC Support"
+    default n
+    help
+      Security (SEC) module support.
+
+config DINGHAI_AUXILIARY
+       tristate "Dinghai AUXILIARY Support"
+       default m
+       help
+         Enable Dinghai AUXILIARY module Support
+
+# Main PF driver
+config DINGHAI_PF
+    tristate "Dinghai PF Support"
+    default m
+    depends on DINGHAI_DH_CMD
+    depends on DINGHAI_AUXILIARY
+    depends on DINGHAI_NP
+    depends on DINGHAI_PTP
+    depends on DINGHAI_TSN_M
+    help
+      Primary Function (PF) driver for Dinghai devices.
+      This driver requires CMD, Auxiliary, NP, PTP, and TSN modules.
+      Note: PTP also requires PTP_1588_CLOCK to be enabled.
+
+endif # NET_VENDOR_DINGHAI
