@@ -1262,6 +1262,18 @@ static bool ice_is_vf_disabled(struct ice_vf *vf)
 }
 
 /**
+ * ice_get_vf_vsi - get VF's VSI based on the stored index
+ * @vf: VF used to get VSI
+ */
+struct ice_vsi *ice_get_vf_vsi(struct ice_vf *vf)
+{
+	if (vf->lan_vsi_idx == ICE_NO_VSI)
+		return NULL;
+
+	return vf->pf->vsi[vf->lan_vsi_idx];
+}
+
+/**
  * ice_reset_vf - Reset a particular VF
  * @vf: pointer to the VF structure
  * @is_vflr: true if VFLR was issued, false if not
@@ -1291,6 +1303,11 @@ bool ice_reset_vf(struct ice_vf *vf, bool is_vflr)
 	}
 
 	if (ice_is_vf_disabled(vf)) {
+		vsi = ice_get_vf_vsi(vf);
+		if (WARN_ON(!vsi))
+			return -EINVAL;
+		ice_vsi_stop_lan_tx_rings(vsi, ICE_NO_RESET, vf->vf_id);
+		ice_vsi_stop_all_rx_rings(vsi);
 		dev_dbg(dev, "VF is already disabled, there is no need for resetting it, telling VM, all is fine %d\n",
 			vf->vf_id);
 		return true;
