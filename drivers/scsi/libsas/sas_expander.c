@@ -829,7 +829,10 @@ static struct domain_device *sas_ex_discover_end_dev(
 			sas_port_free(phy->port);
 			goto out_err;
 		}
-	}
+		dev_printk(KERN_INFO, &phy->port->dev, "port alloc and added\n");
+	} else
+		dev_printk(KERN_INFO, &phy->port->dev, "port already attached to this phy?\n");
+
 	sas_ex_get_linkrate(parent, child, phy);
 	sas_device_set_phy(child, phy->port);
 
@@ -927,6 +930,7 @@ static struct domain_device *sas_ex_discover_end_dev(
 	list_del(&child->dev_list_node);
 	spin_unlock_irq(&parent->port->dev_list_lock);
  out_free:
+	dev_printk(KERN_INFO, &phy->port->dev, "port deleted due to failed discover\n");
 	sas_port_delete(phy->port);
  out_err:
 	phy->port = NULL;
@@ -948,7 +952,23 @@ static bool sas_ex_join_wide_port(struct domain_device *parent, int phy_id)
 
 		if (!memcmp(phy->attached_sas_addr, ephy->attached_sas_addr,
 			    SAS_ADDR_SIZE) && ephy->port) {
+			/*
+			 * Do not join wide port if it is an end device,
+			 * this only happen when swapping disks. Return true
+			 * here to exit the discover process.
+			 */
+			if (sas_phy_end_device(phy) || sas_phy_end_device(ephy)) {
+				memset(phy->attached_sas_addr, 0, SAS_ADDR_SIZE);
+				phy->phy_change_count = -1;
+				parent->ex_dev.ex_change_count = -1;
+				pr_debug("Try attaching ex phy%d to wide port %016llx(with phy%d), not allowed\n",
+					 phy_id, SAS_ADDR(ephy->attached_sas_addr), i);
+				return true;
+			}
+
 			sas_port_add_ex_phy(ephy->port, phy);
+			pr_debug("Attaching ex phy%d to wide port %016llx(with phy%d)\n",
+				 phy_id, SAS_ADDR(ephy->attached_sas_addr), i);
 			return true;
 		}
 	}
@@ -2189,9 +2209,10 @@ static void sas_ex_unregister_device(struct domain_device *dev, const int phy_id
 		if (i == phy_id)
 			continue;
 		if (SAS_ADDR(phy->attached_sas_addr) ==
-		    SAS_ADDR(changed_phy->attached_sas_addr)) {
-			pr_debug("phy%02d part of wide port with phy%02d\n",
-				 phy_id, i);
+		    SAS_ADDR(changed_phy->attached_sas_addr) &&
+		    phy->port == changed_phy->port) {
+			pr_debug("phy%d part of wide port with phy%d, port:%llx\n",
+				 phy_id, i, (unsigned long long)phy->port);
 			last = false;
 			break;
 		}
@@ -2211,10 +2232,10 @@ static int sas_ex_try_unregister(struct domain_device *dev, u8 *changed_phy,
 	int i;
 
 	for (i = 0; i < nr; i++) {
-		pr_debug("ex %016llx phy%d originated BROADCAST(CHANGE)\n",
-			 SAS_ADDR(dev->sas_addr), changed_phy[i]);
-
 		phy = &ex->ex_phy[changed_phy[i]];
+		pr_debug("ex %016llx phy%d:%016llx originated BROADCAST(CHANGE)\n",
+			 SAS_ADDR(dev->sas_addr), changed_phy[i],
+			 SAS_ADDR(phy->attached_sas_addr));
 
 		if (SAS_ADDR(phy->attached_sas_addr) == 0)
 			continue;

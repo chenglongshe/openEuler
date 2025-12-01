@@ -192,4 +192,10 @@ static inline void sas_put_device(struct domain_device *dev)
 	kref_put(&dev->kref, sas_free_device);
 }
 
+static inline bool sas_phy_end_device(struct ex_phy *phy)
+{
+	return (phy->attached_dev_type == SAS_END_DEVICE ||
+		phy->attached_dev_type == SAS_SATA_DEV ||
+		phy->attached_dev_type == SAS_SATA_PENDING);
+}
 #endif /* _SAS_INTERNAL_H_ */

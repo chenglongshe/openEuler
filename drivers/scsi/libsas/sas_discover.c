@@ -357,6 +357,7 @@ static void sas_destruct_ports(struct asd_sas_port *port)
 
 	list_for_each_entry_safe(sas_port, p, &port->sas_port_del_list, del_list) {
 		list_del_init(&sas_port->del_list);
+		dev_printk(KERN_INFO, &sas_port->dev, "port deleted\n");
 		sas_port_delete(sas_port);
 	}
 }
