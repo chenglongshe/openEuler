@@ -931,7 +931,7 @@ static struct domain_device *sas_ex_discover_end_dev(
 	spin_unlock_irq(&parent->port->dev_list_lock);
  out_free:
 	dev_printk(KERN_INFO, &phy->port->dev, "port deleted due to failed discover\n");
-	sas_port_delete(phy->port);
+	list_add_tail(&phy->port->del_list, &parent->port->sas_port_del_list);
  out_err:
 	phy->port = NULL;
 	sas_put_device(child);
