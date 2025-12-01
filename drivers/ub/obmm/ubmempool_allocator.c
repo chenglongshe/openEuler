@@ -479,7 +479,7 @@ static int init_mem_allocator_granu(enum allocator_id aid)
 	if (!mem_allocator_granu) {
 		if (aid == ALLOCATOR_HUGETLB_PUD)
 			__obmm_memseg_size = PUD_SIZE;
-		else if (aid == ALLOCATOR_HUGETLB_PMD)
+		else
 			__obmm_memseg_size = PMD_SIZE;
 		return 0;
 	}
