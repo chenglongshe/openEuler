@@ -2149,6 +2149,8 @@ static int sas_ex_unregister(struct domain_device *dev, int phy_id, bool last,
 		 */
 		if (res == 0)
 			sas_set_ex_phy(dev, phy_id, disc_resp);
+		memcpy(phy->attached_sas_addr, sas_addr, SAS_ADDR_SIZE);
+		phy->phy_change_count = -1;
 		goto out_free_resp;
 	} else if (SAS_ADDR(sas_addr) == SAS_ADDR(phy->attached_sas_addr) &&
 		   dev_type_flutter(type, phy->attached_dev_type)) {
