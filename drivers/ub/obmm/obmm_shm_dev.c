@@ -874,9 +874,6 @@ const struct file_operations obmm_shm_fops = { .owner = THIS_MODULE,
 
 static void obmm_shm_dev_release(struct device *dev)
 {
-	struct obmm_region *reg;
-
-	reg = container_of(dev, struct obmm_region, device);
 	module_put(THIS_MODULE);
 }
 
