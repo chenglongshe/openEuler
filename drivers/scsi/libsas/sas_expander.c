@@ -2066,13 +2066,6 @@ static bool sas_process_flutter(struct domain_device *dev, struct ex_phy *phy,
 	pr_debug("ex %016llx phy%d broadcast flutter%s\n",
 		 SAS_ADDR(dev->sas_addr), phy_id, action);
 
-	if (linkrate != phy->linkrate) {
-		pr_debug("ex %016llx phy%d linkrate changed from %d to %d\n",
-			 SAS_ADDR(dev->sas_addr), phy_id,
-			 linkrate, phy->linkrate);
-		return false;
-	}
-
 	/* the phy attached address will be updated by sas_ex_phy_discover()
 	 * and sometimes become abnormal
 	 */
@@ -2085,6 +2078,13 @@ static bool sas_process_flutter(struct domain_device *dev, struct ex_phy *phy,
 		pr_debug("phy address(%016llx) abnormal, origin:%016llx\n",
 			 SAS_ADDR(phy->attached_sas_addr),
 			 SAS_ADDR(sas_addr));
+		return false;
+	}
+
+	if (linkrate != phy->linkrate) {
+		pr_debug("ex %016llx phy%d linkrate changed from %d to %d\n",
+			 SAS_ADDR(dev->sas_addr), phy_id,
+			 linkrate, phy->linkrate);
 		return false;
 	}
 
