@@ -219,11 +219,15 @@ static void enfs_latency_maybe_sample(struct rpc_clnt *clnt, struct rpc_xprt *xp
 	enfs_latency_prune_old(ctx, now_ms);
 
 	if (enfs_latency_event_count(ctx) >= required_events) {
-		pm_set_path_state(xprt, PM_STATE_UNSTABLE);
 		ctx->latency_unstable_active = true;
 		if (ctx->latency_unstable_enter_ms == 0)
 			ctx->latency_unstable_enter_ms = now_ms;
 	}
+
+	if (ctx->latency_unstable_active || ctx->reconnect_unstable_active)
+		pm_set_path_state(xprt, PM_STATE_UNSTABLE);
+	else
+		pm_set_path_state(xprt, PM_STATE_NORMAL);
 }
 
 static int enfs_latency_maybe_sample_wrapper(struct rpc_clnt *clnt,
@@ -282,12 +286,8 @@ static void enfs_check_reconnect(struct rpc_xprt *xprt)
 	struct enfs_xprt_context *ctx = NULL;
 	struct enfs_reconnect_time *time;
 	bool is_empty, is_full, is_normal;
+	bool is_latency_unstable;
 	enum enfs_path_state curr_state;
-
-	if (enfs_get_unstable_state_timeout() == 0) {
-		pm_set_path_state(xprt, PM_STATE_NORMAL);
-		return;
-	}
 
 	curr_state = pm_get_path_state(xprt);
 
@@ -299,6 +299,11 @@ static void enfs_check_reconnect(struct rpc_xprt *xprt)
 		goto out;
 	}
 
+	if (enfs_get_unstable_state_timeout() == 0) {
+		ctx->reconnect_unstable_active = false;
+		goto out;
+	}
+
 	time = &ctx->reconnect_time;
 	enfs_update_reconnect_time(time, ktime_to_ms(ktime_get()), xprt->connect_cookie);
 	is_empty = enfs_is_time_buf_empty(time);
@@ -307,10 +312,17 @@ static void enfs_check_reconnect(struct rpc_xprt *xprt)
 	is_normal = curr_state == PM_STATE_INIT ||
 		    (is_empty && curr_state == PM_STATE_UNSTABLE) ||
 		    (!is_full && curr_state == PM_STATE_NORMAL);
+
 	if (is_normal)
-		pm_set_path_state(xprt, PM_STATE_NORMAL);
+		ctx->reconnect_unstable_active = false;
 	else
+		ctx->reconnect_unstable_active = is_full;
+
+	is_latency_unstable = ctx->latency_unstable_active;
+	if (is_latency_unstable || ctx->reconnect_unstable_active)
 		pm_set_path_state(xprt, PM_STATE_UNSTABLE);
+	else
+		pm_set_path_state(xprt, PM_STATE_NORMAL);
 
 out:
 	xprt_put(xprt);
@@ -431,7 +443,6 @@ static void pm_ping_call_done(struct rpc_task *task, void *data)
 
 		if (ctx->latency_unstable_enter_ms &&
 		    now_ms - ctx->latency_unstable_enter_ms >= recover_ms) {
-			pm_set_path_state(xprt, PM_STATE_NORMAL);
 			ctx->latency_unstable_active = false;
 			ctx->latency_unstable_enter_ms = 0;
 			/* reset latency window */
@@ -439,6 +450,11 @@ static void pm_ping_call_done(struct rpc_task *task, void *data)
 			ctx->latency_last_sample_ms = 0;
 			ctx->latency_last_ops_sum = 0;
 			ctx->latency_last_exec_ms_sum = 0;
+
+			if (ctx->reconnect_unstable_active)
+				pm_set_path_state(xprt, PM_STATE_UNSTABLE);
+			else
+				pm_set_path_state(xprt, PM_STATE_NORMAL);
 		}
 	}
 	xprt_put(xprt);

@@ -85,6 +85,7 @@ struct enfs_xprt_context {
 	/* record cause/time for unstable entered due to latency */
 	s64 latency_unstable_enter_ms;
 	bool latency_unstable_active;
+	bool reconnect_unstable_active;
 	u32 reserve[30];
 };
 
