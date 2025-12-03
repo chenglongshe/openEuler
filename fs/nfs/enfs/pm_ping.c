@@ -224,6 +224,11 @@ static void enfs_latency_maybe_sample(struct rpc_clnt *clnt, struct rpc_xprt *xp
 			ctx->latency_unstable_enter_ms = now_ms;
 	}
 
+	enum enfs_path_state curr_state = pm_get_path_state(xprt);
+
+	if (curr_state == PM_STATE_FAULT)
+		return;
+
 	if (ctx->latency_unstable_active || ctx->reconnect_unstable_active)
 		pm_set_path_state(xprt, PM_STATE_UNSTABLE);
 	else
