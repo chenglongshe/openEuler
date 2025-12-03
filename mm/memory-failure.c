@@ -67,6 +67,8 @@ int sysctl_memory_failure_early_kill __read_mostly = 0;
 
 int sysctl_memory_failure_recovery __read_mostly = 1;
 
+int sysctl_enable_soft_offline __read_mostly = 1;
+
 atomic_long_t num_poisoned_pages __read_mostly = ATOMIC_LONG_INIT(0);
 
 static bool page_handle_poison(struct page *page, bool hugepage_or_freepage, bool release)
@@ -1996,7 +1998,9 @@ static int soft_offline_free_page(struct page *page)
  * @page: page to offline
  * @flags: flags. Same as memory_failure().
  *
- * Returns 0 on success, otherwise negated errno.
+ * Returns 0 on success,
+ *         -EOPNOTSUPP for  disabled by /proc/sys/vm/enable_soft_offline,
+ *         < 0 otherwise negated errno.
  *
  * Soft offline a page, by migration or invalidation,
  * without killing anything. This is for the case when
@@ -2025,6 +2029,13 @@ int soft_offline_page(struct page *page, int flags)
 		if (flags & MF_COUNT_INCREASED)
 			put_page(page);
 		return -EIO;
+	}
+
+	if (!sysctl_enable_soft_offline) {
+		pr_info_once("disabled by /proc/sys/vm/enable_soft_offline\n");
+		if (flags & MF_COUNT_INCREASED)
+			put_page(page);
+		return -EOPNOTSUPP;
 	}
 
 	if (PageHWPoison(page)) {
