@@ -47,6 +47,7 @@
 #include <linux/page_owner.h>
 #include <linux/sched/mm.h>
 #include <linux/ptrace.h>
+#include <linux/highmem.h>
 
 #include <asm/tlbflush.h>
 
@@ -640,24 +641,33 @@ int migrate_huge_page_move_mapping(struct address_space *mapping,
  * arithmetic will work across the entire page.  We need something more
  * specialized.
  */
-static void __copy_gigantic_page(struct page *dst, struct page *src,
-				int nr_pages)
+static int __copy_gigantic_page(struct page *dst, struct page *src,
+				int nr_pages, bool mc)
 {
-	int i;
+	int i, ret = 0;
 	struct page *dst_base = dst;
 	struct page *src_base = src;
 
 	for (i = 0; i < nr_pages; ) {
 		cond_resched();
-		copy_highpage(dst, src);
+
+		if (mc) {
+			ret = copy_mc_highpage(dst, src);
+			if (ret)
+				return -EFAULT;
+		} else {
+			copy_highpage(dst, src);
+		}
 
 		i++;
 		dst = mem_map_next(dst, dst_base, i);
 		src = mem_map_next(src, src_base, i);
 	}
+
+	return ret;
 }
 
-static void copy_huge_page(struct page *dst, struct page *src)
+static int __copy_huge_page(struct page *dst, struct page *src, bool mc)
 {
 	int i;
 	int nr_pages;
@@ -667,20 +677,32 @@ static void copy_huge_page(struct page *dst, struct page *src)
 		struct hstate *h = page_hstate(src);
 		nr_pages = pages_per_huge_page(h);
 
-		if (unlikely(nr_pages > MAX_ORDER_NR_PAGES)) {
-			__copy_gigantic_page(dst, src, nr_pages);
-			return;
-		}
+		if (unlikely(nr_pages > MAX_ORDER_NR_PAGES))
+			return __copy_gigantic_page(dst, src, nr_pages, mc);
 	} else {
 		/* thp page */
 		BUG_ON(!PageTransHuge(src));
 		nr_pages = hpage_nr_pages(src);
 	}
 
+	if (mc)
+		return copy_mc_highpages(src, src, nr_pages);
+
 	for (i = 0; i < nr_pages; i++) {
 		cond_resched();
 		copy_highpage(dst + i, src + i);
 	}
+	return 0;
+}
+
+static int copy_huge_page(struct page *dst, struct page *src)
+{
+	return __copy_huge_page(dst, src, false);
+}
+
+static int copy_mc_huge_page(struct page *dst, struct page *src)
+{
+	return __copy_huge_page(dst, src, true);
 }
 
 /*
@@ -756,6 +778,38 @@ void migrate_page_copy(struct page *newpage, struct page *page)
 }
 EXPORT_SYMBOL(migrate_page_copy);
 
+static int migrate_page_copy_mc(struct page *newpage, struct page *page)
+{
+	int rc;
+
+	if (PageHuge(page) || PageTransHuge(page))
+		rc = copy_mc_huge_page(newpage, page);
+	else
+		rc = copy_mc_highpage(newpage, page);
+
+	return rc;
+}
+
+static int migrate_page_mc_extra(struct address_space *mapping,
+		struct page *newpage, struct page *page,
+		enum migrate_mode mode, int extra_count)
+{
+	int rc;
+
+	rc = migrate_page_copy_mc(newpage, page);
+	if (rc)
+		return rc;
+
+	rc = migrate_page_move_mapping(mapping, newpage, page, NULL, mode,
+				       extra_count);
+	if (rc != MIGRATEPAGE_SUCCESS)
+		return rc;
+
+	migrate_page_states(newpage, page);
+
+	return rc;
+}
+
 /************************************************************
  *                    Migration functions
  ***********************************************************/
@@ -773,6 +827,13 @@ int migrate_page(struct address_space *mapping,
 	int rc;
 
 	BUG_ON(PageWriteback(page));	/* Writeback must be complete */
+
+#ifdef CONFIG_UCE_KERNEL_RECOVERY
+	if (IS_ENABLED(CONFIG_ARM64) &&
+	    is_cow_kernel_recovery_enable() &&
+	    (mode != MIGRATE_SYNC_NO_COPY))
+		return migrate_page_mc_extra(mapping, newpage, page, mode, 0);
+#endif
 
 	rc = migrate_page_move_mapping(mapping, newpage, page, NULL, mode, 0);
 
