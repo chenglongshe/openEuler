@@ -18,6 +18,7 @@
 #include <kvm/arm_psci.h>
 
 #include <asm/virtcca_coda.h>
+#include "virtcca_mig.h"
 
 /* Protects access to cvm_vmid_bitmap */
 static DEFINE_SPINLOCK(cvm_vmid_lock);
@@ -113,7 +114,7 @@ static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
  * the configurable physical numa range in QEMU is 0-127,
  * but in real scenarios, 0-63 is sufficient.
  */
-static u64 kvm_get_host_numa_set_by_vcpu(u64 vcpu, struct kvm *kvm)
+u64 kvm_get_host_numa_set_by_vcpu(u64 vcpu, struct kvm *kvm)
 {
 	int64_t i;
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
@@ -175,6 +176,39 @@ int kvm_arm_create_cvm(struct kvm *kvm)
 		goto out;
 	}
 
+	if(cvm->params->mig_enable) {
+		ret = kvm_virtcca_mig_stream_ops_init();  /* init the migration main struct */
+		if (ret) {
+			kvm_err("KVM support migration kvm_virtcca_mig_stream_ops_init failed: %d\n", cvm->cvm_vmid);
+			ret = -ENOMEM;
+			goto out;
+		}
+
+		ret = virtcca_mig_capabilities_setup(cvm);
+		if (ret) {
+			kvm_err("KVM support migration virtcca_mig_capabilities_setup failed: %d\n", cvm->cvm_vmid);
+			ret = -ENOMEM;
+			goto out;
+		}
+
+		ret = virtcca_mig_state_create(cvm); /* this state might along with the protected memory */
+		if (ret) {
+			kvm_err("KVM support migration virtcca_mig_state_create failed: %d\n", cvm->cvm_vmid);
+			ret = -ENOMEM;
+			goto out;
+		}
+	} else {
+		pr_warn("warning : Migration Capability is not set\n");
+	}
+
+	if(cvm->params->migration_migvm_cap) {
+		cvm->mig_cvm_info = kzalloc(sizeof(struct mig_cvm), GFP_KERNEL_ACCOUNT);
+		if (!cvm->mig_cvm_info) {
+			return -ENOMEM;
+		}
+		pr_warn("Info : This CVM is Mig-CVM\n");
+	}
+
 	WRITE_ONCE(cvm->state, CVM_STATE_NEW);
 	ret = 0;
 out:
@@ -199,6 +233,21 @@ void kvm_destroy_cvm(struct kvm *kvm)
 
 	if (!cvm)
 		return;
+
+	/* disable mig config and clean binding state*/
+	if (cvm->mig_state) {
+		virtcca_mig_state_release(cvm);
+		kvm_virtcca_mig_stream_ops_exit();
+		ret = tmi_bind_clean(cvm->rd);
+		if (ret) {
+			pr_err("KVM destroy cVM mig tmi_bind_clean failed\n");
+		}
+		kfree(cvm->mig_state);
+	}
+
+	if (cvm->mig_cvm_info) {
+		kfree(cvm->mig_cvm_info);
+	}
 
 #ifdef CONFIG_HISI_VIRTCCA_CODA
 	/* Unmap the cvm with arm smmu domain */
@@ -404,6 +453,10 @@ int kvm_finalize_vcpu_tec(struct kvm_vcpu *vcpu)
 	struct virtcca_cvm *cvm = vcpu->kvm->arch.virtcca_cvm;
 	struct virtcca_cvm_tec *tec = &vcpu->arch.tec;
 
+	if (tec->tec_created) {
+		return 0;
+	}
+
 	mutex_lock(&vcpu->kvm->lock);
 	tec->run = kzalloc(PAGE_SIZE, GFP_KERNEL_ACCOUNT);
 	if (!tec->run) {
@@ -521,6 +574,31 @@ static int config_cvm_kae(struct kvm *kvm, struct kvm_cap_arm_tmm_config_item *c
 	return 0;
 }
 
+/* Get the qemu's transport migration config */
+static int config_cvm_migration(struct kvm *kvm, struct kvm_cap_arm_tmm_config_item *cfg)
+{
+	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+	struct tmi_cvm_params *params;
+	pr_info("calling config_cvm_migration\n");
+	params = cvm->params;
+	params->mig_enable = cfg->mig_enable;
+    params->mig_src = cfg->mig_src;
+	params->flags |= TMI_CVM_PARAM_FLAG_MIG;
+	return 0;
+}
+
+static int config_cvm_migvm(struct kvm *kvm, struct kvm_cap_arm_tmm_config_item *cfg)
+{
+	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+	struct tmi_cvm_params *params;
+
+	params = cvm->params;
+
+	params->migration_migvm_cap = cfg->migration_migvm_cap;
+	params->flags |= TMI_CVM_PARAM_FLAG_MIGVM;
+	return 0;
+}
+
 static int kvm_tmm_config_cvm(struct kvm *kvm, struct kvm_enable_cap *cap)
 {
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
@@ -545,6 +623,12 @@ static int kvm_tmm_config_cvm(struct kvm *kvm, struct kvm_enable_cap *cap)
 		break;
 	case KVM_CAP_ARM_TMM_CFG_KAE:
 		r = config_cvm_kae(kvm, &cfg);
+		break;
+	case KVM_CAP_ARM_TMM_CFG_MIG:	/* enable the mig config of cvm */
+		r = config_cvm_migration(kvm, &cfg);
+		break;
+	case KVM_CAP_ARM_TMM_CFG_MIG_CVM:
+		r = config_cvm_migvm(kvm, &cfg);
 		break;
 
 	default:
@@ -590,6 +674,54 @@ int kvm_cvm_map_range(struct kvm *kvm)
 	return ret;
 }
 
+
+int kvm_cvm_mig_map_range(struct kvm *kvm)
+{
+	int ret = 0;
+	u64 curr_numa_set;
+	int idx;
+	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+	struct kvm_numa_info *numa_info = &cvm->numa_info;
+	struct kvm_numa_node *numa_node;
+	gpa_t gpa;
+
+	curr_numa_set = kvm_get_first_binded_numa_set(kvm);
+	/* uefi boot */
+	if (cvm->ipa_start == UEFI_LOADER_START) {
+		gpa = cvm->ipa_start;
+		numa_node = &numa_info->numa_nodes[0];
+		ret = tmi_ttt_map_range(cvm->rd, gpa,
+						UEFI_SIZE,
+						curr_numa_set, numa_node->host_numa_nodes[0]);
+		if (ret) {
+			kvm_err("tmi_ttt_map_range failed: %d.\n", ret);
+			return ret;
+		}
+	}
+
+	for (idx = 0; idx < numa_info->numa_cnt; idx++) {
+		numa_node = &numa_info->numa_nodes[idx];
+		gpa = numa_node->ipa_start;
+		if (gpa >= numa_node->ipa_start &&
+			gpa < numa_node->ipa_start + numa_node->ipa_size) {
+			ret = tmi_ttt_map_range(cvm->rd, gpa,
+						numa_node->ipa_size,
+						curr_numa_set, numa_node->host_numa_nodes[0]);
+			if (ret) {
+				kvm_err("tmi_ttt_map_range failed: %d.\n", ret);
+				return ret;
+			}
+		}
+	}
+	/* Vfio driver will pin memory in advance,
+	 * if the ram already mapped, activate cvm
+	 * does not need to map twice
+	 */
+	cvm->is_mapped = true;
+	return ret;
+}
+
+
 static int kvm_activate_cvm(struct kvm *kvm)
 {
 #ifdef CONFIG_HISI_VIRTCCA_CODA
@@ -598,6 +730,19 @@ static int kvm_activate_cvm(struct kvm *kvm)
 	struct list_head smmu_domain_group_list;
 #endif
 	struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+
+	if(cvm->mig_state) {
+		kvm_info("kvm_activate_cvm: vm->mig_state->mig_src = %d", cvm->mig_state->mig_src);
+ 		if (cvm->mig_state->mig_src == VIRTCCA_MIG_DST) {
+ 			kvm_info("kvm_activate_cvm: vm->mig_state->mig_src == VIRTCCA_MIG_DST");
+ 			return 0;
+ 		}
+	}
+
+	if (virtcca_cvm_state(kvm) == CVM_STATE_ACTIVE) {
+		kvm_info("cVM%d is already activated!\n", cvm->cvm_vmid);
+		return 0;
+	}
 
 	if (virtcca_cvm_state(kvm) != CVM_STATE_NEW)
 		return -EINVAL;
@@ -656,6 +801,18 @@ static int kvm_populate_ipa_cvm_range(struct kvm *kvm,
 	u64 l2_granule = cvm_granule_size(TMM_TTT_LEVEL_2);
 	phys_addr_t ipa_base1, ipa_end2;
 
+	/**
+	* if cvm comes from live migraion, mem is already maped.
+	* Set mig_state to VIRTCCA_MIG_SRC, init live migration structs.
+	*/
+	if (cvm->mig_state) {
+		if (cvm->mig_state->mig_src == VIRTCCA_MIG_DST) {
+			cvm->mig_state->mig_src = VIRTCCA_MIG_SRC;
+			kvm_info("the ipa range is populated before migraion \n");
+			return 0;
+		}
+	}
+
 	if (virtcca_cvm_state(kvm) != CVM_STATE_NEW)
 		return -EINVAL;
 	if (!IS_ALIGNED(args->populate_ipa_base1, PAGE_SIZE) ||
@@ -672,6 +829,8 @@ static int kvm_populate_ipa_cvm_range(struct kvm *kvm,
 		return -EINVAL;
 	ipa_base1 = round_down(args->populate_ipa_base1, l2_granule);
 	ipa_end2 = round_up(args->populate_ipa_base2 + args->populate_ipa_size2, l2_granule);
+
+	cvm->ipa_start = ipa_base1;
 
 	/* uefi boot, uefi image and uefi ram from 0 to 128M */
 	if (ipa_base1 == UEFI_LOADER_START) {
@@ -896,6 +1055,40 @@ static bool is_numa_ipa_range_valid(struct kvm_numa_info *numa_info)
 static inline bool is_dtb_info_has_extend_data(u64 dtb_info)
 {
 	return dtb_info & 0x1;
+}
+
+int kvm_migcvm_ioctl(struct kvm *kvm, unsigned long arg)
+{
+	struct kvm_virtcca_mig_cmd cvm_cmd;
+	int ret = 0;
+	void __user *argp = (void __user *)arg;
+
+	if (copy_from_user(&cvm_cmd, argp, sizeof(struct kvm_virtcca_mig_cmd)))
+		return -EINVAL;
+
+	if (cvm_cmd.id < KVM_CVM_MIGCVM_SET_CID || cvm_cmd.id >= KVM_CVM_MIG_STREAM_START)
+		return -EINVAL;
+
+	switch (cvm_cmd.id) {
+	case KVM_CVM_MIGCVM_SET_CID:
+		ret = virtcca_save_migvm_cid(kvm, &cvm_cmd);
+		break;
+	case KVM_CVM_MIGCVM_ATTEST:
+		ret = virtcca_migvm_agent_ratstls(kvm, &cvm_cmd);
+		break;
+	case KVM_CVM_MIGCVM_ATTEST_DST:
+		ret = virtcca_migvm_agent_ratstls_dst(kvm, &cvm_cmd);
+		break;
+	case KVM_CVM_GET_BIND_STATUS:
+		ret = virtcca_get_bind_info(kvm, &cvm_cmd);
+		break;
+	case KVM_CVM_MIG_EXPORT_ABORT:
+		ret = virtcca_mig_export_abort(kvm);
+		break;
+	default:
+		return -EINVAL;
+	}
+	return ret;
 }
 
 int kvm_load_user_data(struct kvm *kvm, unsigned long arg)
@@ -1317,6 +1510,13 @@ int kvm_cvm_map_ipa(struct kvm *kvm, phys_addr_t ipa, kvm_pfn_t pfn,
 	if (!is_virtcca_cvm_enable() || !kvm_is_realm(kvm))
 		return ret;
 
+	if (kvm->arch.virtcca_cvm->mig_state && kvm->arch.virtcca_cvm->mig_state->mig_src == VIRTCCA_MIG_SRC) {
+		if (ipa >= kvm->arch.virtcca_cvm->swiotlb_start && 
+			ipa < kvm->arch.virtcca_cvm->swiotlb_end) {
+			return ret;
+		}
+	}
+	
 	struct page *dst_page = pfn_to_page(pfn);
 	phys_addr_t dst_phys = page_to_phys(dst_page);
 

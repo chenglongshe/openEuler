@@ -70,6 +70,12 @@
 #include <linux/kvm_dirty_ring.h>
 #include <linux/virtcca_cvm_domain.h>
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+#include <asm/kvm_emulate.h>
+#include <asm/kvm_tmi.h>
+#include "virtcca_mig.h"
+#endif
+
 /* Worst case buffer size needed for holding an integer. */
 #define ITOA_MAX_LEN 12
 
@@ -1480,6 +1486,28 @@ static int kvm_alloc_dirty_bitmap(struct kvm_memory_slot *memslot)
 	return 0;
 }
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+static int virtcca_kvm_alloc_dirty_bitmap(struct kvm_memory_slot *memslot)
+{
+	unsigned long dirty_bytes = kvm_dirty_bitmap_bytes(memslot);
+	unsigned long dirty_bitmap_size = ALIGN(dirty_bytes, SZ_2M);
+	int current_node;
+
+	current_node = numa_node_id();
+	if (current_node < 0) {
+		pr_err("Failed to get current NUMA node.");
+		return -EINVAL;
+	}
+
+	memslot->dirty_bitmap = __vmalloc_node_range(dirty_bitmap_size * 2, SZ_2M, VMALLOC_START, VMALLOC_END,
+		GFP_KERNEL | __GFP_ZERO, PAGE_KERNEL, VM_ALLOW_HUGE_VMAP, current_node, __builtin_return_address(0));
+	if (!memslot->dirty_bitmap)
+		return -ENOMEM;
+
+	return 0;
+}
+#endif
+
 static struct kvm_memslots *kvm_get_inactive_memslots(struct kvm *kvm, int as_id)
 {
 	struct kvm_memslots *active = __kvm_memslots(kvm, as_id);
@@ -1703,6 +1731,16 @@ static int kvm_prepare_memory_region(struct kvm *kvm,
 	if (change != KVM_MR_DELETE) {
 		if (!(new->flags & KVM_MEM_LOG_DIRTY_PAGES))
 			new->dirty_bitmap = NULL;
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		else if (kvm_is_realm(kvm) && kvm_use_dirty_bitmap(kvm)) {
+			r = virtcca_kvm_alloc_dirty_bitmap(new);
+			if (r)
+				return r;
+			virtcca_set_tmm_memslot(kvm, new);
+			if (kvm_dirty_log_manual_protect_and_init_set(kvm))
+				bitmap_set(new->dirty_bitmap, 0, new->npages);
+		}
+#endif
 		else if (old && old->dirty_bitmap)
 			new->dirty_bitmap = old->dirty_bitmap;
 		else if (kvm_use_dirty_bitmap(kvm)) {
@@ -2241,6 +2279,12 @@ static int kvm_get_dirty_log_protect(struct kvm *kvm, struct kvm_dirty_log *log)
 
 	n = kvm_dirty_bitmap_bytes(memslot);
 	flush = false;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (!kvm_is_realm(kvm))
+		kvm->manual_dirty_log_protect = false;
+#endif
+
 	if (kvm->manual_dirty_log_protect) {
 		/*
 		 * Unlike kvm_get_dirty_log, we always return false in *flush,
@@ -2273,6 +2317,17 @@ static int kvm_get_dirty_log_protect(struct kvm *kvm, struct kvm_dirty_log *log)
 		}
 		KVM_MMU_UNLOCK(kvm);
 	}
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (kvm_is_realm(kvm)) {
+		KVM_MMU_LOCK(kvm);
+		phys_addr_t start = (memslot->base_gfn) << PAGE_SHIFT;
+		phys_addr_t end = (memslot->base_gfn + memslot->npages) << PAGE_SHIFT;
+		flush = true;
+		virtcca_enable_log_dirty(kvm, start, end);
+		KVM_MMU_UNLOCK(kvm);
+	}
+#endif
 
 	if (flush)
 		kvm_flush_remote_tlbs_memslot(kvm, memslot);
@@ -6389,6 +6444,30 @@ struct kvm_vcpu * __percpu *kvm_get_running_vcpus(void)
 {
         return &kvm_running_vcpu;
 }
+
+/*
+ * kvm_get_target_kvm - get the target kvm from vm_list using pid
+ *
+ * Returns: the target kvm struct on success, NULL if not found.
+ */
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+struct kvm *kvm_get_target_kvm(pid_t pid)
+{
+	struct kvm *kvm, *target_kvm = NULL;
+
+	mutex_lock(&kvm_lock);
+	list_for_each_entry(kvm, &vm_list, vm_list) {
+		if (kvm->userspace_pid == pid) {
+			target_kvm = kvm;
+			break;
+		}
+	}
+	mutex_unlock(&kvm_lock);
+
+	return target_kvm;
+}
+EXPORT_SYMBOL_GPL(kvm_get_target_kvm);
+#endif
 
 #ifdef CONFIG_GUEST_PERF_EVENTS
 static unsigned int kvm_guest_state(void)
