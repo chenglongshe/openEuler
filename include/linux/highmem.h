@@ -267,6 +267,61 @@ static inline void copy_highpage(struct page *to, struct page *from)
 	kunmap_atomic(vfrom);
 }
 
+#ifdef CONFIG_UCE_KERNEL_RECOVERY
+/* Return -EFAULT if there was a #MC during copy, otherwise 0 for success. */
+static inline int copy_mc_highpage(struct page *to, struct page *from)
+{
+	char *vfrom, *vto;
+	int ret;
+
+	vfrom = kmap_atomic(from);
+	vto = kmap_atomic(to);
+	ret = copy_page_cow(vto, vfrom);
+	kunmap_atomic(vto);
+	kunmap_atomic(vfrom);
+
+	return ret;
+}
+
+/* Return -EFAULT if there was a #MC during copy, otherwise 0 for success. */
+static inline int copy_mc_highpages(struct page *to, struct page *from,
+				    int nr_pages)
+{
+	int ret = 0;
+	int i;
+
+	for (i = 0; i < nr_pages; i++) {
+		cond_resched();
+		ret = copy_mc_highpage(to + i, from + i);
+		if (ret)
+			return -EFAULT;
+	}
+
+	return ret;
+}
+#else
+static inline int copy_mc_highpage(struct page *to, struct page *from)
+{
+	copy_highpage(to, from);
+
+	return 0;
+}
+
+/* Return -EFAULT if there was a #MC during copy, otherwise 0 for success. */
+static inline int copy_mc_highpages(struct page *to, struct page *from,
+				    int nr_pages)
+{
+	int i;
+
+	for (i = 0; i < nr_pages; i++) {
+		cond_resched();
+		(void)copy_mc_highpage(to + i, from + i);
+	}
+
+	return 0;
+}
+#endif
+
 #endif
 
 #endif /* _LINUX_HIGHMEM_H */
