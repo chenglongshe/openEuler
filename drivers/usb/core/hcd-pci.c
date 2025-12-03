@@ -63,12 +63,10 @@ static void for_each_companion(struct pci_dev *pdev, struct usb_hcd *hcd,
 			continue;
 
 		drv = companion->driver;
-		if (!drv)
-			continue;
-
-		if (strncmp(drv->name, "uhci_hcd", sizeof("uhci_hcd") - 1) &&
-			strncmp(drv->name, "ohci-pci", sizeof("ohci-pci") - 1) &&
-			strncmp(drv->name, "ehci-pci", sizeof("ehci-pci") - 1))
+		if (drv &&
+		    strncmp(drv->name, "uhci_hcd", sizeof("uhci_hcd") - 1) &&
+		    strncmp(drv->name, "ohci-pci", sizeof("ohci-pci") - 1) &&
+		    strncmp(drv->name, "ehci-pci", sizeof("ehci-pci") - 1))
 			continue;
 
 		/*
