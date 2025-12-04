@@ -877,4 +877,12 @@
 #define MSR_VM_IGNNE                    0xc0010115
 #define MSR_VM_HSAVE_PA                 0xc0010117
 
+#define MSR_PAUSEOPT_CONTROL			0x187f
+
+/*
+ * The time field is bit[31:2], but representing a 32bit value with
+ * bit[1:0] zero.
+ */
+#define MSR_PAUSEOPT_CONTROL_TIME_MASK		(~0x03U)
+
 #endif /* _ASM_X86_MSR_INDEX_H */

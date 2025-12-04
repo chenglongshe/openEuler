@@ -128,6 +128,10 @@ static void early_init_centaur(struct cpuinfo_x86 *c)
 		if (edx & (1U << 28))
 			c->x86_coreid_bits = get_count_order((ebx >> 16) & 0xff);
 	}
+
+        if ((cpuid_eax(0xC0000000) >= 0xC0000006) && (cpuid_eax(0xC0000006) & 0x1))
+                setup_force_cpu_cap(X86_FEATURE_PAUSEOPT);
+
 	if (detect_extended_topology_early(c) < 0)
 		detect_ht_early(c);
 }
