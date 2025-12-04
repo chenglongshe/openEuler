@@ -785,7 +785,8 @@ struct kvm_cpuid_param {
 
 static bool is_centaur_cpu(const struct kvm_cpuid_param *param)
 {
-	return boot_cpu_data.x86_vendor == X86_VENDOR_CENTAUR;
+	return boot_cpu_data.x86_vendor == X86_VENDOR_CENTAUR ||
+	       boot_cpu_data.x86_vendor == X86_VENDOR_ZHAOXIN;
 }
 
 static bool sanity_check_entries(struct kvm_cpuid_entry2 __user *entries,
