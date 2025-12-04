@@ -29,6 +29,8 @@
 #define MAX_TOKEN_GRANULE_COUNT    (2U)
 #define CHALLENGE_SIZE             (64U)
 
+#define MAX_BIND_VM                (256U)
+
 struct virtcca_cvm_measurement {
 	int index;
 	unsigned char value[MAX_MEASUREMENT_SIZE];
@@ -75,5 +77,33 @@ struct virtcca_device_cert {
 #define TMM_GET_ATTESTATION_TOKEN _IOWR(TSI_MAGIC, 1, struct virtcca_cvm_attestation_cmd)
 
 #define TMM_GET_DEVICE_CERT _IOR(TSI_MAGIC, 2, struct virtcca_device_cert)
+
+typedef struct pending_guest_rd_s {
+    uint64_t guest_rd[MAX_BIND_VM];
+} pending_guest_rd_t;
+
+typedef struct migration_info {
+    uint8_t msk[32];
+    uint8_t rand_iv[32];
+	uint8_t tag[16];
+	pending_guest_rd_t *pending_guest_rds;
+    unsigned short slot_status;
+    bool is_src;
+} migration_info_t;
+
+typedef struct virtcca_migvm_info {
+	enum ops {
+		OP_MIGRATE_GET_ATTR = 0,
+		OP_MIGRATE_SET_SLOT,
+		OP_MIGRATE_PEEK_RDS
+	} ops;
+	void *content;    /* if ops == OP_MIGRATE_GET_ATTR, the size is sizeof(content) */
+	unsigned long long guest_rd;  /* if ops == OP_MIGRATE_SET_SLOT, the size is sizeof(guest_rd) */
+	unsigned long size;
+} virtcca_migvm_info_t;
+
+#define TMM_GET_MIGRATION_INFO _IOWR(TSI_MAGIC, 3, struct virtcca_migvm_info)
+
+#define TMM_GET_MIGVM_MEM_CHECKSUM _IOW(TSI_MAGIC, 4, unsigned long)
 
 #endif  /* __ASM_VIRTCCA_CVM_TSI_H_ */

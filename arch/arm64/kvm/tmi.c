@@ -404,3 +404,167 @@ u64 tmi_dev_destroy(u64 dev_num, u64 clean)
 	arm_smccc_1_1_smc(TMI_TMM_DEV_DESTROY, dev_num, clean, &res);
 	return res.a1;
 }
+
+/* additional TMI call for migration */
+u64 tmi_get_mig_config(void)
+{
+	struct arm_smccc_res res;
+
+	/* calculate the max number of these pages(rd,vcpu) */
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_GET_MIG_CONFIG, &res);
+	return res.a1;
+}
+
+u64 tmi_mig_stream_create(u64 rd, u64 numa_set)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_STREAM_CREATE, rd, numa_set, &res);
+	return res.a1;
+}
+
+u64 tmi_set_tmm_memslot(uint64_t rd, uint64_t mig_memslot_param)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_SET_TMM_MEMSLOT, rd, mig_memslot_param, &res);
+	return res.a1;
+}
+
+u64 tmi_update_cvm_info(uint64_t rd, uint64_t cvm_update_info_addr)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_UPDATE_CVM_INFO, rd, __pa(cvm_update_info_addr), &res);
+	return res.a1;
+}
+
+struct arm_smccc_res tmi_mem_region_protect(u64 rd, u64 start, u64 end)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_MEM_REGION_PROTECT, rd, start, end, &res);
+	return res;
+}
+
+u64 tmi_import_commit(uint64_t rd)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_IMPORT_COMMIT, rd, &res);
+	return res.a1;
+}
+
+u64 tmi_dump_checksum(uint64_t rd, uint64_t gpa_list_addr, uint64_t crc_result_addr, uint64_t granularity)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_DUMP_CHECKSUM, rd, gpa_list_addr, crc_result_addr, granularity, &res);
+	return res.a1;
+}
+
+u64 tmi_export_abort(uint64_t rd)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_EXPORT_ABORT, rd, &res);
+	return res.a1;
+}
+
+struct arm_smccc_res tmi_export_immutable(uint64_t rd, uint64_t hpa_and_size_pa,
+										uint64_t page_or_list, uint64_t mig_cmd)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_EXPORT_IMMUTABLE, rd, hpa_and_size_pa,
+					page_or_list, mig_cmd, &res);
+	return res;
+}
+
+u64 tmi_import_immutable(uint64_t rd, uint64_t hpa_and_size_pa,
+						uint64_t page_or_list, uint64_t mig_cmd)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_IMPORT_IMMUTABLE, rd, hpa_and_size_pa, page_or_list, mig_cmd, &res);
+	return res.a1;
+}
+
+u64 tmi_export_track(uint64_t rd, uint64_t hpa_and_size_pa, uint64_t mig_cmd)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_EXPORT_TRACK, rd, hpa_and_size_pa, mig_cmd, &res);
+	return res.a1;
+}
+
+u64 tmi_import_track(uint64_t rd, uint64_t hpa_and_size_pa, uint64_t mig_cmd)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_IMPORT_TRACK, rd, hpa_and_size_pa, mig_cmd, &res);
+	return res.a1;
+}
+
+struct arm_smccc_res tmi_import_mem(uint64_t rd, uint64_t mig_mem_param)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_IMPORT_MEM, rd, mig_mem_param, &res);
+	return res;
+}
+
+struct arm_smccc_res tmi_export_mem(uint64_t rd, uint64_t mig_mem_param)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_EXPORT_MEM, rd, mig_mem_param, &res);
+	return res;
+}
+
+struct arm_smccc_res tmi_export_tec(u64 tec_pa, u64 mbmd_addr_and_size, u64 page_list_pa, u64 stream_info_pa)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_EXPORT_TEC, tec_pa, mbmd_addr_and_size, page_list_pa, stream_info_pa, &res);
+	return res;
+}
+
+u64 tmi_import_tec(u64 tec_pa, u64 mbmd_addr_and_size, u64 page_list_pa, u64 stream_info_pa)
+{
+	struct arm_smccc_res res;
+
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_IMPORT_TEC, tec_pa, mbmd_addr_and_size, page_list_pa, stream_info_pa, &res);
+	return res.a1;
+}
+
+struct arm_smccc_res tmi_is_zero_page(uint64_t rd, uint64_t gpa_list_info_val)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_IS_ZERO_PAGE, rd, gpa_list_info_val, &res);
+	return res;
+}
+
+struct arm_smccc_res tmi_import_zero_page(uint64_t rd, uint64_t gpa_list_info_val)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_DATA, TMI_TMM_MIG_IMPORT_ZERO_PAGE, rd, gpa_list_info_val, &res);
+	return res;
+}
+
+struct arm_smccc_res tmi_export_pause(uint64_t rd)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_CONTROL, TMI_TMM_MIG_EXPORT_PAUSE, rd, &res);
+	return res;
+}
+
+u64 tmi_bind_clean(uint64_t rd)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_ATTESTATION, TMI_TMM_MIG_BIND_CLEAN, rd, &res);
+	return res.a1;
+}
+struct arm_smccc_res tmi_bind_peek(uint64_t rd)
+{
+	struct arm_smccc_res res;
+	arm_smccc_1_1_smc(TMI_TMM_MIG_ATTESTATION, TMI_TMM_MIG_BIND_PEEK, rd, &res);
+	return res;
+}
