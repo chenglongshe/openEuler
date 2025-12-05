@@ -1239,6 +1239,22 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,
 
 	lockdep_assert_held_write(&kvm->mmu_lock);
 
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (kvm_is_realm(kvm)) {
+		struct virtcca_cvm *cvm = kvm->arch.virtcca_cvm;
+
+		if (end <= cvm->ipa_start || start >= cvm->ipa_start + cvm->ram_size)
+			goto handle_ns_mem;
+
+		if (start >= cvm->swiotlb_end || end <= cvm->swiotlb_start)
+			return;
+		start = (start < cvm->swiotlb_start) ? cvm->swiotlb_start : start;
+		end = (end < cvm->swiotlb_end) ? end : cvm->swiotlb_end;
+	}
+
+handle_ns_mem:
+#endif
+
 	stage2_wp_range(&kvm->arch.mmu, start, end);
 
 	/*
