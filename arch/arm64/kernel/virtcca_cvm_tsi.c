@@ -26,7 +26,7 @@ static int tmm_get_set_migration_info(struct virtcca_migvm_info __user *arg);
 static int tmm_migvm_mem_checksum_loop(unsigned long rd);
 
 static const struct file_operations tmm_tsi_fops = {
-	.owner		  = THIS_MODULE,
+	.owner          = THIS_MODULE,
 	.unlocked_ioctl = tmm_tsi_ioctl
 };
 
