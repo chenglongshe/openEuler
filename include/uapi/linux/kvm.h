@@ -1499,6 +1499,8 @@ enum kvm_device_type {
 #define KVM_DEV_TYPE_ARM_PV_TIME	KVM_DEV_TYPE_ARM_PV_TIME
 	KVM_DEV_TYPE_RISCV_AIA,
 #define KVM_DEV_TYPE_RISCV_AIA		KVM_DEV_TYPE_RISCV_AIA
+	KVM_DEV_TYPE_VIRTCCA_MIG_STREAM = 0x00C,
+#define KVM_DEV_TYPE_VIRTCCA_MIG_STREAM		KVM_DEV_TYPE_VIRTCCA_MIG_STREAM
 	KVM_DEV_TYPE_LOONGARCH_IPI,
 #define KVM_DEV_TYPE_LOONGARCH_IPI	KVM_DEV_TYPE_LOONGARCH_IPI
 	KVM_DEV_TYPE_LOONGARCH_EIOINTC,
@@ -1772,6 +1774,9 @@ struct kvm_enc_region {
 	__u64 addr;
 	__u64 size;
 };
+
+/*virtcca migration*/
+#define KVM_CVM_MIG_IOCTL _IOWR(KVMIO, 0xf2, struct kvm_virtcca_mig_cmd)
 
 #define KVM_MEMORY_ENCRYPT_REG_REGION    _IOR(KVMIO, 0xbb, struct kvm_enc_region)
 #define KVM_MEMORY_ENCRYPT_UNREG_REGION  _IOR(KVMIO, 0xbc, struct kvm_enc_region)
