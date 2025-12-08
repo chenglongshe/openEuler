@@ -22,6 +22,10 @@
 #define DAMON_MIN_REGION 1
 #endif
 
+#ifdef CONFIG_DAMON_AUTO_TUNING
+#include "auto-tuning.h"
+#endif
+
 static DEFINE_MUTEX(damon_lock);
 static int nr_running_ctxs;
 static bool running_exclusive_ctxs;
@@ -430,7 +434,9 @@ struct damon_target *damon_new_target(void)
 	t->nr_regions = 0;
 	INIT_LIST_HEAD(&t->regions_list);
 	INIT_LIST_HEAD(&t->list);
-
+#ifdef CONFIG_DAMON_AUTO_TUNING
+	t->priority = 0;
+#endif
 	return t;
 }
 
@@ -1479,6 +1485,10 @@ static int kdamond_fn(void *data)
 		unsigned long next_aggregation_sis = ctx->next_aggregation_sis;
 		unsigned long next_ops_update_sis = ctx->next_ops_update_sis;
 		unsigned long sample_interval = ctx->attrs.sample_interval;
+
+#ifdef CONFIG_DAMON_AUTO_TUNING
+		kdamond_targets_auto_tuning(ctx);
+#endif
 
 		if (kdamond_wait_activation(ctx))
 			break;
