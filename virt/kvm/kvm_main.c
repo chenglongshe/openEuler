@@ -1703,6 +1703,13 @@ static int kvm_prepare_memory_region(struct kvm *kvm,
 	if (change != KVM_MR_DELETE) {
 		if (!(new->flags & KVM_MEM_LOG_DIRTY_PAGES))
 			new->dirty_bitmap = NULL;
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+		else if (kvm_check_realm(kvm) && kvm_use_dirty_bitmap(kvm)) {
+			r = virtcca_kvm_prepare_dirty_bitmap(kvm, (void *)new);
+			if (r)
+				return r;
+		}
+#endif
 		else if (old && old->dirty_bitmap)
 			new->dirty_bitmap = old->dirty_bitmap;
 		else if (kvm_use_dirty_bitmap(kvm)) {
@@ -2241,6 +2248,12 @@ static int kvm_get_dirty_log_protect(struct kvm *kvm, struct kvm_dirty_log *log)
 
 	n = kvm_dirty_bitmap_bytes(memslot);
 	flush = false;
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	if (!kvm_check_realm(kvm))
+		kvm->manual_dirty_log_protect = false;
+#endif
+
 	if (kvm->manual_dirty_log_protect) {
 		/*
 		 * Unlike kvm_get_dirty_log, we always return false in *flush,
@@ -2273,6 +2286,10 @@ static int kvm_get_dirty_log_protect(struct kvm *kvm, struct kvm_dirty_log *log)
 		}
 		KVM_MMU_UNLOCK(kvm);
 	}
+
+#ifdef CONFIG_HISI_VIRTCCA_HOST
+	virtcca_kvm_enable_log_dirty(kvm, (void *)memslot, &flush);
+#endif
 
 	if (flush)
 		kvm_flush_remote_tlbs_memslot(kvm, memslot);
