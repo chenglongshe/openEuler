@@ -311,8 +311,10 @@ static int klp_resolve_symbols(Elf_Shdr *sechdrs, const char *strtab,
 #endif
 	Elf_Sym *sym;
 	unsigned long sympos, addr;
+	long ref_offset;
 	bool sym_vmlinux;
 	bool sec_vmlinux = !strcmp(sec_objname, "vmlinux");
+	bool new_style;
 
 	/*
 	 * Since the field widths for sym_objname and sym_name in the sscanf()
@@ -340,10 +342,19 @@ static int klp_resolve_symbols(Elf_Shdr *sechdrs, const char *strtab,
 			return -EINVAL;
 		}
 
-		/* Format: .klp.sym.sym_objname.sym_name,sympos */
-		cnt = sscanf(strtab + sym->st_name,
-			     ".klp.sym.%55[^.].%127[^,],%lu",
-			     sym_objname, sym_name, &sympos);
+		new_style = !!strchr(strtab + sym->st_name, '-');
+		if (likely(!new_style)) {
+			/* Format: .klp.sym.sym_objname.sym_name,sympos */
+			cnt = sscanf(strtab + sym->st_name,
+				".klp.sym.%55[^.].%127[^,],%lu",
+				sym_objname, sym_name, &sympos);
+		} else {
+			/* Format: .klp.sym.sym_objname-ref_name,ref_offset */
+			cnt = sscanf(strtab + sym->st_name,
+				".klp.sym.%55[^-]-%127[^,],%ld",
+				sym_objname, sym_name, &ref_offset);
+		}
+
 		if (cnt != 3) {
 			pr_err("symbol %s has an incorrectly formatted name\n",
 			       strtab + sym->st_name);
@@ -364,11 +375,21 @@ static int klp_resolve_symbols(Elf_Shdr *sechdrs, const char *strtab,
 			return -EINVAL;
 		}
 
-		/* klp_find_object_symbol() treats a NULL objname as vmlinux */
-		ret = klp_find_object_symbol(sym_vmlinux ? NULL : sym_objname,
-					     sym_name, sympos, &addr);
-		if (ret)
-			return ret;
+		if (likely(!new_style)) {
+			/* klp_find_object_symbol() treats a NULL objname as vmlinux */
+			ret = klp_find_object_symbol(sym_vmlinux ? NULL : sym_objname,
+						     sym_name, sympos, &addr);
+			if (ret)
+				return ret;
+		} else {
+			addr = kallsyms_lookup_name(sym_name);
+			if (!addr) {
+				pr_err("can not get %s's address\n", sym_name);
+				return -EINVAL;
+			}
+
+			addr += ref_offset;
+		}
 
 		sym->st_value = addr;
 	}
