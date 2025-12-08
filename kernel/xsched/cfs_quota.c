@@ -26,6 +26,10 @@ static void xsched_group_unthrottle(struct xsched_group *xg)
 
 	for_each_active_xcu(xcu, id) {
 		mutex_lock(&xcu->xcu_lock);
+		if (READ_ONCE(xg->is_offline)) {
+			mutex_unlock(&xcu->xcu_lock);
+			return;
+		}
 		if (!READ_ONCE(xg->perxcu_priv[id].xse.on_rq)) {
 			enqueue_ctx(&xg->perxcu_priv[id].xse, xcu);
 			wake_up_interruptible(&xcu->wq_xcu_idle);
@@ -106,6 +110,9 @@ void xsched_quota_timeout_update(struct xsched_group *xg)
 	struct hrtimer *t = &xg->quota_timeout;
 
 	hrtimer_cancel(t);
+
+	if (READ_ONCE(xg->is_offline))
+		return;
 
 	if (xg->quota > 0 && xg->period > 0)
 		hrtimer_start(t, ns_to_ktime(xg->period), HRTIMER_MODE_REL_SOFT);
