@@ -44,6 +44,4 @@ union hdcheader {
 	} head;
 	u32 dw0;
 };
-
 #endif
-

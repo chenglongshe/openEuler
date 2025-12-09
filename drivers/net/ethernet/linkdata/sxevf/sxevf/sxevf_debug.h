@@ -24,4 +24,3 @@ void sxevf_dump_skb(struct sk_buff *skb);
 #endif
 
 #endif
-

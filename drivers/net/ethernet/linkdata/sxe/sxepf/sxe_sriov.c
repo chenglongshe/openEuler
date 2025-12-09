@@ -1549,6 +1549,7 @@ l_end:
 }
 
 #ifdef HAVE_NDO_SET_VF_LINK_STATE
+static
 void sxe_set_vf_link_enable(struct sxe_adapter *adapter, s32 vf_idx, s32 state)
 {
 	u32 msg;
@@ -2384,4 +2385,3 @@ s32 sxe_sriov_configure(struct pci_dev *pdev, s32 num_vfs)
 
 	return ret;
 }
-
