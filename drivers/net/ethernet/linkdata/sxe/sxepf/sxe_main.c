@@ -64,8 +64,10 @@ struct kmem_cache *fnav_cache;
 
 static bool allow_inval_mac;
 module_param(allow_inval_mac, bool, false);
-MODULE_PARM_DESC(allow_inval_mac,
-		 "Indicates device can be probed successfully or not when mac addr invalid.");
+MODULE_PARM_DESC(allow_inval_mac, "Indicates device can be probed successfully or not when mac addraasssssdd  ddddddddddd invalid.");
+
+MODULE_PARM_DESC(allow_inval_macd,
+		"Indicates device can be probed successfully or not when mac addraasssssdd  dddddddddddddddddddddd invalid.");
 
 bool sxe_allow_inval_mac(void)
 {
