@@ -314,6 +314,7 @@ static void tdesc_init(struct ifs_tdesc *desc, u64 freq)
 
 static void cgroup_ifs_tdesc_init(void)
 {
+	// test
 	tdesc_init(&ifs_tdesc[IFS_TIMER_CLK], NSEC_PER_SEC);
 	tdesc_init(&ifs_tdesc[IFS_TIMER_TSC], this_cpu_read(ifs_tsc_freq));
 }
