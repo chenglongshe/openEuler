@@ -21,6 +21,14 @@
 #include "ubcore_genl.h"
 #include "ubcm/ub_cm.h"
 
+#define UBCORE_LOG_FILE_PERMISSION (0644)
+
+module_param(g_ubcore_log_level, uint, UBCORE_LOG_FILE_PERMISSION);
+MODULE_PARM_DESC(g_ubcore_log_level, " 3: ERR, 4: WARNING, 6: INFO, 7: DEBUG");
+
+module_param(g_ubcore_connect_type, uint, UBCORE_LOG_FILE_PERMISSION);
+MODULE_PARM_DESC(g_ubcore_connect_type, " 0: WK-JETTY, 1: SOCK");
+
 static int __init ubcore_init(void)
 {
 	int ret;
