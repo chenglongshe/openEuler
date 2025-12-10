@@ -63,7 +63,14 @@ static inline struct xsched_entity_cfs *
 xs_pick_first(struct xsched_rq_cfs *cfs_rq)
 {
 	struct xsched_entity_cfs *xse_cfs;
-	struct rb_node *left = rb_first_cached(&cfs_rq->ctx_timeline);
+	struct rb_node *left;
+
+	if (!cfs_rq) {
+		XSCHED_WARN("the rq cannot be NULL @ %s\n", __func__);
+		return NULL;
+	}
+
+	left = rb_first_cached(&cfs_rq->ctx_timeline);
 
 	if (!left)
 		return NULL;
@@ -82,7 +89,7 @@ static void xs_update(struct xsched_entity_cfs *xse_cfs, u64 delta)
 	struct xsched_group_xcu_priv *xg = xse_parent_grp_xcu(xse_cfs);
 
 	for (; xg; xse_cfs = &xg->xse.cfs, xg = &xcg_parent_grp_xcu(xg)) {
-		u64 new_xrt = xse_cfs->xruntime + delta * xse_cfs->weight;
+		u64 new_xrt = xse_cfs->xruntime + xs_calc_delta_fair(delta, xse_cfs->weight);
 
 		xs_cfs_rq_update(xse_cfs, new_xrt);
 		xse_cfs->sum_exec_runtime += delta;
@@ -108,7 +115,8 @@ static void xg_update(struct xsched_group_xcu_priv *xg, int task_delta)
 		xg->cfs_rq->nr_running += task_delta;
 		entry = xs_pick_first(xg->cfs_rq);
 		if (entry)
-			new_xrt = xg->xse.cfs.sum_exec_runtime * xg->xse.cfs.weight;
+			new_xrt = xs_calc_delta_fair(xg->xse.cfs.sum_exec_runtime,
+					xg->xse.cfs.weight);
 		else
 			new_xrt = XSCHED_TIME_INF;
 
@@ -159,12 +167,25 @@ static void enqueue_ctx_fair(struct xsched_entity *xse, struct xsched_cu *xcu)
 {
 	int task_delta;
 	struct xsched_entity_cfs *first;
-	struct xsched_rq_cfs *rq;
+	struct xsched_rq_cfs *rq, *sub_rq;
 	struct xsched_entity_cfs *xse_cfs = &xse->cfs;
 
 	rq = xse_cfs->cfs_rq = xse_parent_grp_xcu(xse_cfs)->cfs_rq;
+	if (!rq) {
+		XSCHED_WARN("the parent rq this xse [%d] attached cannot be NULL @ %s\n",
+			xse->tgid, __func__);
+		return;
+	}
+
+	sub_rq = xse_this_grp_xcu(xse_cfs)->cfs_rq;
+	if (xse->is_group && !sub_rq) {
+		XSCHED_WARN("the sub_rq this cgroup-type xse [%d] owned cannot be NULL @ %s\n",
+			xse->tgid, __func__);
+		return;
+	}
+
 	task_delta =
-		(xse->is_group) ? xse_this_grp_xcu(xse_cfs)->cfs_rq->nr_running : 1;
+		(xse->is_group) ? sub_rq->nr_running : 1;
 
 	/* If no XSE or only empty groups */
 	if (xs_pick_first(rq) == NULL || rq->min_xruntime == XSCHED_TIME_INF)

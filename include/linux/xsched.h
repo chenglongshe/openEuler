@@ -7,6 +7,7 @@
 #include <linux/vstream.h>
 #include <linux/xcu_group.h>
 #include <linux/xsched_types.h>
+#include <linux/math64.h>
 
 #ifndef pr_fmt
 #define pr_fmt(fmt) fmt
@@ -268,8 +269,7 @@ struct xsched_group {
 	int prio;
 
 	/* Bandwidth setting: shares value set by user */
-	u64 shares_cfg;
-	u64 shares_cfg_red;
+	u32 shares_cfg;
 	u32 weight;
 	u64 children_shares_sum;
 
@@ -296,6 +296,8 @@ struct xsched_group {
 	/* to control the xcu.{period, quota, shares} files shown or not */
 	struct cgroup_file xcu_file[NR_XCU_FILE_TYPES];
 	struct work_struct file_show_work;
+
+	bool is_offline;
 };
 #endif /* CONFIG_CGROUP_XCU */
 
@@ -326,7 +328,7 @@ xse_this_grp(struct xsched_entity_cfs *xse_cfs)
 }
 #endif /* CONFIG_CGROUP_XCU */
 
-static inline int xse_integrity_check(const struct xsched_entity *xse)
+static inline int xse_integrity_check(struct xsched_entity *xse)
 {
 	if (!xse) {
 		XSCHED_ERR("xse is null @ %s\n", __func__);
@@ -335,6 +337,13 @@ static inline int xse_integrity_check(const struct xsched_entity *xse)
 
 	if (!xse->class) {
 		XSCHED_ERR("xse->class is null @ %s\n", __func__);
+		return -EINVAL;
+	}
+
+	if (xse->is_group && !xse_this_grp_xcu(&xse->cfs)->cfs_rq) {
+		// Can only be in the free process
+		XSCHED_ERR("the sub_rq this cgroup-type xse [%d] owned cannot be NULL @ %s\n",
+			xse->tgid, __func__);
 		return -EINVAL;
 	}
 
@@ -454,7 +463,10 @@ int delete_ctx(struct xsched_context *ctx);
 void xsched_group_inherit(struct task_struct *tsk, struct xsched_entity *xse);
 void xcu_cg_subsys_init(void);
 void xcu_cfs_root_cg_init(struct xsched_cu *xcu);
-void xcu_grp_shares_update(struct xsched_group *parent);
+void xcu_grp_shares_update(struct xsched_group *parent,
+	struct xsched_group *child, u32 shares_cfg);
+void xcu_grp_shares_add(struct xsched_group *parent, struct xsched_group *child);
+void xcu_grp_shares_sub(struct xsched_group *parent, struct xsched_group *child);
 void xsched_group_xse_detach(struct xsched_entity *xse);
 
 void xsched_quota_init(void);
@@ -474,5 +486,21 @@ void xsched_quota_refill(struct work_struct *work);
 #define SCHED_CLASS_MAX_LENGTH 4
 
 #endif
+
+static inline u64 xs_calc_delta(u64 delta_exec, u32 base_weight, u32 weight)
+{
+	if (unlikely(weight == 0))
+		weight = 1;
+
+	if (weight == base_weight)
+		return delta_exec;
+
+	return mul_u64_u32_div(delta_exec, base_weight, weight);
+}
+
+static inline u64 xs_calc_delta_fair(u64 delta_exec, u32 weight)
+{
+	return xs_calc_delta(delta_exec, XSCHED_CFG_SHARE_DFLT, weight);
+}
 
 #endif /* !__LINUX_XSCHED_H__ */
