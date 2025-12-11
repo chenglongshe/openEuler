@@ -425,7 +425,10 @@ int zxdh_manager_init(struct zxdh_pci_f *rf,
 	rf->base_bar_offset = dh_mgr->param.bar_offset;
 	zxdh_init_hw_bar_pages(rf->sc_dev.ep_id, &rf->base_bar_offset);
 	rf->hw.hw_addr = cdev_info->hw_addr + rf->base_bar_offset;
-    pr_info("rf->hw.hw_addr=0x%llx, cdev_info->hw_addr=0x%llx, rf->base_bar_offset=0x%llx\n", (u64)rf->hw.hw_addr, (u64)cdev_info->hw_addr, rf->base_bar_offset);
+    pr_info("rf->hw.hw_addr=0x%llx, cdev_info->hw_addr=0x%llx, rf->base_bar_offset=0x%llx\n",
+	    (u64)(uintptr_t)rf->hw.hw_addr,
+	    (u64)(uintptr_t)cdev_info->hw_addr,
+	    rf->base_bar_offset);
 
 	ret = zxdh_sc_init_hmccnt(rf, &dh_mgr->param);
 	if (ret != 0) {
@@ -621,7 +624,7 @@ int zxdh_rdma_reg_read(struct zxdh_pci_f *rf, uint64_t phy_addr,
 	in.src = rf->ftype == 0 ? MSG_CHAN_END_PF : MSG_CHAN_END_VF;
 	in.dst = MSG_CHAN_END_RISC;
 	in.event_id = MODULE_RDMA;
-	in.virt_addr = (u64)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
+	in.virt_addr = (u64)(uintptr_t)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
 	in.src_pcieid = mgr.pcie_id;
 
 	// resv buffer preparation
@@ -732,7 +735,7 @@ int zxdh_rdma_regs_read(struct zxdh_pci_f *rf, uint64_t phy_addr,
 	in.src = rf->ftype == 0 ? MSG_CHAN_END_PF : MSG_CHAN_END_VF;
 	in.dst = MSG_CHAN_END_RISC;
 	in.event_id = MODULE_RDMA;
-	in.virt_addr = (u64)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
+	in.virt_addr = (u64)(uintptr_t)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
 	in.src_pcieid = mgr.pcie_id;
 
 	// resv buffer preparation
@@ -845,7 +848,7 @@ int zxdh_rdma_reg_write(struct zxdh_pci_f *rf, uint64_t phy_addr, uint32_t val)
 	in.src = rf->ftype == 0 ? MSG_CHAN_END_PF : MSG_CHAN_END_VF;
 	in.dst = MSG_CHAN_END_RISC;
 	in.event_id = MODULE_RDMA;
-	in.virt_addr = (u64)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
+	in.virt_addr = (u64)(uintptr_t)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
 	in.src_pcieid = mgr.pcie_id;
 
 	// resv buffer preparation
@@ -947,7 +950,7 @@ int zxdh_mp_dtcm_para_get(struct zxdh_pci_f *rf, uint16_t mcode_type,
 	in.src = rf->ftype == 0 ? MSG_CHAN_END_PF : MSG_CHAN_END_VF;
 	in.dst = MSG_CHAN_END_RISC;
 	in.event_id = MODULE_RDMA;
-	in.virt_addr = (u64)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
+	in.virt_addr = (u64)(uintptr_t)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
 	in.src_pcieid = mgr.pcie_id;
 
 	// resv buffer preparation
@@ -1050,7 +1053,7 @@ int zxdh_mp_dtcm_para_set(struct zxdh_pci_f *rf, uint16_t mcode_type,
 	in.src = rf->ftype == 0 ? MSG_CHAN_END_PF : MSG_CHAN_END_VF;
 	in.dst = MSG_CHAN_END_RISC;
 	in.event_id = MODULE_RDMA;
-	in.virt_addr = (u64)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
+	in.virt_addr = (u64)(uintptr_t)cdev_info->hw_addr + ZXDH_BAR_CHAN_OFFSET;
 	in.src_pcieid = mgr.pcie_id;
 
 	// resv buffer preparation

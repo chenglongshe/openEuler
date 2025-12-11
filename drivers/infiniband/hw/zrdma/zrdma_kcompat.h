@@ -167,9 +167,6 @@ int zxdh_get_eth_speed(struct ib_device *dev, struct net_device *netdev,
 #endif
 
 #ifdef Z_DH_DEBUG
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
-#define Z_DH_DEBUG_OPEN /* Combining Z_DH_DEBUG_OPEN and Z_DH_DEBUG for use */
-#endif
 #endif /* Z_DH_DEBUG */
 
 #define kc_set_driver_id(x)
@@ -379,11 +376,6 @@ int zxdh_query_gid(struct ib_device *ibdev, u32 port, int index,
 
 int zxdh_query_qpc(struct zxdh_sc_qp *qp, struct zxdh_dma_mem *qpc_buf);
 void zxdh_print_hw_qpc(__le64 *qp_ctx);
-#ifdef Z_DH_DEBUG_OPEN
-int zxdh_query_cqc(struct zxdh_sc_cq *cq);
-int zxdh_query_ceqc(struct zxdh_sc_ceq *ceq);
-int zxdh_query_aeqc(struct zxdh_sc_aeq *aeq);
-#endif
 
 #ifdef GET_LINK_LAYER_V2
 enum rdma_link_layer zxdh_get_link_layer(struct ib_device *ibdev, u32 port_num);

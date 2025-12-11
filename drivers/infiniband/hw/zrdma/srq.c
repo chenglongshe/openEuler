@@ -699,9 +699,6 @@ int zxdh_modify_srq(struct ib_srq *ibsrq, struct ib_srq_attr *attr,
 	struct zxdh_cqp_request *cqp_request;
 	struct cqp_cmds_info *cqp_info;
 	struct zxdh_pci_f *rf = iwdev->rf;
-#ifdef Z_DH_DEBUG_OPEN
-	//int err_code;
-#endif
 	/* We don't support resizing SRQs yet */
 	if (attr_mask & IB_SRQ_MAX_WR)
 		return -EINVAL;
@@ -724,9 +721,6 @@ int zxdh_modify_srq(struct ib_srq *ibsrq, struct ib_srq_attr *attr,
 
 	zxdh_handle_cqp_op(rf, cqp_request);
 	zxdh_put_cqp_request(&rf->cqp, cqp_request);
-#ifdef Z_DH_DEBUG_OPEN
-	//err_code = zxdh_query_srqc(&iwsrq->sc_srq, NULL);
-#endif
 	return 0;
 }
 
@@ -1050,57 +1044,6 @@ int zxdh_sc_srq_destroy(struct zxdh_sc_srq *srq, u64 scratch, bool post_sq)
 	return 0;
 }
 
-#ifdef Z_DH_DEBUG_OPEN
-static void zxdh_print_hw_srqc(__le64 *srq_ctx)
-{
-	u64 temp;
-
-	get_64bit_val(srq_ctx, 0, &temp);
-	pr_info("Sw Wqe cnt:0x%llx\n", FIELD_GET(GENMASK_ULL(15, 0), temp));
-	pr_info("list virtually mapped:0x%llx\n", FIELD_GET(BIT_ULL(21), temp));
-	pr_info("list leaf pbl size:0x%llx\n",
-		FIELD_GET(GENMASK_ULL(23, 22), temp));
-	pr_info("log srq stride:0x%llx\n",
-		FIELD_GET(GENMASK_ULL(26, 24), temp));
-	pr_info("srq axi err sig:0x%llx\n", FIELD_GET(BIT_ULL(27), temp));
-	pr_info("srq virtually mapped:0x%llx\n", FIELD_GET(BIT_ULL(29), temp));
-	pr_info("cont srq:0x%llx\n", FIELD_GET(BIT_ULL(30), temp));
-	pr_info("pd index:0x%llx\n", FIELD_GET(GENMASK_ULL(51, 32), temp));
-	pr_info("log srq size:0x%llx\n", FIELD_GET(GENMASK_ULL(59, 56), temp));
-	pr_info("leaf pbl size:0x%llx\n", FIELD_GET(GENMASK_ULL(61, 60), temp));
-	pr_info("state:0x%llx\n", FIELD_GET(GENMASK_ULL(63, 62), temp));
-
-	get_64bit_val(srq_ctx, 8, &temp);
-	pr_info("srq address:0x%llx\n", FIELD_GET(GENMASK_ULL(63, 0), temp));
-
-	get_64bit_val(srq_ctx, 16, &temp);
-	pr_info("srq list address:0x%llx\n",
-		FIELD_GET(GENMASK_ULL(63, 0), temp));
-
-	get_64bit_val(srq_ctx, 24, &temp);
-	pr_info("dbr address:0x%llx\n", FIELD_GET(GENMASK_ULL(63, 0), temp));
-
-	get_64bit_val(srq_ctx, 32, &temp);
-	pr_info("hw wqe cnt:0x%llx\n", FIELD_GET(GENMASK_ULL(15, 0), temp));
-	pr_info("limit water mark:0x%llx\n",
-		FIELD_GET(GENMASK_ULL(31, 16), temp));
-	pr_info("debug set:0x%llx\n", FIELD_GET(GENMASK_ULL(41, 32), temp));
-	pr_info("valid wqe index point:0x%llx\n",
-		FIELD_GET(GENMASK_ULL(43, 42), temp));
-
-	get_64bit_val(srq_ctx, 40, &temp);
-	pr_info("compl context value:0x%llx\n",
-		FIELD_GET(GENMASK_ULL(63, 0), temp));
-
-	get_64bit_val(srq_ctx, 48, &temp);
-	pr_info("srq wqe index:0x%llx\n", FIELD_GET(GENMASK_ULL(63, 0), temp));
-
-	get_64bit_val(srq_ctx, 56, &temp);
-	pr_info("srq1 first pble index:0x%llx\n",
-		FIELD_GET(GENMASK_ULL(51, 0), temp));
-}
-#endif
-
 int zxdh_query_srqc(struct zxdh_sc_srq *srq, u32 *limit)
 {
 	struct zxdh_sc_dev *dev = srq->dev;
@@ -1137,11 +1080,6 @@ int zxdh_query_srqc(struct zxdh_sc_srq *srq, u32 *limit)
 		err_code = -ENOMEM;
 		goto free_rsrc;
 	}
-#ifdef Z_DH_DEBUG_OPEN
-	pr_info("***SRQ %d HW SRQC info print start***\n", srq->srq_uk.srq_id);
-	zxdh_print_hw_srqc(srqc_buf.va);
-	pr_info("****SRQ %d HW SRQC info print end****\n", srq->srq_uk.srq_id);
-#endif
 	if (limit) {
 		get_64bit_val(srqc_buf.va, 32, &temp);
 		*limit = FIELD_GET(ZXDH_CQPSQ_SRQ_LIMITWATERMARK, temp);

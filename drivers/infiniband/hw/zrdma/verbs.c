@@ -1347,7 +1347,9 @@ int zxdh_modify_qp_roce(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 				ah_attr_to_dmac(attr->ah_attr));
 
         dual_tor_switch = readl(cdev_info->hw_addr + ZXDH_DUAL_TOR_SWITCH_OFFSET);
-        pr_debug("%s[%d]: hw_addr=0x%llx, dual_tor_switch=0x%x\n", __func__, __LINE__, (u64)cdev_info->hw_addr, dual_tor_switch);
+        pr_debug("%s[%d]: hw_addr=0x%llx, dual_tor_switch=0x%x\n",
+		 __func__, __LINE__,
+		 (u64)(uintptr_t)cdev_info->hw_addr, dual_tor_switch);
         if (remote_ip_update_hook && (dual_tor_switch == ZXDH_DUAL_TOR_SWITCH_OPEN)) {
             ret = qp_remote_ip_info_process(ibqp, RDMA_ADD_REMOTE_IP);
             if (ret) {
@@ -1623,10 +1625,6 @@ int zxdh_modify_qp_roce(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 
 	if (log_buf)
 		vfree(log_buf);
-
-#ifdef Z_DH_DEBUG_OPEN
-		//zxdh_query_qpc(&iwqp->sc_qp);
-#endif
 
 	return 0;
 exit:
@@ -2709,6 +2707,8 @@ struct ib_mr *zxdh_rereg_mr_trans(struct zxdh_mr *iwmr, u64 start, u64 len,
 	struct ib_umem *region;
 	bool use_pbles;
 	int err;
+
+	region = ib_umem_get(pd->device, start, len, iwmr->access);
 
 	if (IS_ERR(region)) {
 		pr_err("VERBS: Failed to create ib_umem region\n");

@@ -2,9 +2,7 @@
 
 config INFINIBAND_ZRDMA
 	tristate "ZTE Ethernet Protocol Driver for RDMA"
-    depends on NET
- 	select GENERIC_ALLOCATOR
- 	select CONFIG_AUXILIARY_BUS
+        depends on NET_VENDOR_DINGHAI
 	help
 	  Say Y or M here to enable support for the ZXDH ZRDMA RDMA device driver.
 

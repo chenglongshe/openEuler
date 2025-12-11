@@ -76,11 +76,6 @@
 #define ZXDH_VER_HEADER_H	0xAA
 #define ZXDH_VER_HEADER_L	0x55
 
-#if (!defined(TRUE) || (TRUE != 1))
-#undef TRUE
-#define TRUE 1
-#endif
-
 #define	RDMA_DEL_REMOTE_IP  0
 #define	RDMA_ADD_REMOTE_IP 1
 

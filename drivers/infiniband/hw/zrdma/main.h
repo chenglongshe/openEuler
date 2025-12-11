@@ -69,19 +69,6 @@
 #include "dbgfs.h"
 #include <linux/inet.h>
 
-#ifdef Z_DH_DEBUG_OPEN
-#include <linux/fs.h>
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
-#include <linux/uaccess.h>
-#include <linux/platform_device.h>
-#include <linux/acpi.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/types.h>
-#endif
 
 extern struct list_head zxdh_handlers;
 extern spinlock_t zxdh_handler_lock;

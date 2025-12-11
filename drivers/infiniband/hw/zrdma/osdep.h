@@ -5,9 +5,7 @@
 #define ZXDH_OSDEP_H
 
 #include <linux/pci.h>
-#ifdef FIELD_PREP
 #include <linux/bitfield.h>
-#endif
 #include <crypto/hash.h>
 #include <rdma/ib_verbs.h>
 #include <linux/workqueue.h>
@@ -88,8 +86,6 @@ struct zxdh_hw;
 struct zxdh_pci_f;
 struct zxdh_virtchnl_req;
 
-#ifndef FIELD_PREP
-
 #if defined(__OFED_4_8__)
 /* Special handling for 7.2/OFED. The GENMASK macros need to be updated */
 #undef GENMASK
@@ -99,14 +95,8 @@ struct zxdh_virtchnl_req;
 #define GENMASK_ULL(h, l) \
 	(((~0ULL) << (l)) & (~0ULL >> (BITS_PER_LONG_LONG - 1 - (h))))
 #endif
-/* Compat for rdma-core-27.0 and OFED 4.8/RHEL 7.2. Not for UPSTREAM */
-#define __bf_shf(x) (__builtin_ffsll(x) - 1)
-#define FIELD_PREP(_mask, _val) \
-	({ ((typeof(_mask))(_val) << __bf_shf(_mask)) & (_mask); })
 
-#define FIELD_GET(_mask, _reg) \
-	({ (typeof(_mask))(((_reg) & (_mask)) >> __bf_shf(_mask)); })
-#endif /* FIELD_PREP */
+
 struct ib_device *zxdh_get_ibdev(struct zxdh_sc_dev *dev);
 void *zxdh_remove_cqp_head(struct zxdh_sc_dev *dev);
 void zxdh_terminate_del_timer(struct zxdh_sc_qp *qp);

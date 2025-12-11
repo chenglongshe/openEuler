@@ -16,7 +16,7 @@ subdir-ccflags-y += -I$(src)/../../../net/ethernet/dinghai/en_np/sdk/include/dev
 subdir-ccflags-y += -I$(src)/../../../net/ethernet/dinghai/en_np/sdk/include/diag
 subdir-ccflags-y += -I$(src)/../../../net/ethernet/dinghai/en_np/agent/include
 
-obj-m += zrdma.o
+obj-$(CONFIG_INFINIBAND_ZRDMA) += zrdma.o
 
 zrdma-y := \
 	slib.o \

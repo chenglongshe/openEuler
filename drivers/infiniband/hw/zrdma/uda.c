@@ -150,7 +150,9 @@ int zxdh_sc_access_ah(struct zxdh_sc_cqp *cqp, struct zxdh_ah_info *info,
 	}
 
     dual_tor_switch = readl(cdev_info->hw_addr + ZXDH_DUAL_TOR_SWITCH_OFFSET);
-    pr_debug("%s[%d]: hw_addr=0x%llx, dual_tor_switch=0x%x\n", __func__, __LINE__, (u64)cdev_info->hw_addr, dual_tor_switch);
+    pr_debug("%s[%d]: hw_addr=0x%llx, dual_tor_switch=0x%x\n",
+	     __func__, __LINE__,
+	     (u64)(uintptr_t)cdev_info->hw_addr, dual_tor_switch);
     if (remote_ip_update_hook && (dual_tor_switch == ZXDH_DUAL_TOR_SWITCH_OPEN)) {
         if (op == ZXDH_CQP_OP_CREATE_AH) {
             ah_remote_ip_info_process(iwdev, info, RDMA_ADD_REMOTE_IP);

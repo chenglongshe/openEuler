@@ -119,11 +119,12 @@ extern u16 zxdh_get_rc_gqp_id(u16 qp_8k_index, u16 vhca_gqp_start,
 		i ++;	\
 	} while (0)
 	
-#define COPY_TO_USER_SAFE(dest, src, size) \
-    do { \
-        if (copy_to_user((void *)(dest), (void *)(src), (size))) \
-            return -EFAULT; \
-    } while (0)
+#define COPY_TO_USER_SAFE(dest, src, size)                                  \
+	do {                                                                 \
+		if (copy_to_user((void __user *)(uintptr_t)(dest),            \
+				 (const void *)(src), (size)))              \
+			return -EFAULT;                                        \
+	} while (0)
 
 static int process_hw_modify_qpc_cmd(struct zxdh_qp *iwqp,
 				     struct zxdh_modify_qpc_item *modify_item,
@@ -1415,7 +1416,8 @@ static int prepare_addr_for_data_cap(struct ib_ucontext *ib_uctx, struct zxdh_de
 		#ifdef RDMA_MMAP_DB_SUPPORT
 				iwdev->hw_data_cap.cap_txrx_use_iova[i].entry_info.cap_mmap_entry =
 					zxdh_cap_mmap_entry_insert(
-						ucontext, (void *)(*cap_iova_addr[i]),
+						ucontext,
+						(void *)(uintptr_t)(*cap_iova_addr[i]),
 						mmap_len, ZXDH_MMAP_HMC,
 						&cap_pa[i]);
 		#else
@@ -1605,9 +1607,9 @@ UVERBS_HANDLER(ZXDH_IB_METHOD_DEV_CAP_START)(struct ib_uverbs_file *file, struct
 		
 	if ((cap_cfg.cap_data_start_cap & 0x1) == 0x1) {
 		if (is_host_dyn_mem_used) {
-			dma_addr_low = (u32)(*dma_addr[NODE0] & 0xFFFFFFFF);
+			dma_addr_low = (u32)((u64)(*dma_addr[NODE0]) & 0xFFFFFFFF);
 			dma_addr_high =
-				(u32)((*dma_addr[NODE0] >> 32) & 0xFFFFFFFF);
+				(u32)(((u64)(*dma_addr[NODE0]) >> 32) & 0xFFFFFFFF);
 			// access host, smmu not used
 			cap_id = (ZXDH_INDICATE_HOST_NOSMMU << 5 |ZXDH_CPU_DDR);
 		} else {
@@ -1679,7 +1681,7 @@ UVERBS_HANDLER(ZXDH_IB_METHOD_DEV_CAP_START)(struct ib_uverbs_file *file, struct
 		} else {
 			dma_addr_low = (u32)(*cap_iova_addr[NODE1] & 0xFFFFFFFF);
 			dma_addr_high =
-				(u32)((*cap_iova_addr[NODE1] >> 32) & 0xFFFFFFFF);
+				(u32)(((u64)(*cap_iova_addr[NODE1]) >> 32) & 0xFFFFFFFF);
 			// access host, smmu iova used
 			cap_id = (ZXDH_INDICATE_HOST_SMMU << 5 |ZXDH_CPU_DDR);
 		}
@@ -4454,7 +4456,9 @@ static int get_reg_value(struct zxdh_pci_f *rf,
 		else
 			len = count - i;
 		i += len;
-		if (copy_from_user((void *)regs, (void *)reg_va, sizeof(u64) * len))
+		if (copy_from_user((void *)regs,
+				   (const void __user *)(uintptr_t)reg_va,
+				   sizeof(u64) * len))
 			return -EFAULT;
 
 		reg_va += sizeof(u64) * len;
@@ -4464,7 +4468,9 @@ static int get_reg_value(struct zxdh_pci_f *rf,
 			j++;
 		}
 			
-		if (copy_to_user((void *)value_va, (void *)values, sizeof(u32) * len))
+		if (copy_to_user((void __user *)(uintptr_t)value_va,
+				 (const void *)values,
+				 sizeof(u32) * len))
 			return -EFAULT;
 
 		value_va += sizeof(u32) * len;
@@ -4544,7 +4550,9 @@ static int get_reg_value_ex(struct zxdh_pci_f *rf,
 	GET_REG_AND_WRITE_TO_USE(0x62065f0f10, 0);
 	WRITE_REGISTER_AND_CHECK(rf, 0x62065F0100, reg2);
 
-	if (copy_to_user((void *)va, (void *)reg_value, sizeof(struct zxdh_reg_value) * i))
+	if (copy_to_user((void __user *)(uintptr_t)va,
+			 (const void *)reg_value,
+			 sizeof(struct zxdh_reg_value) * i))
 		return -EFAULT;
 
 	return 0;
@@ -5365,7 +5373,8 @@ UVERBS_HANDLER(ZXDH_IB_METHOD_DEV_READ_RAM)(struct ib_uverbs_file *file,
 		pr_err("zxdh_read_ram error: read ram reg failed!\n");
 		goto cleanup;
 	}
-	ret = copy_to_user((void *)req.value_va, (void *)reg_values,
+	ret = copy_to_user((void __user *)(uintptr_t)req.value_va,
+			   (const void *)reg_values,
 			   sizeof(u32) * ZXDH_READ_RAM_MAX_OFFSET);
 	if (ret) {
 		ret = -ZXDH_COPY_DATA_TO_USER_ERROR;
