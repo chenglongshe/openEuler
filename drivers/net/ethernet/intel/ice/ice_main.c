@@ -5743,7 +5743,10 @@ static void __exit ice_module_exit(void)
 	pr_info("module unloaded\n");
 }
 module_exit(ice_module_exit);
-
+void meytestaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(void)
+{
+	printk("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n");
+}
 /**
  * ice_set_mac_address - NDO callback to set MAC address
  * @netdev: network interface device structure
