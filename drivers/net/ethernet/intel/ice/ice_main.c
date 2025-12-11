@@ -5779,8 +5779,8 @@ static int ice_set_mac_address(struct net_device *netdev, void *pi)
 		netdev_err(netdev, "can't set mac %pM. Device has tc-flower filters, delete all of them and try again\n",
  			mac);
 		netdev_err(netdev,
-			       	"can't set mac %pM. bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
-				                        mac);  
+			       	"can't set mac %pM.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+				mac);
 		return -EAGAIN;
 	}
 
