@@ -2566,13 +2566,13 @@ static inline void kvm_prepare_memory_fault_exit(struct kvm_vcpu *vcpu,
 						 bool is_private)
 {
 	vcpu->run->exit_reason = KVM_EXIT_MEMORY_FAULT;
-	vcpu->run->memory_fault_gpa = gpa;
-	vcpu->run->memory_fault_size = size;
+	vcpu->run->memory_fault.gpa = gpa;
+	vcpu->run->memory_fault.size = size;
 
 	/* RWX flags are not (yet) defined or communicated to userspace. */
-	vcpu->run->memory_fault_flags = 0;
+	vcpu->run->memory_fault.flags = 0;
 	if (is_private)
-		vcpu->run->memory_fault_flags |= KVM_MEMORY_EXIT_FLAG_PRIVATE;
+		vcpu->run->memory_fault.flags |= KVM_MEMORY_EXIT_FLAG_PRIVATE;
 }
 
 #ifdef CONFIG_KVM_GENERIC_MEMORY_ATTRIBUTES
