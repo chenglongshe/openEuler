@@ -2425,7 +2425,7 @@ cpu_enable_mpam(const struct arm64_cpu_capabilities *entry)
 	 * where latency sensitive tasks have to wait for a task that has
 	 * been throttled to release the lock.
 	 */
-	write_sysreg_s(0, SYS_MPAM1_EL1);
+	write_sysreg_s(regval, SYS_MPAM1_EL1);
 	write_sysreg_s(regval, SYS_MPAM0_EL1);
 }
 
