@@ -45,7 +45,7 @@
 # | sw1                                | | sw2                                |
 # +------------------------------------+ +------------------------------------+
 
-source lib.sh
+source ./lib.sh
 ret=0
 
 # All tests in this script. Can be overridden with -t option.
