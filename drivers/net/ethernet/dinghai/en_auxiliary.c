@@ -17,7 +17,7 @@
 #include <linux/acpi.h>
 #include <linux/dinghai/kcompat.h>
 #ifdef CONFIG_COMPAT_AUXILIARY_EXTERNAL_INIT
-#include "base.h"
+#include "../../../../drivers/base/base.h"
 #endif
 
 
@@ -332,7 +332,6 @@ static void __exit zxdh_auxiliary_bus_exit(void)
 {
     bus_unregister(&zxdh_auxiliary_bus_type);
 }
-
 module_init(zxdh_auxiliary_bus_init);
 module_exit(zxdh_auxiliary_bus_exit);
 

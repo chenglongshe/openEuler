@@ -63,6 +63,12 @@ config DINGHAI_SEC
     help
       Security (SEC) module support.
 
+config DINGHAI_AUXILIARY
+       tristate "Dinghai AUXILIARY Support"
+       default m
+       help
+         Enable Dinghai AUXILIARY module Support
+
 # Main PF driver
 config DINGHAI_PF
     tristate "Dinghai PF Support"
