@@ -2407,3 +2407,79 @@ static inline void membarrier_switch_mm(struct rq *rq,
 {
 }
 #endif
+
+#if defined(CONFIG_SCHED_MC_PRIO) && defined(CONFIG_SMP)
+
+static inline bool is_zx_kh40000(void)
+{
+	return (boot_cpu_data.x86_vendor == X86_VENDOR_CENTAUR ||
+		boot_cpu_data.x86_vendor == X86_VENDOR_ZHAOXIN) &&
+	       (boot_cpu_data.x86 == 7 && boot_cpu_data.x86_model == 0x5b);
+}
+
+static inline void
+zx_set_sd_asym_packing_flag(const struct cpumask *cpu_map,
+			    struct sched_domain *__percpu *sd_arry)
+{
+	struct sched_domain *sd;
+	int i;
+
+	if (!is_zx_kh40000())
+		return;
+
+	for_each_cpu(i, cpu_map) {
+		for (sd = *per_cpu_ptr(sd_arry, i); sd; sd = sd->parent)
+			sd->flags |= SD_ASYM_PACKING;
+	}
+}
+static inline void
+zx_clear_sd_prefer_sibling_flag(const struct cpumask *cpu_map,
+				struct sched_domain *__percpu *sd_arry)
+{
+	struct sched_domain *sd;
+	int i;
+
+	if (!is_zx_kh40000())
+		return;
+
+	for_each_cpu(i, cpu_map) {
+		for (sd = *per_cpu_ptr(sd_arry, i); sd; sd = sd->parent) {
+			if (!(sd->flags & SD_NUMA) && sd->parent &&
+			    (sd->parent->flags & SD_NUMA)) {
+				struct sched_group *sg;
+				int prio;
+
+				sd = sd->parent;
+				sg = sd->groups;
+				prio = arch_asym_cpu_priority(
+						sg->asym_prefer_cpu);
+				sg = sg->next;
+
+				while (sg != sd->groups) {
+					if (arch_asym_cpu_priority(
+						sg->asym_prefer_cpu) != prio)
+						break;
+					sg = sg->next;
+				}
+
+				if (sg != sd->groups)
+					sd->child->flags &=
+							~(SD_PREFER_SIBLING);
+			}
+		}
+	}
+}
+#else
+static inline void
+zx_set_sd_asym_packing_flag(const struct cpumask *cpu_map,
+			    struct sched_domain *__percpu *sd_arry)
+{
+}
+
+static inline void
+zx_clear_sd_prefer_sibling_flag(const struct cpumask *cpu_map,
+				struct sched_domain *__percpu *sd_arry)
+{
+}
+#endif
+
