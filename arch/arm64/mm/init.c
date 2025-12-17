@@ -634,6 +634,19 @@ out:
 }
 #endif
 
+#ifdef CONFIG_ARCH_PHYTIUM
+#define SOCID_PS23064 0x8
+#define RMV_PS23064 0x510783f00000
+static inline void phytium_ps23064_quirk(void)
+{
+	if (read_sysreg_s(SYS_AIDR_EL1) == SOCID_PS23064 &&
+		read_cpuid_id() == MIDR_PHYTIUM_FTC862) {
+		pr_warn("Enable Phytium S5000C-128 Core quirk\n");
+		memblock_remove(RMV_PS23064, (1ULL << PHYS_MASK_SHIFT) - RMV_PS23064);
+	}
+}
+#endif
+
 void __init arm64_memblock_init(void)
 {
 	const s64 linear_region_size = -(s64)PAGE_OFFSET;
@@ -643,7 +656,10 @@ void __init arm64_memblock_init(void)
 
 	/* Remove memory above our supported physical address size */
 	memblock_remove(1ULL << PHYS_MASK_SHIFT, ULLONG_MAX);
-
+#ifdef CONFIG_ARCH_PHYTIUM
+	if (IS_ENABLED(CONFIG_KASAN))
+		phytium_ps23064_quirk();
+#endif
 	/*
 	 * Ensure that the linear region takes up exactly half of the kernel
 	 * virtual address space. This way, we can distinguish a linear address
