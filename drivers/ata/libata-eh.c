@@ -3448,7 +3448,7 @@ static int ata_eh_set_lpm(struct ata_link *link, enum ata_lpm_policy policy,
 			  struct ata_device **r_failed_dev)
 {
 	struct ata_port *ap = ata_is_host_link(link) ? link->ap : NULL;
-	struct device *device = ap->host->dev;
+	struct device *device = ap ? ap->host->dev : NULL;
 	struct pci_dev *pdev = (!device || !dev_is_pci(device)) ? NULL : to_pci_dev(device);
 	struct ata_eh_context *ehc = &link->eh_context;
 	struct ata_device *dev, *link_dev = NULL, *lpm_dev = NULL;
@@ -3458,9 +3458,9 @@ static int ata_eh_set_lpm(struct ata_link *link, enum ata_lpm_policy policy,
 	unsigned int err_mask;
 	int rc;
 
-	/* if controller does not support lpm, then sets no LPM flags */
+	/* if controller does not support lpm, then sets no LPM flags*/
 	if ((pdev && pdev->vendor == PCI_VENDOR_ID_ZHAOXIN) &&
-		!(ap->host->flags & (ATA_HOST_PART | ATA_HOST_SSC | ATA_HOST_DEVSLP)))
+		!(~ap->host->flags & (ATA_HOST_NO_PART | ATA_HOST_NO_SSC | ATA_HOST_NO_DEVSLP)))
 		link->flags |= ATA_LFLAG_NO_LPM;
 
 	/* if the link or host doesn't do LPM, noop */
