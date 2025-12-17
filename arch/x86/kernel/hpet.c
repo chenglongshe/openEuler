@@ -279,6 +279,15 @@ static void hpet_enable_legacy_int(void)
 
 static void hpet_legacy_clockevent_register(void)
 {
+	/*
+	 * On the KH-50000 platform, enable dynamic HPET interrupts
+	 * to prevent unnecessary wakeups of core 0 caused by broadcast timer events.
+	 */
+	if ((boot_cpu_data.x86_vendor == X86_VENDOR_CENTAUR ||
+	     boot_cpu_data.x86_vendor == X86_VENDOR_ZHAOXIN) &&
+	    (boot_cpu_data.x86 == 0x7 && boot_cpu_data.x86_model == 0x7b))
+		hpet_clockevent.features |= CLOCK_EVT_FEAT_DYNIRQ;
+
 	/* Start HPET legacy interrupts */
 	hpet_enable_legacy_int();
 
