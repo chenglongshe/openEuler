@@ -136,6 +136,18 @@ config CRYPTO_ECDH
 	help
 	  Generic implementation of the ECDH algorithm
 
+config CRYPTO_SM2_ZHAOXIN_GMI
+	tristate "SM2 algorithm (Zhaoxin GMI instruction)"
+	depends on CPU_SUP_CENTAUR || CPU_SUP_ZHAOXIN
+	default m
+	select CRYPTO_AKCIPHER
+	select CRYPTO_MANAGER
+	help
+	  SM2 (ShangMi 2) public key algorithm by Zhaoxin GMI Instruction.
+
+	  Published by State Encryption Management Bureau, China,
+	  as specified by OSCCA GM/T 0003.1-2012 -- 0003.5-2012.
+
 config CRYPTO_MANAGER
 	tristate "Cryptographic algorithm manager"
 	select CRYPTO_MANAGER2
