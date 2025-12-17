@@ -527,7 +527,8 @@ static DECLARE_WAIT_QUEUE_HEAD(rcu_tasks_cbs_wq);
 static DEFINE_RAW_SPINLOCK(rcu_tasks_cbs_lock);
 
 /* Track exiting tasks in order to allow them to be waited for. */
-DEFINE_STATIC_SRCU(tasks_rcu_exit_srcu);
+static LIST_HEAD(rtp_exit_list);
+static DEFINE_RAW_SPINLOCK(rtp_exit_list_lock);
 
 /* Control stall timeouts.  Disable with <= 0, otherwise jiffies till stall. */
 #define RCU_TASK_STALL_TIMEOUT (HZ * 60 * 10)
@@ -661,6 +662,17 @@ static void check_holdout_task(struct task_struct *t,
 	sched_show_task(t);
 }
 
+static void rcu_tasks_pertask(struct task_struct *t, struct list_head *hop)
+{
+	if (t != current && READ_ONCE(t->on_rq) &&
+			!is_idle_task(t)) {
+		get_task_struct(t);
+		t->rcu_tasks_nvcsw = READ_ONCE(t->nvcsw);
+		WRITE_ONCE(t->rcu_tasks_holdout, true);
+		list_add(&t->rcu_tasks_holdout_list, hop);
+	}
+}
+
 /* RCU-tasks kthread that detects grace periods and invokes callbacks. */
 static int __noreturn rcu_tasks_kthread(void *arg)
 {
@@ -726,14 +738,7 @@ static int __noreturn rcu_tasks_kthread(void *arg)
 		 */
 		rcu_read_lock();
 		for_each_process_thread(g, t) {
-			if (t != current && READ_ONCE(t->on_rq) &&
-			    !is_idle_task(t)) {
-				get_task_struct(t);
-				t->rcu_tasks_nvcsw = READ_ONCE(t->nvcsw);
-				WRITE_ONCE(t->rcu_tasks_holdout, true);
-				list_add(&t->rcu_tasks_holdout_list,
-					 &rcu_tasks_holdouts);
-			}
+			rcu_tasks_pertask(t, &rcu_tasks_holdouts);
 		}
 		rcu_read_unlock();
 
@@ -744,8 +749,12 @@ static int __noreturn rcu_tasks_kthread(void *arg)
 		 * where they have disabled preemption, allowing the
 		 * later synchronize_sched() to finish the job.
 		 */
-		synchronize_srcu(&tasks_rcu_exit_srcu);
-
+		raw_spin_lock_irqsave(&rtp_exit_list_lock, flags);
+		list_for_each_entry(t, &rtp_exit_list, rcu_tasks_exit_list) {
+			if (list_empty(&t->rcu_tasks_holdout_list))
+				rcu_tasks_pertask(t, &rcu_tasks_holdouts);
+		}
+		raw_spin_unlock_irqrestore(&rtp_exit_list_lock, flags);
 		/*
 		 * Each pass through the following loop scans the list
 		 * of holdout tasks, removing any that are no longer
@@ -802,8 +811,7 @@ static int __noreturn rcu_tasks_kthread(void *arg)
 		 *
 		 * In addition, this synchronize_sched() waits for exiting
 		 * tasks to complete their final preempt_disable() region
-		 * of execution, cleaning up after the synchronize_srcu()
-		 * above.
+		 * of execution.
 		 */
 		synchronize_sched();
 
@@ -835,20 +843,39 @@ static int __init rcu_spawn_tasks_kthread(void)
 }
 core_initcall(rcu_spawn_tasks_kthread);
 
-/* Do the srcu_read_lock() for the above synchronize_srcu().  */
+/*
+ * Protect against tasklist scan blind spot while the task is exiting and
+ * may be removed from the tasklist.  Do this by adding the task to yet
+ * another list.
+ */
 void exit_tasks_rcu_start(void)
 {
+	unsigned long flags;
+	struct task_struct *t = current;
+
+	WARN_ON_ONCE(!list_empty(&t->rcu_tasks_exit_list));
+	get_task_struct(t);
 	preempt_disable();
-	current->rcu_tasks_idx = __srcu_read_lock(&tasks_rcu_exit_srcu);
+	raw_spin_lock_irqsave(&rtp_exit_list_lock, flags);
+	list_add(&t->rcu_tasks_exit_list, &rtp_exit_list);
+	raw_spin_unlock_irqrestore(&rtp_exit_list_lock, flags);
 	preempt_enable();
 }
 
-/* Do the srcu_read_unlock() for the above synchronize_srcu().  */
+/*
+ * Remove the task from the "yet another list" because do_exit() is now
+ * non-preemptible, allowing synchronize_rcu() to wait beyond this point.
+ */
 void exit_tasks_rcu_finish(void)
 {
-	preempt_disable();
-	__srcu_read_unlock(&tasks_rcu_exit_srcu, current->rcu_tasks_idx);
-	preempt_enable();
+	unsigned long flags;
+	struct task_struct *t = current;
+
+	WARN_ON_ONCE(list_empty(&t->rcu_tasks_exit_list));
+	raw_spin_lock_irqsave(&rtp_exit_list_lock, flags);
+	list_del_init(&t->rcu_tasks_exit_list);
+	raw_spin_unlock_irqrestore(&rtp_exit_list_lock, flags);
+	put_task_struct(t);
 }
 
 #endif /* #ifdef CONFIG_TASKS_RCU */
