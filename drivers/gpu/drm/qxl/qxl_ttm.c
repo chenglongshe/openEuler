@@ -217,7 +217,6 @@ static int qxl_ttm_io_mem_reserve(struct ttm_bo_device *bdev,
 	struct qxl_device *qdev = qxl_get_qdev(bdev);
 
 	mem->bus.addr = NULL;
-	mem->bus.offset = 0;
 	mem->bus.size = mem->num_pages << PAGE_SHIFT;
 	mem->bus.base = 0;
 	mem->bus.is_iomem = false;
@@ -226,6 +225,7 @@ static int qxl_ttm_io_mem_reserve(struct ttm_bo_device *bdev,
 	switch (mem->mem_type) {
 	case TTM_PL_SYSTEM:
 		/* system memory */
+		mem->bus.offset = 0;
 		return 0;
 	case TTM_PL_VRAM:
 		mem->bus.is_iomem = true;
