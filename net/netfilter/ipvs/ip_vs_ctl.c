@@ -1735,6 +1735,28 @@ proc_do_sync_ports(struct ctl_table *table, int write,
 	return rc;
 }
 
+static int
+proc_dointvec_target(struct ctl_table *table, int write,
+                 void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+       int rc, t;
+       int *target = table->data;
+       struct netns_ipvs *ipvs =
+               container_of(target, struct netns_ipvs, sysctl_run_estimation_target);
+
+       t = *target;
+
+       rc = proc_dointvec(table, write, buffer, lenp, ppos);
+       if (write && (*target >= nr_cpu_ids || *target < 0))
+               *target = t;
+       else if (*target != t && cpu_online(*target)) {
+               del_timer_sync(&ipvs->est_timer);
+               add_timer_on(&ipvs->est_timer, *target);
+       }
+
+       return rc;
+}
+
 /*
  *	IPVS sysctl table (under the /proc/sys/net/ipv4/vs/)
  *	Do not change order or insert new entries without
@@ -1902,6 +1924,18 @@ static struct ctl_table vs_vars[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
+	},
+	{
+		.procname	= "run_estimation",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+	{
+		.procname       = "run_estimation_target",
+		.maxlen         = sizeof(int),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_target,
 	},
 #ifdef CONFIG_IP_VS_DEBUG
 	{
@@ -3955,6 +3989,10 @@ static int __net_init ip_vs_control_net_init_sysctl(struct netns_ipvs *ipvs)
 	tbl[idx++].data = &ipvs->sysctl_conn_reuse_mode;
 	tbl[idx++].data = &ipvs->sysctl_schedule_icmp;
 	tbl[idx++].data = &ipvs->sysctl_ignore_tunneled;
+	ipvs->sysctl_run_estimation = 1;
+	tbl[idx++].data = &ipvs->sysctl_run_estimation;
+	ipvs->sysctl_run_estimation_target = -1;
+	tbl[idx++].data = &ipvs->sysctl_run_estimation_target;
 
 	ipvs->sysctl_hdr = register_net_sysctl(net, "net/ipv4/vs", tbl);
 	if (ipvs->sysctl_hdr == NULL) {
