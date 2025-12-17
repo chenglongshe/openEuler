@@ -15,6 +15,10 @@
 #include <linux/netdevice.h>
 #include <net/net_namespace.h>
 
+extern struct static_key_false bypass_nf_conntrack_active;
+int bypass_nf_conntrack_handler(struct ctl_table *table, int write,
+				void *buffer, size_t *lenp, loff_t *ppos);
+
 #ifdef CONFIG_NETFILTER
 static inline int NF_DROP_GETERR(int verdict)
 {
@@ -200,6 +204,9 @@ static inline int nf_hook(u_int8_t pf, unsigned int hook, struct net *net,
 	struct nf_hook_entries *hook_head = NULL;
 	int ret = 1;
 
+	if (static_branch_likely(&bypass_nf_conntrack_active))
+		return 1;
+
 #ifdef CONFIG_JUMP_LABEL
 	if (__builtin_constant_p(pf) &&
 	    __builtin_constant_p(hook) &&
@@ -270,6 +277,11 @@ NF_HOOK_COND(uint8_t pf, unsigned int hook, struct net *net, struct sock *sk,
 {
 	int ret;
 
+	if (static_branch_likely(&bypass_nf_conntrack_active)) {
+		ret = okfn(net, sk, skb);
+		return ret;
+	}
+
 	if (!cond ||
 	    ((ret = nf_hook(pf, hook, net, sk, skb, in, out, okfn)) == 1))
 		ret = okfn(net, sk, skb);
@@ -281,7 +293,12 @@ NF_HOOK(uint8_t pf, unsigned int hook, struct net *net, struct sock *sk, struct 
 	struct net_device *in, struct net_device *out,
 	int (*okfn)(struct net *, struct sock *, struct sk_buff *))
 {
-	int ret = nf_hook(pf, hook, net, sk, skb, in, out, okfn);
+	int ret;
+
+	if (static_branch_likely(&bypass_nf_conntrack_active))
+		return okfn(net, sk, skb);
+
+	ret = nf_hook(pf, hook, net, sk, skb, in, out, okfn);
 	if (ret == 1)
 		ret = okfn(net, sk, skb);
 	return ret;
@@ -294,6 +311,8 @@ NF_HOOK_LIST(uint8_t pf, unsigned int hook, struct net *net, struct sock *sk,
 {
 	struct nf_hook_entries *hook_head = NULL;
 
+	if (static_branch_likely(&bypass_nf_conntrack_active))
+		return;
 #ifdef CONFIG_JUMP_LABEL
 	if (__builtin_constant_p(pf) &&
 	    __builtin_constant_p(hook) &&

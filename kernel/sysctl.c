@@ -36,6 +36,7 @@
 #include <linux/kernel.h>
 #include <linux/kobject.h>
 #include <linux/net.h>
+#include <linux/netfilter.h>
 #include <linux/sysrq.h>
 #include <linux/highuid.h>
 #include <linux/writeback.h>
@@ -1352,6 +1353,15 @@ static struct ctl_table kern_table[] = {
 		.extra2		= &hundred_thousand,
 	},
 #endif
+	{
+		.procname	= "nf_contract_ctrl",
+		.data		= NULL,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler   = bypass_nf_conntrack_handler,
+		.extra1         = &zero,
+		.extra2		= &one,
+	},
 	{ }
 };
 

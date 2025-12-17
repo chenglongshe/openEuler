@@ -28,6 +28,32 @@
 #include <linux/sched/signal.h>
 #include <linux/net.h>
 
+DEFINE_STATIC_KEY_FALSE(bypass_nf_conntrack_active);
+EXPORT_SYMBOL(bypass_nf_conntrack_active);
+
+int bypass_nf_conntrack_handler(struct ctl_table *table, int write,
+				void *buffer, size_t *lenp, loff_t *ppos)
+{
+	int state = !!static_branch_unlikely(&bypass_nf_conntrack_active);
+	int prev_state = state;
+	int ret = 0;
+
+	table->data = &state;
+	table->maxlen = sizeof(int);
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+	state = !state;
+	if (ret || !write || state == prev_state)
+		return ret;
+
+	if (state)
+		static_branch_enable(&bypass_nf_conntrack_active);
+	else
+		static_branch_disable(&bypass_nf_conntrack_active);
+
+	pr_info("bypass nf_conntrack is %s\n", state ? "enable" : "disable");
+	return ret;
+}
+
 /*
  * Some useful ethtool_ops methods that're device independent.
  * If we find that all drivers want to do the same thing here,
