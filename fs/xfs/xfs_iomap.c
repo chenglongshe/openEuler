@@ -35,11 +35,39 @@
 #define XFS_WRITEIO_ALIGN(mp,off)	(((off) >> mp->m_writeio_log) \
 						<< mp->m_writeio_log)
 
+u64
+xfs_iomap_inode_sequence(
+	struct xfs_inode	*ip,
+	u16			iomap_flags)
+{
+	u64			cookie = 0;
+
+	if (iomap_flags & IOMAP_F_XATTR)
+		return READ_ONCE(ip->i_afp->if_seq);
+	if ((iomap_flags & IOMAP_F_SHARED) && ip->i_cowfp)
+		cookie = (u64)READ_ONCE(ip->i_cowfp->if_seq) << 32;
+	return cookie | READ_ONCE(ip->i_df.if_seq);
+}
+
+/*
+ * Check that the iomap passed to us is still valid for the given offset and
+ * length.
+ */
+static bool
+xfs_iomap_valid(
+	struct inode		*inode,
+	const struct iomap	*iomap)
+{
+	return iomap->validity_cookie ==
+			xfs_iomap_inode_sequence(XFS_I(inode), iomap->flags);
+}
+
 void
 xfs_bmbt_to_iomap(
 	struct xfs_inode	*ip,
 	struct iomap		*iomap,
-	struct xfs_bmbt_irec	*imap)
+	struct xfs_bmbt_irec	*imap,
+	u64			sequence_cookie)
 {
 	struct xfs_mount	*mp = ip->i_mount;
 
@@ -60,6 +88,9 @@ xfs_bmbt_to_iomap(
 	iomap->length = XFS_FSB_TO_B(mp, imap->br_blockcount);
 	iomap->bdev = xfs_find_bdev_for_inode(VFS_I(ip));
 	iomap->dax_dev = xfs_find_daxdev_for_inode(VFS_I(ip));
+
+	iomap->validity_cookie = sequence_cookie;
+	iomap->iomap_valid = xfs_iomap_valid;
 }
 
 xfs_extlen_t
@@ -146,7 +177,8 @@ xfs_iomap_write_direct(
 	xfs_off_t	offset,
 	size_t		count,
 	xfs_bmbt_irec_t *imap,
-	int		nmaps)
+	int		nmaps,
+	u64		*seq)
 {
 	xfs_mount_t	*mp = ip->i_mount;
 	xfs_fileoff_t	offset_fsb;
@@ -277,6 +309,7 @@ xfs_iomap_write_direct(
 		error = xfs_alert_fsblock_zero(ip, imap);
 
 out_unlock:
+	*seq = xfs_iomap_inode_sequence(ip, 0);
 	xfs_iunlock(ip, lockmode);
 	return error;
 
@@ -515,6 +548,7 @@ xfs_file_iomap_begin_delay(
 	struct xfs_bmbt_irec	got;
 	struct xfs_iext_cursor	icur;
 	xfs_fsblock_t		prealloc_blocks = 0;
+	u64			seq;
 
 	ASSERT(!XFS_IS_REALTIME_INODE(ip));
 	ASSERT(!xfs_get_extsz_hint(ip));
@@ -552,6 +586,7 @@ xfs_file_iomap_begin_delay(
 		}
 
 		trace_xfs_iomap_found(ip, offset, count, 0, &got);
+		seq = xfs_iomap_inode_sequence(ip, 0);
 		goto done;
 	}
 
@@ -618,6 +653,7 @@ retry:
 	 * them out if the write happens to fail.
 	 */
 	iomap->flags |= IOMAP_F_NEW;
+	seq = xfs_iomap_inode_sequence(ip, IOMAP_F_NEW);
 	trace_xfs_iomap_alloc(ip, offset, count, 0, &got);
 done:
 	if (isnullstartblock(got.br_startblock))
@@ -629,7 +665,7 @@ done:
 			goto out_unlock;
 	}
 
-	xfs_bmbt_to_iomap(ip, iomap, &got);
+	xfs_bmbt_to_iomap(ip, iomap, &got, seq);
 
 out_unlock:
 	xfs_iunlock(ip, XFS_ILOCK_EXCL);
@@ -948,6 +984,7 @@ xfs_file_iomap_begin(
 	int			nimaps = 1, error = 0;
 	bool			shared = false, trimmed = false;
 	unsigned		lockmode;
+	u64			seq = 0;
 
 	if (XFS_FORCED_SHUTDOWN(mp))
 		return -EIO;
@@ -1048,7 +1085,7 @@ xfs_file_iomap_begin(
 	if (lockmode == XFS_ILOCK_EXCL)
 		xfs_ilock_demote(ip, lockmode);
 	error = xfs_iomap_write_direct(ip, offset, length, &imap,
-			nimaps);
+			nimaps, &seq);
 	if (error)
 		return error;
 
@@ -1060,7 +1097,9 @@ out_finish:
 				& ~XFS_ILOG_TIMESTAMP))
 		iomap->flags |= IOMAP_F_DIRTY;
 
-	xfs_bmbt_to_iomap(ip, iomap, &imap);
+	if (!seq)
+		seq = xfs_iomap_inode_sequence(ip, shared ? IOMAP_F_SHARED : 0);
+	xfs_bmbt_to_iomap(ip, iomap, &imap, seq);
 
 	if (shared)
 		iomap->flags |= IOMAP_F_SHARED;
@@ -1068,6 +1107,7 @@ out_finish:
 
 out_found:
 	ASSERT(nimaps);
+	seq = xfs_iomap_inode_sequence(ip, 0);
 	xfs_iunlock(ip, lockmode);
 	trace_xfs_iomap_found(ip, offset, length, 0, &imap);
 	goto out_finish;
@@ -1169,6 +1209,7 @@ xfs_xattr_iomap_begin(
 	struct xfs_bmbt_irec	imap;
 	int			nimaps = 1, error = 0;
 	unsigned		lockmode;
+	int			seq;
 
 	if (XFS_FORCED_SHUTDOWN(mp))
 		return -EIO;
@@ -1184,12 +1225,13 @@ xfs_xattr_iomap_begin(
 	ASSERT(ip->i_d.di_aformat != XFS_DINODE_FMT_LOCAL);
 	error = xfs_bmapi_read(ip, offset_fsb, end_fsb - offset_fsb, &imap,
 			       &nimaps, XFS_BMAPI_ATTRFORK);
+	seq = xfs_iomap_inode_sequence(ip, IOMAP_F_XATTR);
 out_unlock:
 	xfs_iunlock(ip, lockmode);
 
 	if (!error) {
 		ASSERT(nimaps);
-		xfs_bmbt_to_iomap(ip, iomap, &imap);
+		xfs_bmbt_to_iomap(ip, iomap, &imap, seq);
 	}
 
 	return error;
