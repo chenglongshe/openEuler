@@ -114,6 +114,8 @@ static int
 ast_bo_init_mem_type(struct ttm_bo_device *bdev, uint32_t type,
 		     struct ttm_mem_type_manager *man)
 {
+	struct ast_private *ast = ast_bdev(bdev);
+
 	switch (type) {
 	case TTM_PL_SYSTEM:
 		man->flags = TTM_MEMTYPE_FLAG_MAPPABLE;
@@ -126,7 +128,13 @@ ast_bo_init_mem_type(struct ttm_bo_device *bdev, uint32_t type,
 			TTM_MEMTYPE_FLAG_MAPPABLE;
 		man->available_caching = TTM_PL_FLAG_UNCACHED |
 			TTM_PL_FLAG_WC;
-		man->default_caching = TTM_PL_FLAG_WC;
+
+		if (ast->is_5c01_device) {
+			man->default_caching = TTM_PL_FLAG_UNCACHED;
+		} else {
+			man->default_caching = TTM_PL_FLAG_WC;
+		}
+
 		break;
 	default:
 		DRM_ERROR("Unsupported memory type %u\n", (unsigned)type);
@@ -153,6 +161,25 @@ static int ast_bo_verify_access(struct ttm_buffer_object *bo, struct file *filp)
 
 	return drm_vma_node_verify_access(&astbo->gem.vma_node,
 					  filp->private_data);
+}
+
+static bool ast_pci_host_is_5c01(struct pci_bus *bus)
+{
+	struct pci_bus *child = bus;
+	struct pci_dev *root = NULL;
+
+	while (child) {
+		if (child->parent->parent)
+			child = child->parent;
+		else
+			break;
+	}
+
+	root = child->self;
+
+	if ((root->vendor == 0x1db7) && (root->device == 0x5c01))
+		return true;
+	return false;
 }
 
 static int ast_ttm_io_mem_reserve(struct ttm_bo_device *bdev,
@@ -231,10 +258,17 @@ int ast_mm_init(struct ast_private *ast)
 	int ret;
 	struct drm_device *dev = ast->dev;
 	struct ttm_bo_device *bdev = &ast->ttm.bdev;
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
 
 	ret = ast_ttm_global_init(ast);
 	if (ret)
 		return ret;
+
+	if (ast_pci_host_is_5c01(pdev->bus)) {
+		ast->is_5c01_device = true;
+	} else {
+		ast->is_5c01_device = false;
+	}
 
 	ret = ttm_bo_device_init(&ast->ttm.bdev,
 				 ast->ttm.bo_global_ref.ref.object,

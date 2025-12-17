@@ -115,6 +115,7 @@ struct ast_private {
 	 * we have. */
 	struct ttm_bo_kmap_obj cache_kmap;
 	int next_cursor;
+	bool is_5c01_device;
 	bool support_wide_screen;
 	enum {
 		ast_use_p2a,

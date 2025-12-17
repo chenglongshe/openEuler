@@ -42,6 +42,24 @@ module_param_named(modeset, ast_modeset, int, 0400);
 
 static struct drm_driver driver;
 
+#define DRM_AST_VRAM_TYPE_DEVICE 0x0
+#define DRM_IOCTL_AST_VRAM_TYPE_DEVICE	DRM_IO(DRM_COMMAND_BASE\
+	+ DRM_AST_VRAM_TYPE_DEVICE)
+
+static int ast_ioctl_check_5c01_device(struct drm_device *dev, void *data,
+				struct drm_file *file_priv)
+{
+	struct ast_private *ast = dev->dev_private;
+
+	return ast->is_5c01_device ? 1 : 0;
+}
+
+static const struct drm_ioctl_desc ast_ioctls[] = {
+	/* for test, none so far */
+	DRM_IOCTL_DEF_DRV(AST_VRAM_TYPE_DEVICE, ast_ioctl_check_5c01_device,
+						DRM_AUTH|DRM_UNLOCKED),
+};
+
 #define AST_VGA_DEVICE(id, info) {		\
 	.class = PCI_BASE_CLASS_DISPLAY << 16,	\
 	.class_mask = 0xff0000,			\
@@ -219,6 +237,8 @@ static struct drm_driver driver = {
 	.load = ast_driver_load,
 	.unload = ast_driver_unload,
 
+	.ioctls = ast_ioctls,
+	.num_ioctls = ARRAY_SIZE(ast_ioctls),
 	.fops = &ast_fops,
 	.name = DRIVER_NAME,
 	.desc = DRIVER_DESC,
