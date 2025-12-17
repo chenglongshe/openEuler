@@ -684,10 +684,13 @@ static inline void __vma_unlink_prev(struct mm_struct *mm,
  * The following helper function should be used when such adjustments
  * are necessary.  The "insert" vma (if any) is to be inserted
  * before we drop the necessary locks.
+ *
+ * @skip_vma_uprobe: only valid for copy_vma process, others please
+ *		     mark it as false.
  */
 int __vma_adjust(struct vm_area_struct *vma, unsigned long start,
 	unsigned long end, pgoff_t pgoff, struct vm_area_struct *insert,
-	struct vm_area_struct *expand)
+	struct vm_area_struct *expand, bool skip_vma_uprobe)
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct vm_area_struct *next = vma->vm_next, *orig_vma = vma;
@@ -894,10 +897,12 @@ again:
 		i_mmap_unlock_write(mapping);
 
 	if (root) {
-		uprobe_mmap(vma);
+		if (!skip_vma_uprobe) {
+			uprobe_mmap(vma);
 
-		if (adjust_next)
-			uprobe_mmap(next);
+			if (adjust_next)
+				uprobe_mmap(next);
+		}
 	}
 
 	if (remove_next) {
@@ -1102,13 +1107,17 @@ can_vma_merge_after(struct vm_area_struct *vma, unsigned long vm_flags,
  * or other rmap walkers (if working on addresses beyond the "end"
  * parameter) may establish ptes with the wrong permissions of NNNN
  * instead of the right permissions of XXXX.
+ *
+ * @skip_vma_uprobe: only valid for copy_vma process, others please
+ *		     mark it as false.
  */
 struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			struct vm_area_struct *prev, unsigned long addr,
 			unsigned long end, unsigned long vm_flags,
 			struct anon_vma *anon_vma, struct file *file,
 			pgoff_t pgoff, struct mempolicy *policy,
-			struct vm_userfaultfd_ctx vm_userfaultfd_ctx)
+			struct vm_userfaultfd_ctx vm_userfaultfd_ctx,
+			bool skip_vma_uprobe)
 {
 	pgoff_t pglen = (end - addr) >> PAGE_SHIFT;
 	struct vm_area_struct *area, *next;
@@ -1160,10 +1169,11 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 							/* cases 1, 6 */
 			err = __vma_adjust(prev, prev->vm_start,
 					 next->vm_end, prev->vm_pgoff, NULL,
-					 prev);
+					 prev, skip_vma_uprobe);
 		} else					/* cases 2, 5, 7 */
 			err = __vma_adjust(prev, prev->vm_start,
-					 end, prev->vm_pgoff, NULL, prev);
+					 end, prev->vm_pgoff, NULL,
+					 prev, skip_vma_uprobe);
 		if (err)
 			return NULL;
 		khugepaged_enter_vma_merge(prev, vm_flags);
@@ -1180,10 +1190,12 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 					     vm_userfaultfd_ctx)) {
 		if (prev && addr < prev->vm_end)	/* case 4 */
 			err = __vma_adjust(prev, prev->vm_start,
-					 addr, prev->vm_pgoff, NULL, next);
+					 addr, prev->vm_pgoff, NULL,
+					 next, skip_vma_uprobe);
 		else {					/* cases 3, 8 */
 			err = __vma_adjust(area, addr, next->vm_end,
-					 next->vm_pgoff - pglen, NULL, next);
+					 next->vm_pgoff - pglen, NULL,
+					 next, skip_vma_uprobe);
 			/*
 			 * In case 3 area is already equal to next and
 			 * this is a noop, but in case 8 "area" has
@@ -1974,7 +1986,7 @@ static unsigned long __mmap_region(struct mm_struct *mm, struct file *file,
 	 * Can we just expand an old mapping?
 	 */
 	vma = vma_merge(mm, prev, addr, addr + len, vm_flags,
-			NULL, file, pgoff, NULL, NULL_VM_UFFD_CTX);
+			NULL, file, pgoff, NULL, NULL_VM_UFFD_CTX, false);
 	if (vma)
 		goto out;
 
@@ -3381,7 +3393,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 
 	/* Can we just expand an old private anonymous mapping? */
 	vma = vma_merge(mm, prev, addr, addr + len, flags,
-			NULL, NULL, pgoff, NULL, NULL_VM_UFFD_CTX);
+			NULL, NULL, pgoff, NULL, NULL_VM_UFFD_CTX, false);
 	if (vma)
 		goto out;
 
@@ -3566,6 +3578,7 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 	struct vm_area_struct *new_vma, *prev;
 	struct rb_node **rb_link, *rb_parent;
 	bool faulted_in_anon_vma = true;
+	bool skip_vma_uprobe = false;
 
 	/*
 	 * If anonymous vma has not yet been faulted, update new pgoff
@@ -3578,9 +3591,18 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 
 	if (find_vma_links(mm, addr, addr + len, &prev, &rb_link, &rb_parent))
 		return NULL;	/* should never get here */
+
+	/*
+	 * If the VMA we are copying might contain a uprobe PTE, ensure
+	 * that we do not establish one upon merge. Otherwise, when mremap()
+	 * moves page tables, it will orphan the newly created PTE.
+	 */
+	if (vma->vm_file)
+		skip_vma_uprobe = true;
+
 	new_vma = vma_merge(mm, prev, addr, addr + len, vma->vm_flags,
 			    vma->anon_vma, vma->vm_file, pgoff, vma_policy(vma),
-			    vma->vm_userfaultfd_ctx);
+			    vma->vm_userfaultfd_ctx, skip_vma_uprobe);
 	if (new_vma) {
 		/*
 		 * Source vma may have been merged into new_vma
