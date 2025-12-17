@@ -12,6 +12,8 @@
 #include <net/ip6_route.h>
 #include <net/xfrm.h>
 #include <net/ipv6.h>
+#include <uapi/linux/netfilter/nf_nat.h>
+#include <net/netfilter/nf_nat_l3proto.h>
 
 static void nf_nat_ipv4_csum_recalc(struct sk_buff *skb,
 				    u8 proto, void *data, __sum16 *check,
