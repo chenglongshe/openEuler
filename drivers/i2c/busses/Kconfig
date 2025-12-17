@@ -1293,6 +1293,17 @@ config I2C_VIPERBOARD
           River Tech's viperboard.h for detailed meaning
           of the module parameters.
 
+config I2C_ZHAOXIN_SMBUS
+	tristate "Zhaoxin SMBus Interface"
+	depends on PCI && X86
+	default m
+	help
+	  If you say yes to this option, support will be included for the
+	  Zhaoxin SMBus interface
+
+	  This driver can also be built as a module. If so, the module
+	  will be called i2c-zhaoxin-smbus.
+
 comment "Other I2C/SMBus bus drivers"
 
 config I2C_ACORN
