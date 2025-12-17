@@ -307,7 +307,7 @@ int ubcore_get_topo_info(struct sk_buff *skb, struct genl_info *info)
 
 	arg.out.node_num = topo_map->node_num;
 	(void)memcpy(&arg.out.topo_info, &topo_map->topo_infos[arg.in.node_idx],
-		     sizeof(struct ubcore_topo_info));
+		     sizeof(struct ubcore_topo_node));
 	return ubcore_copy_to_user((void __user *)(uintptr_t)args_addr, &arg,
 				   sizeof(struct ubcore_cmd_topo_info));
 }

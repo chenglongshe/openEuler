@@ -93,7 +93,7 @@ struct ubagg_device_cap {
 	uint32_t max_fetch_and_xor_size;
 	union ubcore_atomic_feat atomic_feat;
 	uint16_t trans_mode; /* one or more from ubcore_transport_mode_t */
-	uint16_t sub_trans_mode_cap; /* one or more from ubcore_sub_trans_mode_cap */
+	// uint16_t sub_trans_mode_cap; /* one or more from ubcore_sub_trans_mode_cap */
 	uint16_t congestion_ctrl_alg; /* one or more mode from ubcore_congestion_ctrl_alg_t */
 	uint32_t ceq_cnt; /* completion vector count */
 	uint32_t max_tp_in_tpg;
@@ -154,7 +154,7 @@ struct ubagg_slave_device {
 };
 
 struct ubagg_topo_info_out {
-	struct ubagg_topo_info topo_info[MAX_NODE_NUM];
+	struct ubagg_topo_node topo_info[MAX_NODE_NUM];
 	uint32_t node_num;
 };
 
@@ -167,7 +167,7 @@ struct ubagg_primary_port_eid {
 
 struct ubagg_add_dev_by_uvs {
 	char master_dev_name[UBAGG_MAX_DEV_NAME_LEN];
-	union ubcore_eid bonding_eid;
+	union ubcore_eid aggr_eid;
 	struct ubagg_primary_port_eid slave_eid[IODIE_NUM];
 };
 
