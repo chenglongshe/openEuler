@@ -568,6 +568,9 @@ static void ghes_do_proc(struct ghes *ghes,
 			ghes_handle_memory_failure(gdata, sev);
 		}
 		else if (guid_equal(sec_type, &CPER_SEC_PCIE)) {
+			struct cper_sec_pcie *pcie_err = acpi_hest_get_payload(gdata);
+
+			arch_apei_report_pcie_error(sec_sev, pcie_err);
 			ghes_handle_aer(gdata);
 		}
 		else if (guid_equal(sec_type, &CPER_SEC_PROC_ARM)) {
@@ -580,9 +583,12 @@ static void ghes_do_proc(struct ghes *ghes,
 		} else {
 			void *err = acpi_hest_get_payload(gdata);
 
-			log_non_standard_event(sec_type, fru_id, fru_text,
-					       sec_sev, err,
-					       gdata->error_data_length);
+			if (!arch_apei_report_zdi_error(sec_type,
+							(struct cper_sec_proc_generic *)err)) {
+				log_non_standard_event(sec_type, fru_id, fru_text,
+						       sec_sev, err,
+						       gdata->error_data_length);
+			}
 		}
 
 		/* Customization deliver all types error to driver. */
@@ -1022,6 +1028,8 @@ static int ghes_notify_nmi(unsigned int cmd, struct pt_regs *regs)
 {
 	struct ghes *ghes;
 	int sev, ret = NMI_DONE;
+	struct acpi_hest_generic_data *gdata;
+	guid_t *sec_type;
 
 	if (!atomic_add_unless(&ghes_in_nmi, 1, 1))
 		return ret;
@@ -1036,6 +1044,25 @@ static int ghes_notify_nmi(unsigned int cmd, struct pt_regs *regs)
 
 		sev = ghes_severity(ghes->estatus->error_severity);
 		if (sev >= GHES_SEV_PANIC) {
+			apei_estatus_for_each_section(estatus, gdata) {
+				sec_type = (guid_t *)gdata->section_type;
+				if (guid_equal(sec_type, &CPER_SEC_PLATFORM_MEM)) {
+					struct cper_sec_mem_err *mem_err =
+							acpi_hest_get_payload(gdata);
+
+					arch_apei_report_mem_error(sev, mem_err);
+				} else if (guid_equal(sec_type, &CPER_SEC_PCIE)) {
+					struct cper_sec_pcie *pcie_err =
+							acpi_hest_get_payload(gdata);
+
+					arch_apei_report_pcie_error(sev, pcie_err);
+				} else if (guid_equal(sec_type, &CPER_SEC_PROC_GENERIC)) {
+					struct cper_sec_proc_generic *zdi_err =
+							acpi_hest_get_payload(gdata);
+
+					arch_apei_report_zdi_error(sec_type, zdi_err);
+				}
+			}
 			ghes_print_queued_estatus();
 			__ghes_panic(ghes);
 		}
