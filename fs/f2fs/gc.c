@@ -759,8 +759,7 @@ static void move_data_block(struct inode *inode, block_t bidx,
 			updated = true;
 		}
 		f2fs_put_page(mpage, 1);
-		invalidate_mapping_pages(META_MAPPING(fio.sbi),
-					fio.old_blkaddr, fio.old_blkaddr);
+		f2fs_truncate_meta_inode_pages(fio.sbi, fio.old_blkaddr, 1);
 		if (updated)
 			goto write_page;
 	}
