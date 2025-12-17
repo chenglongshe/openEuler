@@ -552,6 +552,13 @@
 #define MSR_VIA_RNG			0x0000110b
 #define MSR_VIA_BCR2			0x00001147
 
+/*
+ * Zhaoxin extend VMCS capabilities:
+ *	bit 0: exec-cntl3 VMCS field.
+ */
+#define MSR_ZX_EXT_VMCS_CAPS		0x1675
+#define MSR_ZX_VMCS_EXEC_CTL3		BIT(0)
+
 /* Transmeta defined MSRs */
 #define MSR_TMTA_LONGRUN_CTRL		0x80868010
 #define MSR_TMTA_LONGRUN_FLAGS		0x80868011
@@ -839,6 +846,9 @@
 /* Geode defined MSRs */
 #define MSR_GEODE_BUSCONT_CONF0		0x00001900
 
+/* Zhaoxin VT MSRs */
+#define MSR_ZX_VMX_PROCBASED_CTLS3	0x12A7
+
 /* Intel VT MSRs */
 #define MSR_IA32_VMX_BASIC              0x00000480
 #define MSR_IA32_VMX_PINBASED_CTLS      0x00000481
@@ -876,5 +886,13 @@
 #define MSR_VM_CR                       0xc0010114
 #define MSR_VM_IGNNE                    0xc0010115
 #define MSR_VM_HSAVE_PA                 0xc0010117
+
+#define MSR_PAUSEOPT_CONTROL			0x187f
+
+/*
+ * The time field is bit[31:2], but representing a 32bit value with
+ * bit[1:0] zero.
+ */
+#define MSR_PAUSEOPT_CONTROL_TIME_MASK		(~0x03U)
 
 #endif /* _ASM_X86_MSR_INDEX_H */
