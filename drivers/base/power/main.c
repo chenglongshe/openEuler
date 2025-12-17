@@ -625,8 +625,20 @@ static int device_resume_noirq(struct device *dev, pm_message_t state, bool asyn
 	if (dev->power.syscore || dev->power.direct_complete)
 		goto Out;
 
-	if (!dev->power.is_noirq_suspended)
+	if (!dev->power.is_noirq_suspended) {
+		/*
+		 * This means that system suspend has been aborted in the noirq
+		 * phase before invoking the noirq suspend callback for the
+		 * device, so if device_suspend_late() has left it in suspend,
+		 * device_resume_early() should leave it in suspend either in
+		 * case the early resume of it depends on the noirq resume that
+		 * has not run.
+		 */
+		if ((dev_pm_smart_suspend_and_suspended(dev))
+			dev->power.must_resume = false;
+
 		goto Out;
+	}
 
 	dpm_wait_for_superior(dev, async);
 
