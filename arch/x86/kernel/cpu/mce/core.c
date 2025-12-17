@@ -1863,9 +1863,19 @@ static void unexpected_machine_check(struct pt_regs *regs, long error_code)
 void (*machine_check_vector)(struct pt_regs *, long error_code) =
 						unexpected_machine_check;
 
+static DEFINE_PER_CPU(bool, nmi_state);
+
 dotraplinkage void do_mce(struct pt_regs *regs, long error_code)
 {
+	if (!in_nmi()) {
+		__this_cpu_write(nmi_state, true);
+		nmi_enter();
+	}
 	machine_check_vector(regs, error_code);
+	if (__this_cpu_read(nmi_state) == true) {
+		nmi_exit();
+		__this_cpu_write(nmi_state, false);
+	}
 }
 
 /*
