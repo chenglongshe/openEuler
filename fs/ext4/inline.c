@@ -600,10 +600,11 @@ retry:
 		goto out;
 
 	if (ext4_should_dioread_nolock(inode)) {
-		ret = __block_write_begin(page, from, to,
-					  ext4_get_block_unwritten);
+		ret = ext4_block_write_begin(handle, page, from, to,
+					     ext4_get_block_unwritten);
 	} else
-		ret = __block_write_begin(page, from, to, ext4_get_block);
+		ret = ext4_block_write_begin(handle, page, from, to,
+					     ext4_get_block);
 
 	if (!ret && ext4_should_journal_data(inode)) {
 		ret = ext4_walk_page_buffers(handle, page_buffers(page),
@@ -880,8 +881,8 @@ static int ext4_da_convert_inline_data_to_extent(struct address_space *mapping,
 			goto out;
 	}
 
-	ret = __block_write_begin(page, 0, inline_size,
-				  ext4_da_get_block_prep);
+	ret = ext4_block_write_begin(NULL, page, 0, inline_size,
+				     ext4_da_get_block_prep);
 	if (ret) {
 		up_read(&EXT4_I(inode)->xattr_sem);
 		unlock_page(page);
