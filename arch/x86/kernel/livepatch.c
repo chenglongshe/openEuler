@@ -166,6 +166,9 @@ static int klp_check_stack_func(struct klp_func *func,
 		if (klp_compare_address(address, func_addr,
 				func_size, func_name))
 			return -EAGAIN;
+		if (func_addr != func->old_addr &&
+		    klp_compare_address(address, func->old_addr, func->old_size, func_name))
+			return -EAGAIN;
 	}
 
 	return 0;

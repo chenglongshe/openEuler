@@ -144,6 +144,12 @@ static int klp_check_activeness_func(struct stackframe *frame, void *data)
 					func_size, func_name);
 			if (args->ret)
 				return args->ret;
+			if (func_addr != func->old_addr) {
+				args->ret = klp_compare_address(frame->pc, func->old_addr,
+						func->old_size, func_name);
+				if (args->ret)
+					return args->ret;
+			}
 		}
 	}
 
