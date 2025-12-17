@@ -913,6 +913,17 @@ config CRYPTO_SHA3
 	  References:
 	  http://keccak.noekeon.org/
 
+config CRYPTO_SM2_ZHAOXIN_GMI
+       tristate "SM2 algorithm (Zhaoxin GMI instruction)"
+       default m
+       select CRYPTO_AKCIPHER
+       select CRYPTO_MANAGER
+       help
+          SM2 (ShangMi 2) public key algorithm by Zhaoxin GMI Instruction.
+
+	  If unsure say M. The compiled module will be
+	  called sm2_zhaoxin_gmi.
+
 config CRYPTO_SM3
 	tristate "SM3 digest algorithm"
 	select CRYPTO_HASH
