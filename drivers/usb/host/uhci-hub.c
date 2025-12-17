@@ -217,10 +217,7 @@ static int uhci_hub_status_data(struct usb_hcd *hcd, char *buf)
 		/* are any devices attached? */
 		if (!any_ports_active(uhci)) {
 			uhci->rh_state = UHCI_RH_RUNNING_NODEVS;
-			if (!uhci->auto_suspend_delay)
-				uhci->auto_stop_time = jiffies + HZ;
-			else
-				uhci->auto_stop_time = jiffies + 3 * HZ;
+			uhci->auto_stop_time = jiffies + HZ;
 		}
 		break;
 
