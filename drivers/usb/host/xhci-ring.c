@@ -637,10 +637,6 @@ static void xhci_stop_watchdog_timer_in_irq(struct xhci_hcd *xhci,
 	del_timer(&ep->stop_cmd_timer);
 }
 
-/*
- * Must be called with xhci->lock held in interrupt context,
- * releases and re-acquires xhci->lock
- */
 static void xhci_giveback_urb_in_irq(struct xhci_hcd *xhci,
 				     struct xhci_td *cur_td, int status)
 {
@@ -657,10 +653,8 @@ static void xhci_giveback_urb_in_irq(struct xhci_hcd *xhci,
 	}
 	xhci_urb_free_priv(urb_priv);
 	usb_hcd_unlink_urb_from_ep(hcd, urb);
-	spin_unlock(&xhci->lock);
 	trace_xhci_urb_giveback(urb);
 	usb_hcd_giveback_urb(hcd, urb, status);
-	spin_lock(&xhci->lock);
 }
 
 static void xhci_unmap_td_bounce_buffer(struct xhci_hcd *xhci,
@@ -2280,7 +2274,6 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 	struct xhci_ep_ctx *ep_ctx;
 	struct list_head *tmp;
 	u32 trb_comp_code;
-	int td_num = 0;
 	bool handling_skipped_tds = false;
 
 	slot_id = TRB_TO_SLOT_ID(le32_to_cpu(event->flags));
@@ -2325,12 +2318,6 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 				 slot_id, ep_index);
 			goto err_out;
 		}
-	}
-
-	/* Count current td numbers if ep->skip is set */
-	if (ep->skip) {
-		list_for_each(tmp, &ep_ring->td_list)
-			td_num++;
 	}
 
 	/* Look for common error cases */
@@ -2493,18 +2480,8 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 			goto cleanup;
 		}
 
-		/* We've skipped all the TDs on the ep ring when ep->skip set */
-		if (ep->skip && td_num == 0) {
-			ep->skip = false;
-			xhci_dbg(xhci, "All tds on the ep_ring skipped. Clear skip flag for slot %u ep %u.\n",
-				 slot_id, ep_index);
-			goto cleanup;
-		}
-
 		td = list_first_entry(&ep_ring->td_list, struct xhci_td,
 				      td_list);
-		if (ep->skip)
-			td_num--;
 
 		/* Is this a TRB in the currently executing TD? */
 		ep_seg = trb_in_td(xhci, ep_ring->deq_seg, ep_ring->dequeue,
