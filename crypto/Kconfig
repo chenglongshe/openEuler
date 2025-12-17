@@ -924,6 +924,34 @@ config CRYPTO_SM3
 	  http://www.oscca.gov.cn/UpFile/20101222141857786.pdf
 	  https://datatracker.ietf.org/doc/html/draft-shen-sm3-hash
 
+config CRYPTO_SM3_ZHAOXIN_GMI
+	tristate "Zhaoxin GMI driver for SM3 algorithm"
+	depends on CRYPTO && X86
+	default m
+	select CRYPTO_HASH
+	help
+	  Use Zhaoxin GMI for SM3 algorithm.
+
+	  Available in ZX-C+ and newer CPUs.
+
+	  If unsure say M. The compiled module will be
+	  called zhaoxin_gmi_sm3.
+
+config CRYPTO_SM4_ZHAOXIN_GMI
+	tristate "Zhaoxin GMI driver for SM4 algorithm"
+	depends on CRYPTO && X86
+	default m
+	select CRYPTO_SIMD
+	select CRYPTO_BLKCIPHER
+	select CRYPTO_ALGAPI
+	help
+	  Use Zhaoxin GMI for SM4 algorithm.
+
+	  Available in ZX-C+ and newer CPUs.
+
+	  If unsure say M. The compiled module will be
+	  called zhaoxin_gmi_sm4.
+
 config CRYPTO_TGR192
 	tristate "Tiger digest algorithms"
 	select CRYPTO_HASH
