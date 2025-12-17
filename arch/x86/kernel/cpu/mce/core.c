@@ -1865,7 +1865,9 @@ void (*machine_check_vector)(struct pt_regs *, long error_code) =
 
 dotraplinkage void do_mce(struct pt_regs *regs, long error_code)
 {
+	nmi_enter();
 	machine_check_vector(regs, error_code);
+	nmi_exit();
 }
 
 /*
