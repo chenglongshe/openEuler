@@ -212,3 +212,112 @@ const struct dma_map_ops dma_direct_ops = {
 	.mapping_error		= dma_direct_mapping_error,
 };
 EXPORT_SYMBOL(dma_direct_ops);
+
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+void *kh40000_dma_direct_alloc(struct device *dev, size_t size, dma_addr_t *dma_handle, gfp_t gfp,
+			       unsigned long attrs)
+{
+	int page_order = get_order(size);
+	struct page *page = NULL;
+	void *ret;
+	int node = dev_to_node(dev);
+	nodemask_t nodemask;
+
+	nodes_clear(nodemask);
+
+	gfp &= ~__GFP_ZERO;
+
+	/* GFP_DMA32 and GFP_DMA are no ops without the corresponding zones: */
+	if (dev->coherent_dma_mask <= DMA_BIT_MASK(ARCH_ZONE_DMA_BITS))
+		gfp |= GFP_DMA;
+	if (dev->coherent_dma_mask <= DMA_BIT_MASK(32) && !(gfp & GFP_DMA))
+		gfp |= GFP_DMA32;
+
+again:
+	if (node == NUMA_NO_NODE) {
+		page = __alloc_pages_nodemask(gfp, page_order, numa_mem_id(), NULL);
+	} else {
+		if (!(gfp & (GFP_DMA | GFP_DMA32))) {
+			node_set(node, nodemask);
+			page = __alloc_pages_nodemask(gfp | __GFP_HIGH, page_order, node, &nodemask);
+		} else {
+			page = __alloc_pages_nodemask(gfp | __GFP_HIGH, page_order, node, NULL);
+		}
+	}
+
+	if (page && !dma_coherent_ok(dev, page_to_phys(page), size)) {
+		__free_pages(page, page_order);
+		page = NULL;
+
+		if (IS_ENABLED(CONFIG_ZONE_DMA32) && dev->coherent_dma_mask < DMA_BIT_MASK(64) &&
+		    !(gfp & (GFP_DMA32 | GFP_DMA))) {
+			gfp |= GFP_DMA32;
+			goto again;
+		}
+
+		if (IS_ENABLED(CONFIG_ZONE_DMA) && dev->coherent_dma_mask < DMA_BIT_MASK(32) &&
+		    !(gfp & GFP_DMA)) {
+			gfp = (gfp & ~GFP_DMA32) | GFP_DMA;
+			goto again;
+		}
+	}
+
+	if (!page)
+		return NULL;
+	ret = page_address(page);
+	if (force_dma_unencrypted()) {
+		set_memory_decrypted((unsigned long)ret, 1 << page_order);
+		*dma_handle = __phys_to_dma(dev, page_to_phys(page));
+	} else {
+		*dma_handle = phys_to_dma(dev, page_to_phys(page));
+	}
+	memset(ret, 0, size);
+	return ret;
+}
+
+static void kh40000_direct_unmap_page(struct device *dev, dma_addr_t addr, size_t size,
+				      enum dma_data_direction dir, unsigned long attrs)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 0);
+}
+
+static void kh40000_direct_sync_single_for_cpu(struct device *dev, dma_addr_t addr, size_t size,
+					       enum dma_data_direction dir)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 0);
+}
+
+static void kh40000_direct_sync_sg_for_cpu(struct device *dev, struct scatterlist *sgl, int nelems,
+					   enum dma_data_direction dir)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sgl, sg, nelems, i)
+		kh40000_sync_single_dma_for_cpu(dev, sg_dma_address(sg), dir, 0);
+}
+
+static void kh40000_direct_unmap_sg(struct device *dev, struct scatterlist *sgl, int nelems,
+				    enum dma_data_direction dir, unsigned long attrs)
+{
+	kh40000_direct_sync_sg_for_cpu(dev, sgl, nelems, dir);
+}
+
+const struct dma_map_ops kh40000_direct_dma_ops = {
+	.alloc			= kh40000_dma_direct_alloc,
+	.free			= dma_direct_free,
+	.map_page		= dma_direct_map_page,
+	.map_sg			= dma_direct_map_sg,
+	.unmap_sg		= kh40000_direct_unmap_sg,
+	.unmap_page		= kh40000_direct_unmap_page,
+	.sync_sg_for_cpu	= kh40000_direct_sync_sg_for_cpu,
+	.sync_single_for_cpu	= kh40000_direct_sync_single_for_cpu,
+	.dma_supported		= dma_direct_supported,
+	.mapping_error		= dma_direct_mapping_error,
+};
+
+void kh40000_set_direct_dma_ops(void)
+{
+	dma_ops = &kh40000_direct_dma_ops;
+}
+#endif /* IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64) */

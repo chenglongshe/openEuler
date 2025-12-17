@@ -20,6 +20,7 @@
 #include <drm/i915_drm.h>
 #include <asm/pci-direct.h>
 #include <asm/dma.h>
+#include <asm/dma-mapping.h>
 #include <asm/io_apic.h>
 #include <asm/apic.h>
 #include <asm/hpet.h>
@@ -666,6 +667,22 @@ static void __init apple_airport_reset(int bus, int slot, int func)
 	early_iounmap(mmio, BCM4331_MMIO_SIZE);
 }
 
+bool __ro_after_init zhaoxin_kh40000;
+
+bool is_zhaoxin_kh40000(void)
+{
+	return zhaoxin_kh40000;
+}
+
+static void __init zhaoxin_platform_check(int num, int slot, int func)
+{
+	if (read_pci_config_byte(num, slot, func, PCI_REVISION_ID) == 0x10) {
+		zhaoxin_kh40000 = true;
+		kh40000_set_direct_dma_ops();
+		pr_info("KH-40000 platform detected!\n");
+	}
+}
+
 #define QFLAG_APPLY_ONCE 	0x1
 #define QFLAG_APPLIED		0x2
 #define QFLAG_DONE		(QFLAG_APPLY_ONCE|QFLAG_APPLIED)
@@ -683,6 +700,10 @@ static struct chipset early_qrk[] __initdata = {
 	  PCI_CLASS_BRIDGE_PCI, PCI_ANY_ID, QFLAG_APPLY_ONCE, nvidia_bugs },
 	{ PCI_VENDOR_ID_VIA, PCI_ANY_ID,
 	  PCI_CLASS_BRIDGE_PCI, PCI_ANY_ID, QFLAG_APPLY_ONCE, via_bugs },
+	{ PCI_VENDOR_ID_ZHAOXIN, 0x1001, PCI_CLASS_BRIDGE_ISA,
+	  PCI_ANY_ID, QFLAG_APPLY_ONCE, zhaoxin_platform_check },
+	{ PCI_VENDOR_ID_ZHAOXIN, 0x345B, PCI_CLASS_BRIDGE_ISA,
+	  PCI_ANY_ID, QFLAG_APPLY_ONCE, zhaoxin_platform_check },
 	{ PCI_VENDOR_ID_AMD, PCI_DEVICE_ID_AMD_K8_NB,
 	  PCI_CLASS_BRIDGE_HOST, PCI_ANY_ID, 0, fix_hypertransport_config },
 	{ PCI_VENDOR_ID_ATI, PCI_DEVICE_ID_ATI_IXP400_SMBUS,

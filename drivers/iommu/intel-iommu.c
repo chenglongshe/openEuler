@@ -4830,6 +4830,7 @@ const struct attribute_group *intel_iommu_groups[] = {
 	NULL,
 };
 
+const struct dma_map_ops kh40000_iommu_dma_ops;
 int __init intel_iommu_init(void)
 {
 	int ret = -ENODEV;
@@ -4922,6 +4923,9 @@ int __init intel_iommu_init(void)
 	swiotlb = 0;
 #endif
 	dma_ops = &intel_dma_ops;
+
+	if (is_zhaoxin_kh40000())
+		dma_ops = &kh40000_iommu_dma_ops;
 
 	init_iommu_pm_ops();
 
@@ -5587,3 +5591,111 @@ static void __init check_tylersburg_isoch(void)
 	pr_warn("Recommended TLB entries for ISOCH unit is 16; your BIOS set %d\n",
 	       vtisochctrl);
 }
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+static void *kh40000_iommu_alloc_coherent(struct device *dev, size_t size, dma_addr_t *dma_handle,
+					  gfp_t flags, unsigned long attrs)
+{
+	struct page *page = NULL;
+	int order;
+	nodemask_t nodemask;
+	int node = dev_to_node(dev);
+
+	nodes_clear(nodemask);
+	size = PAGE_ALIGN(size);
+	order = get_order(size);
+
+	if (!iommu_no_mapping(dev))
+		flags &= ~(GFP_DMA | GFP_DMA32);
+	else if (dev->coherent_dma_mask < dma_get_required_mask(dev)) {
+		if (dev->coherent_dma_mask < DMA_BIT_MASK(32))
+			flags |= GFP_DMA;
+		else
+			flags |= GFP_DMA32;
+	}
+
+	if (node == NUMA_NO_NODE) {
+		page = __alloc_pages_nodemask(flags, order, numa_mem_id(), NULL);
+	} else {
+		if (!(flags & (GFP_DMA | GFP_DMA32))) {
+			node_set(node, nodemask);
+			page = __alloc_pages_nodemask(flags | __GFP_HIGH, order, node, &nodemask);
+		} else {
+			page = __alloc_pages_nodemask(flags | __GFP_HIGH, order, node, NULL);
+		}
+	}
+
+	if (!page)
+		return NULL;
+	memset(page_address(page), 0, size);
+
+	*dma_handle = __intel_map_single(dev, page_to_phys(page), size, DMA_BIDIRECTIONAL,
+					 dev->coherent_dma_mask);
+	if (*dma_handle)
+		return page_address(page);
+
+	return NULL;
+}
+
+phys_addr_t kh40000_iommu_iova_to_phys(struct device *dev, dma_addr_t paddr)
+{
+	/*  only patch remote DMA access */
+	if (!iommu_no_mapping(dev)) {
+		struct dmar_domain *domain = find_domain(dev);
+
+		paddr = intel_iommu_iova_to_phys(&(domain->domain), paddr);
+	}
+	return paddr;
+}
+
+static void kh40000_iommu_sync_single_for_cpu(struct device *dev, dma_addr_t addr, size_t size,
+					      enum dma_data_direction dir)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 1);
+}
+
+static void kh40000_iommu_unmap_page(struct device *dev, dma_addr_t addr, size_t size,
+				     enum dma_data_direction dir, unsigned long attrs)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 1);
+	intel_unmap_page(dev, addr, size, dir, attrs);
+}
+
+static void kh40000_iommu_unmap_sg(struct device *dev, struct scatterlist *sglist, int nelems,
+				   enum dma_data_direction dir, unsigned long attrs)
+{
+	dma_addr_t startaddr = sg_dma_address(sglist) & PAGE_MASK;
+	unsigned long nrpages = 0;
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sglist, sg, nelems, i) {
+		nrpages += aligned_nrpages(sg_dma_address(sg), sg_dma_len(sg));
+		kh40000_iommu_sync_single_for_cpu(dev, sg->dma_address, sg_dma_len(sg), dir);
+	}
+
+	intel_unmap(dev, startaddr, nrpages << VTD_PAGE_SHIFT);
+}
+
+static void kh40000_iommu_sync_sg_for_cpu(struct device *dev, struct scatterlist *sgl, int nelems,
+					  enum dma_data_direction dir)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sgl, sg, nelems, i)
+		kh40000_iommu_sync_single_for_cpu(dev, sg->dma_address, sg_dma_len(sg), dir);
+}
+
+const struct dma_map_ops kh40000_iommu_dma_ops = {
+	.alloc = kh40000_iommu_alloc_coherent,
+	.free = intel_free_coherent,
+	.map_sg = intel_map_sg,
+	.unmap_sg = kh40000_iommu_unmap_sg,
+	.map_page = intel_map_page,
+	.unmap_page = kh40000_iommu_unmap_page,
+	.sync_single_for_cpu = kh40000_iommu_sync_single_for_cpu,
+	.sync_sg_for_cpu = kh40000_iommu_sync_sg_for_cpu,
+	.mapping_error = intel_mapping_error,
+	.dma_supported = dma_direct_supported,
+};
+#endif /* IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64) */

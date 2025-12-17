@@ -175,6 +175,87 @@ static int __init pci_iommu_init(void)
 /* Must execute after PCI subsystem */
 rootfs_initcall(pci_iommu_init);
 
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+/***
+ * usage:
+ *  set "zhaoxin_patch_bitmask=<value>" in cmdline
+ * value description:
+ *  bit 0: enable(1) node check or not(0). default 1
+ */
+enum {
+	ZHAOXIN_P2CW_NODE_CHECK = BIT(0),
+	ZHAOXIN_PATCH_CODE_MAX  = ZHAOXIN_P2CW_NODE_CHECK,
+};
+
+#define ZHAOXIN_PATCH_CODE_DEFAULT	ZHAOXIN_P2CW_NODE_CHECK
+
+unsigned long zhaoxin_patch_code = ZHAOXIN_PATCH_CODE_DEFAULT;
+
+static int __init zhaoxin_patch_code_setup(char *str)
+{
+	int err = kstrtoul(str, 0, &zhaoxin_patch_code);
+
+	if (err || (zhaoxin_patch_code > ZHAOXIN_PATCH_CODE_MAX)) {
+		pr_err("cmdline 'zhaoxin_patch_bitmask=%s' inappropriate\n", str);
+		zhaoxin_patch_code = ZHAOXIN_PATCH_CODE_DEFAULT;
+		return err;
+	}
+
+	if (ZHAOXIN_P2CW_NODE_CHECK & zhaoxin_patch_code)
+		pr_info("zhaoxin dma patch node check is enabled\n");
+
+	return 0;
+}
+__setup("zhaoxin_patch_bitmask=", zhaoxin_patch_code_setup);
+
+static struct pci_dev *kh40000_get_pci_dev(struct device *dev)
+{
+	if (dev_is_pci(dev))
+		return to_pci_dev(dev);
+
+	if (dev->parent)
+		return kh40000_get_pci_dev(dev->parent);
+
+	return NULL;
+}
+
+void kh40000_sync_single_dma_for_cpu(struct device *dev, dma_addr_t paddr,
+				     enum dma_data_direction dir, bool is_iommu)
+{
+	u8 vid;
+	struct pci_dev *pci;
+	u64 dma_mask = *dev->dma_mask;
+
+	/* check direction */
+	if ((dir != DMA_FROM_DEVICE) && (dir != DMA_BIDIRECTIONAL))
+		return;
+
+	/* check dma capability */
+	if (dma_mask <= DMA_BIT_MASK(32))
+		return;
+
+	/* check device type */
+	pci = kh40000_get_pci_dev(dev);
+	if (pci == NULL)
+		return;
+
+	/* get real physical address */
+	if (is_iommu)
+		paddr = kh40000_iommu_iova_to_phys(dev, paddr);
+
+	/* check node or not */
+	if ((zhaoxin_patch_code & ZHAOXIN_P2CW_NODE_CHECK)) {
+		unsigned long pfn = PFN_DOWN(paddr);
+
+		if (pfn_to_nid(pfn) == dev_to_node(dev))
+			return;
+	}
+
+	pci_read_config_byte(pci, PCI_VENDOR_ID, &vid);
+}
+
+#endif /* CONFIG_INTEL_IOMMU && IS_BUILTIN(CONFIG_X86_64) */
+
 #ifdef CONFIG_PCI
 /* Many VIA bridges seem to corrupt data for DAC. Disable it here */
 

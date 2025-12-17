@@ -30,6 +30,27 @@ static inline const struct dma_map_ops *get_arch_dma_ops(struct bus_type *bus)
 	return dma_ops;
 }
 
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+extern bool is_zhaoxin_kh40000(void);
+phys_addr_t kh40000_iommu_iova_to_phys(struct device *dev, dma_addr_t paddr);
+void kh40000_sync_single_dma_for_cpu(struct device *dev, dma_addr_t paddr,
+				     enum dma_data_direction dir, bool is_iommu);
+void *kh40000_dma_direct_alloc(struct device *dev, size_t size, dma_addr_t *dma_handle,
+			       gfp_t gfp, unsigned long attrs);
+void kh40000_set_direct_dma_ops(void);
+void kh40000_set_swiotlb_dma_ops(void);
+#else
+static inline void kh40000_set_direct_dma_ops(void)
+{
+
+}
+
+static inline void kh40000_set_swiotlb_dma_ops(void)
+{
+
+}
+#endif
+
 bool arch_dma_alloc_attrs(struct device **dev);
 #define arch_dma_alloc_attrs arch_dma_alloc_attrs
 

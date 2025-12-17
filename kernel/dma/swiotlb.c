@@ -1058,3 +1058,120 @@ const struct dma_map_ops swiotlb_dma_ops = {
 	.dma_supported		= dma_direct_supported,
 };
 EXPORT_SYMBOL(swiotlb_dma_ops);
+
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+static void *kh40000_swiotlb_alloc_buffer(struct device *dev, size_t size, dma_addr_t *dma_handle,
+					  unsigned long attrs)
+{
+	phys_addr_t phys_addr;
+	u64 dma_mask = DMA_BIT_MASK(32);
+
+	if (dev && dev->coherent_dma_mask)
+		dma_mask = dev->coherent_dma_mask;
+
+	if (swiotlb_force == SWIOTLB_NO_FORCE)
+		goto out_warn;
+
+	if (dma_mask > DMA_BIT_MASK(32))
+		return NULL;
+
+	phys_addr = swiotlb_tbl_map_single(dev, __phys_to_dma(dev, io_tlb_start), 0, size,
+					   DMA_FROM_DEVICE, attrs);
+	if (phys_addr == SWIOTLB_MAP_ERROR)
+		goto out_warn;
+
+	*dma_handle = __phys_to_dma(dev, phys_addr);
+	if (!dma_coherent_ok(dev, *dma_handle, size))
+		goto out_unmap;
+
+	memset(phys_to_virt(phys_addr), 0, size);
+	return phys_to_virt(phys_addr);
+
+out_unmap:
+	dev_warn(dev, "hwdev DMA mask = 0x%016Lx, dev_addr = 0x%016Lx\n",
+		 (unsigned long long)dev->coherent_dma_mask, (unsigned long long)*dma_handle);
+
+	swiotlb_tbl_unmap_single(dev, phys_addr, size, DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+out_warn:
+	if (!(attrs & DMA_ATTR_NO_WARN) && printk_ratelimit()) {
+		dev_warn(dev, "swiotlb: coherent allocation failed, size=%zu\n", size);
+		dump_stack();
+	}
+	return NULL;
+}
+
+static void *kh40000_swiotlb_alloc(struct device *dev, size_t size, dma_addr_t *dma_handle,
+				   gfp_t gfp, unsigned long attrs)
+{
+	void *vaddr;
+
+	if (gfp & __GFP_NOWARN)
+		attrs |= DMA_ATTR_NO_WARN;
+
+	gfp |= __GFP_NOWARN;
+
+	vaddr = kh40000_dma_direct_alloc(dev, size, dma_handle, gfp, attrs);
+	if (!vaddr)
+		vaddr = kh40000_swiotlb_alloc_buffer(dev, size, dma_handle, attrs);
+
+	return vaddr;
+}
+
+static void kh40000_swiotlb_sync_single_for_cpu(struct device *dev, dma_addr_t addr, size_t size,
+						enum dma_data_direction dir)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 0);
+	swiotlb_sync_single_for_cpu(dev, addr, size, dir);
+}
+
+static void kh40000_swiotlb_sync_sg_for_cpu(struct device *dev, struct scatterlist *sgl, int nelems,
+					    enum dma_data_direction dir)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sgl, sg, nelems, i)
+		kh40000_sync_single_dma_for_cpu(dev, sg_dma_address(sg), dir, 0);
+
+	swiotlb_sync_sg_for_cpu(dev, sgl, nelems, dir);
+}
+
+static void kh40000_swiotlb_unmap_sg(struct device *dev, struct scatterlist *sgl, int nelems,
+				     enum dma_data_direction dir, unsigned long attrs)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sgl, sg, nelems, i)
+		kh40000_sync_single_dma_for_cpu(dev, sg_dma_address(sg), dir, 0);
+
+	swiotlb_unmap_sg_attrs(dev, sgl, nelems, dir, attrs);
+}
+
+static void kh40000_swiotlb_unmap_page(struct device *dev, dma_addr_t addr, size_t size,
+				       enum dma_data_direction dir, unsigned long attrs)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 0);
+	swiotlb_unmap_page(dev, addr, size, dir, attrs);
+}
+
+const struct dma_map_ops kh40000_swiotlb_dma_ops = {
+	.mapping_error		= swiotlb_dma_mapping_error,
+	.alloc			= kh40000_swiotlb_alloc,
+	.free			= swiotlb_free,
+	.sync_single_for_cpu	= kh40000_swiotlb_sync_single_for_cpu,
+	.sync_single_for_device	= swiotlb_sync_single_for_device,
+	.sync_sg_for_cpu	= kh40000_swiotlb_sync_sg_for_cpu,
+	.sync_sg_for_device	= swiotlb_sync_sg_for_device,
+	.map_sg			= swiotlb_map_sg_attrs,
+	.unmap_sg		= kh40000_swiotlb_unmap_sg,
+	.map_page		= swiotlb_map_page,
+	.unmap_page		= kh40000_swiotlb_unmap_page,
+	.dma_supported		= dma_direct_supported,
+};
+
+void kh40000_set_swiotlb_dma_ops(void)
+{
+	dma_ops = &kh40000_swiotlb_dma_ops;
+}
+#endif /* IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64) */
