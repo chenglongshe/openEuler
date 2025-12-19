@@ -127,7 +127,7 @@ void ubcore_find_remove_utp(struct ubcore_device *dev, uint32_t idx)
 	struct ubcore_utp *utp;
 
 	spin_lock(&dev->ht[UBCORE_HT_UTP].lock);
-	if (&dev->ht[UBCORE_HT_UTP].head == NULL) {
+	if (dev->ht[UBCORE_HT_UTP].head == NULL) {
 		spin_unlock(&dev->ht[UBCORE_HT_UTP].lock);
 		return;
 	}

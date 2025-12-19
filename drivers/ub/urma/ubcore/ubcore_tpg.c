@@ -97,7 +97,7 @@ int ubcore_find_remove_tpg(struct ubcore_device *dev, uint32_t tpgn)
 	struct ubcore_tpg *tpg;
 
 	spin_lock(&dev->ht[UBCORE_HT_TPG].lock);
-	if (&dev->ht[UBCORE_HT_TPG].head == NULL) {
+	if (dev->ht[UBCORE_HT_TPG].head == NULL) {
 		spin_unlock(&dev->ht[UBCORE_HT_TPG].lock);
 		return -1;
 	}
@@ -128,7 +128,7 @@ struct ubcore_tp *ubcore_find_remove_tp_node(struct ubcore_device *dev, uint32_t
 	struct ubcore_tp *tp;
 
 	spin_lock(&dev->ht[UBCORE_HT_TP].lock);
-	if (&dev->ht[UBCORE_HT_TP].head == NULL) {
+	if (dev->ht[UBCORE_HT_TP].head == NULL) {
 		spin_unlock(&dev->ht[UBCORE_HT_TP].lock);
 		return NULL;
 	}

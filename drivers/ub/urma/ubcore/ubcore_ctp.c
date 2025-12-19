@@ -111,7 +111,7 @@ struct ubcore_ctp *ubcore_find_remove_ctp(struct ubcore_device *dev, uint32_t id
 	struct ubcore_ctp *ctp;
 
 	spin_lock(&dev->ht[UBCORE_HT_CTP].lock);
-	if (&dev->ht[UBCORE_HT_CTP].head == NULL) {
+	if (dev->ht[UBCORE_HT_CTP].head == NULL) {
 		spin_unlock(&dev->ht[UBCORE_HT_CTP].lock);
 		return NULL;
 	}
