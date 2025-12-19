@@ -674,6 +674,8 @@ endif # KBUILD_EXTMOD
 # This allow a user to issue only 'make' to build a kernel including modules
 # Defaults to vmlinux, but the arch makefile usually adds further targets
 all: vmlinux
+CFLAGS_PGO_CLANG := -fprofile-instr-generate
+export CFLAGS_PGO_CLANG
 
 ifeq ($(CONFIG_PGO_KERNEL),y)
 CFLAGS_GCOV := -fprofile-generate
@@ -1007,6 +1009,7 @@ include $(addprefix $(srctree)/, $(include-y))
 
 # Add user supplied CPPFLAGS, AFLAGS and CFLAGS as the last assignments
 KBUILD_CPPFLAGS += $(KCPPFLAGS)
+KBUILD_CPPFLAGS += -I$(srctree)/scripts/dtc/libfdt
 KBUILD_AFLAGS   += $(KAFLAGS)
 KBUILD_CFLAGS   += $(KCFLAGS)
 

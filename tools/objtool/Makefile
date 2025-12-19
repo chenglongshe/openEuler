@@ -2,6 +2,15 @@
 include ../scripts/Makefile.include
 include ../scripts/Makefile.arch
 
+# Drop '-specs=...' when building host tools with clang and avoid
+# elevating 'unused-command-line-argument' to error inside this dir.
+HOSTCC_IS_CLANG := $(strip $(findstring clang,$(shell $(HOSTCC) --version 2>/dev/null)))
+ifneq ($(HOSTCC_IS_CLANG),)
+KBUILD_HOSTCFLAGS  := $(filter-out -specs=%,$(KBUILD_HOSTCFLAGS))
+KBUILD_HOSTLDFLAGS := $(filter-out -specs=%,$(KBUILD_HOSTLDFLAGS))
+EXTRA_WARNINGS     += -Wno-error=unused-command-line-argument
+endif
+
 # always use the host compiler
 AR	 = $(HOSTAR)
 CC	 = $(HOSTCC)

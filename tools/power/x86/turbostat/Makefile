@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-CC		= $(CROSS_COMPILE)gcc
+include ../../../scripts/Makefile.include
 BUILD_OUTPUT	:= $(CURDIR)
 PREFIX		?= /usr
 DESTDIR		?=

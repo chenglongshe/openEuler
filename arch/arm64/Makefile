@@ -10,6 +10,7 @@
 #
 # Copyright (C) 1995-2001 by Russell King
 
+
 LDFLAGS_vmlinux	:=--no-undefined -X
 
 ifeq ($(CONFIG_RELOCATABLE), y)
@@ -97,8 +98,8 @@ asm-arch := armv8.4-a
 endif
 
 ifdef asm-arch
-KBUILD_CFLAGS	+= -Wa,-march=$(asm-arch) \
-		   -DARM64_ASM_ARCH='"$(asm-arch)"'
+KBUILD_CFLAGS  += -Wa,-march=$(asm-arch) \
+                  -DARM64_ASM_ARCH='"$(asm-arch)"'
 endif
 
 ifeq ($(CONFIG_SHADOW_CALL_STACK), y)

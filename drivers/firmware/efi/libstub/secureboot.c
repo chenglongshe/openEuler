@@ -14,12 +14,18 @@
 
 /* BIOS variables */
 static const efi_guid_t efi_variable_guid = EFI_GLOBAL_VARIABLE_GUID;
-static const efi_char16_t efi_SecureBoot_name[] = L"SecureBoot";
-static const efi_char16_t efi_SetupMode_name[] = L"SetupMode";
+static const efi_char16_t efi_SecureBoot_name[] = {
+	'S', 'e', 'c', 'u', 'r', 'e', 'B', 'o', 'o', 't', 0
+};
 
+static const efi_char16_t efi_SetupMode_name[] = {
+	'S', 'e', 't', 'u', 'p', 'M', 'o', 'd', 'e', 0
+};
 /* SHIM variables */
 static const efi_guid_t shim_guid = EFI_SHIM_LOCK_GUID;
-static const efi_char16_t shim_MokSBState_name[] = L"MokSBStateRT";
+static const efi_char16_t shim_MokSBState_name[] = {
+	'M', 'o', 'k', 'S', 'B', 'S', 't', 'a', 't', 'e', 'R', 'T', 0
+};
 
 /*
  * Determine whether we're in secure boot mode.

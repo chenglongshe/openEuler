@@ -72,6 +72,15 @@ _hostc_flags   = $(KBUILD_HOSTCFLAGS)   $(HOST_EXTRACFLAGS)   \
 _hostcxx_flags = $(KBUILD_HOSTCXXFLAGS) $(HOST_EXTRACXXFLAGS) \
                  $(HOSTCXXFLAGS_$(target-stem).o)
 
+# If host compiler is clang, drop GCC-only '-specs=...' from host flags
+# and avoid turning this one warning into an error (keep other -Werror strict).
+HOSTCC_IS_CLANG := $(strip $(findstring clang,$(shell $(HOSTCC) --version 2>/dev/null)))
+ifneq ($(HOSTCC_IS_CLANG),)
+KBUILD_HOSTCFLAGS  := $(filter-out -specs=%,$(KBUILD_HOSTCFLAGS))
+KBUILD_HOSTLDFLAGS := $(filter-out -specs=%,$(KBUILD_HOSTLDFLAGS))
+HOST_EXTRACFLAGS   += -Wno-error=unused-command-line-argument
+endif
+
 # $(objtree)/$(obj) for including generated headers from checkin source files
 ifeq ($(KBUILD_EXTMOD),)
 ifdef building_out_of_srctree
