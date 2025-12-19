@@ -1741,11 +1741,11 @@ static void ext4_mb_use_best_found(struct ext4_allocation_context *ac,
 	get_page(ac->ac_buddy_page);
 	/* store last allocated for subsequent stream allocation */
 	if (ac->ac_flags & EXT4_MB_STREAM_ALLOC) {
-		spin_lock(&sbi->s_md_lock);
-		sbi->s_mb_last_group = ac->ac_f_ex.fe_group;
-		sbi->s_mb_last_start = ac->ac_f_ex.fe_start;
-		spin_unlock(&sbi->s_md_lock);
+		int hash = ac->ac_inode->i_ino % sbi->s_mb_nr_global_goals;
+
+		WRITE_ONCE(sbi->s_mb_last_groups[hash], ac->ac_f_ex.fe_group);
 	}
+
 	/*
 	 * As we've just preallocated more space than
 	 * user requested originally, we store allocated
@@ -2378,11 +2378,11 @@ ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
 
 	/* if stream allocation is enabled, use global goal */
 	if (ac->ac_flags & EXT4_MB_STREAM_ALLOC) {
-		/* TBD: may be hot point */
-		spin_lock(&sbi->s_md_lock);
-		ac->ac_g_ex.fe_group = sbi->s_mb_last_group;
-		ac->ac_g_ex.fe_start = sbi->s_mb_last_start;
-		spin_unlock(&sbi->s_md_lock);
+		int hash = ac->ac_inode->i_ino % sbi->s_mb_nr_global_goals;
+
+		ac->ac_g_ex.fe_group = READ_ONCE(sbi->s_mb_last_groups[hash]);
+		ac->ac_g_ex.fe_start = -1;
+		ac->ac_flags &= ~EXT4_MB_HINT_TRY_GOAL;
 	}
 
 	/* Let's just scan groups to find more-less suitable blocks */
@@ -2434,6 +2434,11 @@ repeat:
 					nr = 0;
 			}
 
+			/* prevent unnecessary buddy loading. */
+			if (cr < 3 &&
+			    spin_is_locked(ext4_group_lock_ptr(sb, group)))
+				continue;
+
 			/* This now checks without needing the buddy page */
 			ret = ext4_mb_good_group_nolock(ac, group, cr);
 			if (ret <= 0) {
@@ -2446,7 +2451,13 @@ repeat:
 			if (err)
 				goto out;
 
-			ext4_lock_group(sb, group);
+			/* skip busy group */
+			if (cr >= 3) {
+				ext4_lock_group(sb, group);
+			} else if (!ext4_try_lock_group(sb, group)) {
+				ext4_mb_unload_buddy(&e4b);
+				continue;
+			}
 
 			/*
 			 * We need to check again after locking the
@@ -2507,8 +2518,12 @@ repeat:
 		}
 	}
 
-	if (sbi->s_mb_stats && ac->ac_status == AC_STATUS_FOUND)
+	if (sbi->s_mb_stats && ac->ac_status == AC_STATUS_FOUND) {
 		atomic64_inc(&sbi->s_bal_cX_hits[ac->ac_criteria]);
+		if (ac->ac_flags & EXT4_MB_STREAM_ALLOC &&
+		    ac->ac_b_ex.fe_group == ac->ac_g_ex.fe_group)
+			atomic_inc(&sbi->s_bal_stream_goals);
+	}
 out:
 	if (!err && ac->ac_status != AC_STATUS_FOUND && first_err)
 		err = first_err;
@@ -2658,6 +2673,8 @@ int ext4_seq_mb_stats_show(struct seq_file *seq, void *offset)
 		   atomic64_read(&sbi->s_bal_cX_failed[3]));
 	seq_printf(seq, "\textents_scanned: %u\n", atomic_read(&sbi->s_bal_ex_scanned));
 	seq_printf(seq, "\t\tgoal_hits: %u\n", atomic_read(&sbi->s_bal_goals));
+	seq_printf(seq, "\t\tstream_goal_hits: %u\n",
+		   atomic_read(&sbi->s_bal_stream_goals));
 	seq_printf(seq, "\t\t2^n_hits: %u\n", atomic_read(&sbi->s_bal_2orders));
 	seq_printf(seq, "\t\tbreaks: %u\n", atomic_read(&sbi->s_bal_breaks));
 	seq_printf(seq, "\t\tlost: %u\n", atomic_read(&sbi->s_mb_lost_chunks));
@@ -3014,10 +3031,19 @@ int ext4_mb_init(struct super_block *sb)
 			sbi->s_mb_group_prealloc, sbi->s_stripe);
 	}
 
+	sbi->s_mb_nr_global_goals = min_t(unsigned int, num_possible_cpus(),
+					DIV_ROUND_UP(sbi->s_groups_count, 4));
+	sbi->s_mb_last_groups = kcalloc(sbi->s_mb_nr_global_goals,
+					sizeof(ext4_group_t), GFP_KERNEL);
+	if (sbi->s_mb_last_groups == NULL) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
 	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
 	if (sbi->s_locality_groups == NULL) {
 		ret = -ENOMEM;
-		goto out;
+		goto out_free_last_groups;
 	}
 	for_each_possible_cpu(i) {
 		struct ext4_locality_group *lg;
@@ -3038,6 +3064,9 @@ int ext4_mb_init(struct super_block *sb)
 out_free_locality_groups:
 	free_percpu(sbi->s_locality_groups);
 	sbi->s_locality_groups = NULL;
+out_free_last_groups:
+	kfree(sbi->s_mb_last_groups);
+	sbi->s_mb_last_groups = NULL;
 out:
 	kfree(sbi->s_mb_offsets);
 	sbi->s_mb_offsets = NULL;
@@ -3126,6 +3155,7 @@ int ext4_mb_release(struct super_block *sb)
 	}
 
 	free_percpu(sbi->s_locality_groups);
+	kfree(sbi->s_mb_last_groups);
 
 	return 0;
 }
