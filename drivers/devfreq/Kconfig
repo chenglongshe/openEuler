@@ -74,6 +74,12 @@ config DEVFREQ_GOV_PASSIVE
 	  through sysfs entries. The passive governor recommends that
 	  devfreq device uses the OPP table to get the frequency/voltage.
 
+config DEVFREQ_GOV_UTIL
+	tristate "Util"
+	help
+	  This governor Adjust the frequency based on the load utilization
+	  rate.
+
 comment "DEVFREQ Drivers"
 
 config ARM_EXYNOS_BUS_DEVFREQ
@@ -142,6 +148,12 @@ config ARM_RK3399_DMC_DEVFREQ
 	  This adds the DEVFREQ driver for the RK3399 DMC(Dynamic Memory Controller).
 	  It sets the frequency for the memory controller and reads the usage counts
 	  from hardware.
+
+config ARM_HISI_UNCORE_DEVFREQ
+	tristate "HiSilicon uncore DEVFREQ Driver"
+	depends on ARM64 && ((PCC && ACPI && ACPI_PPTT) || COMPILE_TEST)
+	help
+	  HiSilicon uncore DEVFREQ Driver
 
 source "drivers/devfreq/event/Kconfig"
 

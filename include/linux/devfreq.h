@@ -23,6 +23,7 @@
 #define DEVFREQ_GOV_POWERSAVE		"powersave"
 #define DEVFREQ_GOV_USERSPACE		"userspace"
 #define DEVFREQ_GOV_PASSIVE		"passive"
+#define DEVFREQ_GOV_UTIL		"util"
 
 /* DEVFREQ notifier interface */
 #define DEVFREQ_TRANSITION_NOTIFIER	(0)
@@ -311,6 +312,20 @@ struct devfreq_passive_data {
 	/* For passive governor's internal use. Don't need to set them */
 	struct devfreq *this;
 	struct notifier_block nb;
+};
+#endif
+
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_UTIL)
+/**
+ * struct devfreq_util_data - ``void *data`` fed to struct devfreq
+ *	and devfreq_add_device
+ * @dful_val:	Resource utilization baseline.
+ *
+ * If the fed devfreq_util_data pointer is NULL to the governor,
+ * the governor uses the default values.
+ */
+struct devfreq_util_data {
+	unsigned int dful_val;
 };
 #endif
 
