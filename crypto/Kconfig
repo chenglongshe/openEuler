@@ -299,6 +299,18 @@ config CRYPTO_CURVE25519_X86
 	select CRYPTO_LIB_CURVE25519_GENERIC
 	select CRYPTO_ARCH_HAVE_LIB_CURVE25519
 
+config CRYPTO_SM2_ZHAOXIN_GMI
+	tristate "SM2 algorithm (Zhaoxin GMI instruction)"
+	depends on X86
+	select CRYPTO_AKCIPHER
+	select CRYPTO_MANAGER
+	default m
+	help
+	  SM2 (ShangMi 2) public key algorithm by Zhaoxin GMI Instruction.
+
+	  If unsure say M. The compiled module will be
+	  called sm2_zhaoxin_gmi.
+
 comment "Authenticated Encryption with Associated Data"
 
 config CRYPTO_CCM
