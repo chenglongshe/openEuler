@@ -615,11 +615,6 @@ static void clean_dcache_guest_page(kvm_pfn_t pfn, unsigned long size)
 	__clean_dcache_guest_page(pfn, size);
 }
 
-static void invalidate_icache_guest_page(kvm_pfn_t pfn, unsigned long size)
-{
-	__invalidate_icache_guest_page(pfn, size);
-}
-
 static void kvm_send_hwpoison_signal(unsigned long address, short lsb)
 {
 	send_sig_mceerr(BUS_MCEERR_AR, (void __user *)address, lsb, current);
@@ -931,13 +926,8 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	if (writable)
 		prot |= KVM_PGTABLE_PROT_W;
 
-	if (fault_status != FSC_PERM && !device)
-		clean_dcache_guest_page(pfn, vma_pagesize);
-
-	if (exec_fault) {
+	if (exec_fault)
 		prot |= KVM_PGTABLE_PROT_X;
-		invalidate_icache_guest_page(pfn, vma_pagesize);
-	}
 
 	if (device)
 		prot |= KVM_PGTABLE_PROT_DEVICE;
@@ -1422,8 +1412,20 @@ void kvm_toggle_cache(struct kvm_vcpu *vcpu, bool was_enabled)
 	 * If switching it off, need to clean the caches.
 	 * Clean + invalidate does the trick always.
 	 */
-	if (now_enabled != was_enabled)
-		stage2_flush_vm(vcpu->kvm);
+	if (now_enabled != was_enabled) {
+		/*
+		 * Due to Phytium CPU's cache consistency support,
+		 * just flush dcache on one vcpu not all vcpus in the VM.
+		 * This can reduce the number of flush dcaches and
+		 * improve the efficiency of SMP multi-core startup,
+		 * especially for the large VM with hugepages.
+		 */
+		if (read_cpuid_implementor() == ARM_CPU_IMP_PHYTIUM) {
+			if (vcpu->vcpu_id == 0)
+				stage2_flush_vm(vcpu->kvm);
+		} else
+			stage2_flush_vm(vcpu->kvm);
+	}
 
 	/* Caches are now on, stop trapping VM ops (until a S/W op) */
 	if (now_enabled)
