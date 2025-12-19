@@ -86,5 +86,7 @@
 #define ARM64_WORKAROUND_PHYTIUM_FT3386	78
 
 #define ARM64_NCAPS				80
+#define ARM64_HAS_NMI				81
+#define ARM64_USES_NMI				82
 
 #endif /* __ASM_CPUCAPS_H */

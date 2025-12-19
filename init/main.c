@@ -1546,6 +1546,7 @@ static noinline void __init kernel_init_freeable(void)
 
 	rcu_init_tasks_generic();
 	do_pre_smp_initcalls();
+	lockup_detector_init();
 
 	smp_init();
 	sched_init_smp();
@@ -1556,8 +1557,6 @@ static noinline void __init kernel_init_freeable(void)
 	page_ext_init();
 
 	do_basic_setup();
-
-	lockup_detector_init();
 
 	kunit_run_all_tests();
 
