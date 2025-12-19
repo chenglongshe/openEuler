@@ -24,6 +24,7 @@
 #include <linux/rculist.h>
 #include <net/xdp_sock_drv.h>
 #include <net/xdp.h>
+#include <net/ip.h>
 
 #include "xsk_queue.h"
 #include "xdp_umem.h"
@@ -811,6 +812,16 @@ static int xsk_generic_xmit(struct sock *sk)
 		skb->mark = sk->sk_mark;
 		skb_shinfo(skb)->destructor_arg = (void *)(long)desc.addr;
 		skb->destructor = xsk_destruct_skb;
+        struct ethhdr *eth = skb_eth_hdr(skb);
+        skb->protocol = eth->h_proto;
+
+        if (eth->h_proto == ETH_P_8021Q){
+                skb_set_network_header(skb, VLAN_ETH_HLEN);
+                skb_set_transport_header(skb, VLAN_ETH_HLEN + sizeof(struct iphdr));
+        } else {
+                skb_set_network_header(skb, ETH_HLEN);
+                skb_set_transport_header(skb, ETH_HLEN + sizeof(struct iphdr));
+        }
 
 		err = __dev_direct_xmit(skb, xs->queue_id);
 		if  (err == NETDEV_TX_BUSY) {
