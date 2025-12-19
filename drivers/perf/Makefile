@@ -14,3 +14,5 @@ obj-$(CONFIG_THUNDERX2_PMU) += thunderx2_pmu.o
 obj-$(CONFIG_XGENE_PMU) += xgene_pmu.o
 obj-$(CONFIG_ARM_SPE_PMU) += arm_spe_pmu.o
 obj-$(CONFIG_ARM64_BRBE) += arm_brbe.o
+obj-$(CONFIG_PHYT_PS2364_DDRPMU) += phyt_ps2364_ddr_pmu.o
+obj-$(CONFIG_PHYT_PS2364_PCIEPMU) += phyt_ps2364_pcie_pmu.o
