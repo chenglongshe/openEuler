@@ -1995,7 +1995,11 @@ unsigned long kretprobe_find_ret_addr(struct task_struct *tsk, void *fp)
 	unsigned long flags;
 	kprobe_opcode_t *correct_ret_addr = NULL;
 
-	kretprobe_hash_lock(tsk, &head, &flags);
+	if (tsk != current)
+		kretprobe_hash_lock(tsk, &head, &flags);
+	else
+		head = &kretprobe_inst_table[hash_ptr(tsk, KPROBE_HASH_BITS)];
+
 	hlist_for_each_entry(ri, head, hlist) {
 		if (ri->task != tsk)
 			continue;
@@ -2006,7 +2010,8 @@ unsigned long kretprobe_find_ret_addr(struct task_struct *tsk, void *fp)
 			break;
 		}
 	}
-	kretprobe_hash_unlock(tsk, &flags);
+	if (tsk != current)
+		kretprobe_hash_unlock(tsk, &flags);
 	return (unsigned long)correct_ret_addr;
 }
 NOKPROBE_SYMBOL(kretprobe_find_ret_addr);
