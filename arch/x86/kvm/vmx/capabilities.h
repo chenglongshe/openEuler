@@ -62,6 +62,7 @@ struct vmcs_config {
 	u32 cpu_based_exec_ctrl;
 	u32 cpu_based_2nd_exec_ctrl;
 	u64 cpu_based_3rd_exec_ctrl;
+	u32 zx_cpu_based_3rd_exec_ctrl;
 	u32 vmexit_ctrl;
 	u32 vmentry_ctrl;
 	struct nested_vmx_msrs nested;
@@ -139,6 +140,11 @@ static inline bool cpu_has_tertiary_exec_ctrls(void)
 {
 	return vmcs_config.cpu_based_exec_ctrl &
 		CPU_BASED_ACTIVATE_TERTIARY_CONTROLS;
+}
+
+static inline bool cpu_has_zx_tertiary_exec_ctrls(void)
+{
+	return !!vmcs_config.zx_cpu_based_3rd_exec_ctrl;
 }
 
 static inline bool cpu_has_vmx_virtualize_apic_accesses(void)
@@ -259,6 +265,12 @@ static inline bool cpu_has_vmx_xsaves(void)
 {
 	return vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_XSAVES;
+}
+
+static inline bool cpu_has_vmx_pauseopt(void)
+{
+	return vmcs_config.zx_cpu_based_3rd_exec_ctrl &
+		ZX_TERTIARY_EXEC_GUEST_PAUSEOPT;
 }
 
 static inline bool cpu_has_vmx_waitpkg(void)

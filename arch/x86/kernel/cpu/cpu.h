@@ -94,4 +94,8 @@ static inline bool spectre_v2_in_eibrs_mode(enum spectre_v2_mitigation mode)
 	       mode == SPECTRE_V2_EIBRS_RETPOLINE ||
 	       mode == SPECTRE_V2_EIBRS_LFENCE;
 }
+
+#ifdef CONFIG_X86_VMX_FEATURE_NAMES
+extern const char * const x86_vmx_zx_tertiary_flags[NVMX_ZX_TERTIARY_INTS*32];
+#endif
 #endif /* ARCH_X86_CPU_H */

@@ -1660,8 +1660,10 @@ static void validate_apic_and_package_id(struct cpuinfo_x86 *c)
 static void init_extra_cpu_data(u16 cpu_index)
 {
 	struct extra_cpuinfo_x86 *e = &extra_cpu_data(cpu_index);
+	struct extra_zx_cpuinfo_x86 *zx = &extra_zx_cpu_data(cpu_index);
 
 	memset(&e->vmx_tertiary_capability, 0, sizeof(e->vmx_tertiary_capability));
+	memset(&zx->vmx_tertiary_capability, 0, sizeof(zx->vmx_tertiary_capability));
 }
 #endif
 

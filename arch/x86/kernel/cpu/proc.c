@@ -117,6 +117,8 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 #ifdef CONFIG_X86_VMX_FEATURE_NAMES
 	if (cpu_has(c, X86_FEATURE_VMX) && c->vmx_capability[0]) {
 		struct extra_cpuinfo_x86 *e = &extra_cpu_data(c->cpu_index);
+		struct extra_zx_cpuinfo_x86 *zx = &extra_zx_cpu_data(cpu);
+
 		seq_puts(m, "\nvmx flags\t:");
 		for (i = 0; i < 32*NVMXINTS; i++) {
 			if (test_bit(i, (unsigned long *)c->vmx_capability) &&
@@ -127,6 +129,11 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 			if (test_bit(i, (unsigned long *)e->vmx_tertiary_capability) &&
 			    x86_vmx_tertiary_flags[i] != NULL)
 				seq_printf(m, " %s", x86_vmx_tertiary_flags[i]);
+		}
+		for (i = 0; i < 32*NVMX_ZX_TERTIARY_INTS; i++) {
+			if (test_bit(i, zx->vmx_tertiary_capability) &&
+			    x86_vmx_zx_tertiary_flags[i] != NULL)
+				seq_printf(m, " %s", x86_vmx_zx_tertiary_flags[i]);
 		}
 	}
 #endif
