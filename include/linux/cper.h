@@ -576,4 +576,6 @@ void cper_print_proc_arm(const char *pfx,
 void cper_print_proc_ia(const char *pfx,
 			const struct cper_sec_proc_ia *proc);
 
+const char *cper_zdi_zpi_err_type_str(unsigned int etype);
+
 #endif
