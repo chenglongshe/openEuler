@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Detect hard lockups on a system
+ * Detect hard lockups on a system using perf
  *
  * started by Don Zickus, Copyright (C) 2010 Red Hat, Inc.
  *
@@ -461,6 +461,29 @@ void hardlockup_detector_perf_cleanup(void)
 		per_cpu(dead_event, cpu) = NULL;
 	}
 	cpumask_clear(&dead_events_mask);
+}
+
+/**
+ * hardlockup_detector_perf_adjust_period - Adjust the event period due
+ *                                          to cpu frequency change
+ * @cpu: The CPU whose event period will be adjusted
+ * @period: The target period to be set
+ */
+void hardlockup_detector_perf_adjust_period(int cpu, u64 period)
+{
+	struct perf_event *event = per_cpu(watchdog_ev, cpu);
+
+	if (!(watchdog_enabled & NMI_WATCHDOG_ENABLED))
+		return;
+
+	if (!event)
+		return;
+
+	if (event->attr.sample_period == period)
+		return;
+
+	if (perf_event_period(event, period))
+		pr_err("failed to change period to %llu\n", period);
 }
 
 /**
