@@ -147,6 +147,7 @@ struct sata_device {
 	struct ata_host *ata_host;
 	struct smp_resp rps_resp ____cacheline_aligned; /* report_phy_sata_resp */
 	u8     fis[ATA_RESP_FIS_SIZE];
+	u16    id[ATA_ID_WORDS];
 };
 
 struct ssp_device {
@@ -434,6 +435,9 @@ static inline void sas_phy_disconnected(struct asd_sas_phy *phy)
 {
 	phy->oob_mode = OOB_NOT_CONNECTED;
 	phy->linkrate = SAS_LINK_RATE_UNKNOWN;
+
+	if (phy->phy)
+		phy->phy->negotiated_linkrate = SAS_LINK_RATE_UNKNOWN;
 }
 
 static inline unsigned int to_sas_gpio_od(int device, int bit)
@@ -681,7 +685,7 @@ int  sas_discover_root_expander(struct domain_device *);
 
 void sas_init_ex_attr(void);
 
-int  sas_ex_revalidate_domain(struct domain_device *);
+void sas_ex_revalidate_domain(struct domain_device *port_dev, bool *retry);
 
 void sas_unregister_domain_devices(struct asd_sas_port *port, int gone);
 void sas_init_disc(struct sas_discovery *disc, struct asd_sas_port *);

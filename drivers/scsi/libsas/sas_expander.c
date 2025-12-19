@@ -829,7 +829,10 @@ static struct domain_device *sas_ex_discover_end_dev(
 			sas_port_free(phy->port);
 			goto out_err;
 		}
-	}
+		dev_printk(KERN_INFO, &phy->port->dev, "port alloc and added\n");
+	} else
+		dev_printk(KERN_INFO, &phy->port->dev, "port already attached to this phy?\n");
+
 	sas_ex_get_linkrate(parent, child, phy);
 	sas_device_set_phy(child, phy->port);
 
@@ -927,7 +930,8 @@ static struct domain_device *sas_ex_discover_end_dev(
 	list_del(&child->dev_list_node);
 	spin_unlock_irq(&parent->port->dev_list_lock);
  out_free:
-	sas_port_delete(phy->port);
+	dev_printk(KERN_INFO, &phy->port->dev, "port deleted due to failed discover\n");
+	list_add_tail(&phy->port->del_list, &parent->port->sas_port_del_list);
  out_err:
 	phy->port = NULL;
 	sas_put_device(child);
@@ -948,7 +952,23 @@ static bool sas_ex_join_wide_port(struct domain_device *parent, int phy_id)
 
 		if (!memcmp(phy->attached_sas_addr, ephy->attached_sas_addr,
 			    SAS_ADDR_SIZE) && ephy->port) {
+			/*
+			 * Do not join wide port if it is an end device,
+			 * this only happen when swapping disks. Return true
+			 * here to exit the discover process.
+			 */
+			if (sas_phy_end_device(phy) || sas_phy_end_device(ephy)) {
+				memset(phy->attached_sas_addr, 0, SAS_ADDR_SIZE);
+				phy->phy_change_count = -1;
+				parent->ex_dev.ex_change_count = -1;
+				pr_debug("Try attaching ex phy%d to wide port %016llx(with phy%d), not allowed\n",
+					 phy_id, SAS_ADDR(ephy->attached_sas_addr), i);
+				return true;
+			}
+
 			sas_port_add_ex_phy(ephy->port, phy);
+			pr_debug("Attaching ex phy%d to wide port %016llx(with phy%d)\n",
+				 phy_id, SAS_ADDR(ephy->attached_sas_addr), i);
 			return true;
 		}
 	}
@@ -1126,9 +1146,36 @@ static int sas_ex_discover_dev(struct domain_device *dev, int phy_id)
 		break;
 	}
 
-	if (!child)
+	if (child) {
+		int i;
+
+		for (i = 0; i < ex->num_phys; i++) {
+			if (ex->ex_phy[i].phy_state == PHY_VACANT ||
+			    ex->ex_phy[i].phy_state == PHY_NOT_PRESENT)
+				continue;
+			/*
+			 * Due to races, the phy might not get added to the
+			 * wide port, so we add the phy to the wide port here.
+			 */
+			if (SAS_ADDR(ex->ex_phy[i].attached_sas_addr) ==
+			    SAS_ADDR(child->sas_addr)) {
+				ex->ex_phy[i].phy_state= PHY_DEVICE_DISCOVERED;
+				if (sas_ex_join_wide_port(dev, i))
+					pr_debug("Attaching ex phy%02d to wide port %016llx\n",
+						 i, SAS_ADDR(ex->ex_phy[i].attached_sas_addr));
+			}
+		}
+	} else {
 		pr_notice("ex %016llx phy%02d failed to discover\n",
 			  SAS_ADDR(dev->sas_addr), phy_id);
+		/* if we failed to discover this device, we have to
+		 * reset the expander phy attached address so that we
+		 * will not treat the phy as flutter in the next
+		 * revalidation
+		 */
+		memset(ex_phy->attached_sas_addr, 0, SAS_ADDR_SIZE);
+	}
+
 	return res;
 }
 
@@ -1931,6 +1978,8 @@ static void sas_unregister_devs_sas_addr(struct domain_device *parent,
 		}
 		phy->port = NULL;
 	}
+	if (phy->phy)
+		phy->phy->negotiated_linkrate = SAS_LINK_RATE_UNKNOWN;
 }
 
 static int sas_discover_bfs_by_root_level(struct domain_device *root,
@@ -2017,22 +2066,73 @@ static bool dev_type_flutter(enum sas_device_type new, enum sas_device_type old)
 	return false;
 }
 
-static int sas_rediscover_dev(struct domain_device *dev, int phy_id,
-			      bool last, int sibling)
+/*
+ * we think the device is fluttering so just read the phy state and update
+ * some information of the device, but if some important things changed
+ * such as the sas address, or the linkrate, or the ata devices id and class,
+ * we have to unregister the device and re-probe it.
+ */
+static bool sas_process_flutter(struct domain_device *dev, struct ex_phy *phy,
+				int phy_id, u8 *sas_addr)
+{
+	struct domain_device *ata_dev = sas_ex_to_ata(dev, phy_id);
+	enum sas_linkrate linkrate = phy->linkrate;
+	char *action = "";
+
+	sas_ex_phy_discover(dev, phy_id);
+
+	if (ata_dev && phy->attached_dev_type == SAS_SATA_PENDING)
+		action = ", needs recovery";
+	pr_debug("ex %016llx phy%d broadcast flutter%s\n",
+		 SAS_ADDR(dev->sas_addr), phy_id, action);
+
+	/* the phy attached address will be updated by sas_ex_phy_discover()
+	 * and sometimes become abnormal
+	 */
+	if (SAS_ADDR(phy->attached_sas_addr) != SAS_ADDR(sas_addr) ||
+	    SAS_ADDR(phy->attached_sas_addr) == 0) {
+		/* if attached_sas_addr become abnormal, we must set the
+		 * original address back so that the device can be unregistered
+		 */
+		memcpy(phy->attached_sas_addr, sas_addr, SAS_ADDR_SIZE);
+		pr_debug("phy address(%016llx) abnormal, origin:%016llx\n",
+			 SAS_ADDR(phy->attached_sas_addr),
+			 SAS_ADDR(sas_addr));
+		return false;
+	}
+
+	if (linkrate != phy->linkrate) {
+		pr_debug("ex %016llx phy%d linkrate changed from %d to %d\n",
+			 SAS_ADDR(dev->sas_addr), phy_id,
+			 linkrate, phy->linkrate);
+		return false;
+	}
+
+	if (ata_dev) {
+		struct ata_device *adev = sas_to_ata_dev(ata_dev);
+		unsigned int class = ata_dev->sata_dev.class;
+		u16 *id = ata_dev->sata_dev.id;
+
+		/* to see if the disk is replaced with another one */
+		if (!ata_dev_same_device(adev, class, id))
+			return false;
+	}
+
+	return true;
+}
+
+static int sas_ex_unregister(struct domain_device *dev, int phy_id, bool last,
+			      bool *retry)
 {
 	struct expander_device *ex = &dev->ex_dev;
 	struct ex_phy *phy = &ex->ex_phy[phy_id];
 	enum sas_device_type type = SAS_PHY_UNUSED;
 	struct smp_disc_resp *disc_resp;
 	u8 sas_addr[SAS_ADDR_SIZE];
-	char msg[80] = "";
 	int res;
 
-	if (!last)
-		sprintf(msg, ", part of a wide port with phy%02d", sibling);
-
-	pr_debug("ex %016llx rediscovering phy%02d%s\n",
-		 SAS_ADDR(dev->sas_addr), phy_id, msg);
+	pr_debug("ex %016llx unregistering phy%02d\n",
+		 SAS_ADDR(dev->sas_addr), phy_id);
 
 	memset(sas_addr, 0, SAS_ADDR_SIZE);
 	disc_resp = alloc_smp_resp(DISCOVER_RESP_SIZE);
@@ -2069,19 +2169,13 @@ static int sas_rediscover_dev(struct domain_device *dev, int phy_id,
 		 */
 		if (res == 0)
 			sas_set_ex_phy(dev, phy_id, disc_resp);
+		memcpy(phy->attached_sas_addr, sas_addr, SAS_ADDR_SIZE);
+		phy->phy_change_count = -1;
 		goto out_free_resp;
 	} else if (SAS_ADDR(sas_addr) == SAS_ADDR(phy->attached_sas_addr) &&
 		   dev_type_flutter(type, phy->attached_dev_type)) {
-		struct domain_device *ata_dev = sas_ex_to_ata(dev, phy_id);
-		char *action = "";
-
-		sas_ex_phy_discover(dev, phy_id);
-
-		if (ata_dev && phy->attached_dev_type == SAS_SATA_PENDING)
-			action = ", needs recovery";
-		pr_debug("ex %016llx phy%02d broadcast flutter%s\n",
-			 SAS_ADDR(dev->sas_addr), phy_id, action);
-		goto out_free_resp;
+		if (sas_process_flutter(dev, phy, phy_id, sas_addr))
+			goto out_free_resp;
 	}
 
 	/* we always have to delete the old device when we went here */
@@ -2090,27 +2184,18 @@ static int sas_rediscover_dev(struct domain_device *dev, int phy_id,
 		SAS_ADDR(phy->attached_sas_addr));
 	sas_unregister_devs_sas_addr(dev, phy_id, last);
 
-	res = sas_discover_new(dev, phy_id);
+	/* force the next revalidation find this phy and bring it up */
+	phy->phy_change_count = -1;
+	ex->ex_change_count = -1;
+	*retry = true;
+	res = 0;
 out_free_resp:
 	kfree(disc_resp);
 	return res;
 }
 
-/**
- * sas_rediscover - revalidate the domain.
- * @dev:domain device to be detect.
- * @phy_id: the phy id will be detected.
- *
- * NOTE: this process _must_ quit (return) as soon as any connection
- * errors are encountered.  Connection recovery is done elsewhere.
- * Discover process only interrogates devices in order to discover the
- * domain.For plugging out, we un-register the device only when it is
- * the last phy in the port, for other phys in this port, we just delete it
- * from the port.For inserting, we do discovery when it is the
- * first phy,for other phys in this port, we add it to the port to
- * forming the wide-port.
- */
-static int sas_rediscover(struct domain_device *dev, const int phy_id)
+static void sas_ex_unregister_device(struct domain_device *dev, const int phy_id,
+			   bool *retry)
 {
 	struct expander_device *ex = &dev->ex_dev;
 	struct ex_phy *changed_phy = &ex->ex_phy[phy_id];
@@ -2118,56 +2203,128 @@ static int sas_rediscover(struct domain_device *dev, const int phy_id)
 	int i;
 	bool last = true;	/* is this the last phy of the port */
 
-	pr_debug("ex %016llx phy%02d originated BROADCAST(CHANGE)\n",
-		 SAS_ADDR(dev->sas_addr), phy_id);
+	for (i = 0; i < ex->num_phys; i++) {
+		struct ex_phy *phy = &ex->ex_phy[i];
 
-	if (SAS_ADDR(changed_phy->attached_sas_addr) != 0) {
-		for (i = 0; i < ex->num_phys; i++) {
-			struct ex_phy *phy = &ex->ex_phy[i];
-
-			if (i == phy_id)
-				continue;
-			if (SAS_ADDR(phy->attached_sas_addr) ==
-			    SAS_ADDR(changed_phy->attached_sas_addr)) {
-				last = false;
-				break;
-			}
+		if (i == phy_id)
+			continue;
+		if (SAS_ADDR(phy->attached_sas_addr) ==
+		    SAS_ADDR(changed_phy->attached_sas_addr) &&
+		    phy->port == changed_phy->port) {
+			pr_debug("phy%d part of wide port with phy%d, port:%llx\n",
+				 phy_id, i, (unsigned long long)phy->port);
+			last = false;
+			break;
 		}
-		res = sas_rediscover_dev(dev, phy_id, last, i);
-	} else
-		res = sas_discover_new(dev, phy_id);
-	return res;
+	}
+	res = sas_ex_unregister(dev, phy_id, last, retry);
+
+	pr_debug("ex %016llx phy%d discover returned 0x%x\n",
+		 SAS_ADDR(dev->sas_addr), phy_id, res);
+}
+
+static int sas_ex_try_unregister(struct domain_device *dev, u8 *changed_phy,
+				 int nr, bool *retry)
+{
+	struct expander_device *ex = &dev->ex_dev;
+	int unregistered = 0;
+	struct ex_phy *phy;
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		phy = &ex->ex_phy[changed_phy[i]];
+		pr_debug("ex %016llx phy%d:%016llx originated BROADCAST(CHANGE)\n",
+			 SAS_ADDR(dev->sas_addr), changed_phy[i],
+			 SAS_ADDR(phy->attached_sas_addr));
+
+		if (SAS_ADDR(phy->attached_sas_addr) == 0)
+			continue;
+
+		sas_ex_unregister_device(dev, changed_phy[i], retry);
+		changed_phy[i] = 0xff;
+		unregistered++;
+	}
+	return unregistered;
+}
+
+static void sas_ex_register(struct domain_device *dev, u8 *changed_phy,
+			    int nr)
+{
+	struct expander_device *ex = &dev->ex_dev;
+	struct ex_phy *phy;
+	int res = 0;
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		if (changed_phy[i] == 0xff)
+			continue;
+
+		phy = &ex->ex_phy[changed_phy[i]];
+
+		res = sas_discover_new(dev, changed_phy[i]);
+
+		pr_debug("ex %016llx phy%d register returned 0x%x\n",
+			 SAS_ADDR(dev->sas_addr), changed_phy[i], res);
+	}
 }
 
 /**
  * sas_ex_revalidate_domain - revalidate the domain
  * @port_dev: port domain device.
+ * @retry: do we need to revalidate again
  *
  * NOTE: this process _must_ quit (return) as soon as any connection
  * errors are encountered.  Connection recovery is done elsewhere.
  * Discover process only interrogates devices in order to discover the
  * domain.
  */
-int sas_ex_revalidate_domain(struct domain_device *port_dev)
+void sas_ex_revalidate_domain(struct domain_device *port_dev, bool *retry)
 {
 	int res;
 	struct domain_device *dev = NULL;
+	u8 changed_phy[MAX_EXPANDER_PHYS];
+	struct expander_device *ex;
+	int unregistered = 0;
+	int phy_id;
+	int nr = 0;
+	int i = 0;
 
 	res = sas_find_bcast_dev(port_dev, &dev);
-	if (res == 0 && dev) {
-		struct expander_device *ex = &dev->ex_dev;
-		int i = 0, phy_id;
+	if (res || !dev)
+		return;
 
-		do {
-			phy_id = -1;
-			res = sas_find_bcast_phy(dev, &phy_id, i, true);
-			if (phy_id == -1)
-				break;
-			res = sas_rediscover(dev, phy_id);
-			i = phy_id + 1;
-		} while (i < ex->num_phys);
+	memset(changed_phy, 0xff, MAX_EXPANDER_PHYS);
+	ex = &dev->ex_dev;
+
+	do {
+		phy_id = -1;
+		res = sas_find_bcast_phy(dev, &phy_id, i, true);
+		if (phy_id == -1)
+			break;
+		changed_phy[nr++] = phy_id;
+		i = phy_id + 1;
+	} while (i < dev->ex_dev.num_phys);
+
+	if (nr == 0)
+		return;
+
+	unregistered = sas_ex_try_unregister(dev, changed_phy, nr, retry);
+
+	if (unregistered > 0) {
+		struct ex_phy *phy;
+
+		for (i = 0; i < nr; i++) {
+			if (changed_phy[i] == 0xff)
+				continue;
+			phy = &ex->ex_phy[changed_phy[i]];
+			phy->phy_change_count = -1;
+		}
+		ex->ex_change_count = -1;
+		*retry = true;
+		return;
 	}
-	return res;
+
+	sas_ex_register(dev, changed_phy, nr);
 }
 
 void sas_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
