@@ -579,3 +579,19 @@ const struct bpf_func_proto bpf_sched_set_task_tag_proto = {
 	.arg1_btf_id	= &btf_sched_task_ids[0],
 	.arg2_type	= ARG_ANYTHING,
 };
+
+#define __bpf_kfunc __used noinline
+
+__bpf_kfunc long bpf_sched_tag_of_entity(struct sched_entity *se)
+{
+	if (!se)
+		return -EINVAL;
+
+	if (entity_is_task(se))
+		return task_of(se)->tag;
+
+	return group_cfs_rq(se)->tg->tag;
+}
+
+BTF_ID_LIST(sched_entity_dtor_ids)
+

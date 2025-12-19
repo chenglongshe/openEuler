@@ -3276,3 +3276,8 @@ static inline int destroy_soft_domain(struct task_group *tg)
 }
 
 #endif
+
+#ifdef CONFIG_BPF_SCHED
+inline bool is_cpu_allowed(struct task_struct *p, int cpu);
+#endif
+

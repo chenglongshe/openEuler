@@ -16,3 +16,4 @@ BPF_SCHED_HOOK(void, (void) 0, cfs_change_preferred_node,
 	struct sched_preferred_node_ctx *ctx)
 BPF_SCHED_HOOK(int, -1, cfs_preferred_nid_init, struct task_struct *tsk)
 BPF_SCHED_HOOK(void, (void) 0, cfs_exec_init, struct task_struct *tsk)
+BPF_SCHED_HOOK(int, -1, cfs_tag_entity_eligible, struct sched_entity *se)
