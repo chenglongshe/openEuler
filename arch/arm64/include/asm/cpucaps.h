@@ -84,7 +84,9 @@
 #define ARM64_HAS_XCALL				76
 #define ARM64_HAS_XINT				77
 #define ARM64_WORKAROUND_PHYTIUM_FT3386	78
+#define ARM64_HAS_NMI				79
+#define ARM64_USES_NMI				80
 
-#define ARM64_NCAPS				80
+#define ARM64_NCAPS				81
 
 #endif /* __ASM_CPUCAPS_H */
