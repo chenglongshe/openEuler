@@ -1188,7 +1188,8 @@ static inline int ip6_sock_set_v6only(struct sock *sk)
 static inline void ip6_sock_set_recverr(struct sock *sk)
 {
 	lock_sock(sk);
-	inet6_sk(sk)->recverr = true;
+	if (inet6_sk(sk) != NULL)
+		inet6_sk(sk)->recverr = true;
 	release_sock(sk);
 }
 
@@ -1244,8 +1245,8 @@ static inline int __ip6_sock_set_addr_preferences(struct sock *sk, int val)
 	default:
 		return -EINVAL;
 	}
-
-	inet6_sk(sk)->srcprefs = (inet6_sk(sk)->srcprefs & prefmask) | pref;
+	if (inet6_sk(sk) != NULL)
+		inet6_sk(sk)->srcprefs = (inet6_sk(sk)->srcprefs & prefmask) | pref;
 	return 0;
 }
 
@@ -1262,7 +1263,8 @@ static inline int ip6_sock_set_addr_preferences(struct sock *sk, int val)
 static inline void ip6_sock_set_recvpktinfo(struct sock *sk)
 {
 	lock_sock(sk);
-	inet6_sk(sk)->rxopt.bits.rxinfo = true;
+	if (inet6_sk(sk) != NULL)
+		inet6_sk(sk)->rxopt.bits.rxinfo = true;
 	release_sock(sk);
 }
 
