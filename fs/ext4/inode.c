@@ -48,6 +48,10 @@
 
 #include <trace/events/ext4.h>
 
+static void ext4_journalled_zero_new_buffers(handle_t *handle,
+					    struct page	*page,
+					    unsigned from, unsigned to);
+
 static __u32 ext4_inode_csum(struct inode *inode, struct ext4_inode *raw,
 			      struct ext4_inode_info *ei)
 {
@@ -1007,31 +1011,15 @@ int ext4_walk_page_buffers(handle_t *handle,
 int do_journal_get_write_access(handle_t *handle,
 				struct buffer_head *bh)
 {
-	int dirty = buffer_dirty(bh);
-	int ret;
-
 	if (!buffer_mapped(bh) || buffer_freed(bh))
 		return 0;
-	/*
-	 * __block_write_begin() could have dirtied some buffers. Clean
-	 * the dirty bit as jbd2_journal_get_write_access() could complain
-	 * otherwise about fs integrity issues. Setting of the dirty bit
-	 * by __block_write_begin() isn't a real problem here as we clear
-	 * the bit before releasing a page lock and thus writeback cannot
-	 * ever write the buffer.
-	 */
-	if (dirty)
-		clear_buffer_dirty(bh);
 	BUFFER_TRACE(bh, "get write access");
-	ret = ext4_journal_get_write_access(handle, bh);
-	if (!ret && dirty)
-		ret = ext4_handle_dirty_metadata(handle, NULL, bh);
-	return ret;
+	return ext4_journal_get_write_access(handle, bh);
 }
 
-#ifdef CONFIG_FS_ENCRYPTION
-static int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
-				  get_block_t *get_block)
+int ext4_block_write_begin(handle_t *handle, struct page *page,
+			   loff_t pos, unsigned len,
+			   get_block_t *get_block)
 {
 	unsigned from = pos & (PAGE_SIZE - 1);
 	unsigned to = from + len;
@@ -1044,6 +1032,7 @@ static int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
 	struct buffer_head *bh, *head, *wait[2];
 	int nr_wait = 0;
 	int i;
+	bool should_journal_data = ext4_should_journal_data(inode);
 
 	BUG_ON(!PageLocked(page));
 	BUG_ON(from > PAGE_SIZE);
@@ -1073,10 +1062,21 @@ static int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
 			if (err)
 				break;
 			if (buffer_new(bh)) {
+				/*
+				 * We may be zeroing partial buffers or all new
+				 * buffers in case of failure. Prepare JBD2 for
+				 * that.
+				 */
+				if (should_journal_data)
+					do_journal_get_write_access(handle, bh);
 				if (PageUptodate(page)) {
-					clear_buffer_new(bh);
+					/*
+					 * Unlike __block_write_begin() we leave
+					 * dirtying of new uptodate buffers to
+					 * ->write_end() time or
+					 * folio_zero_new_buffers().
+					 */
 					set_buffer_uptodate(bh);
-					mark_buffer_dirty(bh);
 					continue;
 				}
 				if (block_end > to || block_start < from)
@@ -1105,7 +1105,11 @@ static int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
 			err = -EIO;
 	}
 	if (unlikely(err)) {
-		page_zero_new_buffers(page, from, to);
+		if (should_journal_data)
+			ext4_journalled_zero_new_buffers(handle, page, from,
+							 to);
+		else
+			page_zero_new_buffers(page, from, to);
 	} else if (fscrypt_inode_uses_fs_layer_crypto(inode)) {
 		for (i = 0; i < nr_wait; i++) {
 			int err2;
@@ -1121,7 +1125,6 @@ static int ext4_block_write_begin(struct page *page, loff_t pos, unsigned len,
 
 	return err;
 }
-#endif
 
 static int ext4_write_begin(struct file *file, struct address_space *mapping,
 			    loff_t pos, unsigned len, unsigned flags,
@@ -1195,20 +1198,12 @@ retry_journal:
 	/* In case writeback began while the page was unlocked */
 	wait_for_stable_page(page);
 
-#ifdef CONFIG_FS_ENCRYPTION
 	if (ext4_should_dioread_nolock(inode))
-		ret = ext4_block_write_begin(page, pos, len,
+		ret = ext4_block_write_begin(handle, page, pos, len,
 					     ext4_get_block_unwritten);
 	else
-		ret = ext4_block_write_begin(page, pos, len,
+		ret = ext4_block_write_begin(handle, page, pos, len,
 					     ext4_get_block);
-#else
-	if (ext4_should_dioread_nolock(inode))
-		ret = __block_write_begin(page, pos, len,
-					  ext4_get_block_unwritten);
-	else
-		ret = __block_write_begin(page, pos, len, ext4_get_block);
-#endif
 	if (!ret && ext4_should_journal_data(inode)) {
 		ret = ext4_walk_page_buffers(handle, page_buffers(page),
 					     from, to, NULL,
@@ -1221,7 +1216,7 @@ retry_journal:
 
 		unlock_page(page);
 		/*
-		 * __block_write_begin may have instantiated a few blocks
+		 * ext4_block_write_begin may have instantiated a few blocks
 		 * outside i_size.  Trim these off again. Don't need
 		 * i_size_read because we hold i_mutex.
 		 *
@@ -1365,9 +1360,9 @@ static void ext4_journalled_zero_new_buffers(handle_t *handle,
 					size = min(to, block_end) - start;
 
 					zero_user(page, start, size);
-					write_end_fn(handle, bh);
 				}
 				clear_buffer_new(bh);
+				write_end_fn(handle, bh);
 			}
 		}
 		block_start = block_end;
@@ -3021,12 +3016,8 @@ retry:
 	/* In case writeback began while the page was unlocked */
 	wait_for_stable_page(page);
 
-#ifdef CONFIG_FS_ENCRYPTION
-	ret = ext4_block_write_begin(page, pos, len,
+	ret = ext4_block_write_begin(NULL, page, pos, len,
 				     ext4_da_get_block_prep);
-#else
-	ret = __block_write_begin(page, pos, len, ext4_da_get_block_prep);
-#endif
 	if (ret < 0) {
 		unlock_page(page);
 		put_page(page);
@@ -6302,7 +6293,8 @@ retry_alloc:
 		else
 			len = PAGE_SIZE;
 
-		err = __block_write_begin(page, 0, len, ext4_get_block);
+		err = ext4_block_write_begin(handle, page, 0, len,
+					     ext4_get_block);
 		if (!err) {
 			ret = VM_FAULT_SIGBUS;
 			if (ext4_walk_page_buffers(handle, page_buffers(page),
