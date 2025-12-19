@@ -205,7 +205,7 @@ config CPU_FREQ_GOV_SCHEDUTIL
 
 config CPU_FREQ_GOV_SEEP
 	tristate "'seep' cpufreq policy governor"
-	depends on ACPI_CPPC_CPUFREQ || ARM64
+	depends on ACPI_CPPC_CPUFREQ && ARM64
 	select CPPC_CPUFREQ_SYSFS_INTERFACE
 	select CPU_FREQ_GOV_COMMON
 	help
