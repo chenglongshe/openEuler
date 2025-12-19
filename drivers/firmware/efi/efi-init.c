@@ -236,6 +236,7 @@ void __init efi_init(void)
 	}
 
 	reserve_regions();
+	efi_find_mirror();
 	efi_esrt_init();
 	efi_mokvar_table_init();
 
