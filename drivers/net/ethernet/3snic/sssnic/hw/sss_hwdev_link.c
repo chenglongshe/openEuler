@@ -23,6 +23,10 @@
 #define SSS_FW_CFG_MAX_INDEX       8
 #define SSS_FW_CFG_MIN_INDEX       1
 
+#ifndef DEVLINK_SUPPORT_FLASH_UPDATE_COMPONENT
+#define DEVLINK_SUPPORT_FLASH_UPDATE_COMPONENT          BIT(0)
+#endif
+
 enum sss_devlink_param_id {
 	SSS_DEVLINK_PARAM_ID_BASE = DEVLINK_PARAM_GENERIC_ID_MAX,
 	SSS_DEVLINK_PARAM_ID_ACTIVATE_FW,
@@ -645,7 +649,11 @@ int sss_init_devlink(struct sss_hwdev *hwdev)
 	struct devlink *link = NULL;
 	struct pci_dev *pdev = hwdev->pcidev_hdl;
 
+#ifdef HAS_DEVLINK_ALLOC_SETS_DEV
+	link = devlink_alloc(&g_devlink_ops, sizeof(struct sss_devlink), &pdev->dev);
+#else
 	link = devlink_alloc(&g_devlink_ops, sizeof(struct sss_devlink));
+#endif
 	if (!link) {
 		sdk_err(hwdev->dev_hdl, "Fail to alloc devlink\n");
 		return -ENOMEM;
@@ -665,7 +673,17 @@ int sss_init_devlink(struct sss_hwdev *hwdev)
 	}
 #endif
 
+#ifdef NO_DEVLINK_REGISTER_SETS_DEV
+#ifdef DEVLINK_REGISTER_RETURN_VOID
+	devlink_register(link);
+	ret = 0;
+#else
+	ret = devlink_register(link);
+#endif
+
+#else
 	ret = devlink_register(link, &pdev->dev);
+#endif
 	if (ret != 0) {
 		sdk_err(hwdev->dev_hdl, "Fail to register devlink\n");
 #ifdef REGISTER_DEVLINK_PARAMETER_PREFERRED

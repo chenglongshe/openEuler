@@ -315,7 +315,6 @@ static void sss_prepare_elem_desc(struct sss_adm_msg *adm_msg,
 		return;
 	}
 
-
 	elem->desc |= SSS_ADM_MSG_DESC_SET(SSS_ADM_MSG_CHANNEL_0, MSG_CHANNEL) |
 		      SSS_ADM_MSG_DESC_SET(SSS_VALID_MSG_CHANNEL, MSG_VALID);
 

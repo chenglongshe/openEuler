@@ -623,7 +623,6 @@ static void sss_deinit_adm_msg(const struct sss_hwdev *hwdev,
 	for (adm_msg_type = SSS_ADM_MSG_WRITE_TO_MGMT_MODULE;
 	     adm_msg_type < SSS_ADM_MSG_MAX; adm_msg_type++)
 		sss_destroy_adm_msg(adm_msg[adm_msg_type]);
-
 }
 
 static int sss_alloc_msg_buf(struct sss_msg_pf_to_mgmt *mgmt_msg)

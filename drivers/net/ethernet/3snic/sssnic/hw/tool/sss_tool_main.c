@@ -635,7 +635,11 @@ static int sss_tool_create_dev(void)
 		return ret;
 	}
 
+#ifdef CLASS_CREATE_WITH_ONE_PARAM
+	g_nictool_class = class_create(SSS_TOOL_DEV_CLASS);
+#else
 	g_nictool_class = class_create(THIS_MODULE, SSS_TOOL_DEV_CLASS);
+#endif
 	if (IS_ERR(g_nictool_class)) {
 		tool_err("Fail to create sssnic_nictool_class\n");
 		ret = -EFAULT;

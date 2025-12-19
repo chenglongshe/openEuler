@@ -433,9 +433,9 @@ void sss_get_card_info(const void *hwdev, void *bufin)
 		}
 
 		if (sss_support_service_type(fun_hwdev))
-			strlcpy(info->pf[i].name, "FOR_MGMT", IFNAMSIZ);
+			strscpy(info->pf[i].name, "FOR_MGMT", IFNAMSIZ);
 
-		strlcpy(info->pf[i].bus_info, pci_name(dev->pcidev),
+		strscpy(info->pf[i].bus_info, pci_name(dev->pcidev),
 			sizeof(info->pf[i].bus_info));
 		info->pf_num++;
 		i = info->pf_num;
@@ -721,4 +721,3 @@ struct sss_hal_dev *sss_get_lld_dev_by_chip_and_port(const char *chip_name, u8 p
 
 	return NULL;
 }
-

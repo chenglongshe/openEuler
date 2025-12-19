@@ -318,7 +318,7 @@ int sss_tool_get_netdev_name(struct sss_nic_dev *nic_dev, const void *in_buf,
 		return -EINVAL;
 	}
 
-	strlcpy(out_buf, nic_dev->netdev->name, IFNAMSIZ);
+	strscpy(out_buf, nic_dev->netdev->name, IFNAMSIZ);
 
 	return 0;
 }
@@ -413,4 +413,3 @@ int sss_tool_get_xsfp_info(struct sss_nic_dev *nic_dev, const void *in_buf,
 
 	return 0;
 }
-

@@ -112,4 +112,3 @@ struct sss_tool_drv_version_info {
 };
 
 #endif /* _SSS_NIC_MT_H_ */
-

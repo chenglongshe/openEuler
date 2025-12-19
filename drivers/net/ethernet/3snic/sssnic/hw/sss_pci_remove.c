@@ -19,6 +19,7 @@
 
 #include "sss_kernel.h"
 #include "sss_hw.h"
+#include "sss_pci.h"
 #include "sss_pci_id_tbl.h"
 #include "sss_pci_sriov.h"
 #include "sss_adapter_mgmt.h"

@@ -21,6 +21,7 @@
 
 #include "sss_kernel.h"
 #include "sss_hw.h"
+#include "sss_hwdev.h"
 #include "sss_nic_cfg.h"
 #include "sss_nic_vf_cfg.h"
 #include "sss_nic_mag_cfg.h"
@@ -41,7 +42,6 @@
 #include "sss_nic_ntuple.h"
 #include "sss_nic_event.h"
 #include "sss_tool_nic_func.h"
-
 
 #define DEFAULT_POLL_BUDGET	64
 static u32 poll_budget = DEFAULT_POLL_BUDGET;
@@ -155,6 +155,7 @@ static void sss_nic_unregister_notifier(struct sss_nic_dev *nic_dev)
 	mutex_unlock(&g_netdev_notifier_mutex);
 }
 
+#if IS_ENABLED(CONFIG_VLAN_8021Q)
 static u16 sss_nic_get_vlan_depth(struct net_device *dev)
 {
 	u16 vlan_depth = 0;
@@ -179,11 +180,14 @@ static void sss_nic_clear_netdev_vlan_offload(struct net_device *dev, u16 vlan_d
 		dev->features &= SSSNIC_VLAN_CLEAR_OFFLOAD;
 	}
 }
+#endif
 
 static int sss_nic_netdev_event_handler(struct notifier_block *notifier,
 					unsigned long event, void *ptr)
 {
+#if IS_ENABLED(CONFIG_VLAN_8021Q)
 	u16 vlan_depth;
+#endif
 	struct net_device *real_dev = NULL;
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 
@@ -199,8 +203,10 @@ static int sss_nic_netdev_event_handler(struct notifier_block *notifier,
 	if (!sss_nic_is_netdev_ops_match(real_dev))
 		goto out;
 
+#if IS_ENABLED(CONFIG_VLAN_8021Q)
 	vlan_depth = sss_nic_get_vlan_depth(dev);
 	sss_nic_clear_netdev_vlan_offload(dev, vlan_depth);
+#endif
 out:
 	dev_put(dev);
 
@@ -417,7 +423,7 @@ static int sss_nic_init_mac_addr(struct sss_nic_dev *nic_dev)
 	int ret;
 	struct net_device *netdev = nic_dev->netdev;
 
-	ret = sss_nic_get_default_mac(nic_dev, netdev->dev_addr);
+	ret = sss_nic_get_default_mac(nic_dev, (u8 *)(netdev->dev_addr));
 	if (ret != 0) {
 		nic_err(nic_dev->dev_hdl, "Fail to get MAC address\n");
 		return ret;
@@ -1038,9 +1044,16 @@ static __init int sss_nic_init(void)
 	pr_info("%s - version %s\n", SSSNIC_DRV_DESC,
 		SSSNIC_DRV_VERSION);
 
+	ret = sss_init_pci();
+	if (ret) {
+		pr_err("SDK init failed.\n");
+		return ret;
+	}
+
 	ret = sss_register_uld(SSS_SERVICE_TYPE_NIC, &g_nic_uld_info);
 	if (ret != 0) {
 		pr_err("Fail to register sss_nic uld\n");
+		sss_exit_pci();
 		return ret;
 	}
 
@@ -1050,6 +1063,7 @@ static __init int sss_nic_init(void)
 static __exit void sss_nic_exit(void)
 {
 	sss_unregister_uld(SSS_SERVICE_TYPE_NIC);
+	sss_exit_pci();
 }
 
 #ifndef _LLT_TEST_

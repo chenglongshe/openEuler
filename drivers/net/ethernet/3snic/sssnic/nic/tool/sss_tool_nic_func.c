@@ -106,4 +106,3 @@ int sss_tool_ioctl(void *uld_dev, u32 cmd, const void *in_buf,
 
 	return sss_tool_cmd_to_nic_driver(uld_dev, cmd, in_buf, in_len, out_buf, out_len);
 }
-

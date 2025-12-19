@@ -321,4 +321,3 @@ int sss_tool_get_inter_num(struct sss_nic_dev *nic_dev, const void *in_buf,
 
 	return 0;
 }
-

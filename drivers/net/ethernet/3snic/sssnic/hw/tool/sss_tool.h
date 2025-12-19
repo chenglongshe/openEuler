@@ -27,4 +27,3 @@ extern void *g_card_va[SSS_TOOL_CARD_MAX];
 extern int g_card_id;
 
 #endif
-

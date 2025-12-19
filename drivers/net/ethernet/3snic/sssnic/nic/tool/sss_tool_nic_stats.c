@@ -134,4 +134,3 @@ int sss_tool_get_sset_stats(struct sss_nic_dev *nic_dev, const void *in_buf,
 
 	return 0;
 }
-

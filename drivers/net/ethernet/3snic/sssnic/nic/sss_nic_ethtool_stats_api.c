@@ -39,7 +39,7 @@
 #define SSSNIC_ETHTOOL_ADD_SPPED_LINK_MODE(ecmd, mode, op) \
 do { \
 	u32 _link_mode; \
-	unsigned long *val = (op == SSSNIC_SET_SUPPORTED_MODE) ? \
+	unsigned long *val = ((op) == SSSNIC_SET_SUPPORTED_MODE) ? \
 			(ecmd)->supported : (ecmd)->advertising; \
 	for (_link_mode = 0; _link_mode < g_link_mode_table[mode].array_len; _link_mode++) { \
 		if (g_link_mode_table[mode].array[_link_mode] >= \
@@ -783,7 +783,7 @@ void sss_nic_set_link_speed(struct sss_nic_dev *nic_dev,
 					      SSSNIC_SET_ADVERTISED_MODE);
 
 	ret = sss_nic_get_hw_link_state(nic_dev, &state);
-	if ((ret != 0) || (state == 0)) {
+	if (ret != 0 || state == 0) {
 		cmd->duplex = DUPLEX_UNKNOWN;
 		cmd->speed = (u32)SPEED_UNKNOWN;
 		return;
@@ -852,7 +852,7 @@ int sss_nic_get_link_pause_setting(struct sss_nic_dev *nic_dev,
 	}
 
 	SSSNIC_ETHTOOL_ADD_SUPPORTED_LINK_MODE(cmd, Pause);
-	if ((pause_config.rx_pause != 0) && (pause_config.tx_pause != 0)) {
+	if (pause_config.rx_pause != 0 && pause_config.tx_pause != 0) {
 		SSSNIC_ETHTOOL_ADD_ADVERTISED_LINK_MODE(cmd, Pause);
 		return 0;
 	}
@@ -954,16 +954,16 @@ int sss_nic_get_link_settings_param(struct sss_nic_dev *nic_dev,
 	}
 
 	if (speed != (u32)SPEED_UNKNOWN) {
-		if ((info.supported_mode == SSSNIC_LINK_MODE_UNKNOWN) ||
-		    (info.advertised_mode == SSSNIC_LINK_MODE_UNKNOWN)) {
+		if (info.supported_mode == SSSNIC_LINK_MODE_UNKNOWN ||
+		    info.advertised_mode == SSSNIC_LINK_MODE_UNKNOWN) {
 			nicif_err(nic_dev, drv, nic_dev->netdev, "Unsupport link mode\n");
 			return -EAGAIN;
 		}
 
 		/* Set speed only when autoneg is disable */
 		level = sss_nic_get_speed_level(speed);
-		if ((level >= SSSNIC_PORT_SPEED_UNKNOWN) ||
-		    (!sss_nic_is_support_speed(info.supported_mode, speed))) {
+		if (level >= SSSNIC_PORT_SPEED_UNKNOWN ||
+		    !sss_nic_is_support_speed(info.supported_mode, speed)) {
 			nicif_err(nic_dev, drv, nic_dev->netdev, "Unsupport speed: %u\n", speed);
 			return -EINVAL;
 		}
@@ -1055,4 +1055,3 @@ void sss_nic_get_io_stats(const struct sss_nic_dev *nic_dev, void *stats)
 					&nic_dev->rq_desc_group[qid].stats, qid);
 	}
 }
-

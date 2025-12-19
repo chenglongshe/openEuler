@@ -20,6 +20,7 @@
 #include <linux/ipv6.h>
 #include <linux/module.h>
 #include <linux/compiler.h>
+#include <net/xdp.h>
 
 #include "sss_kernel.h"
 #include "sss_hw.h"

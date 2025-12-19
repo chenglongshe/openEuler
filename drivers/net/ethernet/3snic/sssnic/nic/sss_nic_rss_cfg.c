@@ -339,4 +339,3 @@ int sss_nic_init_hw_rss(struct sss_nic_dev *nic_dev, u16 qp_num)
 
 	return 0;
 }
-

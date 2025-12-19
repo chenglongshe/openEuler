@@ -269,7 +269,7 @@ int sss_init_func_mbx_msg(void *hwdev, u16 func_num)
 	for (cnt = 0; cnt < func_num; cnt++) {
 		ret = sss_alloc_mbx_msg_buffer(&mbx->func_msg[cnt]);
 		if (ret != 0) {
-			sdk_err(dev->dev_hdl, "Fail to alloc func %hu msg buf\n", cnt);
+			sdk_err(dev->dev_hdl, "Fail to alloc func %u msg buf\n", cnt);
 			goto alloc_mbx_msg_buf_err;
 		}
 	}
@@ -584,7 +584,7 @@ static int sss_recv_vf_mbx_handler(struct sss_mbx *mbx,
 	struct sss_hwdev *hwdev = SSS_TO_HWDEV(mbx);
 
 	if (recv_mbx->mod >= SSS_MOD_TYPE_MAX) {
-		sdk_warn(hwdev->dev_hdl, "Recv err mbx msg, mod = %hhu\n", recv_mbx->mod);
+		sdk_warn(hwdev->dev_hdl, "Recv err mbx msg, mod = %u\n", recv_mbx->mod);
 		return -EINVAL;
 	}
 
@@ -645,7 +645,7 @@ static int sss_recv_ppf_mbx_handler(struct sss_mbx *mbx,
 	struct sss_hwdev *hwdev = SSS_TO_HWDEV(mbx);
 
 	if (recv_mbx->mod >= SSS_MOD_TYPE_MAX) {
-		sdk_warn(hwdev->dev_hdl, "Recv err mbx msg, mod = %hhu\n", recv_mbx->mod);
+		sdk_warn(hwdev->dev_hdl, "Recv err mbx msg, mod = %u\n", recv_mbx->mod);
 		return -EINVAL;
 	}
 
@@ -657,7 +657,7 @@ static int sss_recv_ppf_mbx_handler(struct sss_mbx *mbx,
 		ret = callback(mbx->ppf_mbx_data[recv_mbx->mod], pf_id, vf_id, recv_mbx->cmd,
 			       recv_mbx->buf, recv_mbx->buf_len, resp_buf, size);
 	} else {
-		sdk_warn(hwdev->dev_hdl, "PPF mbx cb is unregistered, mod = %hhu\n", recv_mbx->mod);
+		sdk_warn(hwdev->dev_hdl, "PPF mbx cb is unregistered, mod = %u\n", recv_mbx->mod);
 		ret = -EINVAL;
 	}
 
@@ -677,7 +677,7 @@ static int sss_recv_pf_from_vf_mbx_handler(struct sss_mbx *mbx,
 	struct sss_hwdev *hwdev = SSS_TO_HWDEV(mbx);
 
 	if (recv_mbx->mod >= SSS_MOD_TYPE_MAX) {
-		sdk_warn(hwdev->dev_hdl, "Recv err mbx msg, mod = %hhu\n", recv_mbx->mod);
+		sdk_warn(hwdev->dev_hdl, "Recv err mbx msg, mod = %u\n", recv_mbx->mod);
 		return -EINVAL;
 	}
 

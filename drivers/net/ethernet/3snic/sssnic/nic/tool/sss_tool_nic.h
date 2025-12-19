@@ -109,4 +109,3 @@ struct sss_tool_qos_cos_cfg {
 };
 
 #endif /* SSS_TOOL_NIC_H */
-

@@ -212,7 +212,7 @@ int sss_nic_dettach_vf(struct sss_nic_io *nic_io, u16 vf_id)
 
 	vf_info->attach = false;
 
-	if ((!vf_info->specified_mac) && (vf_info->pf_vlan == 0)) {
+	if (!vf_info->specified_mac && vf_info->pf_vlan == 0) {
 		memset(vf_info->drv_mac, 0, ETH_ALEN);
 		return 0;
 	}

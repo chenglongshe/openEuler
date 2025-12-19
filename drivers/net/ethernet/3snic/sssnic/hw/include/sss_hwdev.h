@@ -255,7 +255,7 @@ enum sss_servic_bit_define {
 
 #define SSS_SUPPORT_ADM_MSG(hwdev)		((hwdev)->features[0] & SSS_COMM_F_ADM)
 #define SSS_SUPPORT_MBX_SEGMENT(hwdev)		\
-			(SSS_GET_HWIF_PCI_INTF_ID(hwdev->hwif) == SSS_SPU_HOST_ID)
+			(SSS_GET_HWIF_PCI_INTF_ID((hwdev)->hwif) == SSS_SPU_HOST_ID)
 #define SSS_SUPPORT_CTRLQ_NUM(hwdev)		\
 			((hwdev)->features[0] & SSS_COMM_F_CTRLQ_NUM)
 #define SSS_SUPPORT_VIRTIO_VQ_SIZE(hwdev)	\
@@ -269,5 +269,8 @@ enum {
 	SSS_CFG_FREE = 0,
 	SSS_CFG_BUSY = 1
 };
+
+int sss_init_pci(void);
+void sss_exit_pci(void);
 
 #endif

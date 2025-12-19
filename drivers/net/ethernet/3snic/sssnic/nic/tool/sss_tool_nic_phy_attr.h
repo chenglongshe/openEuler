@@ -35,4 +35,3 @@ int sss_tool_get_xsfp_info(struct sss_nic_dev *nic_dev, const void *in_buf,
 			   u32 in_len, void *out_buf, u32 *out_len);
 
 #endif
-

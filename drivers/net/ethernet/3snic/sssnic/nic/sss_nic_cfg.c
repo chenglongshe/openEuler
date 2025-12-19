@@ -51,12 +51,12 @@
 
 static int sss_nic_check_mac_set_status(u32 func_type, u8 status, u16 vlan_id)
 {
-	if ((status != 0) && (status != SSSNIC_MGMT_STATUS_EXIST)) {
+	if (status != 0 && status != SSSNIC_MGMT_STATUS_EXIST) {
 		if (!SSSNIC_VF_SET_MAC_ALREADY(func_type, status))
 			return -EINVAL;
 	}
 
-	if (((vlan_id & SSSNIC_CHECK_IPSU_15BIT) != 0) && (status == SSSNIC_MGMT_STATUS_EXIST)) {
+	if ((vlan_id & SSSNIC_CHECK_IPSU_15BIT) != 0 && status == SSSNIC_MGMT_STATUS_EXIST) {
 		if (!SSSNIC_VF_SET_MAC_ALREADY(func_type, status))
 			return -EINVAL;
 	}
@@ -1138,4 +1138,3 @@ int sss_nic_set_pf_rate(struct sss_nic_dev *nic_dev, u8 speed)
 
 	return 0;
 }
-
