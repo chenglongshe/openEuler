@@ -774,6 +774,10 @@ bool is_hwirq_xint(unsigned int hwirq);
 void register_irqchip_proc(struct irq_desc *desc, void *irqp);
 void unregister_irqchip_proc(struct irq_desc *desc);
 #endif
+
+#ifdef CONFIG_HISILICON_ERRATUM_165010801
+extern void gic_irq_set_prio(struct irq_data *d, u8 prio);
+#endif
 #endif
 
 #endif
