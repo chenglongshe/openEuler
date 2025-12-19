@@ -37,12 +37,30 @@
 	msr	daifset, #0xf
 	.endm
 
+	.macro	disable_allint
+#ifdef CONFIG_ARM64_NMI
+alternative_if ARM64_HAS_NMI
+	msr_s	SYS_ALLINT_SET, xzr
+alternative_else_nop_endif
+#endif
+	.endm
+
+	.macro	enable_allint
+#ifdef CONFIG_ARM64_NMI
+alternative_if ARM64_HAS_NMI
+	msr_s	SYS_ALLINT_CLR, xzr
+alternative_else_nop_endif
+#endif
+	.endm
+
 	.macro disable_daif
+	disable_allint
 	msr	daifset, #0xf
 	.endm
 
 	.macro enable_daif
 	msr	daifclr, #0xf
+	enable_allint
 	.endm
 
 	.macro	restore_daif, flags:req
