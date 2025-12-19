@@ -6505,3 +6505,6 @@
 				pte entry.
 			user	only select user task will update PBHA bit0 for
 				their pte entry.
+	zhaoxin_patch_bitmask=
+			[X86] Bitmask for Zhaoxin Platform's patch.
+			bit 0: enable KH-40000 dma patch's node check function

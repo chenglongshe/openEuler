@@ -132,14 +132,24 @@ static struct page *__dma_direct_alloc_pages(struct device *dev, size_t size,
 		return page;
 	}
 
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+	if (is_zhaoxin_kh40000())
+		goto again;
+#endif
+
 	page = dma_alloc_contiguous(dev, size, gfp);
 	if (page && !dma_coherent_ok(dev, page_to_phys(page), size)) {
 		dma_free_contiguous(dev, page, size);
 		page = NULL;
 	}
 again:
-	if (!page)
-		page = alloc_pages_node(node, gfp, get_order(size));
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+	if (is_zhaoxin_kh40000())
+		page = kh40000_alloc_coherent(node, gfp, size);
+	else
+#endif
+		if (!page)
+			page = alloc_pages_node(node, gfp, get_order(size));
 	if (page && !dma_coherent_ok(dev, page_to_phys(page), size)) {
 		dma_free_contiguous(dev, page, size);
 		page = NULL;
@@ -404,6 +414,10 @@ void dma_direct_sync_sg_for_cpu(struct device *dev,
 	for_each_sg(sgl, sg, nents, i) {
 		phys_addr_t paddr = dma_to_phys(dev, sg_dma_address(sg));
 
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+		if (is_zhaoxin_kh40000())
+			kh40000_sync_single_dma_for_cpu(dev, paddr, dir, 0);
+#endif
 		if (!dev_is_dma_coherent(dev))
 			arch_sync_dma_for_cpu(paddr, sg->length, dir);
 

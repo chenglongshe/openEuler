@@ -4148,6 +4148,180 @@ static const struct dma_map_ops bounce_dma_ops = {
 	.dma_supported		= dma_direct_supported,
 };
 
+static void *kh40000_iommu_alloc_coherent(struct device *dev, size_t size,
+					  dma_addr_t *dma_handle, gfp_t flags,
+					  unsigned long attrs)
+{
+	struct page *page = NULL;
+	int order;
+
+	size = PAGE_ALIGN(size);
+	order = get_order(size);
+
+	page = kh40000_alloc_coherent(dev_to_node(dev), flags, size);
+	if (!page)
+		return NULL;
+	memset(page_address(page), 0, size);
+
+	*dma_handle = __intel_map_single(dev, page_to_phys(page), size,
+					 DMA_BIDIRECTIONAL,
+					 dev->coherent_dma_mask);
+	if (*dma_handle != DMA_MAPPING_ERROR)
+		return page_address(page);
+	if (!dma_release_from_contiguous(dev, page, size >> PAGE_SHIFT))
+		__free_pages(page, order);
+
+	return NULL;
+}
+
+phys_addr_t kh40000_iommu_iova_to_phys(struct device *dev, dma_addr_t paddr)
+
+{
+	struct dmar_domain *domain;
+
+	domain = find_domain(dev);
+	if (WARN_ON(!domain))
+		return paddr;
+
+	return intel_iommu_iova_to_phys(&domain->domain, paddr);
+}
+
+static void kh40000_iommu_sync_single_for_cpu(struct device *dev, dma_addr_t addr,
+					      size_t size, enum dma_data_direction dir)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 1);
+}
+
+static void kh40000_iommu_unmap_page(struct device *dev, dma_addr_t addr, size_t size,
+				     enum dma_data_direction dir, unsigned long attrs)
+{
+	kh40000_sync_single_dma_for_cpu(dev, addr, dir, 1);
+	intel_unmap_page(dev, addr, size, dir, attrs);
+}
+
+static void kh40000_iommu_unmap_sg(struct device *dev, struct scatterlist *sglist,
+				   int nelems, enum dma_data_direction dir,
+				   unsigned long attrs)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sglist, sg, nelems, i)
+		kh40000_sync_single_dma_for_cpu(dev, sg->dma_address,
+						dir, 1);
+
+	intel_unmap_sg(dev, sglist, nelems, dir, attrs);
+}
+
+static void kh40000_iommu_sync_sg_for_cpu(struct device *dev, struct scatterlist *sgl,
+					  int nelems, enum dma_data_direction dir)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sgl, sg, nelems, i)
+		kh40000_sync_single_dma_for_cpu(dev, sg->dma_address,
+						dir, 1);
+}
+
+const struct dma_map_ops kh40000_iommu_dma_ops = {
+	.alloc			= kh40000_iommu_alloc_coherent,
+	.free			= intel_free_coherent,
+	.map_sg			= intel_map_sg,
+	.unmap_sg		= kh40000_iommu_unmap_sg,
+	.map_page		= intel_map_page,
+	.unmap_page		= kh40000_iommu_unmap_page,
+	.map_resource		= intel_map_resource,
+	.unmap_resource		= kh40000_iommu_unmap_page,
+	.sync_single_for_cpu	= kh40000_iommu_sync_single_for_cpu,
+	.sync_sg_for_cpu	= kh40000_iommu_sync_sg_for_cpu,
+	.dma_supported		= dma_direct_supported,
+	.mmap			= dma_common_mmap,
+	.get_sgtable		= dma_common_get_sgtable,
+	.get_required_mask	= intel_get_required_mask,
+};
+
+static void
+kh40000_bounce_sync_single_for_cpu(struct device *dev, dma_addr_t addr,
+				   size_t size, enum dma_data_direction dir)
+{
+	struct dmar_domain *domain;
+	phys_addr_t tlb_addr;
+
+	domain = find_domain(dev);
+	if (WARN_ON(!domain))
+		return;
+
+	tlb_addr = intel_iommu_iova_to_phys(&domain->domain, addr);
+	kh40000_sync_single_dma_for_cpu(dev, tlb_addr, dir, 0);
+
+	if (is_swiotlb_buffer(tlb_addr))
+		swiotlb_tbl_sync_single(dev, tlb_addr, size, dir, SYNC_FOR_CPU);
+}
+
+static void
+kh40000_bounce_sync_sg_for_cpu(struct device *dev, struct scatterlist *sglist,
+			       int nelems, enum dma_data_direction dir)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sglist, sg, nelems, i)
+		kh40000_bounce_sync_single_for_cpu(dev, sg_dma_address(sg),
+						   sg_dma_len(sg), dir);
+}
+
+static void
+kh40000_bounce_unmap_page(struct device *dev, dma_addr_t dev_addr, size_t size,
+			  enum dma_data_direction dir, unsigned long attrs)
+{
+	size_t aligned_size = ALIGN(size, VTD_PAGE_SIZE);
+	struct dmar_domain *domain;
+	phys_addr_t tlb_addr;
+
+	domain = find_domain(dev);
+	if (WARN_ON(!domain))
+		return;
+
+	tlb_addr = intel_iommu_iova_to_phys(&domain->domain, dev_addr);
+	kh40000_sync_single_dma_for_cpu(dev, tlb_addr, dir, 0);
+
+	intel_unmap(dev, dev_addr, size);
+	if (is_swiotlb_buffer(tlb_addr))
+		swiotlb_tbl_unmap_single(dev, tlb_addr, size,
+					 aligned_size, dir, attrs);
+
+	trace_bounce_unmap_single(dev, dev_addr, size);
+}
+
+static void
+kh40000_bounce_unmap_sg(struct device *dev, struct scatterlist *sglist, int nelems,
+			enum dma_data_direction dir, unsigned long attrs)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sglist, sg, nelems, i)
+		kh40000_bounce_unmap_page(dev, sg->dma_address,
+					  sg_dma_len(sg), dir, attrs);
+}
+
+const struct dma_map_ops kh40000_bounce_dma_ops = {
+	.alloc			= kh40000_iommu_alloc_coherent,
+	.free			= intel_free_coherent,
+	.map_sg			= bounce_map_sg,
+	.unmap_sg		= kh40000_bounce_unmap_sg,
+	.map_page		= bounce_map_page,
+	.unmap_page		= kh40000_bounce_unmap_page,
+	.sync_single_for_cpu	= kh40000_bounce_sync_single_for_cpu,
+	.sync_single_for_device	= bounce_sync_single_for_device,
+	.sync_sg_for_cpu	= kh40000_bounce_sync_sg_for_cpu,
+	.sync_sg_for_device	= bounce_sync_sg_for_device,
+	.map_resource		= bounce_map_resource,
+	.unmap_resource		= bounce_unmap_resource,
+	.dma_supported		= dma_direct_supported,
+};
+
 static inline int iommu_domain_cache_init(void)
 {
 	int ret = 0;
@@ -6018,12 +6192,19 @@ static void intel_iommu_probe_finalize(struct device *dev)
 	struct iommu_domain *domain;
 
 	domain = iommu_get_domain_for_dev(dev);
-	if (device_needs_bounce(dev))
-		set_dma_ops(dev, &bounce_dma_ops);
-	else if (domain && domain->type == IOMMU_DOMAIN_DMA)
-		set_dma_ops(dev, &intel_dma_ops);
-	else
+	if (device_needs_bounce(dev)) {
+		if (is_zhaoxin_kh40000())
+			set_dma_ops(dev, &kh40000_bounce_dma_ops);
+		else
+			set_dma_ops(dev, &bounce_dma_ops);
+	} else if (domain && domain->type == IOMMU_DOMAIN_DMA) {
+		if (is_zhaoxin_kh40000())
+			set_dma_ops(dev, &kh40000_iommu_dma_ops);
+		else
+			set_dma_ops(dev, &intel_dma_ops);
+	} else {
 		set_dma_ops(dev, NULL);
+	}
 }
 
 static void intel_iommu_get_resv_regions(struct device *device,

@@ -73,6 +73,11 @@ static inline void dma_direct_sync_single_for_cpu(struct device *dev,
 		arch_sync_dma_for_cpu_all();
 	}
 
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+	if (is_zhaoxin_kh40000())
+		kh40000_sync_single_dma_for_cpu(dev, paddr, dir, 0);
+#endif
+
 	if (unlikely(is_swiotlb_buffer(paddr)))
 		swiotlb_tbl_sync_single(dev, paddr, size, dir, SYNC_FOR_CPU);
 
@@ -112,6 +117,10 @@ static inline void dma_direct_unmap_page(struct device *dev, dma_addr_t addr,
 
 	if (!(attrs & DMA_ATTR_SKIP_CPU_SYNC))
 		dma_direct_sync_single_for_cpu(dev, addr, size, dir);
+#if IS_BUILTIN(CONFIG_INTEL_IOMMU) && IS_BUILTIN(CONFIG_X86_64)
+	else if (is_zhaoxin_kh40000())
+		kh40000_sync_single_dma_for_cpu(dev, phys, dir, 0);
+#endif
 
 	if (unlikely(is_swiotlb_buffer(phys)))
 		swiotlb_tbl_unmap_single(dev, phys, size, size, dir,
