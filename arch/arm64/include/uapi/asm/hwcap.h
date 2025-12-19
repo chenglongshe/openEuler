@@ -87,5 +87,6 @@
 #define HWCAP2_SME_B16F32	(1 << 28)
 #define HWCAP2_SME_F32F32	(1 << 29)
 #define HWCAP2_SME_FA64		(1 << 30)
+#define HWCAP2_HBC		(1UL << 44)
 
 #endif /* _UAPI__ASM_HWCAP_H */
