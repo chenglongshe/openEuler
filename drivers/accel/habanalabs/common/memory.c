@@ -1806,9 +1806,6 @@ static void hl_release_dmabuf(struct dma_buf *dmabuf)
 	struct hl_dmabuf_priv *hl_dmabuf = dmabuf->priv;
 	struct hl_ctx *ctx;
 
-	if (!hl_dmabuf)
-		return;
-
 	ctx = hl_dmabuf->ctx;
 
 	if (hl_dmabuf->memhash_hnode)
@@ -1836,7 +1833,13 @@ static int export_dmabuf(struct hl_ctx *ctx,
 {
 	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
 	struct hl_device *hdev = ctx->hdev;
-	int rc, fd;
+	int fd;
+
+	fd = get_unused_fd_flags(flags);
+	if (fd < 0) {
+		dev_err(hdev->dev, "failed to get a file descriptor for a dma-buf, %d\n", fd);
+		return fd;
+	}
 
 	exp_info.ops = &habanalabs_dmabuf_ops;
 	exp_info.size = total_size;
@@ -1846,15 +1849,10 @@ static int export_dmabuf(struct hl_ctx *ctx,
 	hl_dmabuf->dmabuf = dma_buf_export(&exp_info);
 	if (IS_ERR(hl_dmabuf->dmabuf)) {
 		dev_err(hdev->dev, "failed to export dma-buf\n");
+		put_unused_fd(fd);
 		return PTR_ERR(hl_dmabuf->dmabuf);
 	}
 
-	fd = dma_buf_fd(hl_dmabuf->dmabuf, flags);
-	if (fd < 0) {
-		dev_err(hdev->dev, "failed to get a file descriptor for a dma-buf, %d\n", fd);
-		rc = fd;
-		goto err_dma_buf_put;
-	}
 
 	hl_dmabuf->ctx = ctx;
 	hl_ctx_get(hl_dmabuf->ctx);
@@ -1868,12 +1866,9 @@ static int export_dmabuf(struct hl_ctx *ctx,
 
 	*dmabuf_fd = fd;
 
-	return 0;
+	fd_install(fd, hl_dmabuf->dmabuf->file);
 
-err_dma_buf_put:
-	hl_dmabuf->dmabuf->priv = NULL;
-	dma_buf_put(hl_dmabuf->dmabuf);
-	return rc;
+	return 0;
 }
 
 static int validate_export_params_common(struct hl_device *hdev, u64 device_addr, u64 size)
