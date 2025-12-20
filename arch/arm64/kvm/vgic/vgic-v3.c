@@ -22,6 +22,32 @@ static bool common_trap;
 static bool dir_trap;
 static bool gicv4_enable;
 
+enum GIC_VERSION global_gic_version = UNKNOWN_GIC_VERSION;
+
+static int get_gic_version(char *buffer, const struct kernel_param *kp);
+static const struct kernel_param_ops gic_version_ops = {
+	.get = get_gic_version,
+};
+
+static const char *gic_version;
+module_param_cb(gic_version, &gic_version_ops, &gic_version, 0444);
+
+static int get_gic_version(char *buffer, const struct kernel_param *kp)
+{
+	int index = global_gic_version;
+	const char * const gic_version_str[] = {
+		"GICv2",
+		"GICv3",
+		"GICv4",
+		"GICv4.1",
+		"unknown"
+	};
+
+	gic_version = gic_version_str[index];
+
+	return param_get_charp(buffer, kp);
+}
+
 void vgic_v3_set_underflow(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v3_cpu_if *cpuif = &vcpu->arch.vgic_cpu.vgic_v3;
@@ -656,6 +682,7 @@ int vgic_v3_probe(const struct gic_kvm_info *info)
 	kvm_vgic_global_state.nr_lr = (ich_vtr_el2 & 0xf) + 1;
 	kvm_vgic_global_state.can_emulate_gicv2 = false;
 	kvm_vgic_global_state.ich_vtr_el2 = ich_vtr_el2;
+	global_gic_version = GICV3;
 
 	/* GICv4 support? */
 	if (info->has_v4) {
@@ -664,6 +691,11 @@ int vgic_v3_probe(const struct gic_kvm_info *info)
 		kvm_info("GICv4%s support %sabled\n",
 			 kvm_vgic_global_state.has_gicv4_1 ? ".1" : "",
 			 gicv4_enable ? "en" : "dis");
+
+		if (kvm_vgic_global_state.has_gicv4_1)
+			global_gic_version = GICV4_1;
+		else if (kvm_vgic_global_state.has_gicv4)
+			global_gic_version = GICV4;
 
 #ifdef CONFIG_VIRT_VTIMER_IRQ_BYPASS
 		kvm_vgic_global_state.has_direct_vtimer = info->has_vtimer && gicv4_enable;
