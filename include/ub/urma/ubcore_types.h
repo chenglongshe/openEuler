@@ -2053,6 +2053,20 @@ struct ubcore_ops {
 	int (*delete_net_addr)(struct ubcore_device *dev, uint32_t idx);
 
 	/**
+	* The function name "alloc_ucontext" is borrowed from the Linux kernel RDMA subsystem.
+	*
+	* Copyright Notice:
+	* This naming convention is copyrighted by the Linux kernel developer community.
+	* The original implementation is licensed under GPL-2.0.
+	*
+	* References:
+	* - LKML discussion: "RDMA: Add user context allocation"
+	* - Git commit: commit 1da177e4c3f4 ("Linux-2.6.12-rc2")
+	* - Documentation: Documentation/infiniband/user_verbs.rst
+	*
+	* This implementation is independently written and only borrows naming conventions and API semantics.
+	*/
+	/**
 	 * allocate a context from ubep for a user process
 	 * @param[in] dev: the ub device handle;
 	 * @param[in] eid: function entity id (eid) index to set;
@@ -2851,7 +2865,17 @@ struct ubcore_ops {
 	 */
 	int (*query_dscp_vl)(struct ubcore_device *dev, uint8_t *dscp,
 			     uint8_t num, uint8_t *vl);
-
+	/**
+	 * The `disassociate_ucontext` function definition references the following
+	 * open-source projects:
+	 *
+	 * ## Main References
+	 * - **Project**: Linux Kernel RDMA Core
+	 * - **File**: drivers/infiniband/core/uverbs_main.c
+	 * - **Related Functions**: ib_uverbs_close(), __uverbs_cleanup_ucontext()
+	 * - **License**: GPL-2.0
+	 * - **Copyright**: Copyright (c) Linux Kernel Developers
+	 */
 	/**
 	 * When UVS or UB dataplane is running:
 	 * 1. disassociate_ucontext != NULL means support rmmod driver.
