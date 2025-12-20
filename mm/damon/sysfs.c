@@ -212,6 +212,9 @@ struct damon_sysfs_target {
 	struct kobject kobj;
 	struct damon_sysfs_regions *regions;
 	int pid;
+#ifdef CONFIG_DAMON_AUTO_TUNING
+	int priority;
+#endif
 };
 
 static struct damon_sysfs_target *damon_sysfs_target_alloc(void)
@@ -271,8 +274,37 @@ static void damon_sysfs_target_release(struct kobject *kobj)
 static struct kobj_attribute damon_sysfs_target_pid_attr =
 		__ATTR_RW_MODE(pid_target, 0600);
 
+#ifdef CONFIG_DAMON_AUTO_TUNING
+static ssize_t target_priority_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_target *target = container_of(kobj,
+			struct damon_sysfs_target, kobj);
+
+	return sysfs_emit(buf, "%d\n", target->priority);
+}
+
+static ssize_t target_priority_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_target *target = container_of(kobj,
+			struct damon_sysfs_target, kobj);
+	int err = kstrtoint(buf, 0, &target->priority);
+
+	if (err)
+		return -EINVAL;
+	return count;
+}
+
+static struct kobj_attribute damon_sysfs_target_priority =
+		__ATTR_RW_MODE(target_priority, 0600);
+#endif
+
 static struct attribute *damon_sysfs_target_attrs[] = {
 	&damon_sysfs_target_pid_attr.attr,
+#ifdef CONFIG_DAMON_AUTO_TUNING
+	&damon_sysfs_target_priority.attr,
+#endif
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_target);
@@ -1140,6 +1172,9 @@ static int damon_sysfs_add_target(struct damon_sysfs_target *sys_target,
 		if (!t->pid)
 			goto destroy_targets_out;
 	}
+#ifdef CONFIG_DAMON_AUTO_TUNING
+	t->priority = sys_target->priority;
+#endif
 	err = damon_sysfs_set_regions(t, sys_target->regions);
 	if (err)
 		goto destroy_targets_out;

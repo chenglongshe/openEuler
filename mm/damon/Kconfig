@@ -12,6 +12,11 @@ config DAMON
 	  See https://damonitor.github.io/doc/html/latest-damon/index.html for
 	  more information.
 
+config DAMON_AUTO_TUNING
+	bool "Build DAMON-based auto-tuning"
+	help
+	  This module adds auto-tuning support to DAMON.
+
 config DAMON_KUNIT_TEST
 	bool "Test for damon" if !KUNIT_ALL_TESTS
 	depends on DAMON && KUNIT=y

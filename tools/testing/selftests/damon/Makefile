@@ -11,4 +11,8 @@ TEST_PROGS += debugfs_rm_non_contexts.sh
 TEST_PROGS += sysfs.sh sysfs_update_removed_scheme_dir.sh
 TEST_PROGS += reclaim.sh lru_sort.sh
 
+ifeq ($(CONFIG_DAMON_AUTO_TUNING),y)
+TEST_PROGS += auto-tuning.sh
+endif
+
 include ../lib.mk
