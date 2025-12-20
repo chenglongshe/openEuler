@@ -12,7 +12,7 @@ extern atomic_t zswap_stored_pages;
 
 bool zswap_store(struct folio *folio);
 bool zswap_load(struct folio *folio);
-void zswap_invalidate(int type, pgoff_t offset);
+void zswap_invalidate(swp_entry_t swp);
 void zswap_swapon(int type);
 void zswap_swapoff(int type);
 bool zswap_never_enabled(void);
@@ -29,7 +29,7 @@ static inline bool zswap_load(struct folio *folio)
 	return false;
 }
 
-static inline void zswap_invalidate(int type, pgoff_t offset) {}
+static inline void zswap_invalidate(swp_entry_t swp) {}
 static inline void zswap_swapon(int type) {}
 static inline void zswap_swapoff(int type) {}
 
