@@ -168,6 +168,29 @@ static struct vfio_iommu_group*
 vfio_iommu_find_iommu_group(struct vfio_iommu *iommu,
 			    struct iommu_group *iommu_group);
 
+struct dmmu_sge {
+	u64 addr;
+	u64 paddr;
+}
+
+struct dmmu_cmd {
+	int vmid;
+	u16 rsvd;
+	u16 sge_cnt;
+	int pin;
+	struct dmmu_sge sgl[];
+}
+
+struct dmmu_notifier_ops {
+	int (*map_pages)(struct dmmu_cmd *cmd);
+	int (*unmap_pages)(struct dmmu_cmd *cmd);
+} *dmmu_ops = NULL;
+
+void vfio_set_dmmu_notifier(struct dmmu_notifier_ops *ops)
+{
+}
+EXPORT_SYMBOL(vfio_set_dmmu_notifier);
+
 /*
  * This code handles mapping and unmapping of user data buffers
  * into DMA'ble space using the IOMMU
@@ -1866,6 +1889,16 @@ static bool vfio_iommu_iova_dma_valid(struct vfio_iommu *iommu,
 	 */
 	return list_empty(iova);
 }
+
+int vfio_map_iova_range(struct device *dev, unsigned long iova, size_t size, int pin)
+{
+}
+EXPORT_SYMBOL(vfio_map_iova_range);
+
+int vfio_unmap_iova_range(struct device *dev, unsigned long iova, size_t size)
+{
+}
+EXPORT_SYMBOL(vfio_unmap_iova_range);
 
 static int vfio_change_dma_owner(struct vfio_dma *dma)
 {

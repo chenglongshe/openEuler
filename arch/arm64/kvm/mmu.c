@@ -33,6 +33,12 @@ static phys_addr_t __ro_after_init hyp_idmap_vector;
 
 static unsigned long __ro_after_init io_map_base;
 
+static int (*dmmu_notifier)(u64, u64, u64);
+void kvm_set_dmmu_notifier(int (*notifier)(u64, u64, u64))
+{
+}
+EXPORT_SYMBOL(kvm_set_dmmu_notifier);
+
 static phys_addr_t __stage2_range_addr_end(phys_addr_t addr, phys_addr_t end,
 					   phys_addr_t size)
 {
