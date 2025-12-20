@@ -321,6 +321,11 @@ static inline bool xfs_inode_has_bigrtalloc(struct xfs_inode *ip)
 	(XFS_IS_REALTIME_INODE(ip) ? \
 		(ip)->i_mount->m_rtdev_targp : (ip)->i_mount->m_ddev_targp)
 
+static inline bool xfs_inode_can_hw_atomic_write(const struct xfs_inode *ip)
+{
+	return xfs_inode_buftarg(ip)->bt_bdev_awu_max > 0;
+}
+
 /*
  * In-core inode flags.
  */

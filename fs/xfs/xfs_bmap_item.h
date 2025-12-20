@@ -68,4 +68,7 @@ struct xfs_bud_log_item {
 extern struct kmem_cache	*xfs_bui_cache;
 extern struct kmem_cache	*xfs_bud_cache;
 
+unsigned int xfs_bui_log_space(unsigned int nr);
+unsigned int xfs_bud_log_space(void);
+
 #endif	/* __XFS_BMAP_ITEM_H__ */
