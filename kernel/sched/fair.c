@@ -231,6 +231,10 @@ static int sysctl_affinity_adjust_delay_ms = 5000;
 unsigned int sysctl_soft_runtime_ratio = 20;
 #endif
 
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+int sysctl_sched_util_ratio = 100;
+#endif
+
 #ifdef CONFIG_SYSCTL
 static struct ctl_table sched_fair_sysctls[] = {
 	{
@@ -339,6 +343,17 @@ static struct ctl_table sched_fair_sysctls[] = {
 		.mode           = 0644,
 		.proc_handler   = proc_dointvec_minmax,
 		.extra1         = SYSCTL_ONE,
+		.extra2         = SYSCTL_ONE_HUNDRED,
+	},
+#endif
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+	{
+		.procname       = "sched_util_ratio",
+		.data           = &sysctl_sched_util_ratio,
+		.maxlen         = sizeof(sysctl_sched_util_ratio),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_minmax,
+		.extra1         = SYSCTL_ZERO,
 		.extra2         = SYSCTL_ONE_HUNDRED,
 	},
 #endif
@@ -8226,7 +8241,6 @@ static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int t
 
 	return -1;
 }
-
 #else /* CONFIG_SCHED_SMT */
 
 static inline void set_idle_cores(int cpu, int val)
@@ -8779,6 +8793,20 @@ static __always_inline unsigned long cpu_util_without(int cpu, struct task_struc
 
 	return cpu_util(cpu, p, -1, 0);
 }
+
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+static bool core_has_spare(int cpu)
+{
+	int core_id = cpumask_first(cpu_smt_mask(cpu));
+	unsigned long util = cpu_util_cfs(core_id);
+	unsigned long capacity = capacity_of(core_id);
+
+	if (sysctl_sched_util_ratio == 100)
+		return true;
+
+	return util * 100 < capacity * sysctl_sched_util_ratio;
+}
+#endif
 
 /*
  * energy_env - Utilization landscape for energy estimation.
@@ -9449,6 +9477,15 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 		/* Fast path */
 		new_cpu = select_idle_sibling(p, prev_cpu, new_cpu);
 	}
+
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+	if (sched_feat(KEEP_ON_CORE) &&
+	    static_branch_likely(&sched_smt_present)) {
+		if (core_has_spare(new_cpu))
+			new_cpu = cpumask_first(cpu_smt_mask((new_cpu)));
+	}
+#endif
+
 	rcu_read_unlock();
 	schedstat_end_time(cpu_rq(cpu), time);
 
@@ -10818,6 +10855,15 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		ret = bpf_sched_cfs_can_migrate_task(p, &migrate_node);
 		if (!ret)
 			return ret;
+	}
+#endif
+
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+	if (sched_feat(KEEP_ON_CORE) &&
+	    static_branch_likely(&sched_smt_present)) {
+		if (core_has_spare(env->dst_cpu) &&
+		    cpumask_first(cpu_smt_mask((env->dst_cpu))) != env->dst_cpu)
+			return 0;
 	}
 #endif
 

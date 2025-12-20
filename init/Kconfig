@@ -1193,6 +1193,25 @@ config SCHED_SOFT_QUOTA
 	  restrictions on the use of the CPU quota, such as some commercial
 	  scenarios that charge based on the use of CPU quota.
 
+#
+# For architectures that want to enable the support for SCHED_KEEP_ON_CORE
+#
+config ARCH_SUPPORTS_SCHED_KEEP_ON_CORE
+	bool
+
+config SCHED_KEEP_ON_CORE
+	bool "Prefer physical cores when migrating tasks"
+	depends on ARCH_SUPPORTS_SCHED_KEEP_ON_CORE
+	depends on SCHED_SMT
+	default n
+	help
+	  When cpu hyperthreading is enabled, one physical core can virtualize
+	  multiple logical cpus. Assume that physical core0 virtualizes two
+	  logical cpus, cpu0 and cpu1. Only when the load of cpu0 exceeds the
+	  ratio to the capacity of cpu0, the task will be migrated to the cpu1,
+	  otherwise the task will not be migrated and the cpu0 will still be
+	  used.
+
 config SCHED_MM_CID
 	def_bool n
 	depends on SMP && RSEQ
