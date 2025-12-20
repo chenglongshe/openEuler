@@ -1,0 +1,202 @@
+What:		/proc/sentry_remote_reporter/cna
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Configure and display the local CNA for remote event reporting.
+
+		Write Format:
+			<unsigned integer> - CNA value in range [0, 16777215]
+
+		Read Format:
+			<unsigned integer> - Current CNA value
+
+		Examples:
+			# Set CNA to 100
+			echo "100" > /proc/sentry_remote_reporter/cna
+
+			# Read current CNA
+			cat /proc/sentry_remote_reporter/cna
+			100
+
+		Notes:
+		- Setting CNA automatically registers UVB CIS function for panic calls
+		- Maximum value: 16777215
+
+What:		/proc/sentry_remote_reporter/eid
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Configure and display local EID for URMA communication.
+
+		Write Format:
+			"eid1;eid2;..." - Multiple EIDs separated by semicolons
+
+		Read Format:
+			"eid1;eid2;..." - Same format as write
+
+		Examples:
+			# Set EIDs for multiple dies
+			echo "2001:0db8:85a3:0000:0000:8a2e:0370:7334;2001:0db8:85a3:0000:0000: \
+			8a2e:0370:7335" > /proc/sentry_remote_reporter/eid
+
+			# Read current EIDs
+			cat /proc/sentry_remote_reporter/eid
+			2001:0db8:85a3:0000:0000:8a2e:0370:7334;2001:0db8:85a3:0000:0000:8a2e:0370:7335
+
+		Notes:
+		- EIDs must use full IPv6 format: 128-bit numbers separated every 4 bits by colons
+		- Supports multiple EIDs for multi-die systems
+		- Automatically initializes URMA resources when EIDs are set
+
+What:		/proc/sentry_remote_reporter/panic_timeout
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Configure and display timeout value (in milliseconds) for panic event reporting.
+
+		Write Format:
+			<unsigned long> - Timeout in milliseconds, range [0, 3600000]
+
+		Read Format:
+			<unsigned long> - Current timeout value
+
+		Examples:
+			# Set panic timeout to 35000 ms
+			echo "35000" > /proc/sentry_remote_reporter/panic_timeout
+
+			# Read current panic timeout
+			cat /proc/sentry_remote_reporter/panic_timeout
+			35000
+
+		Notes:
+		- Default value: 35000 ms
+		- Range: 0 to 3600000 ms (1 hour)
+
+What:		/proc/sentry_remote_reporter/kernel_reboot_timeout
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Configure and display timeout value (in milliseconds) for kernel reboot event reporting.
+
+		Write Format:
+			<unsigned long> - Timeout in milliseconds, range [0, 3600000]
+
+		Read Format:
+			<unsigned long> - Current timeout value
+
+		Examples:
+			# Set kernel reboot timeout to 35000 ms
+			echo "35000" > /proc/sentry_remote_reporter/kernel_reboot_timeout
+
+			# Read current kernel reboot timeout
+			cat /proc/sentry_remote_reporter/kernel_reboot_timeout
+			35000
+
+		Notes:
+		- Default value: 35000 ms
+		- Range: 0 to 3600000 ms (1 hour)
+
+What:		/proc/sentry_remote_reporter/panic
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Enable or disable panic event reporting.
+
+		Write Values:
+			"on"  - Enable panic event reporting
+			"off" - Disable panic event reporting
+
+		Read Values:
+			"on" or "off" - Current panic event reporting status
+
+		Examples:
+			# Enable panic event reporting
+			echo "on" > /proc/sentry_remote_reporter/panic
+
+			# Disable panic event reporting
+			echo "off" > /proc/sentry_remote_reporter/panic
+
+			# Check current status
+			cat /proc/sentry_remote_reporter/panic
+			on
+
+		Notes:
+		- Requires crash_kexec_post_notifiers to be enabled for activation
+
+What:		/proc/sentry_remote_reporter/kernel_reboot
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Enable or disable kernel reboot event reporting.
+
+		Write Values:
+			"on"  - Enable kernel reboot event reporting
+			"off" - Disable kernel reboot event reporting
+
+		Read Values:
+			"on" or "off" - Current kernel reboot event reporting status
+
+		Examples:
+			# Enable kernel reboot event reporting
+			echo "on" > /proc/sentry_remote_reporter/kernel_reboot
+
+			# Disable kernel reboot event reporting
+			echo "off" > /proc/sentry_remote_reporter/kernel_reboot
+
+			# Check current status
+			cat /proc/sentry_remote_reporter/kernel_reboot
+			on
+
+What:		/proc/sentry_remote_reporter/uvb_comm
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Enable or disable UVB communication.
+
+		Write Values:
+			"on"  - Enable UVB communication
+			"off" - Disable UVB communication
+
+		Read Values:
+			"on" or "off" - Current UVB communication status
+
+		Examples:
+			# Enable UVB communication
+			echo "on" > /proc/sentry_remote_reporter/uvb_comm
+
+			# Disable UVB communication
+			echo "off" > /proc/sentry_remote_reporter/uvb_comm
+
+			# Check current status
+			cat /proc/sentry_remote_reporter/uvb_comm
+			on
+
+		Notes:
+		- Cannot disable both URMA and UVB communication simultaneously
+
+What:		/proc/sentry_remote_reporter/urma_comm
+Date:		March 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Enable or disable URMA communication.
+
+		Write Values:
+			"on"  - Enable URMA communication
+			"off" - Disable URMA communication
+
+		Read Values:
+			"on" or "off" - Current URMA communication status
+
+		Examples:
+			# Enable URMA communication
+			echo "on" > /proc/sentry_remote_reporter/urma_comm
+
+			# Disable URMA communication
+			echo "off" > /proc/sentry_remote_reporter/urma_comm
+
+			# Check current status
+			cat /proc/sentry_remote_reporter/urma_comm
+			on
+
+		Notes:
+		- Cannot disable both URMA and UVB communication simultaneously

@@ -1,0 +1,24 @@
+What:		/proc/sentry_uvb_comm/server_cna
+Date:		April 2025
+Contact:	Huawei Technologies Co., Ltd. <sxt1001@huawei.com>
+Description:
+		Configure and display server CNA
+		values for UVB communication.
+
+		Write Format:
+			"cna1;cna2;cna3;..." - Multiple CNA values separated by semicolons
+
+		Read Format:
+			"cna1;cna2;cna3;..." - Same format as write
+
+		Examples:
+			# Set server CNAs
+			echo "100;200;300" > /proc/sentry_uvb_comm/server_cna
+
+			# Read current server CNAs
+			cat /proc/sentry_uvb_comm/server_cna
+			100;200;300
+
+		Notes:
+		- Each CNA must be a valid unsigned 32-bit integer
+		- Invalid CNAs (>= CNA_MAX_VALUE) are filtered out
