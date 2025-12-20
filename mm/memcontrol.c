@@ -2581,25 +2581,33 @@ static unsigned long reclaim_high(struct mem_cgroup *memcg,
 }
 
 #ifdef CONFIG_MEMCG_V1_RECLAIM
+static unsigned long async_high_read(struct mem_cgroup *memcg)
+{
+	return READ_ONCE(memcg->memory.max) * READ_ONCE(memcg->high_async_ratio) / HIGH_ASYNC_RATIO_BASE;
+}
+
+static unsigned long async_low_read(struct mem_cgroup *memcg)
+{
+	return async_high_read(memcg) -
+		READ_ONCE(memcg->memory.max) * READ_ONCE(memcg->wmark_scale_factor) / 10000;
+}
+
 static bool is_high_async_reclaim(struct mem_cgroup *memcg)
 {
 	int ratio = READ_ONCE(memcg->high_async_ratio);
-	unsigned long memcg_high = READ_ONCE(memcg->memory.high);
+	unsigned long memcg_high = READ_ONCE(memcg->memory.max);
 
 	if (ratio == HIGH_ASYNC_RATIO_BASE || memcg_high == PAGE_COUNTER_MAX)
 		return false;
 
-	return page_counter_read(&memcg->memory) >
-	       memcg_high * ratio / HIGH_ASYNC_RATIO_BASE;
+	return page_counter_read(&memcg->memory) > async_high_read(memcg);
 }
 
 static void async_reclaim_high(struct mem_cgroup *memcg)
 {
 	unsigned long nr_pages, pflags;
-	unsigned long memcg_high = READ_ONCE(memcg->memory.high);
 	unsigned long memcg_usage = page_counter_read(&memcg->memory);
-	int ratio = READ_ONCE(memcg->high_async_ratio) - HIGH_ASYNC_RATIO_GAP;
-	unsigned long safe_pages = memcg_high * ratio / HIGH_ASYNC_RATIO_BASE;
+	unsigned long safe_pages = async_low_read(memcg);
 
 	if (!is_high_async_reclaim(memcg)) {
 		WRITE_ONCE(memcg->high_async_reclaim, false);
@@ -6161,6 +6169,105 @@ static ssize_t memcg_high_async_ratio_write(struct kernfs_open_file *of,
 
 	return nbytes;
 }
+
+static int memcg_wmark_ratio_show(struct seq_file *m, void *v)
+{
+	int ratio = READ_ONCE(mem_cgroup_from_seq(m)->high_async_ratio);
+
+	if (ratio == HIGH_ASYNC_RATIO_BASE)
+		ratio = 0;
+
+	seq_printf(m, "%d\n", ratio);
+
+	return 0;
+}
+
+static ssize_t memcg_wmark_ratio_write(struct kernfs_open_file *of,
+				char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	int ret, high_async_ratio;
+
+	buf = strstrip(buf);
+	if (!buf)
+		return -EINVAL;
+
+	ret = kstrtoint(buf, 0, &high_async_ratio);
+	if (ret)
+		return ret;
+
+	if (high_async_ratio >  HIGH_ASYNC_RATIO_BASE ||
+	    high_async_ratio < 0)
+		return -EINVAL;
+
+	if (high_async_ratio == 0)
+		high_async_ratio = HIGH_ASYNC_RATIO_BASE;
+
+	WRITE_ONCE(memcg->high_async_ratio, high_async_ratio);
+
+	return nbytes;
+}
+
+static inline void memcg_wmark_scale_factor_init(struct mem_cgroup *memcg,
+						 struct mem_cgroup *parent)
+{
+	if (!parent)
+		memcg->wmark_scale_factor = 50;
+	else
+		memcg->wmark_scale_factor = parent->wmark_scale_factor;
+}
+
+static int memcg_wmark_scale_factor_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%d\n",
+	   READ_ONCE(mem_cgroup_from_seq(m)->wmark_scale_factor));
+	return 0;
+}
+
+static ssize_t memcg_wmark_scale_factor_write(struct kernfs_open_file *of,
+					      char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	int ret, wmark_scale_factor;
+
+	buf = strstrip(buf);
+	if (!buf)
+		return -EINVAL;
+
+	ret = kstrtoint(buf, 0, &wmark_scale_factor);
+	if (ret)
+		return ret;
+
+	if (wmark_scale_factor >  1000 ||
+	    wmark_scale_factor < 1)
+		return -EINVAL;
+
+	WRITE_ONCE(memcg->wmark_scale_factor, wmark_scale_factor);
+
+	return nbytes;
+
+}
+
+static u64 memcg_wmark_high_read(struct cgroup_subsys_state *css,
+				 struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)async_high_read(memcg) * PAGE_SIZE;
+}
+
+static u64 memcg_wmark_low_read(struct cgroup_subsys_state *css,
+				struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)async_low_read(memcg) * PAGE_SIZE;
+}
+#else
+static inline void memcg_wmark_scale_factor_init(struct mem_cgroup *memcg,
+						 struct mem_cgroup *parent)
+{
+}
 #endif
 
 #ifdef CONFIG_CGROUP_V1_WRITEBACK
@@ -6418,6 +6525,28 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memcg_high_async_ratio_show,
 		.write = memcg_high_async_ratio_write,
+	},
+	{
+		.name = "wmark_ratio",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memcg_wmark_ratio_show,
+		.write = memcg_wmark_ratio_write,
+	},
+	{
+		.name = "wmark_scale_factor",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memcg_wmark_scale_factor_show,
+		.write = memcg_wmark_scale_factor_write,
+	},
+	{
+		.name = "wmark_high",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memcg_wmark_high_read,
+	},
+	{
+		.name = "wmark_low",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memcg_wmark_low_read,
 	},
 	{
 		.name = "reclaim",
@@ -6740,6 +6869,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		page_counter_init(&memcg->kmem, &parent->kmem);
 		page_counter_init(&memcg->tcpmem, &parent->tcpmem);
 		memcg_swap_device_init(memcg, parent);
+		memcg_wmark_scale_factor_init(memcg, parent);
 	} else {
 		init_memcg_events();
 		page_counter_init(&memcg->memory, NULL);
@@ -6747,6 +6877,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		page_counter_init(&memcg->kmem, NULL);
 		page_counter_init(&memcg->tcpmem, NULL);
 		memcg_swap_device_init(memcg, NULL);
+		memcg_wmark_scale_factor_init(memcg, NULL);
 
 		root_mem_cgroup = memcg;
 		return &memcg->css;
