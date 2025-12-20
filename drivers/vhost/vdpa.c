@@ -1683,13 +1683,13 @@ static int vhost_vdpa_release(struct inode *inode, struct file *filep)
 	struct vhost_dev *d = &v->vdev;
 
 	mutex_lock(&d->mutex);
-#if IS_ENABLED(CONFIG_IOMMUFD)
-	vhost_vdpa_unbind_iommufd(v);
-#endif
 	filep->private_data = NULL;
 	vhost_vdpa_clean_irq(v);
 	vhost_vdpa_reset(v, VDPA_DEV_RESET_CLOSE);
 	vhost_dev_stop(&v->vdev);
+#if IS_ENABLED(CONFIG_IOMMUFD)
+	vhost_vdpa_unbind_iommufd(v);
+#endif
 	vhost_vdpa_unbind_mm(v);
 	vhost_vdpa_config_put(v);
 	vhost_vdpa_cleanup(v);
