@@ -3933,7 +3933,8 @@ static int ext4_iomap_prepare_ioend(struct iomap_ioend *ioend, int status)
 
 	/* Need to convert unwritten extents when I/Os are completed. */
 	if (ioend->io_type == IOMAP_UNWRITTEN ||
-	    ioend->io_offset + ioend->io_size > READ_ONCE(ei->i_disksize))
+	    ioend->io_offset + ioend->io_size > READ_ONCE(ei->i_disksize) ||
+	    ioend->io_flags & IOMAP_F_DONTCACHE)
 		ioend->io_bio.bi_end_io = ext4_iomap_end_bio;
 
 	return status;
