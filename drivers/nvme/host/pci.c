@@ -31,6 +31,7 @@
 #include <linux/io-64-nonatomic-hi-lo.h>
 #include <linux/sed-opal.h>
 #include <linux/pci-p2pdma.h>
+#include <linux/printk.h>
 
 #include "trace.h"
 #include "nvme.h"
@@ -163,6 +164,8 @@ struct nvme_dev {
 	unsigned int nr_allocated_queues;
 	unsigned int nr_write_queues;
 	unsigned int nr_poll_queues;
+	/* is currently coalescing */
+	int is_coalescing;
 };
 
 static int io_queue_depth_set(const char *val, const struct kernel_param *kp)
@@ -218,6 +221,10 @@ struct nvme_queue {
 	__le32 *dbbuf_sq_ei;
 	__le32 *dbbuf_cq_ei;
 	struct completion delete_done;
+	u8 up_cnt;   /* cnt for up condition */
+	u8 down_cnt; /* cnt for down condition */
+	u16 sq_head;
+	ktime_t last_time; /* timestamp for last op */
 };
 
 union nvme_descriptor {
@@ -874,6 +881,181 @@ out_free_cmd:
 	return ret;
 }
 
+static int nvme_set_irq_coalesce(struct nvme_ctrl *ctrl, u32 v)
+{
+	return nvme_set_features(ctrl, NVME_FEAT_IRQ_COALESCE, v, NULL, 0, NULL);
+}
+
+/*
+ * coalescing interrupt control
+ */
+#define MAX_COALESCE_THRESHOLD_DEFAULT  8      /* single queue threshold */
+#define MIN_COALESCE_THRESHOLD_DEFAULT  2      /* single queue threshold */
+#define HIT_COUNT_BEFORE_CHANGE_DEFAULT 5      /* condition hit count before change */
+#define CHECK_INTERVAL                  0x7    /* check interval */
+
+static int disable = 0;
+static int switch_cnt = 0;
+static int hit_count_before_change = HIT_COUNT_BEFORE_CHANGE_DEFAULT;
+static int coalesce_value = 0x10a;
+static int max_coalesce_threshold = MAX_COALESCE_THRESHOLD_DEFAULT;
+static int min_coalesce_threshold = MIN_COALESCE_THRESHOLD_DEFAULT;
+
+static ssize_t disable_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	return sprintf(buf, "%d\n", disable);
+}
+
+static ssize_t disable_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	int v = 0;
+	int ret = kstrtoint(buf, 10, &v);
+	if (0 == v || 1 == v)
+		disable = v;
+
+	if (1 == v)
+		switch_cnt = 0;
+
+	return ret ?: count;
+}
+
+static ssize_t switch_cnt_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	return sprintf(buf, "%d\n", switch_cnt);
+}
+
+static ssize_t switch_cnt_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	int v = 0;
+	int ret = kstrtoint(buf, 10, &v);
+	if(v >= 0)
+		switch_cnt = v;
+	return ret ?: count;
+}
+
+static ssize_t coalesce_value_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	return sprintf(buf, "%d\n", coalesce_value);
+}
+
+static ssize_t coalesce_value_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	int v = 0;
+	int ret = kstrtoint(buf, 10, &v);
+	if(v > 0)
+		coalesce_value = v;
+	return ret ?: count;
+}
+
+static ssize_t hit_count_before_change_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	return sprintf(buf, "%d\n", hit_count_before_change);
+}
+
+static ssize_t hit_count_before_change_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	int v = 0;
+	int ret = kstrtoint(buf, 10, &v);
+	if(v > 0)
+		hit_count_before_change = v;
+	return ret ?: count;
+}
+
+static ssize_t max_coalesce_threshold_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	return sprintf(buf, "%d\n", max_coalesce_threshold);
+}
+
+static ssize_t max_coalesce_threshold_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	int v = 0;
+	int ret = kstrtoint(buf, 10, &v);
+	if(0<=v && v<100000)
+		max_coalesce_threshold = v;
+	return ret ?: count;
+}
+
+static ssize_t min_coalesce_threshold_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	return sprintf(buf, "%d\n", min_coalesce_threshold);
+}
+
+static ssize_t min_coalesce_threshold_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	int v = 0;
+	int ret = kstrtoint(buf, 10, &v);
+	if(0<=v && v<100000)
+		min_coalesce_threshold = v;
+	return ret ?: count;
+}
+
+static struct kobj_attribute disable_attr = __ATTR(disable, 0644, disable_show, disable_store);
+static struct kobj_attribute switch_cnt_attr = __ATTR(switch_cnt, 0644, switch_cnt_show, switch_cnt_store);
+static struct kobj_attribute coalesce_value_attr = __ATTR(coalesce_value, 0644, coalesce_value_show, coalesce_value_store);
+static struct kobj_attribute hit_count_before_change_attr = __ATTR(hit_count_before_change, 0644, hit_count_before_change_show, hit_count_before_change_store);
+static struct kobj_attribute max_coalesce_threshold_attr = __ATTR(max_coalesce_threshold, 0644, max_coalesce_threshold_show, max_coalesce_threshold_store);
+static struct kobj_attribute min_coalesce_threshold_attr = __ATTR(min_coalesce_threshold, 0644, min_coalesce_threshold_show, min_coalesce_threshold_store);
+
+static inline void adjust_coalesce(struct nvme_queue *nvmeq, struct request *req, u16 sq_head, u16 sq_tail)
+{
+	struct nvme_dev *dev = nvmeq->dev;
+	struct nvme_ctrl *ctrl = &dev->ctrl;
+
+	if (disable)
+		return;
+
+	if (nvmeq->qid == 0) /* ignore admin op */
+		return;
+
+	/* idle for a while, speed up disabling coalesce */
+	if (dev->is_coalescing) {
+		ktime_t end = ktime_get();
+		s64 duration_ns = ktime_to_ns(ktime_sub(end, nvmeq->last_time));
+		if (duration_ns > 100000000 /* 100 ms */) {
+			if(nvmeq->down_cnt < hit_count_before_change - 1)
+				nvmeq->down_cnt = hit_count_before_change - 1;
+			pr_debug("idle for a while, qid=%hu, duration=%lld\n", nvmeq->qid, duration_ns);
+		}
+		nvmeq->last_time = end;
+	}
+
+	while (0 == (sq_tail & CHECK_INTERVAL)) {
+		int inflight = sq_tail-sq_head;
+		if (inflight < 0)
+			inflight += nvmeq->q_depth;
+
+		if (0 == sq_tail) {
+			pr_debug("dev=%p, qid=%hu, sq_head=%hu, sq_tail=%hu, inflight=%d, switch_cnt=%d, is_coalescing=%d. up_cnt=%d, down_cnt=%d, online_queue_num=%u, q_depth=%u\n",
+				dev, nvmeq->qid, sq_head, sq_tail, inflight, switch_cnt, dev->is_coalescing, nvmeq->up_cnt, nvmeq->down_cnt, dev->online_queues, nvmeq->q_depth);
+		}
+
+		/* queue full, switch to coalesce interrupt */
+		unsigned int req_size = blk_rq_bytes(req);
+		/* lower threshold for big op */
+		int max_threshold = (req_size >= 8192) ? (max_coalesce_threshold>>1) : max_coalesce_threshold;
+		if (dev->is_coalescing != 1 && inflight > max_threshold) {
+			if (rq_data_dir(req) == READ && req_size <32768) { /* no coalesce for write op or huge op*/
+				if (++nvmeq->up_cnt > hit_count_before_change) {
+					nvme_set_irq_coalesce(ctrl, coalesce_value);
+					dev->is_coalescing = 1;
+					switch_cnt++;
+					nvmeq->last_time = ktime_get();
+				}
+			}
+		} else {
+			if (0 != nvmeq->up_cnt) {
+				pr_debug("dev=%p, qid=%hu, inflight=%d, up_cnt reset from %d to 0.\n", dev, nvmeq->qid, inflight, nvmeq->up_cnt);
+				nvmeq->up_cnt = 0;
+			}
+		}
+
+		/* queues not so full, close coalesce interrupt */
+		if (dev->is_coalescing == 1 && (inflight < min_coalesce_threshold || rq_data_dir(req) == WRITE)) {
+			if (++nvmeq->down_cnt > hit_count_before_change) {
+				nvme_set_irq_coalesce(ctrl, 0);
+				dev->is_coalescing = 0;
+				switch_cnt++;
+				pr_debug("dev=%p, qid=%hu, disable_coalesce.\n", dev, nvmeq->qid);
+			}
+		} else {
+			if (0 != nvmeq->down_cnt) {
+				pr_debug("dev=%p, qid=%hu, inflight=%d, down_cnt reset from %d to 0.\n", dev, nvmeq->qid, inflight, nvmeq->down_cnt);
+				nvmeq->down_cnt = 0;
+			}
+		}
+
+		break;
+	}
+}
+
 /*
  * NOTE: ns is NULL when called on the admin queue.
  */
@@ -899,6 +1081,9 @@ static blk_status_t nvme_queue_rq(struct blk_mq_hw_ctx *hctx,
 	ret = nvme_prep_rq(dev, req);
 	if (unlikely(ret))
 		return ret;
+
+	adjust_coalesce(nvmeq, req, nvmeq->sq_head, nvmeq->sq_tail+1);
+
 	spin_lock(&nvmeq->sq_lock);
 	nvme_sq_copy_cmd(nvmeq, &iod->cmd);
 	nvme_write_sq_db(nvmeq, bd->last);
@@ -952,6 +1137,8 @@ static void nvme_queue_rqs(struct request **rqlist)
 			rq_list_add(&submit_list, req); /* reverse order */
 		else
 			rq_list_add_tail(&requeue_lastp, req);
+
+		adjust_coalesce(nvmeq, req, nvmeq->sq_head, nvmeq->sq_tail+1);
 	}
 
 	if (nvmeq)
@@ -1036,6 +1223,8 @@ static inline void nvme_handle_cqe(struct nvme_queue *nvmeq,
 			command_id, le16_to_cpu(cqe->sq_id));
 		return;
 	}
+
+	nvmeq->sq_head = le16_to_cpu(cqe->sq_head);
 
 	trace_nvme_sq(req, cqe->sq_head, nvmeq->sq_tail);
 	if (!nvme_try_complete_req(req, cqe->status, cqe->result) &&
@@ -1568,6 +1757,8 @@ static int nvme_alloc_queue(struct nvme_dev *dev, int qid, int depth)
 	nvmeq->cq_phase = 1;
 	nvmeq->q_db = &dev->dbs[qid * 2 * dev->db_stride];
 	nvmeq->qid = qid;
+	nvmeq->up_cnt = 0;
+	nvmeq->down_cnt = 0;
 	dev->ctrl.queue_count++;
 
 	return 0;
@@ -3011,6 +3202,7 @@ static struct nvme_dev *nvme_pci_alloc_dev(struct pci_dev *pdev,
 	INIT_WORK(&dev->ctrl.reset_work, nvme_reset_work);
 	mutex_init(&dev->shutdown_lock);
 
+	dev->is_coalescing = 0;
 	dev->nr_write_queues = write_queues;
 	dev->nr_poll_queues = poll_queues;
 	dev->nr_allocated_queues = nvme_max_io_queues(dev) + 1;
@@ -3608,8 +3800,37 @@ static struct pci_driver nvme_driver = {
 	.err_handler	= &nvme_err_handler,
 };
 
+static struct kobject *nvme_kobj;
+
 static int __init nvme_init(void)
 {
+	int ret;
+	nvme_kobj = kobject_create_and_add("nvme", kernel_kobj);
+	if (!nvme_kobj) {
+		pr_err("Failed to create nvme kobject\n");
+		return -ENOMEM;
+	}
+
+	pr_info("nvme.ko nvme_init() IN 20250421-2258.\n");
+	ret = sysfs_create_file(nvme_kobj, &disable_attr.attr);
+	if (ret)
+		pr_err("Failed to create sysfs file: disable\n");
+	ret = sysfs_create_file(nvme_kobj, &switch_cnt_attr.attr);
+	if (ret)
+		pr_err("Failed to create sysfs file: switch_cnt\n");
+	ret = sysfs_create_file(nvme_kobj, &coalesce_value_attr.attr);
+	if (ret)
+		pr_err("Failed to create sysfs file: coalesce_value\n");
+	ret = sysfs_create_file(nvme_kobj, &hit_count_before_change_attr.attr);
+	if (ret)
+		pr_err("Failed to create sysfs file: hit_count_before_change\n");
+	ret = sysfs_create_file(nvme_kobj, &max_coalesce_threshold_attr.attr);
+	if (ret)
+		pr_err("Failed to create sysfs file: max_coalesce_threshold\n");
+	ret = sysfs_create_file(nvme_kobj, &min_coalesce_threshold_attr.attr);
+	if (ret)
+		pr_err("Failed to create sysfs file: min_coalesce_threshold\n");
+
 	BUILD_BUG_ON(sizeof(struct nvme_create_cq) != 64);
 	BUILD_BUG_ON(sizeof(struct nvme_create_sq) != 64);
 	BUILD_BUG_ON(sizeof(struct nvme_delete_queue) != 64);
@@ -3625,6 +3846,14 @@ static void __exit nvme_exit(void)
 {
 	pci_unregister_driver(&nvme_driver);
 	flush_workqueue(nvme_wq);
+
+	sysfs_remove_file(nvme_kobj, &disable_attr.attr);
+	sysfs_remove_file(nvme_kobj, &switch_cnt_attr.attr);
+	sysfs_remove_file(nvme_kobj, &coalesce_value_attr.attr);
+	sysfs_remove_file(nvme_kobj, &hit_count_before_change_attr.attr);
+	sysfs_remove_file(nvme_kobj, &max_coalesce_threshold_attr.attr);
+	sysfs_remove_file(nvme_kobj, &min_coalesce_threshold_attr.attr);
+	kobject_put(nvme_kobj);
 }
 
 MODULE_AUTHOR("Matthew Wilcox <willy@linux.intel.com>");
