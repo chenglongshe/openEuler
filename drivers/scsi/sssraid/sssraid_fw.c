@@ -635,13 +635,16 @@ static int sssraid_setup_isr(struct sssraid_ioc *sdioc, u8 setup_one)
 
 	irq_flags |= PCI_IRQ_AFFINITY | PCI_IRQ_ALL_TYPES;
 
-	i = pci_alloc_irq_vectors_affinity(sdioc->pdev,
+	retval = pci_alloc_irq_vectors_affinity(sdioc->pdev,
 		1, max_vectors, irq_flags, &desc);
 
-	if (i <= 0) {
+	if (retval <= 0) {
+		retval = -EIO;
 		ioc_err(sdioc, "Err: alloc irq vectors fail.\n");
 		goto out_failed;
 	}
+
+	i = retval;
 	if (i != max_vectors) {
 		ioc_warn(sdioc,
 		    "Allocated vectors (%d) are less than requested (%d)\n",
@@ -671,7 +674,7 @@ static int sssraid_setup_isr(struct sssraid_ioc *sdioc, u8 setup_one)
 	/* intr_info_count replace max_qid */
 	sdioc->intr_info_count = max_vectors;
 	sssraid_ioc_enable_intr(sdioc);
-	return retval;
+	return 0;
 out_failed:
 	sssraid_cleanup_isr(sdioc);
 
