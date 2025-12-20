@@ -1143,7 +1143,7 @@ static int ubagg_check_add_dev_para_valid(struct ubagg_add_dev *arg)
 	return 0;
 }
 
-static int add_dev(struct ubagg_cmd_hdr *hdr)
+static int ubagg_cmd_add_dev(struct ubagg_cmd_hdr *hdr)
 {
 	struct ubagg_device *ubagg_dev;
 	struct ubagg_add_dev arg;
@@ -1190,7 +1190,7 @@ module_get_fail:
 	return -ENODEV;
 }
 
-static int rmv_dev(struct ubagg_cmd_hdr *hdr)
+static int ubagg_cmd_rmv_dev(struct ubagg_cmd_hdr *hdr)
 {
 	struct ubagg_rmv_dev arg;
 	struct ubagg_device *ubagg_dev;
@@ -1668,46 +1668,6 @@ static void find_add_master_dev(const char *bondingEid, const char *name)
 	mutex_unlock(&g_name_eid_arr_lock);
 }
 
-static int ubagg_add_dev_by_uvs(struct ubagg_topo_map *topo_map)
-{
-	struct ubagg_topo_info *cur_node_info;
-	struct ubagg_add_dev_by_uvs arg = { 0 };
-	char *master_dev_name = NULL;
-	uint32_t cur_node_index = 0;
-
-	if (find_cur_node_index(topo_map, &cur_node_index) != 0) {
-		ubagg_log_err("find cur node index failed\n");
-		return -1;
-	}
-	cur_node_info = &(topo_map->topo_infos[cur_node_index]);
-
-	if (has_add_dev_by_bonding_eid(cur_node_info->bonding_eid)) {
-		ubagg_log_info("has add dev by bonding eid: " EID_FMT "\n",
-			       EID_RAW_ARGS(cur_node_info->bonding_eid));
-		return 0;
-	}
-
-	master_dev_name = generate_master_dev_name();
-	if (master_dev_name == NULL) {
-		ubagg_log_err("generate master dev name failed\n");
-		return -1;
-	}
-
-	(void)snprintf(arg.master_dev_name, UBAGG_MAX_DEV_NAME_LEN, "%s",
-		       master_dev_name);
-	fill_add_dev_cfg(cur_node_info, &arg);
-
-	if (add_dev_by_uvs(&arg) != 0) {
-		release_bond_device_id_with_name(master_dev_name);
-		kfree(master_dev_name);
-		ubagg_log_err("add ubagg dev by uvs failed\n");
-		return -1;
-	}
-	find_add_master_dev(cur_node_info->bonding_eid, master_dev_name);
-	kfree(master_dev_name);
-	return 0;
-}
-
 static void print_topo_map(struct ubagg_topo_map *topo_map)
 {
 	int i, j, k;
@@ -1752,7 +1712,7 @@ static void print_topo_map(struct ubagg_topo_map *topo_map)
 		"========================== topo map end =============================\n");
 }
 
-static int ubagg_set_topo_info(struct ubagg_cmd_hdr *hdr)
+static int ubagg_cmd_set_topo_info(struct ubagg_cmd_hdr *hdr)
 {
 	struct ubagg_set_topo_info arg;
 	struct ubagg_topo_map *new_topo_map;
@@ -1804,17 +1764,280 @@ static int ubagg_set_topo_info(struct ubagg_cmd_hdr *hdr)
 
 	print_topo_map(topo_map);
 
-	if (ubagg_add_dev_by_uvs(topo_map) != 0) {
-		delete_global_ubagg_topo_map();
-		ubagg_log_err("Failed to add dev by uvs\n");
-		return -1;
-	}
 	return 0;
 }
 
 void ubagg_delete_topo_map(void)
 {
 	delete_global_ubagg_topo_map();
+}
+
+static int ubagg_create_dev(struct ubagg_create_dev_arg *arg)
+{
+    struct ubagg_add_dev_by_uvs uvs_arg = {0};
+    struct ubagg_topo_info *cur_node_info;
+    struct ubagg_topo_map *topo_map;
+    char *master_dev_name = NULL;
+    uint32_t cur_node_index = 0;
+    int ret;
+
+    if (is_eid_empty(arg->in.aggr_eid.raw)) {
+        ubagg_log_err("aggr_eid is empty\n");
+        return -EINVAL;
+    }
+
+    if (has_add_dev_by_bonding_eid(arg->in.aggr_eid.raw)) {
+        ubagg_log_info("has add dev by aggr eid: " EID_FMT "\n",
+                   EID_RAW_ARGS(arg->in.aggr_eid.raw));
+        return -EEXIST;
+    }
+
+    topo_map = get_global_ubagg_map();
+    if (topo_map == NULL) {
+        ubagg_log_err("global topo map is NULL\n");
+        return -EINVAL;
+    }
+
+    if (find_cur_node_index(topo_map, &cur_node_index) != 0) {
+        ubagg_log_err("find cur node index failed\n");
+        return -EINVAL;
+    }
+    cur_node_info = &(topo_map->topo_infos[cur_node_index]);
+
+    if (!compare_eids(cur_node_info->bonding_eid, arg->in.aggr_eid.raw)) {
+        ubagg_log_err("aggr eid not matched, input: " EID_FMT "\n",
+                   EID_RAW_ARGS(arg->in.aggr_eid.raw));
+        return -EINVAL;
+    }
+
+    master_dev_name = generate_master_dev_name();
+    if (master_dev_name == NULL) {
+        ubagg_log_err("generate master dev name failed\n");
+        return -ENOMEM;
+    }
+    (void)snprintf(uvs_arg.master_dev_name, UBAGG_MAX_DEV_NAME_LEN, "%s",
+               master_dev_name);
+
+    fill_add_dev_cfg(cur_node_info, &uvs_arg);
+
+    ret = add_dev_by_uvs(&uvs_arg);
+    if (ret != 0) {
+        release_bond_device_id_with_name(master_dev_name);
+        kfree(master_dev_name);
+        ubagg_log_err("add ubagg dev by uvs failed, ret:%d\n", ret);
+        return ret;
+    }
+
+    find_add_master_dev(cur_node_info->bonding_eid, master_dev_name);
+    kfree(master_dev_name);
+    return 0;
+}
+
+static int ubagg_cmd_create_dev(struct ubagg_cmd_hdr *hdr)
+{
+	struct ubagg_create_dev_arg arg;
+    int ret;
+
+    if (hdr->args_len != sizeof(struct ubagg_create_dev_arg)) {
+        ubagg_log_err("create dev, args_len invalid: %u\n",
+                  hdr->args_len);
+        return -EINVAL;
+    }
+
+    ret = copy_from_user(&arg, (void __user *)hdr->args_addr, hdr->args_len);
+    if (ret != 0) {
+        ubagg_log_err("copy_from_user fail.\n");
+        return -EFAULT;
+    }
+
+	ret = ubagg_create_dev(&arg);
+	if (ret != 0) {
+		ubagg_log_err("ubagg_create_dev failed, ret:%d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static char *ubagg_find_name_by_bonding_eid(const char *bonding_eid)
+{
+    char *master_dev_name = NULL;
+    int i;
+
+    mutex_lock(&g_name_eid_arr_lock);
+    for (i = 0; i < UBAGG_MAX_BONDING_DEV_NUM; i++) {
+        if (compare_eids(bonding_eid, g_name_eid_arr[i].bonding_eid)) {
+            master_dev_name = g_name_eid_arr[i].master_dev_name;
+            mutex_unlock(&g_name_eid_arr_lock);
+            return master_dev_name;
+        }
+    }
+    mutex_unlock(&g_name_eid_arr_lock);
+    return NULL;
+}
+
+static struct ubagg_device *ubagg_find_dev_by_bonding_eid(const char *bonding_eid)
+{
+    char *master_dev_name = NULL;
+    struct ubagg_device *dev;
+
+    master_dev_name = ubagg_find_name_by_bonding_eid(bonding_eid);
+    if (master_dev_name == NULL) {
+        ubagg_log_err("no master dev name for bonding eid: " EID_FMT "\n",
+                      EID_RAW_ARGS(bonding_eid));
+        return NULL;
+    }
+
+    dev = ubagg_find_dev_by_name(master_dev_name);
+    if (dev == NULL) {
+        ubagg_log_err("ubagg dev not exist by name:%s\n", master_dev_name);
+        return NULL;
+    }
+
+    return dev;
+}
+
+static int ubagg_delete_dev(const struct ubagg_delete_dev_arg *arg)
+{
+	struct ubagg_topo_info *cur_node_info;
+	struct ubagg_topo_map *topo_map;
+	uint32_t cur_node_index = 0;
+	struct ubagg_device *dev;
+
+	if (is_eid_empty(arg->in.aggr_eid.raw)) {
+		ubagg_log_err("aggr_eid is empty\n");
+		return -EINVAL;
+	}
+
+	if (!has_add_dev_by_bonding_eid(arg->in.aggr_eid.raw)) {
+		ubagg_log_err("no ubagg dev by aggr eid: " EID_FMT "\n",
+			       EID_RAW_ARGS(arg->in.aggr_eid.raw));
+		return -ENODEV;
+	}
+
+	topo_map = get_global_ubagg_map();
+	if (topo_map == NULL) {
+		ubagg_log_err("global topo map is NULL\n");
+		return -EINVAL;
+	}
+
+	if (find_cur_node_index(topo_map, &cur_node_index) != 0) {
+		ubagg_log_err("find cur node index failed\n");
+		return -EINVAL;
+	}
+	cur_node_info = &(topo_map->topo_infos[cur_node_index]);
+
+	if (!compare_eids(arg->in.aggr_eid.raw, cur_node_info->bonding_eid)) {
+		ubagg_log_err("input aggr_eid is not cur node bonding_eid\n");
+		return -EINVAL;
+	}
+
+	dev = ubagg_find_dev_by_bonding_eid(cur_node_info->bonding_eid);
+	if (dev == NULL) {
+		ubagg_log_err("ubagg dev not exist by bonding eid: " EID_FMT "\n",
+			       EID_RAW_ARGS(cur_node_info->bonding_eid));
+		return -ENODEV;
+	}
+
+	uninit_ubagg_res(dev);
+	ubcore_unregister_device(&dev->ub_dev);
+	rmv_dev_from_list(dev);
+
+	ubagg_dev_ref_put(dev);
+	module_put(THIS_MODULE);
+
+	return 0;
+}
+
+static int ubagg_cmd_delete_dev(struct ubagg_cmd_hdr *hdr)
+{
+	struct ubagg_delete_dev_arg arg;
+    int ret;
+
+    if (hdr->args_len != sizeof(struct ubagg_delete_dev_arg)) {
+        ubagg_log_err("delete dev, args_len invalid: %u\n",
+				  hdr->args_len);
+        return -EINVAL;
+    }
+
+    ret = copy_from_user(&arg, (void __user *)hdr->args_addr, hdr->args_len);
+    if (ret != 0) {
+        ubagg_log_err("copy_from_user fail.\n");
+        return -EFAULT;
+    }
+
+	ret = ubagg_delete_dev(&arg);
+	if (ret != 0) {
+		ubagg_log_err("ubagg_delete_dev failed: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int ubagg_get_dev_name(struct ubagg_get_dev_name_arg *arg)
+{
+	struct ubagg_device *ubagg_dev;
+	char *master_dev_name = NULL;
+	int ret;
+
+	if (is_eid_empty(arg->in.eid.raw) || !arg->in.buf || arg->in.len == 0) {
+		ubagg_log_err("Invalid get_dev_name param\n");
+		return -EINVAL;
+	}
+
+	master_dev_name = ubagg_find_name_by_bonding_eid(arg->in.eid.raw);
+	if (master_dev_name == NULL) {
+		ubagg_log_err("no master dev name for bonding eid: " EID_FMT "\n",
+			       EID_RAW_ARGS(arg->in.eid.raw));
+		ubagg_dev_ref_put(ubagg_dev);
+		return -ENODEV;
+	}
+
+	if (arg->in.len < strnlen(master_dev_name, UBAGG_MAX_DEV_NAME_LEN) + 1) {
+		ubagg_log_err("buf len is too small, need:%zu, given:%u\n",
+			      strnlen(master_dev_name, UBAGG_MAX_DEV_NAME_LEN) + 1,
+			      arg->in.len);
+		ubagg_dev_ref_put(ubagg_dev);
+		return -EINVAL;
+	}
+
+	ret = copy_to_user((void __user *)arg->in.buf, master_dev_name,
+			   strnlen(master_dev_name, UBAGG_MAX_DEV_NAME_LEN) + 1);
+	if (ret != 0) {
+		ubagg_log_err("copy_to_user fail.\n");
+		ubagg_dev_ref_put(ubagg_dev);
+		return -EFAULT;
+	}
+
+	ubagg_dev_ref_put(ubagg_dev);
+	return 0;
+}
+
+static int ubagg_cmd_get_dev_name(struct ubagg_cmd_hdr *hdr)
+{
+	struct ubagg_get_dev_name_arg arg;
+	int ret;
+
+	if (hdr->args_len != sizeof(struct ubagg_get_dev_name_arg)) {
+		ubagg_log_err("get dev name, args_len invalid: %u\n",
+				  hdr->args_len);
+		return -EINVAL;
+	}
+
+	ret = copy_from_user(&arg, (void __user *)hdr->args_addr, hdr->args_len);
+	if (ret != 0) {
+		ubagg_log_err("copy_from_user fail.\n");
+		return -EFAULT;
+	}
+
+	ret = ubagg_get_dev_name(&arg);
+	if (ret != 0) {
+		ubagg_log_err("ubagg_get_dev_name failed: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
 long ubagg_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -1833,12 +2056,18 @@ long ubagg_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return -EFAULT;
 	}
 	switch (hdr.command) {
-	case UBAGG_ADD_DEV:
-		return add_dev(&hdr);
-	case UBAGG_RMV_DEV:
-		return rmv_dev(&hdr);
-	case UBAGG_SET_TOPO_INFO:
-		return ubagg_set_topo_info(&hdr);
+	case UBAGG_CMD_ADD_DEV:
+		return ubagg_cmd_add_dev(&hdr);
+	case UBAGG_CMD_RMV_DEV:
+		return ubagg_cmd_rmv_dev(&hdr);
+	case UBAGG_CMD_SET_TOPO_INFO:
+		return ubagg_cmd_set_topo_info(&hdr);
+	case UBAGG_CMD_CREATE_DEV:
+		return ubagg_cmd_create_dev(&hdr);
+	case UBAGG_CMD_DELETE_DEV:
+		return ubagg_cmd_delete_dev(&hdr);
+	case UBAGG_CMD_GET_DEV_NAME:
+		return ubagg_cmd_get_dev_name(&hdr);
 	default:
 		ubagg_log_err("Wrong command type:%u", hdr.command);
 		return -EINVAL;
