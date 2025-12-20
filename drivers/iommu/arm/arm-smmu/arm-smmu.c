@@ -1421,6 +1421,7 @@ static struct iommu_device *arm_smmu_probe_device(struct device *dev)
 			u32 fwid = FWID_READ(fwspec->ids[i]);
 
 			iommu_fwspec_add_ids(dev, &fwid, 1);
+			fwspec = dev_iommu_fwspec_get(dev);
 		}
 	}
 #endif
