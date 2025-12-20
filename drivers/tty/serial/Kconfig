@@ -85,6 +85,39 @@ config SERIAL_EARLYCON_SEMIHOST
 	  This is enabled with "earlycon=smh" on the kernel command line.
 	  The console is enabled when early_param is processed.
 
+config SERIAL_PHYTIUM_PCI
+	tristate "Phytium PCI serial port support"
+	depends on PCI 
+	depends on ARM64
+	select SERIAL_CORE
+	help
+	  This driver supports the Phytium UART controller on PCI/PCIe adapters.
+	  If you want to compile this driver into the kernel, say Y here.  To
+	  compile this driver as a module, choose M here.
+
+	  If unsure, say N.
+
+config SERIAL_PHYTIUM_UART_V2
+        tristate "Phytium V2 serial port support"
+        depends on ARCH_PHYTIUM
+	depends on ARM64
+        select SERIAL_CORE
+        help
+        This driver supports the Phytium UART V2 controller on platform adapters.
+          If you want to compile this driver into the kernel, say Y here.  To
+          compile this driver as a module, choose M here.
+
+          If unsure, say N.
+
+config SERIAL_PHYTIUM_V2_DEBUG
+        bool "Phytium UART V2 debug/heartbeat function support"
+        depends on SERIAL_PHYTIUM_UART_V2
+        help
+          This driver supports the Phytium UART V2 controller Debug on platform adapters.
+          If you want to enable debug, say Y here.
+
+          If unsure, say N.
+
 config SERIAL_EARLYCON_RISCV_SBI
 	bool "Early console using RISC-V SBI"
 	depends on RISCV_SBI_V01
@@ -765,7 +798,7 @@ config SERIAL_CPM
 	depends on CPM2 || CPM1
 	select SERIAL_CORE
 	help
-	  This driver supports the SCC and SMC serial ports on Motorola 
+	  This driver supports the SCC and SMC serial ports on Motorola
 	  embedded PowerPC that contain a CPM1 (8xx) or CPM2 (8xxx)
 
 config SERIAL_CPM_CONSOLE
