@@ -10,8 +10,14 @@
 #define NFP6000_PCIE_H
 
 #include "nfp_cpp.h"
+#include "../nfp_main.h"
+
+/* Vendor specific register layout */
+#define NFP_VNDR_HEADER_OFFSET	0x0
+#define NFP_VNDR_PF_ID_OFFSET	0x4
 
 struct nfp_cpp *
-nfp_cpp_from_nfp6000_pcie(struct pci_dev *pdev, const struct nfp_dev_info *dev_info);
+nfp_cpp_from_nfp6000_pcie(struct pci_dev *pdev, const struct nfp_dev_info *dev_info,
+			  struct nfp_pf *pf);
 
 #endif /* NFP6000_PCIE_H */
