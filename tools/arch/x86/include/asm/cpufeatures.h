@@ -444,14 +444,15 @@
 #define X86_FEATURE_NULL_SEL_CLR_BASE	(20*32+ 6) /* "" Null Selector Clears Base */
 #define X86_FEATURE_AUTOIBRS		(20*32+ 8) /* "" Automatic IBRS */
 #define X86_FEATURE_NO_SMM_CTL_MSR	(20*32+ 9) /* "" SMM_CTL MSR is not present */
-
-/* VIA/Cyrix/Centaur-defined CPU features, CPUID level 0xC0000006, word 20 */
-#define X86_FEATURE_ZXPAUSE			(30*32 + 0) /* ZHAOXIN ZXPAUSE */
 #define X86_FEATURE_VERW_CLEAR		(20*32+ 5) /* The memory form of VERW mitigates TSA */
 #define X86_FEATURE_GP_ON_USER_CPUID	(20*32+17) /* User CPUID faulting */
+
 #define X86_FEATURE_TSA_SQ_NO		(21*32+11) /* AMD CPU not vulnerable to TSA-SQ */
 #define X86_FEATURE_TSA_L1_NO		(21*32+12) /* AMD CPU not vulnerable to TSA-L1 */
 #define X86_FEATURE_CLEAR_CPU_BUF_VM	(21*32+13) /* Clear CPU buffers using VERW before VMRUN */
+
+/* VIA/Cyrix/Centaur-defined CPU features, CPUID level 0xC0000006, word 30 */
+#define X86_FEATURE_PAUSEOPT		(30*32 + 0) /* ZHAOXIN PAUSEOPT */
 
 /*
  * BUG word(s)
