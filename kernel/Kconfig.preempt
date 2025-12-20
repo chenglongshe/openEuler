@@ -134,3 +134,18 @@ config SCHED_CORE
 	  be no measurable impact on performance.
 
 
+config TEMP_EEVDF_NULL_POINTER_CHECKER
+	bool "temp eevdf null pointer"
+	default n
+	help
+	  This option can record the attrs of the cfs_rq and cfs_rq->curr
+	  when a sched_entity in place_entity().
+
+config TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+	bool "temp eevdf null pointer bugon"
+	depends on TEMP_EEVDF_NULL_POINTER_CHECKER
+	default n
+	help
+	  This option can record the attrs of the cfs_rq and cfs_rq->curr
+	  when a sched_entity in place_entity(). Also, it will bug_on when
+	  necessary.

@@ -187,6 +187,9 @@ static inline struct task_struct *alloc_task_struct_node(int node)
 static inline void free_task_struct(struct task_struct *tsk)
 {
 	kfree(tsk->_resvd);
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+	kfree(tsk->se._resvd);
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
 	kmem_cache_free(task_struct_cachep, tsk);
 }
 #endif
@@ -1164,6 +1167,15 @@ static bool dup_resvd_task_struct(struct task_struct *dst,
 	if (!dst->_resvd)
 		return false;
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+	dst->se._resvd = kzalloc_node(sizeof(struct sched_entity_resvd),
+					  GFP_KERNEL, node);
+	if (!dst->se._resvd)
+		return false;
+
+	dst->se._resvd->se = &dst->se;
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
+
 	dst->_resvd->task = dst;
 #ifdef CONFIG_XCU_SCHEDULER
 	dst->_resvd->xse_attr = orig->_resvd->xse_attr;
@@ -1187,6 +1199,9 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	 * a double-free for task_struct_resvd extension object.
 	 */
 	WRITE_ONCE(tsk->_resvd, NULL);
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+	WRITE_ONCE(tsk->se._resvd, NULL);
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
 
 	err = arch_dup_task_struct(tsk, orig);
 	if (err || !dup_resvd_task_struct(tsk, orig, node))

@@ -353,6 +353,10 @@ static int __init sched_fair_sysctl_init(void)
 late_initcall(sched_fair_sysctl_init);
 #endif
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+static inline void avg_vruntime_validate(struct cfs_rq *cfs_rq);
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON */
+
 static inline void update_load_add(struct load_weight *lw, unsigned long inc)
 {
 	lw->weight += inc;
@@ -834,6 +838,11 @@ avg_vruntime_add(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	unsigned long weight = scale_load_down(se->load.weight);
 	s64 key = entity_key(cfs_rq, se);
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+	/* not yet added to tree */
+	avg_vruntime_validate(cfs_rq);
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON */
+
 	cfs_rq->avg_vruntime += key * weight;
 	cfs_rq->avg_load += weight;
 }
@@ -846,6 +855,11 @@ avg_vruntime_sub(struct cfs_rq *cfs_rq, struct sched_entity *se)
 
 	cfs_rq->avg_vruntime -= key * weight;
 	cfs_rq->avg_load -= weight;
+
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+	/* already removed from tree */
+	avg_vruntime_validate(cfs_rq);
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON */
 }
 
 static inline
@@ -947,6 +961,10 @@ static int vruntime_eligible(struct cfs_rq *cfs_rq, u64 vruntime)
 		load += weight;
 	}
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+	WARN_ON_ONCE(!(avg >= (s64)(vruntime - cfs_rq->min_vruntime) * load)
+		&& (avg - (s64)(vruntime - cfs_rq->min_vruntime) * load >= 0));
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON */
 	return avg >= (s64)(vruntime - cfs_rq->min_vruntime) * load;
 }
 
@@ -3853,6 +3871,32 @@ static inline void
 dequeue_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *se) { }
 #endif
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+
+#define TEMP_EEVDF_MAX_LAG (1ULL << 50)
+#define TEMP_EEVDF_NULL_ABS(x) ((x) < 0 ? -(x) : (x))
+
+static inline void avg_vruntime_validate(struct cfs_rq *cfs_rq)
+{
+	unsigned long load = 0;
+	s64 vruntime = 0;
+	struct rb_node *node = rb_first_cached(&cfs_rq->tasks_timeline);
+
+	for (; node; node = rb_next(node)) {
+		struct sched_entity *se = __node_2_se(node);
+		unsigned long weight = scale_load_down(se->load.weight);
+		s64 key = entity_key(cfs_rq, se);
+		/* vruntime += key * weight; */
+		WARN_ON_ONCE(__builtin_mul_overflow(key, weight, &key));
+		WARN_ON_ONCE(__builtin_add_overflow(vruntime, key, &vruntime));
+		load += weight;
+	}
+
+	WARN_ON_ONCE(cfs_rq->avg_load != load);
+	WARN_ON_ONCE(cfs_rq->avg_vruntime != vruntime);
+}
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON */
+
 static void reweight_eevdf(struct sched_entity *se, u64 avruntime,
 			   unsigned long weight)
 {
@@ -3940,6 +3984,9 @@ static void reweight_eevdf(struct sched_entity *se, u64 avruntime,
 		vlag = entity_lag(avruntime, se);
 		vlag = div_s64(vlag * old_weight, weight);
 		se->vruntime = avruntime - vlag;
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+		BUG_ON(TEMP_EEVDF_NULL_ABS(vlag) > TEMP_EEVDF_MAX_LAG);
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON */
 	}
 
 	/*
@@ -5448,6 +5495,12 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	}
 
 	se->vruntime = vruntime - lag;
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+	temp_save_info_for_eevdf_nullpointer(cfs_rq, se, vruntime, lag);
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON
+	BUG_ON(TEMP_EEVDF_NULL_ABS(lag) > TEMP_EEVDF_MAX_LAG);
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER_BUGON */
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
 
 	/*
 	 * When joining the competition; the exisiting tasks will be,

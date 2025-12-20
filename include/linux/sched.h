@@ -576,6 +576,36 @@ struct sched_statistics {
 #endif /* CONFIG_SCHEDSTATS */
 } ____cacheline_aligned;
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+struct sched_entity_resvd {
+	/* pointer back to the main sched_entity */
+	struct sched_entity *se;
+
+	/*
+	 * CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER is only designed
+	 * to verify EEVDF null pointer issues.
+	 */
+	/* attrs for cfs_rq */
+	s64 cfs_rq_avg_vruntime;
+	u64 cfs_rq_avg_load;
+	u64 cfs_rq_min_vruntime;
+	unsigned long cfs_rq_load_weight;
+	u64 cfs_rq_load_inv_weight;
+
+	/* attrs for cfs_rq->curr */
+	struct sched_entity *curr_address;
+	unsigned int curr_on_rq;
+	u64 curr_vruntime;
+	u64 curr_min_vruntime;
+	unsigned long curr_load_weight;
+	u32 curr_load_inv_weight;
+
+	/* calculators for place_entity() */
+	u64 function_place_entity_vruntime;
+	s64 function_place_entity_lag;
+};
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
+
 struct sched_entity {
 	/* For load-balancing: */
 	struct load_weight		load;
@@ -615,8 +645,12 @@ struct sched_entity {
 	 */
 	struct sched_avg		avg;
 #endif
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+	KABI_REPLACE(KABI_RESERVE(1); KABI_RESERVE(2), KABI_AUX_PTR(sched_entity))
+#else
 	KABI_RESERVE(1)
 	KABI_RESERVE(2)
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
 	KABI_RESERVE(3)
 	KABI_RESERVE(4)
 };

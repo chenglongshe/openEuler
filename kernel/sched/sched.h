@@ -3803,4 +3803,38 @@ static inline int destroy_soft_domain(struct task_group *tg)
 
 #endif
 
+#ifdef CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER
+static inline void temp_save_info_for_eevdf_nullpointer(
+	struct cfs_rq *cfs_rq,
+	struct sched_entity *se,
+	u64 function_place_entity_vruntime,
+	s64 function_place_entity_lag)
+{
+	// attrs for cfs_rq
+	se->_resvd->cfs_rq_avg_vruntime = cfs_rq->avg_vruntime;
+	se->_resvd->cfs_rq_avg_load = cfs_rq->avg_load;
+	se->_resvd->cfs_rq_min_vruntime = cfs_rq->min_vruntime;
+	se->_resvd->cfs_rq_load_weight = cfs_rq->load.weight;
+	se->_resvd->cfs_rq_load_inv_weight = cfs_rq->load.inv_weight;
+
+	// attrs for cfs_rq->curr
+	struct sched_entity *curr = cfs_rq->curr;
+
+	if (curr) {
+		se->_resvd->curr_address = curr;
+		se->_resvd->curr_on_rq = curr->on_rq;
+		se->_resvd->curr_vruntime = curr->vruntime;
+		se->_resvd->curr_min_vruntime = curr->min_vruntime;
+		se->_resvd->curr_load_weight = curr->load.weight;
+		se->_resvd->curr_load_inv_weight = curr->load.inv_weight;
+	} else {
+		se->_resvd->curr_address = NULL;
+	}
+
+	// calculators for place_entity()
+	se->_resvd->function_place_entity_vruntime = function_place_entity_vruntime;
+	se->_resvd->function_place_entity_lag = function_place_entity_lag;
+}
+#endif /* CONFIG_TEMP_EEVDF_NULL_POINTER_CHECKER */
+
 #endif /* _KERNEL_SCHED_SCHED_H */
