@@ -8296,6 +8296,11 @@ static int rnpm_rm_pf_adapter(struct pci_dev *pdev,
 	if (pf_adapter->hw_addr4)
 		pcim_iounmap(pdev, pf_adapter->hw_addr4);
 
+	if (pf_adapter->hw.mbx.reply_dma)
+		dma_free_coherent(&pdev->dev, pf_adapter->hw.mbx.reply_dma_size,
+				  pf_adapter->hw.mbx.reply_dma,
+				  pf_adapter->hw.mbx.reply_dma_phy);
+
 	if (pf_adapter)
 		devm_kfree(&pdev->dev, pf_adapter);
 
@@ -8977,9 +8982,6 @@ static void rnpm_remove(struct pci_dev *pdev)
 	rnpm_rm_pf_adapter(pdev, &pf_adapter);
 	// pci_release_selected_regions(pdev, pci_select_bars(pdev,
 	//			IORESOURCE_MEM));
-	dma_free_coherent(&pdev->dev, pf_adapter->hw.mbx.reply_dma_size,
-			  pf_adapter->hw.mbx.reply_dma,
-			  pf_adapter->hw.mbx.reply_dma_phy);
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 }
