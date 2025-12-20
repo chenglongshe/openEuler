@@ -189,7 +189,12 @@ enum {
  * Removes indirection through the SQ index array.
  */
 #define IORING_SETUP_NO_SQARRAY		(1U << 16)
+#define IORING_SETUP_EXT_PARAM          (1U << 31)  /* extended param */
 
+/*
+ * io_uring_setup() extended flags
+ */
+#define IORING_SETUP_SQ_THREAD_FORCE_IDLE (1U << 0) /* Force SQ thread to be idle, waiting for periodic wake-up */
 enum io_uring_op {
 	IORING_OP_NOP,
 	IORING_OP_READV,
@@ -480,6 +485,13 @@ struct io_uring_params {
 	__u32 resv[3];
 	struct io_sqring_offsets sq_off;
 	struct io_cqring_offsets cq_off;
+};
+
+struct io_uring_params_ext {
+	struct io_uring_params p;
+	__u32 ext_flags;
+	__u32 sq_thread_wakeup_period;
+	__u32 resv[6];
 };
 
 /*
