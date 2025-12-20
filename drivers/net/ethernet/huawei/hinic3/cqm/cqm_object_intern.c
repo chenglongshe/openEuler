@@ -627,7 +627,8 @@ void cqm_qpc_mpt_delete(struct tag_cqm_object *object)
 	 * Services ensure that the QPC is referenced
 	 * when the QPC is deleted.
 	 */
-	if (!cla_table->alloc_static)
+	if (!cla_table->alloc_static ||
+	     object->service_type == CQM_SERVICE_T_ROCE)
 		wait_for_completion(&object->free);
 
 	/* VMware  FC need explicitly deinit spin_lock in completion */

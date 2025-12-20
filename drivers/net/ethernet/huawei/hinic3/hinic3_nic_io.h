@@ -19,10 +19,231 @@
 #define HINIC3_SQ_WQEBB_SIZE		BIT(HINIC3_SQ_WQEBB_SHIFT)
 #define HINIC3_CQE_SIZE_SHIFT		4
 
+#define HINIC3_Q_CTXT_MAX		31 /* (2048 - 8) / 64 */
+
+#define RQ_CTXT_PI_IDX_SHIFT				0
+#define RQ_CTXT_CI_IDX_SHIFT				16
+
+#define RQ_CTXT_PI_IDX_MASK				0xFFFFU
+#define RQ_CTXT_CI_IDX_MASK				0xFFFFU
+
+#define RQ_CTXT_CI_PI_SET(val, member)			(((val) & \
+					RQ_CTXT_##member##_MASK) \
+					<< RQ_CTXT_##member##_SHIFT)
+
+#define SQ_CTXT_SIZE(num_sqs)	((u16)(sizeof(struct hinic3_qp_ctxt_header) \
+				+ (num_sqs) * sizeof(struct hinic3_sq_ctxt)))
+
+#define RQ_CTXT_SIZE(num_rqs)	((u16)(sizeof(struct hinic3_qp_ctxt_header) \
+				+ (num_rqs) * sizeof(struct hinic3_rq_ctxt)))
+
+#define CI_IDX_HIGH_SHIFH				12
+
+#define CI_HIGN_IDX(val)		((val) >> CI_IDX_HIGH_SHIFH)
+
+#define SQ_CTXT_PI_IDX_SHIFT				0
+#define SQ_CTXT_CI_IDX_SHIFT				16
+
+#define SQ_CTXT_PI_IDX_MASK				0xFFFFU
+#define SQ_CTXT_CI_IDX_MASK				0xFFFFU
+
+#define SQ_CTXT_CI_PI_SET(val, member)			(((val) & \
+					SQ_CTXT_##member##_MASK) \
+					<< SQ_CTXT_##member##_SHIFT)
+
+#define SQ_CTXT_MODE_SP_FLAG_SHIFT			0
+#define SQ_CTXT_MODE_PKT_DROP_SHIFT			1
+
+#define SQ_CTXT_MODE_SP_FLAG_MASK			0x1U
+#define SQ_CTXT_MODE_PKT_DROP_MASK			0x1U
+
+#define SQ_CTXT_MODE_SET(val, member)	(((val) & \
+					SQ_CTXT_MODE_##member##_MASK) \
+					<< SQ_CTXT_MODE_##member##_SHIFT)
+
+#define SQ_CTXT_WQ_PAGE_HI_PFN_SHIFT			0
+#define SQ_CTXT_WQ_PAGE_OWNER_SHIFT			23
+
+#define SQ_CTXT_WQ_PAGE_HI_PFN_MASK			0xFFFFFU
+#define SQ_CTXT_WQ_PAGE_OWNER_MASK			0x1U
+
+#define SQ_CTXT_WQ_PAGE_SET(val, member)		(((val) & \
+					SQ_CTXT_WQ_PAGE_##member##_MASK) \
+					<< SQ_CTXT_WQ_PAGE_##member##_SHIFT)
+
+#define SQ_CTXT_PKT_DROP_THD_ON_SHIFT			0
+#define SQ_CTXT_PKT_DROP_THD_OFF_SHIFT			16
+
+#define SQ_CTXT_PKT_DROP_THD_ON_MASK			0xFFFFU
+#define SQ_CTXT_PKT_DROP_THD_OFF_MASK			0xFFFFU
+
+#define SQ_CTXT_PKT_DROP_THD_SET(val, member)		(((val) & \
+					SQ_CTXT_PKT_DROP_##member##_MASK) \
+					<< SQ_CTXT_PKT_DROP_##member##_SHIFT)
+
+#define SQ_CTXT_GLOBAL_SQ_ID_SHIFT			0
+
+#define SQ_CTXT_GLOBAL_SQ_ID_MASK			0x1FFFU
+
+#define SQ_CTXT_GLOBAL_QUEUE_ID_SET(val, member)		(((val) & \
+					SQ_CTXT_##member##_MASK) \
+					<< SQ_CTXT_##member##_SHIFT)
+
+#define SQ_CTXT_VLAN_TAG_SHIFT				0
+#define SQ_CTXT_VLAN_TYPE_SEL_SHIFT			16
+#define SQ_CTXT_VLAN_INSERT_MODE_SHIFT			19
+#define SQ_CTXT_VLAN_CEQ_EN_SHIFT			23
+
+#define SQ_CTXT_VLAN_TAG_MASK				0xFFFFU
+#define SQ_CTXT_VLAN_TYPE_SEL_MASK			0x7U
+#define SQ_CTXT_VLAN_INSERT_MODE_MASK			0x3U
+#define SQ_CTXT_VLAN_CEQ_EN_MASK			0x1U
+
+#define SQ_CTXT_VLAN_CEQ_SET(val, member)		(((val) & \
+					SQ_CTXT_VLAN_##member##_MASK) \
+					<< SQ_CTXT_VLAN_##member##_SHIFT)
+
+#define SQ_CTXT_PREF_CACHE_THRESHOLD_SHIFT		0
+#define SQ_CTXT_PREF_CACHE_MAX_SHIFT			14
+#define SQ_CTXT_PREF_CACHE_MIN_SHIFT			25
+
+#define SQ_CTXT_PREF_CACHE_THRESHOLD_MASK		0x3FFFU
+#define SQ_CTXT_PREF_CACHE_MAX_MASK			0x7FFU
+#define SQ_CTXT_PREF_CACHE_MIN_MASK			0x7FU
+
+#define SQ_CTXT_PREF_CI_HI_SHIFT			0
+#define SQ_CTXT_PREF_OWNER_SHIFT			4
+
+#define SQ_CTXT_PREF_CI_HI_MASK				0xFU
+#define SQ_CTXT_PREF_OWNER_MASK				0x1U
+
+#define SQ_CTXT_PREF_WQ_PFN_HI_SHIFT			0
+#define SQ_CTXT_PREF_CI_LOW_SHIFT			20
+
+#define SQ_CTXT_PREF_WQ_PFN_HI_MASK			0xFFFFFU
+#define SQ_CTXT_PREF_CI_LOW_MASK			0xFFFU
+
+#define SQ_CTXT_PREF_SET(val, member)			(((val) & \
+					SQ_CTXT_PREF_##member##_MASK) \
+					<< SQ_CTXT_PREF_##member##_SHIFT)
+
+#define SQ_CTXT_WQ_BLOCK_PFN_HI_SHIFT			0
+
+#define SQ_CTXT_WQ_BLOCK_PFN_HI_MASK			0x7FFFFFU
+
+#define SQ_CTXT_WQ_BLOCK_SET(val, member)	(((val) & \
+					SQ_CTXT_WQ_BLOCK_##member##_MASK) \
+					<< SQ_CTXT_WQ_BLOCK_##member##_SHIFT)
+
+#define RQ_CTXT_PI_IDX_SHIFT				0
+#define RQ_CTXT_CI_IDX_SHIFT				16
+
+#define RQ_CTXT_PI_IDX_MASK				0xFFFFU
+#define RQ_CTXT_CI_IDX_MASK				0xFFFFU
+
+#define RQ_CTXT_CI_PI_SET(val, member)			(((val) & \
+					RQ_CTXT_##member##_MASK) \
+					<< RQ_CTXT_##member##_SHIFT)
+
+#define RQ_CTXT_CEQ_ATTR_INTR_SHIFT			21
+#define RQ_CTXT_CEQ_ATTR_EN_SHIFT			31
+
+#define RQ_CTXT_CEQ_ATTR_INTR_MASK			0x3FFU
+#define RQ_CTXT_CEQ_ATTR_EN_MASK			0x1U
+
+#define RQ_CTXT_CEQ_ATTR_ARM_SHIFT			30
+#define RQ_CTXT_CEQ_ATTR_ARM_MASK			0x1U
+
+#define RQ_CTXT_CEQ_ATTR_SET(val, member)		(((val) & \
+					RQ_CTXT_CEQ_ATTR_##member##_MASK) \
+					<< RQ_CTXT_CEQ_ATTR_##member##_SHIFT)
+
+#define RQ_CTXT_WQ_PAGE_HI_PFN_SHIFT			0
+#define RQ_CTXT_WQ_PAGE_WQE_TYPE_SHIFT			28
+#define RQ_CTXT_WQ_PAGE_OWNER_SHIFT			31
+
+#define RQ_CTXT_WQ_PAGE_HI_PFN_MASK			0xFFFFFU
+#define RQ_CTXT_WQ_PAGE_WQE_TYPE_MASK			0x3U
+#define RQ_CTXT_WQ_PAGE_OWNER_MASK			0x1U
+
+#define RQ_CTXT_WQ_PAGE_SET(val, member)		(((val) & \
+					RQ_CTXT_WQ_PAGE_##member##_MASK) << \
+					RQ_CTXT_WQ_PAGE_##member##_SHIFT)
+
+#define RQ_CTXT_CQE_LEN_SHIFT				28
+
+#define RQ_CTXT_CQE_LEN_MASK				0x3U
+
+#define RQ_CTXT_MAX_COUNT_SHIFT				18
+#define RQ_CTXT_MAX_COUNT_MASK				0x3FFU
+
+#define RQ_CTXT_CQE_LEN_SET(val, member)		(((val) & \
+					RQ_CTXT_##member##_MASK) << \
+					RQ_CTXT_##member##_SHIFT)
+
+#define RQ_CTXT_PREF_CACHE_THRESHOLD_SHIFT		0
+#define RQ_CTXT_PREF_CACHE_MAX_SHIFT			14
+#define RQ_CTXT_PREF_CACHE_MIN_SHIFT			25
+
+#define RQ_CTXT_PREF_CACHE_THRESHOLD_MASK		0x3FFFU
+#define RQ_CTXT_PREF_CACHE_MAX_MASK			0x7FFU
+#define RQ_CTXT_PREF_CACHE_MIN_MASK			0x7FU
+
+#define RQ_CTXT_PREF_CI_HI_SHIFT			0
+#define RQ_CTXT_PREF_OWNER_SHIFT			4
+
+#define RQ_CTXT_PREF_CI_HI_MASK				0xFU
+#define RQ_CTXT_PREF_OWNER_MASK				0x1U
+
+#define RQ_CTXT_PREF_WQ_PFN_HI_SHIFT			0
+#define RQ_CTXT_PREF_CI_LOW_SHIFT			20
+
+#define RQ_CTXT_PREF_WQ_PFN_HI_MASK			0xFFFFFU
+#define RQ_CTXT_PREF_CI_LOW_MASK			0xFFFU
+
+#define RQ_CTXT_PREF_SET(val, member)			(((val) & \
+					RQ_CTXT_PREF_##member##_MASK) << \
+					RQ_CTXT_PREF_##member##_SHIFT)
+
+#define RQ_CTXT_WQ_BLOCK_PFN_HI_SHIFT			0
+
+#define RQ_CTXT_WQ_BLOCK_PFN_HI_MASK			0x7FFFFFU
+
+#define RQ_CTXT_WQ_BLOCK_SET(val, member)		(((val) & \
+					RQ_CTXT_WQ_BLOCK_##member##_MASK) << \
+					RQ_CTXT_WQ_BLOCK_##member##_SHIFT)
+
+#define WQ_PREFETCH_MAX			4
+#define WQ_PREFETCH_MIN			1
+#define WQ_PREFETCH_THRESHOLD		256
+
 enum hinic3_rq_wqe_type {
 	HINIC3_COMPACT_RQ_WQE,
 	HINIC3_NORMAL_RQ_WQE,
 	HINIC3_EXTEND_RQ_WQE,
+};
+
+struct hinic3_rq_ctxt {
+	u32	ci_pi;
+	u32	ceq_attr;
+	u32	wq_pfn_hi_type_owner;
+	u32	wq_pfn_lo;
+
+	u32	ci_paddr_hi;
+	u32	ci_paddr_lo;
+
+	u32	rsvd;
+	u32	cqe_sge_len;
+
+	u32	pref_cache;
+	u32	pref_ci_owner;
+	u32	pref_wq_pfn_hi_ci;
+	u32	pref_wq_pfn_lo;
+
+	u32	pi_paddr_hi;
+	u32	pi_paddr_lo;
+	u32	wq_block_pfn_hi;
+	u32	wq_block_pfn_lo;
 };
 
 struct hinic3_io_queue {
@@ -38,7 +259,22 @@ struct hinic3_io_queue {
 	u16 msix_entry_idx;
 
 	u8 __iomem *db_addr;
-	void *cons_idx_addr;
+
+	union {
+		struct {
+			void *cons_idx_addr;
+		} tx;
+
+		struct {
+			u16 *pi_virt_addr;
+			dma_addr_t pi_dma_addr;
+		} rx;
+	};
+
+	void *rx_cons_idx_addr;
+	void *rx_ci_vaddr;
+	dma_addr_t rx_ci_paddr;
+	dma_addr_t cqe_start_paddr;
 } ____cacheline_aligned;
 
 struct hinic3_nic_db {
@@ -119,7 +355,7 @@ static inline u16 hinic3_get_sq_local_pi(const struct hinic3_io_queue *sq)
 static inline u16 hinic3_get_sq_hw_ci(const struct hinic3_io_queue *sq)
 {
 	return WQ_MASK_IDX(&sq->wq,
-			   hinic3_hw_cpu16(*(u16 *)sq->cons_idx_addr));
+			   hinic3_hw_cpu16(*(u16 *)sq->tx.cons_idx_addr));
 }
 
 /* *
@@ -132,7 +368,7 @@ static inline u16 hinic3_get_rq_hw_ci(const struct hinic3_io_queue *rq)
 	u16 hw_ci;
 	u32 rq_ci_wb;
 
-	rq_ci_wb = hinic3_hw_cpu32(*(u32 *)rq->cons_idx_addr);
+	rq_ci_wb = hinic3_hw_cpu32(*(u32 *)rq->rx_cons_idx_addr);
 	hw_ci = ((struct hinic3_rq_ci_wb *) &rq_ci_wb)->dw0.bs.hw_ci;
 
 	return WQ_MASK_IDX(&rq->wq, hw_ci);
@@ -336,5 +572,11 @@ int hinic3_init_qps(void *hwdev, struct hinic3_dyna_qp_params *qp_params);
 void hinic3_deinit_qps(void *hwdev, struct hinic3_dyna_qp_params *qp_params);
 int hinic3_init_nicio_res(void *hwdev);
 void hinic3_deinit_nicio_res(void *hwdev);
+u8 hinic3_get_nic_io_cqe_coal_state(void *hwdev);
 int hinic3_get_rq_wqe_type(void *hwdev);
+void hinic3_rq_prepare_ctxt_get_wq_info(struct hinic3_io_queue *rq,
+					       u32 *wq_page_pfn_hi,
+					       u32 *wq_page_pfn_lo,
+					       u32 *wq_block_pfn_hi,
+					       u32 *wq_block_pfn_lo);
 #endif

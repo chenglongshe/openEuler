@@ -210,6 +210,10 @@ enum driver_cmd_type {
 	PORT_ID,
 
 	SET_RX_PF_BW_LIMIT = 0x43,
+	MONITOR_MAC_SPEED,
+	GET_FUNC_ID,
+	SET_MAC_SPEED_STATUS,
+	BOND_DEFAULT_OFFLOAD,
 
 	GET_FUNC_CAP = 0x50,
 	GET_XSFP_PRESENT = 0x51,
@@ -228,6 +232,17 @@ enum driver_cmd_type {
 
 	BIFUR_SET_ENABLE = 0xc0,
 	BIFUR_GET_ENABLE = 0xc1,
+
+	ROCE_CMD_SET_DSCP = 0xd0,
+	ROCE_CMD_GET_DSCP = 0xd1,
+	ROCE_CMD_CLEAR_DSCP = 0xd2,
+	ROCE_CMD_GET_ECN = 0xd3,
+	ROCE_CMD_SET_ECN = 0xd4,
+	ROCE_CMD_CLEAR_ECN = 0xd5,
+
+	ROCE_CMD_SET_TSO = 0xe0,
+	ROCE_CMD_GET_TSO = 0xe1,
+	ROCE_CMD_CLEAR_TSO = 0xe2,
 
 	VM_COMPAT_TEST = 0xFF
 };
@@ -323,6 +338,10 @@ struct hinic3_hw_stats {
 
 #ifndef IFNAMSIZ
 #define IFNAMSIZ 16
+#endif
+
+#ifndef IB_DEVICE_NAME_MAX
+#define IB_DEVICE_NAME_MAX 64
 #endif
 
 struct pf_info {
@@ -477,7 +496,10 @@ struct hinic3_mt_qos_info { /* delete */
 	u16 op_code;
 	u8 valid_cos_bitmap;
 	u8 valid_up_bitmap;
-	u32 rsvd1;
+	/* 当ib设备名过长，超出device_name长度时
+	 * 使用这个buffer
+	 */
+	char ib_device_name[IB_DEVICE_NAME_MAX];
 };
 
 struct hinic3_mt_dcb_state {
@@ -581,7 +603,10 @@ struct msg_module {
 	int bus_num;
 	u8 port_id;
 	u8 rsvd1[3];
-	u32 rsvd2[4];
+	/* 当ib设备名过长，超出device_name长度时
+	 * 使用这个buffer
+	 */
+	char ib_device_name[IB_DEVICE_NAME_MAX];
 };
 
 struct hinic3_mt_qos_cos_cfg {

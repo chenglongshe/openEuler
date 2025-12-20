@@ -22,6 +22,7 @@ enum servic_bit_define {
 	SERVICE_BIT_MIGRATE	= 12,
 	SERVICE_BIT_VROCE	= 13,
 	SERVICE_BIT_BIFUR	= 14,
+	SERVICE_BIT_TXBOND     = 15,
 	SERVICE_BIT_MAX
 };
 
@@ -40,6 +41,7 @@ enum servic_bit_define {
 #define CFG_SERVICE_MASK_MIGRATE	(0x1 << SERVICE_BIT_MIGRATE)
 #define CFG_SERVICE_MASK_VROCE		(0x1 << SERVICE_BIT_VROCE)
 #define CFG_SERVICE_MASK_BIFUR		(0x1 << SERVICE_BIT_BIFUR)
+#define CFG_SERVICE_MASK_TXBOND     (0x1 << SERVICE_BIT_TXBOND)
 
 /* Definition of the scenario ID in the cfg_data, which is used for SML memory allocation. */
 enum scenes_id_define {

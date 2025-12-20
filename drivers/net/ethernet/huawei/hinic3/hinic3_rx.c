@@ -22,6 +22,7 @@
 #include <linux/module.h>
 #include <linux/compiler.h>
 #include <linux/filter.h>
+#include <linux/bpf_trace.h>
 
 #include "ossl_knl.h"
 #include "hinic3_crm.h"
@@ -31,7 +32,11 @@
 #include "hinic3_srv_nic.h"
 #include "hinic3_nic_dev.h"
 #include "hinic3_rss.h"
+#include "hinic3_nic.h"
+#include "nic_mpu_cmd.h"
 #include "hinic3_rx.h"
+#include "hinic3_tx.h"
+#include "hinic3_hwdev.h"
 
 /* performance: ci addr RTE_CACHE_SIZE(64B) alignment */
 #define HINIC3_RX_HDR_SIZE			256
@@ -159,7 +164,14 @@ static u32 hinic3_rx_fill_buffers(struct hinic3_rxq *rxq)
 			break;
 		}
 
+#ifdef HAVE_XDP_SUPPORT
+		dma_addr = (rxq->xdp_headroom_flag == 0) ?
+			    rx_info->buf_dma_addr + rx_info->page_offset :
+			    rx_info->buf_dma_addr +
+			    rx_info->page_offset + XDP_PACKET_HEADROOM;
+#else
 		dma_addr = rx_info->buf_dma_addr + rx_info->page_offset;
+#endif
 
 		rq_wqe = rx_info->rq_wqe;
 
@@ -469,8 +481,13 @@ void hinic3_rxq_get_stats(struct hinic3_rxq *rxq,
 		stats->csum_errors = rxq_stats->csum_errors;
 		stats->other_errors = rxq_stats->other_errors;
 		stats->dropped = rxq_stats->dropped;
-		stats->xdp_dropped = rxq_stats->xdp_dropped;
 		stats->rx_buf_empty = rxq_stats->rx_buf_empty;
+#ifdef HAVE_XDP_SUPPORT
+		stats->xdp_dropped = rxq_stats->xdp_dropped;
+		stats->xdp_redirected = rxq_stats->xdp_redirected;
+		stats->rx_buf_empty = rxq_stats->rx_buf_empty;
+		stats->xdp_large_pkt = rxq_stats->xdp_large_pkt;
+#endif
 	} while (u64_stats_fetch_retry(&rxq_stats->syncp, start));
 	u64_stats_update_end(&stats->syncp);
 }
@@ -484,14 +501,17 @@ void hinic3_rxq_clean_stats(struct hinic3_rxq_stats *rxq_stats)
 	rxq_stats->csum_errors = 0;
 	rxq_stats->other_errors = 0;
 	rxq_stats->dropped = 0;
-	rxq_stats->xdp_dropped = 0;
 	rxq_stats->rx_buf_empty = 0;
 
 	rxq_stats->alloc_skb_err = 0;
 	rxq_stats->alloc_rx_buf_err = 0;
-	rxq_stats->xdp_large_pkt = 0;
 	rxq_stats->restore_drop_sge = 0;
 	rxq_stats->rsvd2 = 0;
+#ifdef HAVE_XDP_SUPPORT
+	rxq_stats->xdp_dropped = 0;
+	rxq_stats->xdp_redirected = 0;
+	rxq_stats->xdp_large_pkt = 0;
+#endif
 	u64_stats_update_end(&rxq_stats->syncp);
 }
 
@@ -760,6 +780,8 @@ enum hinic3_xdp_status {
 	// pkt action
 	HINIC3_XDP_PKT_PASS,
 	HINIC3_XDP_PKT_DROP,
+	HINIC3_XDP_PKT_REDIRECT,
+	HINIC3_XDP_PKT_TX,
 };
 
 static void update_drop_rx_info(struct hinic3_rxq *rxq, u16 weqbb_num)
@@ -784,71 +806,6 @@ discard_direct:
 
 		weqbb_num--;
 	}
-}
-
-int hinic3_run_xdp(struct hinic3_rxq *rxq, u32 pkt_len, struct xdp_buff *xdp)
-{
-	struct bpf_prog *xdp_prog = NULL;
-	struct hinic3_rx_info *rx_info = NULL;
-	struct net_device *netdev = rxq->netdev;
-	int result = HINIC3_XDP_PKT_PASS;
-	u16 weqbb_num = 1; /* xdp can only use one rx_buff */
-	u8 *va = NULL;
-	u32 act;
-
-	rcu_read_lock();
-	xdp_prog = READ_ONCE(rxq->xdp_prog);
-	if (!xdp_prog) {
-		result = HINIC3_XDP_PROG_EMPTY;
-		goto unlock_rcu;
-	}
-
-	if (unlikely(pkt_len > rxq->buf_len)) {
-		RXQ_STATS_INC(rxq, xdp_large_pkt);
-		weqbb_num = HINIC3_GET_SGE_NUM(pkt_len, rxq);
-		result = HINIC3_XDP_PKT_DROP;
-		goto xdp_out;
-	}
-
-	rx_info = &rxq->rx_info[rxq->cons_idx & rxq->q_mask];
-	va = (u8 *)page_address(rx_info->page) + rx_info->page_offset;
-	prefetch(va);
-	dma_sync_single_range_for_cpu(rxq->dev, rx_info->buf_dma_addr,
-				      rx_info->page_offset,
-				      rxq->buf_len, DMA_FROM_DEVICE);
-	xdp->data = va;
-	xdp->data_hard_start = xdp->data;
-	xdp->data_end = xdp->data + pkt_len;
-#ifdef HAVE_XDP_FRAME_SZ
-	xdp->frame_sz = rxq->buf_len;
-#endif
-#ifdef HAVE_XDP_DATA_META
-	xdp_set_data_meta_invalid(xdp);
-#endif
-	prefetchw(xdp->data_hard_start);
-	act = bpf_prog_run_xdp(xdp_prog, xdp);
-	switch (act) {
-	case XDP_PASS:
-		result = HINIC3_XDP_PKT_PASS;
-		break;
-	case XDP_DROP:
-		result = HINIC3_XDP_PKT_DROP;
-		break;
-	default:
-		result = HINIC3_XDP_PKT_DROP;
-		bpf_warn_invalid_xdp_action(netdev, xdp_prog, act);
-	}
-
-xdp_out:
-	if (result == HINIC3_XDP_PKT_DROP) {
-		RXQ_STATS_INC(rxq, xdp_dropped);
-		update_drop_rx_info(rxq, weqbb_num);
-	}
-
-unlock_rcu:
-	rcu_read_unlock();
-
-	return result;
 }
 
 static bool hinic3_add_rx_frag_with_xdp(struct hinic3_rxq *rxq, u32 pkt_len,
@@ -897,6 +854,106 @@ umap_page:
 	return false;
 }
 
+static int hinic3_run_xdp_prog(struct hinic3_rxq *rxq,
+			       struct bpf_prog *xdp_prog, struct xdp_buff *xdp,
+			       u32 *pkt_len)
+{
+	u32 act;
+	int err;
+	int result = HINIC3_XDP_PKT_DROP;
+	struct net_device *netdev = rxq->netdev;
+
+	act = bpf_prog_run_xdp(xdp_prog, xdp);
+	switch (act) {
+	case XDP_PASS:
+		*pkt_len = xdp->data_end - xdp->data;
+		result = HINIC3_XDP_PKT_PASS;
+		break;
+	case XDP_TX:
+		if (unlikely(!hinic3_xmit_xdp_buff(netdev, rxq->q_id, xdp)))
+			goto out_failure;
+		result = HINIC3_XDP_PKT_TX;
+		break;
+	case XDP_REDIRECT:
+		err = xdp_do_redirect(netdev, xdp, xdp_prog);
+		if (unlikely(err != 0))
+			goto out_failure;
+
+		result = HINIC3_XDP_PKT_REDIRECT;
+		break;
+	case XDP_ABORTED:
+		goto out_failure;
+	case XDP_DROP:
+		break;
+	default:
+		bpf_warn_invalid_xdp_action(rxq->netdev, xdp_prog, act);
+out_failure:
+	trace_xdp_exception(netdev, xdp_prog, act);
+	}
+
+	return result;
+}
+
+static int hinic3_run_xdp(struct hinic3_rxq *rxq, u32 *pkt_len,
+			  struct xdp_buff *xdp)
+{
+	struct bpf_prog *xdp_prog = NULL;
+	struct hinic3_rx_info *rx_info = NULL;
+	int result = HINIC3_XDP_PKT_PASS;
+	u16 weqbb_num = 1; /* xdp can only use one rx_buff */
+	u8 *va = NULL;
+
+	rcu_read_lock();
+	xdp_prog = READ_ONCE(rxq->xdp_prog);
+	if (!xdp_prog) {
+		result = HINIC3_XDP_PROG_EMPTY;
+		goto unlock_rcu;
+	}
+	if (unlikely(*pkt_len > rxq->buf_len)) {
+		RXQ_STATS_INC(rxq, xdp_large_pkt);
+		weqbb_num = HINIC3_GET_SGE_NUM(*pkt_len, rxq);
+		result = HINIC3_XDP_PKT_DROP;
+		goto xdp_out;
+	}
+
+	rx_info = &rxq->rx_info[rxq->cons_idx & rxq->q_mask];
+	va = (u8 *)page_address(rx_info->page) + rx_info->page_offset;
+	prefetch(va);
+	dma_sync_single_range_for_cpu(rxq->dev, rx_info->buf_dma_addr,
+					rx_info->page_offset,
+					rxq->buf_len, DMA_FROM_DEVICE);
+	xdp->data_hard_start = va;
+	xdp->data = va + XDP_PACKET_HEADROOM;
+	xdp->data_end = xdp->data + *pkt_len;
+	xdp->rxq = &rxq->xdp_rxq;
+#ifdef HAVE_XDP_FRAME_SZ
+	xdp->frame_sz = rxq->buf_len;
+#endif
+#ifdef HAVE_XDP_DATA_META
+	xdp_set_data_meta_invalid(xdp);
+#endif
+	prefetchw(xdp->data_hard_start);
+
+	result = hinic3_run_xdp_prog(rxq, xdp_prog, xdp, pkt_len);
+xdp_out:
+	switch (result) {
+	case HINIC3_XDP_PKT_DROP:
+		RXQ_STATS_INC(rxq, xdp_dropped);
+		break;
+	case HINIC3_XDP_PKT_REDIRECT:
+		RXQ_STATS_INC(rxq, xdp_redirected);
+		break;
+	default:
+		break;
+	}
+	if (result != HINIC3_XDP_PKT_PASS)
+		update_drop_rx_info(rxq, weqbb_num);
+unlock_rcu:
+	rcu_read_unlock();
+
+	return result;
+}
+
 static struct sk_buff *hinic3_fetch_rx_buffer_xdp(struct hinic3_rxq *rxq,
 						  u32 pkt_len,
 						  struct xdp_buff *xdp)
@@ -929,19 +986,24 @@ static struct sk_buff *hinic3_fetch_rx_buffer_xdp(struct hinic3_rxq *rxq,
 #endif
 
 static int recv_one_pkt(struct hinic3_rxq *rxq,
-			struct hinic3_cqe_info *cqe_info)
+			struct hinic3_cqe_info *cqe_info, u32 rx_pkt_len)
 {
 	struct sk_buff *skb = NULL;
 	struct net_device *netdev = rxq->netdev;
 	struct hinic3_nic_dev *nic_dev = netdev_priv(rxq->netdev);
+	u32 pkt_len = rx_pkt_len;
 
 #ifdef HAVE_XDP_SUPPORT
 	u32 xdp_status;
 	struct xdp_buff xdp = { 0 };
 
-	xdp_status = (u32)(hinic3_run_xdp(rxq, cqe_info->pkt_len, &xdp));
-	if (xdp_status == HINIC3_XDP_PKT_DROP)
+	xdp_status = (u32)(hinic3_run_xdp(rxq, &pkt_len, &xdp));
+	// XDP_REDIRECT & XDP_TX: ring buffer flip
+	if (xdp_status == HINIC3_XDP_PKT_REDIRECT ||
+	    xdp_status == HINIC3_XDP_PKT_TX
+			    || xdp_status == HINIC3_XDP_PKT_DROP) {
 		return 0;
+	}
 
 	// build skb
 	if (xdp_status != HINIC3_XDP_PROG_EMPTY) {
@@ -995,10 +1057,9 @@ static int recv_one_pkt(struct hinic3_rxq *rxq,
 #else
 		napi_gro_flush(&rxq->irq_cfg->napi);
 #endif
-		netif_receive_skb(skb);
-	} else {
-		napi_gro_receive(&rxq->irq_cfg->napi, skb);
 	}
+
+	napi_gro_receive(&rxq->irq_cfg->napi, skb);
 
 	return 0;
 }
@@ -1115,25 +1176,47 @@ static bool rx_separate_cqe_done(void *rx_queue, void **rx_cqe)
 	return true;
 }
 
+#ifdef HAVE_XDP_SUPPORT
+static inline void hinic3_xdp_flush_if_needed(const struct hinic3_nic_dev
+					      *nic_dev)
+{
+	if (unlikely(rcu_access_pointer(nic_dev->xdp_prog))) {
+		xdp_do_flush_map();
+	}
+}
+#endif
+
 int hinic3_rx_poll(struct hinic3_rxq *rxq, int budget)
 {
 	struct hinic3_nic_dev *nic_dev = netdev_priv(rxq->netdev);
-	u32 dropped = 0;
+	u32 sw_ci, dropped = 0;
 	struct hinic3_rq_cqe *rx_cqe = NULL;
 	struct hinic3_cqe_info cqe_info = { 0 };
 	u64 rx_bytes = 0;
 	int pkts = 0, nr_pkts = 0;
 	u16 num_wqe = 0;
+	u32 hw_ci_value, pkt_len, vlan_len;
+	u16 current_hw_ci = 0;
 
 	while (likely(pkts < budget)) {
+		sw_ci = rxq->cons_idx & rxq->q_mask;
 		if (!nic_dev->tx_rx_ops.rx_cqe_done(rxq, (void **)&rx_cqe))
 			break;
-
+		if (nic_dev->cqe_coal_en == HINIC3_CQE_COAL_EN) {
+			hw_ci_value = hinic3_hw_cpu32(
+					 rxq->rx_ci_index->current_hw_ci);
+			current_hw_ci = (HINIC3_GET_RX_HW_CI(hw_ci_value) >>
+					 rxq->rq->wqe_type) & rxq->q_mask;
+			if (unlikely(sw_ci == current_hw_ci))
+				break;
+		}
 		/* make sure we read rx_done before packet length */
 		rmb();
 
 		nic_dev->tx_rx_ops.rx_get_cqe_info(rx_cqe, &cqe_info, nic_dev->cqe_mode);
-		if (recv_one_pkt(rxq, &cqe_info))
+		vlan_len = hinic3_hw_cpu32(rx_cqe->vlan_len);
+		pkt_len = HINIC3_GET_RX_PKT_LEN(vlan_len);
+		if (recv_one_pkt(rxq, &cqe_info, pkt_len))
 			break;
 
 		rx_bytes += cqe_info.pkt_len;
@@ -1159,6 +1242,9 @@ int hinic3_rx_poll(struct hinic3_rxq *rxq, int budget)
 	rxq->rxq_stats.bytes += rx_bytes;
 	rxq->rxq_stats.dropped += (u64)dropped;
 	u64_stats_update_end(&rxq->rxq_stats.syncp);
+#ifdef HAVE_XDP_SUPPORT
+	hinic3_xdp_flush_if_needed(nic_dev);
+#endif
 	return pkts;
 }
 
@@ -1267,10 +1353,12 @@ void hinic3_free_rxqs_res(struct hinic3_nic_dev *nic_dev, u16 num_rq,
 			  u32 rq_depth, struct hinic3_dyna_rxq_res *rxqs_res)
 {
 	struct hinic3_dyna_rxq_res *rqres = NULL;
+	struct hinic3_rxq *rxq = NULL;
 	u64 cqe_mem_size = sizeof(struct hinic3_rq_cqe) * rq_depth;
 	int idx;
 
 	for (idx = 0; idx < num_rq; idx++) {
+		rxq = &nic_dev->rxqs[idx];
 		rqres = &rxqs_res[idx];
 
 		hinic3_rx_free_buffers(nic_dev, rq_depth, rqres->rx_info);
@@ -1284,7 +1372,52 @@ void hinic3_free_rxqs_res(struct hinic3_nic_dev *nic_dev, u16 num_rq,
 					  rqres->cqe_start_paddr);
 		}
 		kfree(rqres->rx_info);
+#ifdef HAVE_XDP_SUPPORT
+		xdp_rxq_info_unreg(&rxq->xdp_rxq);
+#endif
 	}
+}
+
+static int hinic3_fill_rxqs_wqe_buffer(struct hinic3_dyna_rxq_res *rqres,
+				       u32 rq_depth,
+	struct hinic3_rxq *rxq, struct hinic3_nic_dev *nic_dev)
+{
+	struct hinic3_rq_cqe *cqe_va = NULL;
+	dma_addr_t cqe_pa;
+	u32 idx;
+	u32 pkts;
+	/* fill cqe */
+	cqe_va = (struct hinic3_rq_cqe *)rqres->cqe_start_vaddr;
+	cqe_pa = rqres->cqe_start_paddr;
+	for (idx = 0; idx < rq_depth; idx++) {
+		rxq->rx_info[idx].cqe = cqe_va;
+		rxq->rx_info[idx].cqe_dma = cqe_pa;
+		cqe_va++;
+		cqe_pa += sizeof(*rxq->rx_info->cqe);
+	}
+
+	rxq->rq = hinic3_get_nic_queue(nic_dev->hwdev, rxq->q_id, HINIC3_RQ);
+	if (!rxq->rq) {
+		nicif_err(nic_dev, drv, nic_dev->netdev, "Failed to get rq\n");
+		return -EINVAL;
+	}
+
+	rxq->rx_ci_index = (struct hinic3_rx_ci_index *)rxq->rq->rx_ci_vaddr;
+	pkts = hinic3_rx_fill_wqe(rxq);
+	if (pkts != rxq->q_depth) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+			  "Failed to fill rx wqe\n");
+		return -EFAULT;
+	}
+
+	pkts = hinic3_rx_fill_buffers(rxq);
+	if (!pkts) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+				"Failed to fill Rx buffer\n");
+		return -ENOMEM;
+	}
+
+	return 0;
 }
 
 int hinic3_configure_rxqs(struct hinic3_nic_dev *nic_dev, u16 num_rq,
@@ -1293,11 +1426,10 @@ int hinic3_configure_rxqs(struct hinic3_nic_dev *nic_dev, u16 num_rq,
 	struct hinic3_dyna_rxq_res *rqres = NULL;
 	struct irq_info *msix_entry = NULL;
 	struct hinic3_rxq *rxq = NULL;
-	struct hinic3_rq_cqe *cqe_va = NULL;
-	dma_addr_t cqe_pa;
 	u16 q_id;
-	u32 idx;
-	u32 pkts;
+	int err;
+
+	nic_dev->cqe_coal_en = hinic3_get_nic_io_cqe_coal_state(nic_dev->hwdev);
 
 	nic_dev->rxq_get_err_times = 0;
 	for (q_id = 0; q_id < num_rq; q_id++) {
@@ -1323,38 +1455,18 @@ int hinic3_configure_rxqs(struct hinic3_nic_dev *nic_dev, u16 num_rq,
 		rxq->restore_buf_num = 0;
 
 		rxq->rx_info = rqres->rx_info;
+#ifdef HAVE_XDP_SUPPORT
+		rxq->xdp_headroom_flag = (nic_dev->xdp_prog != NULL) ? 1 : 0;
+		err = xdp_rxq_info_reg(&rxq->xdp_rxq, rxq->netdev, q_id, q_id);
+		if (err != 0)
+			return err;
+#endif
 
-		/* fill cqe */
-		if (nic_dev->cqe_mode == HINIC3_RQ_CQE_SEPARATE) {
-			cqe_va = (struct hinic3_rq_cqe *)rqres->cqe_start_vaddr;
-			cqe_pa = rqres->cqe_start_paddr;
-			for (idx = 0; idx < rq_depth; idx++) {
-				rxq->rx_info[idx].cqe = cqe_va;
-				rxq->rx_info[idx].cqe_dma = cqe_pa;
-				cqe_va++;
-				cqe_pa += sizeof(*rxq->rx_info->cqe);
-			}
-		}
+		err = hinic3_fill_rxqs_wqe_buffer(rqres, rq_depth,
+						  rxq, nic_dev);
+		if (err != 0)
+			return err;
 
-		rxq->rq = hinic3_get_nic_queue(nic_dev->hwdev, rxq->q_id,
-					       HINIC3_RQ);
-		if (!rxq->rq) {
-			nicif_err(nic_dev, drv, nic_dev->netdev, "Failed to get rq\n");
-			return -EINVAL;
-		}
-
-		pkts = hinic3_rx_fill_wqe(rxq);
-		if (pkts != rxq->q_depth) {
-			nicif_err(nic_dev, drv, nic_dev->netdev, "Failed to fill rx wqe\n");
-			return -EFAULT;
-		}
-
-		pkts = hinic3_rx_fill_buffers(rxq);
-		if (!pkts) {
-			nicif_err(nic_dev, drv, nic_dev->netdev,
-				  "Failed to fill Rx buffer\n");
-			return -ENOMEM;
-		}
 	}
 
 	return 0;
@@ -1624,4 +1736,32 @@ void hinic3_rxq_check_work_handler(struct work_struct *work)
 
 free_rxq_info:
 	kfree(rxq_info);
+}
+
+void hinic3_cmd_vf_lag(void *hwdev, u16 func_id, u16 channel)
+{
+	struct hinic3_vf_lag_cmd vf_lag_info = { 0 };
+	u16 out_size = sizeof(vf_lag_info);
+	struct hinic3_nic_io *nic_io = NULL;
+	int err;
+
+	if (!hwdev || (hinic3_func_type(hwdev) != TYPE_VF))
+		return;
+
+	nic_io = (struct hinic3_nic_io *)hinic3_get_service_adapter(hwdev,
+								 SERVICE_T_NIC);
+	if (!nic_io)
+		return;
+
+	vf_lag_info.func_id = func_id;
+	vf_lag_info.opcode = FLOW_BIFUR_CMD_SET;
+	vf_lag_info.en_flag = 0;
+
+	err = l2nic_msg_to_mgmt_sync_ch(hwdev, HINIC3_NIC_CMD_CFG_VF_LAG,
+					&vf_lag_info, sizeof(vf_lag_info),
+					&vf_lag_info, &out_size, channel);
+	if (err || !out_size || vf_lag_info.msg_head.status)
+		nic_err(nic_io->dev_hdl, "Failed to disable vf_lag function: 0x%x, err: %d, status: 0x%x, out size: 0x%x.\n",
+			func_id, err, vf_lag_info.msg_head.status, out_size);
+
 }

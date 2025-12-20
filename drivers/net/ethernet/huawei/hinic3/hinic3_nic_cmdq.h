@@ -8,7 +8,6 @@
 #include "hinic3_hw.h"
 #include "hinic3_nic.h"
 
-#define HINIC3_Q_CTXT_MAX		31U /* (2048 - 8) / 64 */
 #define HINIC3_QP_CTXT_HEADER_SIZE	16U
 
 enum hinic3_qp_ctxt_type {
@@ -56,30 +55,9 @@ struct hinic3_sq_ctxt {
 	u32	wq_block_pfn_lo;
 };
 
-struct hinic3_rq_ctxt {
-	u32	ci_pi;
-	u32	ceq_attr;
-	u32	wq_pfn_hi_type_owner;
-	u32	wq_pfn_lo;
-
-	u32	rsvd[3];
-	u32	cqe_sge_len;
-
-	u32	pref_cache;
-	u32	pref_ci_owner;
-	u32	pref_wq_pfn_hi_ci;
-	u32	pref_wq_pfn_lo;
-
-	u32	pi_paddr_hi;
-	u32	pi_paddr_lo;
-	u32	wq_block_pfn_hi;
-	u32	wq_block_pfn_lo;
-};
-
 struct hinic3_nic_cmdq_ops *hinic3_nic_cmdq_get_sw_ops(void);
 struct hinic3_nic_cmdq_ops *hinic3_nic_cmdq_get_hw_ops(void);
 
 void hinic3_nic_cmdq_adapt_init(struct hinic3_nic_io *nic_io);
 void hinic3_sq_prepare_ctxt(struct hinic3_io_queue *sq, u16 sq_id, struct hinic3_sq_ctxt *sq_ctxt);
-void hinic3_rq_prepare_ctxt(struct hinic3_io_queue *rq, struct hinic3_rq_ctxt *rq_ctxt);
 #endif

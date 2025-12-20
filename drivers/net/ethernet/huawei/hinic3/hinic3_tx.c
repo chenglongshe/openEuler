@@ -57,6 +57,11 @@ void hinic3_txq_get_stats(struct hinic3_txq *txq,
 		stats->busy = txq_stats->busy;
 		stats->wake = txq_stats->wake;
 		stats->dropped = txq_stats->dropped;
+#ifdef HAVE_XDP_SUPPORT
+		stats->xdp_dropped = txq_stats->xdp_dropped;
+		stats->xdp_xmits = txq_stats->xdp_xmits;
+		stats->map_xdpf_err = txq_stats->map_xdpf_err;
+#endif
 	} while (u64_stats_fetch_retry(&txq_stats->syncp, start));
 	u64_stats_update_end(&stats->syncp);
 }
@@ -78,6 +83,11 @@ void hinic3_txq_clean_stats(struct hinic3_txq_stats *txq_stats)
 	txq_stats->frag_size_err = 0;
 	txq_stats->rsvd1 = 0;
 	txq_stats->rsvd2 = 0;
+#ifdef HAVE_XDP_SUPPORT
+	txq_stats->xdp_dropped = 0;
+	txq_stats->xdp_xmits = 0;
+	txq_stats->map_xdpf_err = 0;
+#endif
 	u64_stats_update_end(&txq_stats->syncp);
 }
 
@@ -97,7 +107,7 @@ static inline void hinic3_set_buf_desc(struct hinic3_sq_bufdesc *buf_descs,
 	buf_descs->len  = hinic3_hw_be32(len);
 }
 
-static int tx_map_skb(struct hinic3_nic_dev *nic_dev, struct sk_buff *skb,
+int tx_map_skb(struct hinic3_nic_dev *nic_dev, struct sk_buff *skb,
 		      u16 valid_nr_frags, struct hinic3_txq *txq,
 		      struct hinic3_tx_info *tx_info,
 		      struct hinic3_sq_wqe_combo *wqe_combo)
@@ -473,7 +483,7 @@ u32 hinic3_tx_offload(struct sk_buff *skb, struct hinic3_offload_info *offload_i
 	return offload;
 }
 
-static void get_pkt_stats(struct hinic3_tx_info *tx_info, struct sk_buff *skb)
+void get_pkt_stats(struct hinic3_tx_info *tx_info, struct sk_buff *skb)
 {
 	u32 ihs, hdr_len;
 
@@ -504,7 +514,7 @@ static void get_pkt_stats(struct hinic3_tx_info *tx_info, struct sk_buff *skb)
 	tx_info->num_pkts = 1;
 }
 
-static inline int hinic3_maybe_stop_tx(struct hinic3_txq *txq, u16 wqebb_cnt)
+inline int hinic3_maybe_stop_tx(struct hinic3_txq *txq, u16 wqebb_cnt)
 {
 	if (likely(hinic3_get_sq_free_wqebbs(txq->sq) >= wqebb_cnt))
 		return 0;
@@ -523,7 +533,7 @@ static inline int hinic3_maybe_stop_tx(struct hinic3_txq *txq, u16 wqebb_cnt)
 	return 0;
 }
 
-static u16 hinic3_set_wqe_combo(struct hinic3_txq *txq,
+u16 hinic3_set_wqe_combo(struct hinic3_txq *txq,
 				struct hinic3_sq_wqe_combo *wqe_combo,
 				u16 num_sge, u16 *curr_pi)
 {
@@ -666,7 +676,7 @@ void hinic3_tx_set_compact_offload_wqe_task(void *wqe_combo, void *offload_info)
  * hinic3_prepare_sq_ctrl - init sq wqe cs
  * @nr_descs: total sge_num, include bd0 in cs
  */
-static void hinic3_prepare_sq_ctrl(struct hinic3_sq_wqe_combo *wqe_combo,
+void hinic3_prepare_sq_ctrl(struct hinic3_sq_wqe_combo *wqe_combo,
 				   struct hinic3_queue_info *queue_info, int nr_descs, u16 owner)
 {
 	struct hinic3_sq_wqe_desc *wqe_desc = wqe_combo->ctrl_bd0;
@@ -1107,3 +1117,172 @@ int hinic3_flush_txqs(struct net_device *netdev)
 	return 0;
 }
 
+#ifdef HAVE_XDP_SUPPORT
+int tx_map_xdpf(struct hinic3_nic_dev *nic_dev, struct xdp_frame *frame,
+		struct hinic3_txq *txq, struct hinic3_xdp_tx_info *tx_info,
+		struct hinic3_sq_wqe_combo *wqe_combo)
+{
+	struct hinic3_sq_wqe_desc *wqe_desc = wqe_combo->ctrl_bd0;
+	struct hinic3_dma_info *dma_info = tx_info->dma_info;
+	struct pci_dev *pdev = nic_dev->pdev;
+
+	dma_info->dma = dma_map_single(&pdev->dev, frame->data,
+					frame->len, DMA_TO_DEVICE);
+	if (dma_mapping_error(&pdev->dev, dma_info->dma)) {
+		TXQ_STATS_INC(txq, map_xdpf_err);
+		return -EIO;
+	}
+	dma_info->len = frame->len;
+
+	wqe_desc->hi_addr = hinic3_hw_be32(upper_32_bits(dma_info->dma));
+	wqe_desc->lo_addr = hinic3_hw_be32(lower_32_bits(dma_info->dma));
+
+	wqe_desc->ctrl_len = dma_info->len;
+
+	return 0;
+}
+
+void hinic3_prepare_xdp_sq_ctrl(struct hinic3_sq_wqe_combo *wqe_combo,
+				u16 owner)
+{
+	struct hinic3_sq_wqe_desc *wqe_desc = wqe_combo->ctrl_bd0;
+
+	wqe_desc->ctrl_len |=
+		SQ_CTRL_SET(SQ_NORMAL_WQE, DATA_FORMAT) |
+		SQ_CTRL_SET(wqe_combo->wqe_type, EXTENDED) |
+		SQ_CTRL_SET(owner, OWNER);
+
+	wqe_desc->ctrl_len = hinic3_hw_be32(wqe_desc->ctrl_len);
+	wqe_desc->queue_info = 0;
+}
+
+int hinic3_xdp_xmit_frame(struct hinic3_nic_dev *nic_dev,
+			  struct hinic3_txq *txq, struct xdp_frame *xdpf)
+{
+	struct hinic3_sq_wqe_combo wqe_combo = {0};
+	struct hinic3_xdp_tx_info *xdp_tx_info = NULL;
+	struct hinic3_tx_info *tx_info = NULL;
+	u16 pi = 0, owner = 0;
+
+	if (unlikely(hinic3_maybe_stop_tx(txq, 1))) {
+		TXQ_STATS_INC(txq, busy);
+		return NETDEV_TX_BUSY;
+	}
+
+	wqe_combo.ctrl_bd0 = hinic3_get_sq_one_wqebb(txq->sq, &pi);
+	wqe_combo.task_type = SQ_WQE_TASKSECT_4BYTES;
+	wqe_combo.wqe_type = SQ_WQE_COMPACT_TYPE;
+	owner = hinic3_get_and_update_sq_owner(txq->sq, pi, 1);
+
+	xdp_tx_info = kzalloc(sizeof(*xdp_tx_info), GFP_ATOMIC);
+	if (!xdp_tx_info) {
+		hinic3_rollback_sq_wqebbs(txq->sq, 1, owner);
+		return -ENOMEM;
+	}
+
+	tx_info = &txq->tx_info[pi];
+	tx_info->wqebb_cnt = 1;
+	xdp_tx_info->dma_info = tx_info->dma_info;
+	xdp_tx_info->xdpf = xdpf;
+
+	if (tx_map_xdpf(nic_dev, xdpf, txq, xdp_tx_info, &wqe_combo) != 0) {
+		kfree(xdp_tx_info);
+		hinic3_rollback_sq_wqebbs(txq->sq, 1, owner);
+		return -EIO;
+	}
+	hinic3_prepare_xdp_sq_ctrl(&wqe_combo, owner);
+	TXQ_STATS_INC(txq, xdp_xmits);
+	wmb(); /* ensure wqe info before updating ci */
+
+	return 0;
+}
+
+int hinic3_xdp_xmit_frames(struct net_device *dev, int n,
+			   struct xdp_frame **frames, u32 flags)
+{
+	struct hinic3_nic_dev *nic_dev = netdev_priv(dev);
+	struct hinic3_txq *txq;
+	u16 i, q_id, drops = 0;
+
+	if (unlikely(!netif_carrier_ok(dev))) {
+		HINIC3_NIC_STATS_INC(nic_dev, tx_carrier_off_drop);
+		return -NETDEV_TX_BUSY;
+	}
+
+	if (unlikely(flags & ~XDP_XMIT_FLAGS_MASK))
+		return -EINVAL;
+
+	q_id = raw_smp_processor_id() % nic_dev->q_params.num_qps;
+	txq = &nic_dev->txqs[q_id];
+
+	for (i = 0; i < n; i++) {
+		struct xdp_frame *xdpf = frames[i];
+
+		if (unlikely(hinic3_xdp_xmit_frame(nic_dev, txq, xdpf))) {
+			xdp_return_frame(xdpf);
+			TXQ_STATS_INC(txq, xdp_dropped);
+			drops++;
+		}
+	}
+
+	if (flags & XDP_XMIT_FLUSH) {
+		hinic3_write_db(txq->sq, txq->cos, SQ_CFLAG_DP,
+		hinic3_get_sq_local_pi(txq->sq));
+	}
+	return n - drops;
+}
+
+struct xdp_frame *xdp_convert_to_frame(struct xdp_buff *xdp,
+				       struct hinic3_nic_dev *nic_dev)
+{
+	struct xdp_frame *xdp_frame;
+	int metasize, headroom;
+
+	if (xdp->rxq->mem.type == MEM_TYPE_XSK_BUFF_POOL)
+		return xdp_convert_zc_to_xdp_frame(xdp);
+	xdp_frame = xdp->data_hard_start;
+	headroom = xdp->data - xdp->data_hard_start;
+	metasize = xdp->data - xdp->data_meta;
+	metasize = metasize > 0 ? metasize : 0;
+	if (unlikely((headroom - metasize) < sizeof(*xdp_frame)))
+		return NULL;
+	if (unlikely(xdp->data_end > xdp_data_hard_end(xdp))) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+					"Missing reserved tailroom\n");
+		return NULL;
+	}
+	xdp_frame->frame_sz = xdp->frame_sz;
+	xdp_frame->data = xdp->data;
+	xdp_frame->len  = xdp->data_end - xdp->data;
+	xdp_frame->headroom = (u16)(headroom - sizeof(*xdp_frame));
+	xdp_frame->metasize = (u32)metasize;
+	xdp_frame->mem = xdp->rxq->mem;
+
+	return xdp_frame;
+}
+
+bool hinic3_xmit_xdp_buff(struct net_device *netdev, u16 q_id,
+			  struct xdp_buff *xdp)
+{
+	struct hinic3_nic_dev *nic_dev = netdev_priv(netdev);
+	struct hinic3_txq *txq;
+	struct xdp_frame *xdpf;
+
+	xdpf = xdp_convert_to_frame(xdp, nic_dev);
+	if (!xdpf) {
+		TXQ_STATS_INC(&nic_dev->txqs[q_id], xdp_dropped);
+		return false;
+	}
+	txq = &nic_dev->txqs[q_id];
+
+	if (unlikely(hinic3_xdp_xmit_frame(nic_dev, txq, xdpf) != 0)) {
+		xdp_return_frame(xdpf);
+		TXQ_STATS_INC(txq, xdp_dropped);
+		return false;
+	}
+	hinic3_write_db(txq->sq, txq->cos, SQ_CFLAG_DP,
+		hinic3_get_sq_local_pi(txq->sq));
+
+	return true;
+}
+#endif

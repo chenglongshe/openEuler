@@ -22,6 +22,7 @@
 #include "hinic3_tx.h"
 #include "hinic3_rx.h"
 #include "hinic3_rss.h"
+#include "hinic3_bond.h"
 
 #define COALESCE_ALL_QUEUE		0xFFFF
 #define COALESCE_PENDING_LIMIT_UNIT	8
@@ -946,9 +947,10 @@ static int hinic3_set_force_link_flag(struct net_device *netdev, u32 priv_flags)
 		netif_carrier_on(netdev);
 		nicif_info(nic_dev, link, netdev, "Set link up\n");
 
-		if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev))
+		if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev) &&
+		    !hinic3_is_bond_offload(nic_dev->lld_dev))
 			hinic3_notify_all_vfs_link_changed(nic_dev->hwdev,
-							   nic_dev->link_status);
+							  nic_dev->link_status);
 	} else {
 		if (!test_and_clear_bit(HINIC3_FORCE_LINK_UP, &nic_dev->flags))
 			return 0;
@@ -980,7 +982,7 @@ static int hinic3_set_force_link_flag(struct net_device *netdev, u32 priv_flags)
 
 		if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev))
 			hinic3_notify_all_vfs_link_changed(nic_dev->hwdev,
-							   nic_dev->link_status);
+							  nic_dev->link_status);
 	}
 
 	return 0;
@@ -1021,14 +1023,14 @@ static int hinic3_run_lp_test(struct hinic3_nic_dev *nic_dev, u32 test_time)
 	if (!skb_tmp)
 		return -ENOMEM;
 
-	eth_hdr = __skb_put(skb_tmp, ETH_HLEN);
+	eth_hdr = (struct ethhdr *)__skb_put(skb_tmp, ETH_HLEN);
 	eth_hdr->h_proto = htons(ETH_P_ARP);
 	ether_addr_copy(eth_hdr->h_dest, nic_dev->netdev->dev_addr);
 	eth_zero_addr(eth_hdr->h_source);
 	skb_reset_mac_header(skb_tmp);
 
 	test_data = __skb_put(skb_tmp, LP_PKT_LEN - ETH_HLEN);
-	for (i = ETH_HLEN; i < LP_PKT_LEN; i++)
+	for (i = 0; i < LP_PKT_LEN - ETH_HLEN; i++)
 		test_data[i] = i & 0xFF;
 
 	skb_tmp->queue_mapping = 0;
@@ -1037,7 +1039,7 @@ static int hinic3_run_lp_test(struct hinic3_nic_dev *nic_dev, u32 test_time)
 
 	for (i = 0; i < cnt; i++) {
 		nic_dev->lb_test_rx_idx = 0;
-		memset(lb_test_rx_buf, 0, LP_PKT_CNT * LP_PKT_LEN);
+		(void)memset(lb_test_rx_buf, 0, LP_PKT_CNT * LP_PKT_LEN);
 
 		for (j = 0; j < LP_PKT_CNT; j++) {
 			skb = pskb_copy(skb_tmp, GFP_ATOMIC);
@@ -1201,13 +1203,6 @@ static int hinic3_get_fecparam(struct net_device *netdev,
 	u8 supported_fec = 0;
 	int err;
 
-	if (fecparam->cmd != ETHTOOL_GFECPARAM) {
-		nicif_err(nic_dev, drv, netdev,
-			  "get fecparam cmd err.exp:0x%x,real:0x%x\n",
-			  ETHTOOL_GFECPARAM, fecparam->cmd);
-		return -EINVAL;
-	}
-
 	err = get_fecparam(nic_dev->hwdev, &advertised_fec, &supported_fec);
 	if (err) {
 		nicif_err(nic_dev, drv, netdev, "Get fec param failed\n");
@@ -1225,14 +1220,6 @@ static int hinic3_set_fecparam(struct net_device *netdev,
 {
 	struct hinic3_nic_dev *nic_dev = netdev_priv(netdev);
 	int err;
-
-	if (fecparam->cmd != ETHTOOL_SFECPARAM) {
-		nicif_err(nic_dev, drv, netdev,
-			  "Set fecparam cmd err.exp:0x%x,real:0x%x\n",
-			  ETHTOOL_SFECPARAM, fecparam->cmd);
-	return -EINVAL;
-	}
-
 	err = set_fecparam(nic_dev->hwdev, (u8)fecparam->fec);
 	if (err) {
 		nicif_err(nic_dev, drv, netdev, "Set fec param failed\n");
@@ -1282,12 +1269,10 @@ static const struct ethtool_ops hinic3_ethtool_ops = {
 
 	.self_test = hinic3_diag_test,
 
-#ifndef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
 #ifdef HAVE_ETHTOOL_SET_PHYS_ID
 	.set_phys_id = hinic3_set_phys_id,
 #else
 	.phys_id = hinic3_phys_id,
-#endif
 #endif
 
 	.get_coalesce = hinic3_get_coalesce,
@@ -1306,7 +1291,6 @@ static const struct ethtool_ops hinic3_ethtool_ops = {
 	.get_priv_flags = hinic3_get_priv_flags,
 	.set_priv_flags = hinic3_set_priv_flags,
 
-#ifndef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
 	.get_channels = hinic3_get_channels,
 	.set_channels = hinic3_set_channels,
 
@@ -1328,35 +1312,7 @@ static const struct ethtool_ops hinic3_ethtool_ops = {
 	.set_rxfh_indir = hinic3_set_rxfh_indir,
 #endif
 
-#endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 };
-
-#ifdef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
-static const struct ethtool_ops_ext hinic3_ethtool_ops_ext = {
-	.size	= sizeof(struct ethtool_ops_ext),
-	.set_phys_id = hinic3_set_phys_id,
-	.get_channels = hinic3_get_channels,
-	.set_channels = hinic3_set_channels,
-#ifdef ETHTOOL_GMODULEEEPROM
-	.get_module_info = hinic3_get_module_info,
-	.get_module_eeprom = hinic3_get_module_eeprom,
-#endif
-
-#ifndef NOT_HAVE_GET_RXFH_INDIR_SIZE
-	.get_rxfh_indir_size = hinic3_get_rxfh_indir_size,
-#endif
-
-#if defined(ETHTOOL_GRSSH) && defined(ETHTOOL_SRSSH)
-	.get_rxfh_key_size = hinic3_get_rxfh_key_size,
-	.get_rxfh = hinic3_get_rxfh,
-	.set_rxfh = hinic3_set_rxfh,
-#else
-	.get_rxfh_indir = hinic3_get_rxfh_indir,
-	.set_rxfh_indir = hinic3_set_rxfh_indir,
-#endif
-
-};
-#endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 
 static const struct ethtool_ops hinic3vf_ethtool_ops = {
 #ifdef SUPPORTED_COALESCE_PARAMS
@@ -1401,29 +1357,6 @@ static const struct ethtool_ops hinic3vf_ethtool_ops = {
 	.get_priv_flags = hinic3_get_priv_flags,
 	.set_priv_flags = hinic3_set_priv_flags,
 
-#ifndef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
-	.get_channels = hinic3_get_channels,
-	.set_channels = hinic3_set_channels,
-
-#ifndef NOT_HAVE_GET_RXFH_INDIR_SIZE
-	.get_rxfh_indir_size = hinic3_get_rxfh_indir_size,
-#endif
-
-#if defined(ETHTOOL_GRSSH) && defined(ETHTOOL_SRSSH)
-	.get_rxfh_key_size = hinic3_get_rxfh_key_size,
-	.get_rxfh = hinic3_get_rxfh,
-	.set_rxfh = hinic3_set_rxfh,
-#else
-	.get_rxfh_indir = hinic3_get_rxfh_indir,
-	.set_rxfh_indir = hinic3_set_rxfh_indir,
-#endif
-
-#endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
-};
-
-#ifdef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
-static const struct ethtool_ops_ext hinic3vf_ethtool_ops_ext = {
-	.size	= sizeof(struct ethtool_ops_ext),
 	.get_channels = hinic3_get_channels,
 	.set_channels = hinic3_set_channels,
 
@@ -1441,21 +1374,14 @@ static const struct ethtool_ops_ext hinic3vf_ethtool_ops_ext = {
 #endif
 
 };
-#endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 
 void hinic3_set_ethtool_ops(struct net_device *netdev)
 {
 	SET_ETHTOOL_OPS(netdev, &hinic3_ethtool_ops);
-#ifdef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
-	set_ethtool_ops_ext(netdev, &hinic3_ethtool_ops_ext);
-#endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 }
 
 void hinic3vf_set_ethtool_ops(struct net_device *netdev)
 {
 	SET_ETHTOOL_OPS(netdev, &hinic3vf_ethtool_ops);
-#ifdef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
-	set_ethtool_ops_ext(netdev, &hinic3vf_ethtool_ops_ext);
-#endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 }
 

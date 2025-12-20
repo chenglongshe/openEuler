@@ -351,12 +351,11 @@ int hinic3_update_mac(void *hwdev, const u8 *old_mac, u8 *new_mac, u16 vlan_id,
 	if (!hwdev || !old_mac || !new_mac)
 		return -EINVAL;
 
-	memset(&mac_info, 0, sizeof(mac_info));
+	(void)memset(&mac_info, 0, sizeof(mac_info));
 
 	nic_io = hinic3_get_service_adapter(hwdev, SERVICE_T_NIC);
 	if (!nic_io)
 		return -EINVAL;
-
 	if ((vlan_id & HINIC_VLAN_ID_MASK) >= VLAN_N_VID) {
 		nic_err(nic_io->dev_hdl, "Invalid VLAN number: %d\n",
 			(vlan_id & HINIC_VLAN_ID_MASK));
@@ -382,7 +381,7 @@ int hinic3_update_mac(void *hwdev, const u8 *old_mac, u8 *new_mac, u16 vlan_id,
 
 	if (PF_SET_VF_MAC(hwdev, mac_info.msg_head.status)) {
 		nic_warn(nic_io->dev_hdl, "PF has already set VF MAC. Ignore update operation\n");
-		return HINIC3_PF_SET_VF_ALREADY;
+		return 0;
 	}
 
 	if (mac_info.msg_head.status == HINIC3_MGMT_STATUS_EXIST) {
@@ -393,7 +392,7 @@ int hinic3_update_mac(void *hwdev, const u8 *old_mac, u8 *new_mac, u16 vlan_id,
 	return 0;
 }
 
-int hinic3_get_default_mac(void *hwdev, u8 *mac_addr)
+int hinic3_get_default_mac(void *hwdev, u8 *mac_addr, int ether_len)
 {
 	struct hinic3_port_mac_set mac_info;
 	u16 out_size = sizeof(mac_info);
@@ -403,7 +402,7 @@ int hinic3_get_default_mac(void *hwdev, u8 *mac_addr)
 	if (!hwdev || !mac_addr)
 		return -EINVAL;
 
-	memset(&mac_info, 0, sizeof(mac_info));
+	(void)memset(&mac_info, 0, sizeof(mac_info));
 
 	nic_io = hinic3_get_service_adapter(hwdev, SERVICE_T_NIC);
 	if (!nic_io)
@@ -899,6 +898,41 @@ int hinic3_get_vport_stats(void *hwdev, u16 func_id,
 	}
 
 	memcpy(stats, &vport_stats.stats, sizeof(*stats));
+
+	return 0;
+}
+
+int hinic3_get_cir_drop(void *hwdev, u16 func_id, struct hinic3_cir_drop *stats)
+{
+	struct hinic3_port_stats_info stats_info;
+	struct hinic3_cmd_get_dp_info_resp vport_stats;
+	u16 out_size = sizeof(vport_stats);
+	struct hinic3_nic_io *nic_io = NULL;
+	int err;
+
+	if (!hwdev || !stats)
+		return -EINVAL;
+
+	(void)memset(&stats_info, 0, sizeof(stats_info));
+	(void)memset(&vport_stats, 0, sizeof(vport_stats));
+
+	nic_io = hinic3_get_service_adapter(hwdev, SERVICE_T_NIC);
+	if (!nic_io)
+		return -EINVAL;
+
+	stats_info.func_id = func_id;
+
+	err = l2nic_msg_to_mgmt_sync(hwdev, HINIC3_NIC_CMD_GET_CIR_DROP,
+				     &stats_info, sizeof(stats_info),
+				     &vport_stats, &out_size);
+	if (err || !out_size || vport_stats.head.status) {
+		nic_err(nic_io->dev_hdl,
+			"Failed to get CPB cir drop, err: %d, status: 0x%x, out size: 0x%x\n",
+			err, vport_stats.head.status, out_size);
+		return -EFAULT;
+	}
+
+	memcpy(stats, &vport_stats.value, sizeof(struct hinic3_cir_drop));
 
 	return 0;
 }
@@ -1556,8 +1590,42 @@ static int hinic3_set_rx_lro_timer(void *hwdev, u32 timer_value)
 	return 0;
 }
 
+static int hinic3_set_lro_cfg(void *hwdev, u8 data, u8 data_type)
+{
+	struct hinic3_nic_io *nic_io = NULL;
+	struct hinic3_cmd_lro_cfg lro_cfg;
+	u16 out_size = sizeof(lro_cfg);
+	int err;
+
+	if (!hwdev)
+		return -EINVAL;
+
+	nic_io = hinic3_get_service_adapter(hwdev, SERVICE_T_NIC);
+	if (!nic_io)
+		return -EINVAL;
+
+	(void)memset(&lro_cfg, 0, sizeof(lro_cfg));
+	lro_cfg.func_id = hinic3_global_func_id(hwdev);
+	lro_cfg.opcode = HINIC3_CMD_OP_SET;
+	lro_cfg.data = data;
+	lro_cfg.data_type = data_type;
+
+	err = l2nic_msg_to_mgmt_sync(hwdev, HINIC3_NIC_CMD_LRO_CFG,
+				     &lro_cfg, sizeof(lro_cfg),
+				     &lro_cfg, &out_size);
+	if (err != 0 || out_size == 0 || lro_cfg.msg_head.status != 0) {
+		nic_err(nic_io->dev_hdl, "Failed to set soft lro cfg, err: %d, status: 0x%x, out size: 0x%x\n",
+			err, lro_cfg.msg_head.status, out_size);
+
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 int hinic3_set_rx_lro_state(void *hwdev, u8 lro_en, u32 lro_timer,
-			    u32 lro_max_pkt_len)
+			    u32 lro_max_pkt_len, u8 soft_lro_disable,
+			    u8 hw_lro_max_len, u8 hw_lro_max_num)
 {
 	struct hinic3_nic_io *nic_io = NULL;
 	u8 ipv4_en = 0, ipv6_en = 0;
@@ -1579,6 +1647,18 @@ int hinic3_set_rx_lro_state(void *hwdev, u8 lro_en, u32 lro_timer,
 	err = hinic3_set_rx_lro(hwdev, ipv4_en, ipv6_en, (u8)lro_max_pkt_len);
 	if (err != 0)
 		return err;
+
+	err = hinic3_set_lro_cfg(hwdev, soft_lro_disable, NIC_SOFT_LRO_DISABLE);
+	if (err != 0)
+		nic_warn(nic_io->dev_hdl, "Set soft LRO state failed, please check fw version first\n");
+
+	err = hinic3_set_lro_cfg(hwdev, hw_lro_max_len, NIC_HW_LRO_MAX_LEN);
+	if (err != 0)
+		nic_warn(nic_io->dev_hdl, "Set hw LRO max len failed, please check fw version first\n");
+
+	err = hinic3_set_lro_cfg(hwdev, hw_lro_max_num, NIC_HW_LRO_MAX_NUM);
+	if (err != 0)
+		nic_warn(nic_io->dev_hdl, "Set hw LRO max num failed, please check fw version first\n");
 
 	/* we don't set LRO timer for VF */
 	if (hinic3_func_type(hwdev) == TYPE_VF)

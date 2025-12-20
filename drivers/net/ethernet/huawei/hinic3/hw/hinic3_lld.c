@@ -1716,6 +1716,25 @@ static void hinic3_probe_success_process(struct hinic3_pcidev *pci_adapter)
 	mutex_unlock(&pci_adapter->pdev_mutex);
 }
 
+static void hinic3_probe_update_chip_node_info(
+					struct hinic3_pcidev *pci_adapter)
+{
+	struct pci_dev *pdev = pci_adapter->pcidev;
+	struct card_node *chip_node = pci_adapter->chip_node;
+	struct hinic3_board_info board_info = {0};
+
+	if (hinic3_get_pf_bus_by_dev(pci_adapter->hwdev,
+				     &(chip_node->hw_bus_num)) != 0)
+		sdk_err(&pdev->dev, "Failed to get pf bus by dev\n");
+
+	if (hinic3_get_board_info(pci_adapter->hwdev, &board_info,
+				  HINIC3_CHANNEL_COMM) == 0)
+		chip_node->board_type = board_info.board_type;
+	else
+		sdk_err(&pdev->dev, "Failed to get board info\n");
+
+}
+
 static int hinic3_probe_func(struct hinic3_pcidev *pci_adapter)
 {
 	struct pci_dev *pdev = pci_adapter->pcidev;
@@ -1759,7 +1778,7 @@ static int hinic3_probe_func(struct hinic3_pcidev *pci_adapter)
 			goto set_bdf_err;
 		}
 	}
-
+	hinic3_probe_update_chip_node_info(pci_adapter);
 	hinic3_probe_success_process(pci_adapter);
 
 	return 0;
@@ -1953,9 +1972,7 @@ static void hinic3_probe_vf_add_dwork(struct pci_dev *pdev)
 	if (!hinic3_is_host_vmsec_enable(pdev))
 		return;
 
-#if defined(CONFIG_SP_VID_DID)
-	if (pdev->vendor == PCI_VENDOR_ID_SPNIC && pdev->device == HINIC3_DEV_SDI_5_1_ID_VF) {
-#elif defined(CONFIG_NF_VID_DID)
+#if defined(CONFIG_NF_VID_DID)
 	if (pdev->vendor == PCI_VENDOR_ID_NF && pdev->device == NFNIC_DEV_ID_VF) {
 #else
 	if (pdev->vendor == PCI_VENDOR_ID_HUAWEI && pdev->device == HINIC3_DEV_SDI_5_0_ID_VF) {
@@ -2312,14 +2329,7 @@ free_pf_info:
 EXPORT_SYMBOL(hinic3_set_vf_service_state);
 
 static const struct pci_device_id hinic3_pci_table[] = {
-#if defined(CONFIG_SP_VID_DID)
-	{PCI_VDEVICE(SPNIC, HINIC3_DEV_ID_STANDARD), 0},
-	{PCI_VDEVICE(SPNIC, HINIC3_DEV_ID_SDI_5_1_PF), 0},
-	{PCI_VDEVICE(SPNIC, HINIC3_DEV_ID_SDI_5_0_PF), 0},
-	{PCI_VDEVICE(SPNIC, HINIC3_DEV_ID_SPN120), 0},
-	{PCI_VDEVICE(SPNIC, HINIC3_DEV_ID_VF), 0},
-	{PCI_VDEVICE(SPNIC, HINIC3_DEV_SDI_5_1_ID_VF), 0},
-#elif defined(CONFIG_NF_VID_DID)
+#ifdef CONFIG_NF_VID_DID
 	{PCI_VDEVICE(NF, NFNIC_DEV_ID_STANDARD), 0},
 	{PCI_VDEVICE(NF, NFNIC_DEV_ID_VF), 0},
 #else

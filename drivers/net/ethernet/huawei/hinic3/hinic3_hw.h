@@ -838,6 +838,21 @@ int hinic3_get_hw_pf_infos(void *hwdev, struct hinic3_hw_pf_infos *infos,
 			   u16 channel);
 
 /**
+ * @brief hinic3_get_pf_by_func - get pf by func
+ * @param hwdev: device pointer to hwdev
+ * @param func_id: func id
+ * @param pf_id: pf id
+ */
+int hinic3_get_pf_by_func(void *hwdev, u16 func_id, u8 *pf_id);
+
+/**
+ * @brief hinic3_get_pf_bus_by_dev - get pf bus by dev
+ * @param hwdev: device pointer to hwdev
+ * @param bus_num: pf bus num
+ */
+int hinic3_get_pf_bus_by_dev(void *hwdev, u8 *bus_num);
+
+/**
  * @brief hinic3_func_reset - reset func
  * @param hwdev: device pointer to hwdev
  * @param func_id: global function index

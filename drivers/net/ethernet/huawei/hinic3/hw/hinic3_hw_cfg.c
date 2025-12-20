@@ -718,7 +718,7 @@ static int cfg_init_eq(struct hinic3_hwdev *dev)
 
 	for (i = 0; i < num_ceq; ++i) {
 		eq[i].eqn = i;
-		eq[i].free = CFG_FREE;
+		eq[i].freed = CFG_FREE;
 		eq[i].type = SERVICE_T_MAX;
 	}
 
@@ -751,7 +751,8 @@ int hinic3_vector_to_eqn(void *hwdev, enum hinic3_service_type type, int vector)
 	vector_num = (vector_num % cfg_mgmt->eq_info.num_ceq) + CFG_RDMA_CEQ_BASE;
 
 	eq = cfg_mgmt->eq_info.eq;
-	if (eq[vector_num].type == SERVICE_T_ROCE && eq[vector_num].free == CFG_BUSY)
+	if (eq[vector_num].type == SERVICE_T_ROCE &&
+	    eq[vector_num].freed == CFG_BUSY)
 		eqn = eq[vector_num].eqn;
 
 	return eqn;
@@ -844,7 +845,7 @@ static int cfg_enable_interrupt(struct hinic3_hwdev *dev)
 			/* u32 kernel uses to write allocated vector */
 			irq_info[i].info.irq_id = entry[i].vector;
 			irq_info[i].type = SERVICE_T_MAX;
-			irq_info[i].free = CFG_FREE;
+			irq_info[i].freed = CFG_FREE;
 		}
 
 		kfree(entry);
@@ -898,14 +899,14 @@ int hinic3_alloc_irqs(void *hwdev, enum hinic3_service_type type, u16 num,
 
 	for (i = 0; i < num_new; i++) {
 		for (j = 0; j < max_num_irq; j++) {
-			if (alloc_info[j].free == CFG_FREE) {
+			if (alloc_info[j].freed == CFG_FREE) {
 				if (irq_info->num_irq_remain == 0) {
 					sdk_err(dev->dev_hdl, "No free irq resource in cfg mgmt\n");
 					mutex_unlock(&irq_info->irq_mutex);
 					return -EINVAL;
 				}
 				alloc_info[j].type = type;
-				alloc_info[j].free = CFG_BUSY;
+				alloc_info[j].freed = CFG_BUSY;
 
 				irq_info_array[i].msix_entry_idx =
 					alloc_info[j].info.msix_entry_idx;
@@ -945,8 +946,8 @@ void hinic3_free_irq(void *hwdev, enum hinic3_service_type type, u32 irq_id)
 	for (i = 0; i < max_num_irq; i++) {
 		if (irq_id == alloc_info[i].info.irq_id &&
 		    type == alloc_info[i].type) {
-			if (alloc_info[i].free == CFG_BUSY) {
-				alloc_info[i].free = CFG_FREE;
+			if (alloc_info[i].freed == CFG_BUSY) {
+				alloc_info[i].freed = CFG_FREE;
 				irq_info->num_irq_remain++;
 				if (irq_info->num_irq_remain > max_num_irq) {
 					sdk_err(dev->dev_hdl, "Find target,but over range\n");
@@ -1007,9 +1008,9 @@ int hinic3_alloc_ceqs(void *hwdev, enum hinic3_service_type type, int num,
 		}
 
 		for (j = CFG_RDMA_CEQ_BASE; j < eq->num_ceq; j++) {
-			if (eq->eq[j].free == CFG_FREE) {
+			if (eq->eq[j].freed == CFG_FREE) {
 				eq->eq[j].type = type;
-				eq->eq[j].free = CFG_BUSY;
+				eq->eq[j].freed = CFG_BUSY;
 				eq->num_ceq_remain--;
 				ceq_id_array[i] = eq->eq[j].eqn;
 				(*act_num)++;
@@ -1043,8 +1044,8 @@ void hinic3_free_ceq(void *hwdev, enum hinic3_service_type type, int ceq_id)
 	for (i = 0; i < num_ceq; i++) {
 		if (ceq_id == eq->eq[i].eqn &&
 		    type == cfg_mgmt->eq_info.eq[i].type) {
-			if (eq->eq[i].free == CFG_BUSY) {
-				eq->eq[i].free = CFG_FREE;
+			if (eq->eq[i].freed == CFG_BUSY) {
+				eq->eq[i].freed = CFG_FREE;
 				eq->num_ceq_remain++;
 				if (eq->num_ceq_remain > num_ceq)
 					eq->num_ceq_remain %= num_ceq;
@@ -1531,6 +1532,44 @@ u8 hinic3_physical_port_id(void *hwdev)
 	return dev->cfg_mgmt->svc_cap.port_id;
 }
 EXPORT_SYMBOL(hinic3_physical_port_id);
+
+void hinic3_set_bifur_link_status(void *hwdev, u8 port_id, u8 status)
+{
+struct hinic3_hwdev *dev = hwdev;
+
+	if (dev == NULL) {
+		pr_err("Hwdev pointer is NULL for set bifur link status\n");
+		return;
+	}
+
+	if (port_id >= BIFUR_MAX_LINK_STATUS_NUM) {
+		pr_err("port id:0x%x out of range for set bifur link status\n",
+			port_id);
+		return;
+	}
+
+	dev->bifur_link_status[port_id] = status;
+}
+EXPORT_SYMBOL(hinic3_set_bifur_link_status);
+
+u8 hinic3_get_bifur_link_status(void *hwdev, u8 port_id)
+{
+struct hinic3_hwdev *dev = hwdev;
+
+if (dev == NULL) {
+	pr_err("Hwdev pointer is NULL for getting bifur link status\n");
+	return 0;
+}
+
+if (port_id >= BIFUR_MAX_LINK_STATUS_NUM) {
+	pr_err("port id:0x%x out of range for get bifur link status\n",
+		port_id);
+	return 0;
+}
+
+return dev->bifur_link_status[port_id];
+}
+EXPORT_SYMBOL(hinic3_get_bifur_link_status);
 
 u16 hinic3_func_max_vf(void *hwdev)
 {
