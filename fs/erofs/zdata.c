@@ -9,6 +9,8 @@
 #include <linux/cpuhotplug.h>
 #include <trace/events/erofs.h>
 
+#include "bcj.h"
+
 #define Z_EROFS_PCLUSTER_MAX_PAGES	(Z_EROFS_PCLUSTER_MAX_SIZE / PAGE_SIZE)
 #define Z_EROFS_INLINE_BVECS		2
 
@@ -86,6 +88,9 @@ struct z_erofs_pcluster {
 
 	/* L: indicate several pageofs_outs or not */
 	bool multibases;
+
+	/* L: bcj test data*/
+	uint32_t  filepos;
 
 	/* A: compressed bvecs (can be cached or inplaced pages) */
 	struct z_erofs_bvec compressed_bvecs[];
@@ -804,6 +809,7 @@ static int z_erofs_register_pcluster(struct z_erofs_decompress_frontend *fe)
 	/* new pclusters should be claimed as type 1, primary and followed */
 	pcl->next = fe->owned_head;
 	pcl->pageofs_out = map->m_la & ~PAGE_MASK;
+	pcl->filepos = map->m_la;
 	fe->mode = Z_EROFS_PCLUSTER_FOLLOWED;
 
 	/*
@@ -1236,6 +1242,37 @@ static int z_erofs_parse_in_bvecs(struct z_erofs_decompress_backend *be,
 	return 0;
 }
 
+static int z_erofs_bcj_decode_page(struct page *page, struct z_erofs_pcluster *pcl,
+				u8 bcj_flag, int nowpage, int totalpage)
+{
+	if (pcl->algorithmformat != 4) {
+		uint8_t *buf = (uint8_t *)kmap_local_page(page);
+
+		if (!buf)
+			return -1;
+		uint32_t startpos;
+
+		if (nowpage == 0) {
+			startpos = pcl->filepos;
+			bcj_code(buf + pcl->pageofs_out, startpos,
+					PAGE_SIZE - pcl->pageofs_out, bcj_flag, false);
+		} else if (nowpage == totalpage - 1) {
+			startpos = pcl->filepos + nowpage*PAGE_SIZE - pcl->pageofs_out;
+			if ((pcl->pageofs_out + pcl->length)%PAGE_SIZE == 0)
+				bcj_code(buf, startpos, PAGE_SIZE, bcj_flag, false);
+			else
+				bcj_code(buf, startpos,
+					(pcl->pageofs_out + pcl->length)%PAGE_SIZE,
+					bcj_flag, false);
+		} else {
+			startpos = pcl->filepos + nowpage*PAGE_SIZE - pcl->pageofs_out;
+			bcj_code(buf, startpos, PAGE_SIZE, bcj_flag, false);
+		}
+		kunmap_local(buf);
+	}
+	return 0;
+}
+
 static int z_erofs_decompress_pcluster(struct z_erofs_decompress_backend *be,
 				       int err)
 {
@@ -1329,6 +1366,9 @@ out:
 			continue;
 
 		DBG_BUGON(z_erofs_page_is_invalidated(page));
+
+		if (sbi->bcj_flag)
+			z_erofs_bcj_decode_page(page, pcl, sbi->bcj_flag, i, be->nr_pages);
 
 		/* recycle all individual short-lived pages */
 		if (z_erofs_put_shortlivedpage(be->pagepool, page))
