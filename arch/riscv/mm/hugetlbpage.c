@@ -422,6 +422,7 @@ int pmd_huge(pmd_t pmd)
 {
 	return pmd_leaf(pmd);
 }
+EXPORT_SYMBOL_GPL(pmd_huge);
 
 static bool __hugetlb_valid_size(unsigned long size)
 {

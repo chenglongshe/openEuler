@@ -49,8 +49,9 @@
 
 #ifdef CONFIG_ARM64
 #define if_pmd_thp_or_huge(pmd) (if_pmd_huge(pmd) || pmd_trans_huge(pmd))
-#endif /* CONFIG_ARM64  */
-
+#else /* CONFIG_ARM64  */
+#define if_pmd_thp_or_huge(pmd) (pmd_huge(pmd) || pmd_trans_huge(pmd))
+#endif /* CONFIG_RISCV */
 #ifdef DEBUG
 
 #define debug_printk trace_printk
@@ -601,7 +602,7 @@ static int ept_idle_supports_cpu(struct kvm *kvm)
 		return ret;
 }
 
-#else
+#elif defined(CONFIG_ARM64)
 static inline phys_addr_t stage2_range_addr_end(phys_addr_t addr, phys_addr_t end)
 {
 	phys_addr_t size = kvm_granule_size(KVM_PGTABLE_MIN_BLOCK_LEVEL);
@@ -746,6 +747,151 @@ static int arm_page_range(struct page_idle_ctrl *pic,
 		}
 
 		err = arm_p4d_range(pic, pgd, addr, next);
+		if (err)
+			break;
+	} while (pgd++, addr = next, addr != end);
+
+	local_irq_enable();
+	return err;
+}
+
+#elif defined(CONFIG_RISCV)
+static int riscv_pte_range(struct page_idle_ctrl *pic,
+			pmd_t *pmd, unsigned long addr, unsigned long end)
+{
+	pte_t *pte;
+	enum ProcIdlePageType page_type;
+	int err = 0;
+
+	pte = pte_offset_kernel(pmd, addr);
+	do {
+		if (!pte_present(*pte))
+			page_type = PTE_HOLE;
+		else if (!test_and_clear_bit(_PAGE_MM_BIT_ACCESSED,
+					(unsigned long *) &pte->pte))
+			page_type = PTE_IDLE;
+		else
+			page_type = PTE_ACCESSED;
+
+		err = pic_add_page(pic, addr, addr + PAGE_SIZE, page_type);
+		if (err)
+			break;
+	} while (pte++, addr += PAGE_SIZE, addr != end);
+
+	return err;
+}
+
+static int riscv_pmd_range(struct page_idle_ctrl *pic,
+			pud_t *pud, unsigned long addr, unsigned long end)
+{
+	pmd_t *pmd;
+	unsigned long next;
+	enum ProcIdlePageType page_type;
+	enum ProcIdlePageType pte_page_type;
+	int err = 0;
+
+	if (pic->flags & SCAN_HUGE_PAGE)
+		pte_page_type = PMD_IDLE_PTES;
+	else
+		pte_page_type = IDLE_PAGE_TYPE_MAX;
+
+	pmd = pmd_offset(pud, addr);
+	do {
+		next = pmd_addr_end(addr, end);
+		if (!pmd_present(*pmd))
+			page_type = PMD_HOLE;
+		else if (!if_pmd_thp_or_huge(*pmd))
+			page_type = pte_page_type;
+		else if (!test_and_clear_bit(_PAGE_MM_BIT_ACCESSED,
+					(unsigned long *)pmd))
+			page_type = PMD_IDLE;
+		else
+			page_type = PMD_ACCESSED;
+
+		if (page_type != IDLE_PAGE_TYPE_MAX)
+			err = pic_add_page(pic, addr, next, page_type);
+		else
+			err = riscv_pte_range(pic, pmd, addr, next);
+		if (err)
+			break;
+	} while (pmd++, addr = next, addr != end);
+
+	return err;
+}
+
+static int riscv_pud_range(struct page_idle_ctrl *pic,
+			p4d_t *p4d, unsigned long addr, unsigned long end)
+{
+	pud_t *pud = (pud_t *)p4d;
+	unsigned long next;
+	int err = 0;
+
+	pud += pud_index(addr);
+	do {
+		next = pud_addr_end(addr, end);
+		if (!pud_present(*pud)) {
+			set_restart_gpa(next, "PUD_HOLE");
+			continue;
+		}
+
+		if (pud_leaf(*pud))
+			err = pic_add_page(pic, addr, next, PUD_PRESENT);
+		else
+			err = riscv_pmd_range(pic, pud, addr, next);
+		if (err)
+			break;
+	} while (pud++, addr = next, addr != end);
+
+	return err;
+}
+
+static int riscv_p4d_range(struct page_idle_ctrl *pic,
+			pgd_t *pgd, unsigned long addr, unsigned long end)
+{
+	p4d_t *p4d;
+	unsigned long next;
+	int err = 0;
+
+	p4d = p4d_offset(pgd, addr);
+	do {
+		next = p4d_addr_end(addr, end);
+		if (!p4d_present(*p4d)) {
+			set_restart_gpa(next, "P4D_HOLE");
+			continue;
+		}
+
+		err = riscv_pud_range(pic, p4d, addr, next);
+		if (err)
+			break;
+	} while (p4d++, addr = next, addr != end);
+
+	return err;
+}
+
+static int riscv_page_range(struct page_idle_ctrl *pic,
+						   unsigned long addr,
+						   unsigned long end)
+{
+	pgd_t *pgd;
+	unsigned long next;
+	struct kvm *kvm = pic->kvm;
+	int err = 0;
+
+	WARN_ON(addr >= end);
+
+	spin_lock(&pic->kvm->mmu_lock);
+	pgd = (pgd_t *)kvm->arch.pgd + pgd_index(addr) * PTRS_PER_PTE;
+	spin_unlock(&pic->kvm->mmu_lock);
+
+	local_irq_disable();
+	do {
+		next = pgd_addr_end(addr, end);
+		if (!pgd_present(*pgd)) {
+			set_restart_gpa(next, "PGD_HOLE");
+			continue;
+		}
+
+		err = riscv_p4d_range(pic, pgd, addr, next);
 		if (err)
 			break;
 	} while (pgd++, addr = next, addr != end);
@@ -921,8 +1067,10 @@ static int vm_idle_walk_hva_range(struct page_idle_ctrl *pic,
 				gpa_next = min(gpa_end, gpa_addr + walk_step * PAGE_SIZE);
 #ifdef CONFIG_ARM64
 				ret = arm_page_range(pic, gpa_addr, gpa_next);
-#else
+#elif defined(CONFIG_X86)
 				ret = ept_page_range(pic, gpa_addr, gpa_next, walk);
+#elif defined(CONFIG_RISCV)
+				ret = riscv_page_range(pic, gpa_addr, gpa_next);
 #endif
 				gpa_addr = pic->restart_gpa;
 
@@ -1069,8 +1217,10 @@ static int mm_idle_pmd_large(pmd_t pmd)
 {
 #ifdef CONFIG_ARM64
 	return if_pmd_thp_or_huge(pmd);
-#else
+#elif defined(CONFIG_X86)
 	return pmd_large(pmd);
+#elif defined(CONFIG_RISCV)
+	return pmd_trans_huge(pmd);
 #endif
 }
 

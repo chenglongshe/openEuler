@@ -1456,7 +1456,7 @@ config ETMEM_SWAP
 config ETMEM
 	bool "Enable etmem feature"
 	depends on MMU
-	depends on X86 || ARM64
+	depends on X86 || ARM64 || RISCV
 	default n
 	help
 	  etmem is a tiered memory extension technology that uses DRAM and memory
