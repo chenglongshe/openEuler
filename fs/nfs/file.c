@@ -140,7 +140,6 @@ static int
 nfs_file_flush(struct file *file, fl_owner_t id)
 {
 	struct inode	*inode = file_inode(file);
-	errseq_t since;
 
 	dprintk("NFS: flush(%pD2)\n", file);
 
@@ -149,9 +148,8 @@ nfs_file_flush(struct file *file, fl_owner_t id)
 		return 0;
 
 	/* Flush writes to the server and return any errors */
-	since = filemap_sample_wb_err(file->f_mapping);
 	nfs_wb_all(inode);
-	return filemap_check_wb_err(file->f_mapping, since);
+	return file_check_and_advance_wb_err(file);
 }
 
 ssize_t
@@ -642,7 +640,6 @@ ssize_t nfs_file_write(struct kiocb *iocb, struct iov_iter *from)
 	struct inode *inode = file_inode(file);
 	unsigned int mntflags = NFS_SERVER(inode)->flags;
 	ssize_t result, written;
-	errseq_t since;
 	int error;
 
 	result = nfs_key_timeout_notify(file, inode);
@@ -668,7 +665,6 @@ ssize_t nfs_file_write(struct kiocb *iocb, struct iov_iter *from)
 
 	nfs_clear_invalid_mapping(file->f_mapping);
 
-	since = filemap_sample_wb_err(file->f_mapping);
 	nfs_start_io_write(inode);
 	result = generic_write_checks(iocb, from);
 	if (result > 0)
@@ -698,7 +694,7 @@ ssize_t nfs_file_write(struct kiocb *iocb, struct iov_iter *from)
 
 out:
 	/* Return error values */
-	error = filemap_check_wb_err(file->f_mapping, since);
+	error = file_check_and_advance_wb_err(file);
 	switch (error) {
 	default:
 		break;
@@ -707,9 +703,9 @@ out:
 	case -ENOSPC:
 		nfs_wb_all(inode);
 		error = file_check_and_advance_wb_err(file);
-		if (error < 0)
-			result = error;
 	}
+	if (error < 0)
+		result = error;
 	return result;
 
 out_swapfile:
