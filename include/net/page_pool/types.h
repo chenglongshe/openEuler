@@ -6,6 +6,7 @@
 #include <linux/dma-direction.h>
 #include <linux/ptr_ring.h>
 #include <linux/kabi.h>
+#include <linux/xarray.h>
 
 #define PP_FLAG_DMA_MAP		BIT(0) /* Should page_pool do the DMA
 					* map/unmap
@@ -22,6 +23,9 @@
 #define PP_FLAG_ALL		(PP_FLAG_DMA_MAP |\
 				 PP_FLAG_DMA_SYNC_DEV |\
 				 PP_FLAG_PAGE_FRAG)
+
+/* Index limit to stay within PP_DMA_INDEX_BITS for DMA indices */
+#define PP_DMA_INDEX_LIMIT XA_LIMIT(1, BIT(PP_DMA_INDEX_BITS) - 1)
 
 /*
  * Fast allocation side cache array/stack
@@ -182,7 +186,7 @@ struct page_pool {
 
 	u64 destroy_cnt;
 
-	KABI_RESERVE(1)
+	KABI_USE(1, struct xarray *dma_mapped)
 	KABI_RESERVE(2)
 };
 
