@@ -65,6 +65,10 @@ SCHED_FEAT(STEAL, false)
 SCHED_FEAT(PARAL, false)
 #endif
 
+#ifdef CONFIG_SCHED_KEEP_ON_CORE
+SCHED_FEAT(KEEP_ON_CORE, false)
+#endif
+
 /*
  * Issue a WARN when we do multiple update_rq_clock() calls
  * in a single rq->lock section. Default disabled because the
