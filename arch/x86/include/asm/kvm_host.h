@@ -1019,6 +1019,10 @@ struct kvm_vcpu_arch {
 #endif
 };
 
+struct kvm_vcpu_arch_ext {
+	u64 host_debugctl;
+};
+
 struct kvm_lpage_info {
 	int disallow_lpage;
 };
@@ -1875,6 +1879,9 @@ void kvm_mmu_destroy(struct kvm_vcpu *vcpu);
 int kvm_mmu_create(struct kvm_vcpu *vcpu);
 void kvm_mmu_init_vm(struct kvm *kvm);
 void kvm_mmu_uninit_vm(struct kvm *kvm);
+
+void kvm_mmu_init_memslot_memory_attributes(struct kvm *kvm,
+					    struct kvm_memory_slot *slot);
 
 void kvm_mmu_after_set_cpuid(struct kvm_vcpu *vcpu);
 void kvm_mmu_reset_context(struct kvm_vcpu *vcpu);
