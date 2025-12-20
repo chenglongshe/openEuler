@@ -2793,6 +2793,7 @@ enum rdt_param {
 	Opt_mba_mbps,
 	Opt_debug,
 	Opt_l2,
+	Opt_hiprec,
 	nr__rdt_params
 };
 
@@ -2802,6 +2803,7 @@ static const struct fs_parameter_spec rdt_fs_parameters[] = {
 	fsparam_flag("mba_MBps",	Opt_mba_mbps),
 	fsparam_flag("debug",		Opt_debug),
 	fsparam_flag("l2",		Opt_l2),
+	fsparam_flag("hiprec",		Opt_hiprec),
 	{}
 };
 
