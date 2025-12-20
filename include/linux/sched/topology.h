@@ -106,6 +106,8 @@ struct sched_domain_shared {
 #ifdef CONFIG_SCHED_STEAL
 	struct sparsemask *cfs_overload_cpus;
 #endif
+	KABI_RESERVE(1)
+	KABI_RESERVE(2)
 };
 
 struct sched_domain {
@@ -174,6 +176,9 @@ struct sched_domain {
 		struct rcu_head rcu;	/* used during destruction */
 	};
 	struct sched_domain_shared *shared;
+
+	KABI_RESERVE(1)
+	KABI_RESERVE(2)
 
 	unsigned int span_weight;
 	/*
