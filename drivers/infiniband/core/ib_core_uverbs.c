@@ -367,11 +367,12 @@ int rdma_user_mmap_entry_insert(struct ib_ucontext *ucontext,
 }
 EXPORT_SYMBOL(rdma_user_mmap_entry_insert);
 
+#if IS_ENABLED(CONFIG_MMU)
 void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
 {
 	struct rdma_umap_priv *priv, *next_priv;
 
-	lockdep_assert_held(&ufile->hw_destroy_rwsem);
+	mutex_lock(&ufile->disassociation_lock);
 
 	while (1) {
 		struct mm_struct *mm = NULL;
@@ -397,8 +398,10 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
 			break;
 		}
 		mutex_unlock(&ufile->umap_lock);
-		if (!mm)
+		if (!mm) {
+			mutex_unlock(&ufile->disassociation_lock);
 			return;
+		}
 
 		/*
 		 * The umap_lock is nested under mmap_lock since it used within
@@ -427,26 +430,22 @@ void uverbs_user_mmap_disassociate(struct ib_uverbs_file *ufile)
 		mmap_read_unlock(mm);
 		mmput(mm);
 	}
+
+	mutex_unlock(&ufile->disassociation_lock);
 }
 EXPORT_SYMBOL(uverbs_user_mmap_disassociate);
 
 /**
- * rdma_user_mmap_disassociate() - disassociate the mmap from the ucontext.
+ * rdma_user_mmap_disassociate() - Revoke mmaps for a device
+ * @device: device to revoke
  *
- * @ucontext: associated user context.
- *
- * This function should be called by drivers that need to disable mmap for
- * some ucontexts.
+ * This function should be called by drivers that need to disable mmaps for the
+ * device, for instance because it is going to be reset.
  */
 void rdma_user_mmap_disassociate(struct ib_ucontext *ucontext)
 {
-	struct ib_uverbs_file *ufile = ucontext->ufile;
-
-	/* Racing with uverbs_destroy_ufile_hw */
-	if (!down_read_trylock(&ufile->hw_destroy_rwsem))
-		return;
-
-	uverbs_user_mmap_disassociate(ufile);
-	up_read(&ufile->hw_destroy_rwsem);
+	if (ucontext->ufile)
+		uverbs_user_mmap_disassociate(ucontext->ufile);
 }
 EXPORT_SYMBOL(rdma_user_mmap_disassociate);
+#endif

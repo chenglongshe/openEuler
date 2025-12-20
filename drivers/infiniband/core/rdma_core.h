@@ -163,6 +163,8 @@ extern const struct uapi_definition uverbs_def_obj_srq[];
 extern const struct uapi_definition uverbs_def_obj_wq[];
 extern const struct uapi_definition uverbs_def_write_intf[];
 
+extern struct ib_client uverbs_client;
+
 static inline const struct uverbs_api_write_method *
 uapi_get_method(const struct uverbs_api *uapi, u32 command)
 {
