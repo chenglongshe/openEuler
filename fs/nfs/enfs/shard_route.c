@@ -1771,7 +1771,7 @@ static int enfs_check_shard(void)
 	shard_check_wq = create_workqueue("shard_check_wq");
 	if (!shard_check_wq) {
 		ret = -ENOMEM;
-		goto out;
+		goto out2;
 	}
 
 	rcu_read_lock();
@@ -1799,12 +1799,13 @@ static int enfs_check_shard(void)
 			info->server = server;
 			queue_work(shard_check_wq, &info->work);
 		}
+out:
 		spin_unlock(&nn->nfs_client_lock);
 		break;
 	}
 	rcu_read_unlock();
 
-out:
+out2:
 	// free shard_check_wq in enfs_shard_exit() if an error occurs
 	return ret;
 }

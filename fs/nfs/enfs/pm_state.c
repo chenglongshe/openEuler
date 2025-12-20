@@ -128,6 +128,7 @@ out:
 void pm_get_path_state_desc(struct rpc_xprt *xprt, char *buf, int len)
 {
 	enum enfs_path_state state;
+	struct enfs_xprt_context *ctx = NULL;
 
 	if (xprt == NULL) {
 		enfs_log_error("The xprt is not valid.\n");
@@ -149,7 +150,24 @@ void pm_get_path_state_desc(struct rpc_xprt *xprt, char *buf, int len)
 		(void)snprintf(buf, len, "Normal");
 		break;
 	case PM_STATE_UNSTABLE:
-		(void)snprintf(buf, len, "Unstable");
+		xprt_get(xprt);
+		ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
+		if (ctx != NULL) {
+			bool is_latency = ctx->latency_unstable_active;
+			bool is_reconnect = ctx->reconnect_unstable_active;
+
+			if (is_reconnect && is_latency)
+				(void)snprintf(buf, len, "UnstableR+L");
+			else if (is_reconnect)
+				(void)snprintf(buf, len, "UnstableR");
+			else if (is_latency)
+				(void)snprintf(buf, len, "UnstableL");
+			else
+				(void)snprintf(buf, len, "UnstableR");
+		} else {
+			(void)snprintf(buf, len, "UnstableR");
+		}
+		xprt_put(xprt);
 		break;
 	case PM_STATE_FAULT:
 		(void)snprintf(buf, len, "Fault");

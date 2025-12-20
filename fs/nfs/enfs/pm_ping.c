@@ -17,6 +17,7 @@
 #include <net/netns/generic.h>
 #include <linux/atomic.h>
 #include <linux/sunrpc/clnt.h>
+#include <linux/sunrpc/metrics.h>
 
 #include "../../../net/sunrpc/netns.h"
 #include "pm_state.h"
@@ -116,6 +117,131 @@ static void set_xprt_close_wait(struct rpc_xprt *xprt)
 
 }
 
+static inline s8 enfs_latency_next_idx(s8 idx, int cap)
+{
+	return (idx + 1) % cap;
+}
+
+static void enfs_latency_prune_old(struct enfs_xprt_context *ctx, s64 now_ms)
+{
+	int cap = ARRAY_SIZE(ctx->latency_event_time_ms);
+	s64 window_ms = (s64)enfs_get_latency_detect_period_min() * 60 * 1000;
+
+	while (ctx->latency_tail != ctx->latency_head) {
+		s64 t = ctx->latency_event_time_ms[ctx->latency_tail];
+
+		if (now_ms - t <= window_ms)
+			break;
+		ctx->latency_tail = enfs_latency_next_idx(ctx->latency_tail, cap);
+	}
+}
+
+static void enfs_latency_push_event(struct enfs_xprt_context *ctx, s64 now_ms)
+{
+	int cap = ARRAY_SIZE(ctx->latency_event_time_ms);
+	int next = enfs_latency_next_idx(ctx->latency_head, cap);
+
+	if (next == ctx->latency_tail) // full, drop oldest
+		ctx->latency_tail = enfs_latency_next_idx(ctx->latency_tail, cap);
+	ctx->latency_event_time_ms[ctx->latency_head] = now_ms;
+	ctx->latency_head = next;
+}
+
+static int enfs_latency_event_count(struct enfs_xprt_context *ctx)
+{
+	int cap = ARRAY_SIZE(ctx->latency_event_time_ms);
+	int head = ctx->latency_head;
+	int tail = ctx->latency_tail;
+
+	if (head >= tail)
+		return head - tail;
+	return cap - tail + head;
+}
+
+static void enfs_latency_maybe_sample(struct rpc_clnt *clnt, struct rpc_xprt *xprt)
+{
+	struct enfs_xprt_context *ctx;
+	ktime_t ktime;
+	s64 now_ms;
+	int i;
+	u64 ops_sum = 0;
+	s64 exec_ms_sum = 0;
+	int maxproc = clnt->cl_maxproc;
+	int mini_window_ms = enfs_get_latency_mini_window_sec() * 1000;
+	int threshold_ms = enfs_get_latency_avg_threshold_ms();
+	int required_events = 3;
+
+	ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
+	if (ctx == NULL || ctx->stats == NULL)
+		return;
+
+	ktime = ktime_get();
+	now_ms = ktime_to_ms(ktime);
+
+	if (ctx->latency_last_sample_ms != 0 &&
+	    now_ms - ctx->latency_last_sample_ms < mini_window_ms)
+		return;
+
+	for (i = 0; i < maxproc; i++) {
+		struct rpc_iostats *st = &ctx->stats[i];
+		unsigned long om_ops;
+		ktime_t om_execute;
+
+		om_ops = READ_ONCE(st->om_ops);
+		om_execute = READ_ONCE(st->om_rtt);
+		ops_sum += om_ops;
+		exec_ms_sum += ktime_to_ms(om_execute);
+	}
+
+	if (ctx->latency_last_sample_ms == 0) {
+		ctx->latency_last_sample_ms = now_ms;
+		ctx->latency_last_ops_sum = ops_sum;
+		ctx->latency_last_exec_ms_sum = exec_ms_sum;
+		return;
+	}
+
+	{
+		u64 delta_ops = ops_sum - ctx->latency_last_ops_sum;
+		s64 delta_exec_ms = exec_ms_sum - ctx->latency_last_exec_ms_sum;
+
+		if (delta_ops > 0) {
+			s64 avg_ms = div_s64(delta_exec_ms, delta_ops);
+
+			if (avg_ms >= threshold_ms)
+				enfs_latency_push_event(ctx, now_ms);
+		}
+
+		ctx->latency_last_sample_ms = now_ms;
+		ctx->latency_last_ops_sum = ops_sum;
+		ctx->latency_last_exec_ms_sum = exec_ms_sum;
+	}
+
+	enfs_latency_prune_old(ctx, now_ms);
+
+	if (enfs_latency_event_count(ctx) >= required_events) {
+		ctx->latency_unstable_active = true;
+		if (ctx->latency_unstable_enter_ms == 0)
+			ctx->latency_unstable_enter_ms = now_ms;
+	}
+
+	enum enfs_path_state curr_state = pm_get_path_state(xprt);
+
+	if (curr_state == PM_STATE_FAULT)
+		return;
+
+	if (ctx->latency_unstable_active || ctx->reconnect_unstable_active)
+		pm_set_path_state(xprt, PM_STATE_UNSTABLE);
+	else
+		pm_set_path_state(xprt, PM_STATE_NORMAL);
+}
+
+static int enfs_latency_maybe_sample_wrapper(struct rpc_clnt *clnt,
+					      struct rpc_xprt *xprt, void *data)
+{
+	enfs_latency_maybe_sample(clnt, xprt);
+	return 0;
+}
+
 static inline s8 enfs_get_next_time_idx(s8 idx)
 {
 	return (idx + 1) % (ENFS_RECONNECT_TIME_CNT + 1);
@@ -153,7 +279,7 @@ enfs_update_reconnect_time(
 
 	while (time->tail != time->head) {
 		if (now_ms - time->time[time->tail] <
-		    ENFS_UNSTABLE_STATE_TIMEOUT * 1000)
+		    enfs_get_unstable_state_timeout() * 1000)
 			break;
 		/* timed out */
 		time->tail = enfs_get_next_time_idx(time->tail);
@@ -165,13 +291,21 @@ static void enfs_check_reconnect(struct rpc_xprt *xprt)
 	struct enfs_xprt_context *ctx = NULL;
 	struct enfs_reconnect_time *time;
 	bool is_empty, is_full, is_normal;
-	enum enfs_path_state curr_state = pm_get_path_state(xprt);
+	bool is_latency_unstable;
+	enum enfs_path_state curr_state;
+
+	curr_state = pm_get_path_state(xprt);
 
 	xprt_get(xprt);
 
 	ctx = (struct enfs_xprt_context *)xprt_get_reserve_context(xprt);
 	if (ctx == NULL) {
 		enfs_log_error("The xprt multipath ctx is not valid.\n");
+		goto out;
+	}
+
+	if (enfs_get_unstable_state_timeout() == 0) {
+		ctx->reconnect_unstable_active = false;
 		goto out;
 	}
 
@@ -183,10 +317,17 @@ static void enfs_check_reconnect(struct rpc_xprt *xprt)
 	is_normal = curr_state == PM_STATE_INIT ||
 		    (is_empty && curr_state == PM_STATE_UNSTABLE) ||
 		    (!is_full && curr_state == PM_STATE_NORMAL);
+
 	if (is_normal)
-		pm_set_path_state(xprt, PM_STATE_NORMAL);
+		ctx->reconnect_unstable_active = false;
 	else
+		ctx->reconnect_unstable_active = is_full;
+
+	is_latency_unstable = ctx->latency_unstable_active;
+	if (is_latency_unstable || ctx->reconnect_unstable_active)
 		pm_set_path_state(xprt, PM_STATE_UNSTABLE);
+	else
+		pm_set_path_state(xprt, PM_STATE_NORMAL);
 
 out:
 	xprt_put(xprt);
@@ -258,7 +399,7 @@ bool enfs_test_reconnect_time(void)
 	if (!match)
 		return false;
 
-	ms = begin_ms + 5000 + ENFS_UNSTABLE_STATE_TIMEOUT * 1000 + 1;
+	ms = begin_ms + 5000 + ENFS_MAX_UNSTABLE_STATE_TIMEOUT * 1000 + 1;
 	cookie += 1;
 	enfs_log_info("%lld ms, cookie:%d\n", ms, cookie);
 	enfs_update_reconnect_time(&time, ms, cookie);
@@ -297,6 +438,30 @@ static void pm_ping_call_done(struct rpc_task *task, void *data)
 	}
 	ktime = ktime_get();
 	ctx->lastTime = ktime_to_ms(ktime);
+
+	/* unconditional recovery for latency-based unstable after configured
+	 * minutes if probe succeeds
+	 */
+	if (task->tk_status >= 0 && ctx->latency_unstable_active) {
+		s64 now_ms = ctx->lastTime;
+		s64 recover_ms = (s64)enfs_get_latency_recover_min() * 60 * 1000;
+
+		if (ctx->latency_unstable_enter_ms &&
+		    now_ms - ctx->latency_unstable_enter_ms >= recover_ms) {
+			ctx->latency_unstable_active = false;
+			ctx->latency_unstable_enter_ms = 0;
+			/* reset latency window */
+			ctx->latency_tail = ctx->latency_head = 0;
+			ctx->latency_last_sample_ms = 0;
+			ctx->latency_last_ops_sum = 0;
+			ctx->latency_last_exec_ms_sum = 0;
+
+			if (ctx->reconnect_unstable_active)
+				pm_set_path_state(xprt, PM_STATE_UNSTABLE);
+			else
+				pm_set_path_state(xprt, PM_STATE_NORMAL);
+		}
+	}
 	xprt_put(xprt);
 }
 
@@ -437,6 +602,10 @@ static void pm_ping_loop_rpclnt(struct sunrpc_net *sn)
 			enfs_log_debug("find rpc_clnt.   %p\n", clnt);
 			rpc_clnt_iterate_for_each_xprt(clnt, pm_ping_execute_xprt_test,
 							   (void *)&free_list);
+			/* latency sampling for each xprt */
+			rpc_clnt_iterate_for_each_xprt(clnt,
+						       enfs_latency_maybe_sample_wrapper,
+						       NULL);
 		}
 	}
 	spin_unlock(&sn->rpc_client_lock);

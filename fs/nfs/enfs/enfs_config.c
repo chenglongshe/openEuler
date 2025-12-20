@@ -71,6 +71,11 @@ struct enfs_config_info {
 	int32_t link_count_total;
 	int32_t native_link_io_enable;
 	int32_t create_path_no_route;
+	int32_t unstable_state_timeout;
+	int32_t latency_avg_threshold_ms;
+	int32_t latency_detect_period_min;
+	int32_t latency_mini_window_sec;
+	int32_t latency_recover_min;
 };
 
 struct enfs_config_value_info {
@@ -133,6 +138,8 @@ static int32_t enfs_check_and_assign_int_value(char *field_name, char *value,
 		  &g_enfs_config_info.native_link_io_enable },
 		{ "create_path_no_route",
 		  &g_enfs_config_info.create_path_no_route },
+		{ "unstable_state_timeout",
+		  &g_enfs_config_info.unstable_state_timeout },
 	};
 
 	int_value = enfs_check_config_value(value, min_value, max_value);
@@ -285,6 +292,12 @@ static const struct enfs_config_value_info g_check_and_assign_value[] = {
 	  MIN_ENFS_MAX_LINK_COUNT, ENFS_MAX_LINK_COUNT },
 	{ "native_link_io_enable", enfs_check_and_assign_int_value, 0, 1 },
 	{ "create_path_no_route", enfs_check_and_assign_int_value, 0, 1 },
+	{ "unstable_state_timeout", enfs_check_and_assign_int_value,
+	  0, ENFS_MAX_UNSTABLE_STATE_TIMEOUT },
+	{ "latency_avg_threshold_ms", enfs_check_and_assign_int_value, 100, 60000 },
+	{ "latency_detect_period_min", enfs_check_and_assign_int_value, 1, 120 },
+	{ "latency_mini_window_sec", enfs_check_and_assign_int_value, 10, 300 },
+	{ "latency_recover_min", enfs_check_and_assign_int_value, 1, 720 },
 };
 
 static int32_t enfs_read_config_file_in_openeuler(char *buffer, char *file_path)
@@ -437,6 +450,11 @@ int32_t enfs_config_load(void)
 	g_enfs_config_info.link_count_total = DEFAULT_ENFS_MAX_LINK_COUNT;
 	g_enfs_config_info.native_link_io_enable = 1;
 	g_enfs_config_info.create_path_no_route = 0;
+	g_enfs_config_info.unstable_state_timeout = ENFS_MAX_UNSTABLE_STATE_TIMEOUT;
+	g_enfs_config_info.latency_avg_threshold_ms = 1000;
+	g_enfs_config_info.latency_detect_period_min = 10;
+	g_enfs_config_info.latency_mini_window_sec = 30;
+	g_enfs_config_info.latency_recover_min = 30;
 
 	table_len = sizeof(g_check_and_assign_value) /
 		    sizeof(g_check_and_assign_value[0]);
@@ -534,6 +552,31 @@ int32_t enfs_get_native_link_io_status(void)
 int32_t enfs_get_create_path_no_route(void)
 {
 	return g_enfs_config_info.create_path_no_route;
+}
+
+int32_t enfs_get_unstable_state_timeout(void)
+{
+	return g_enfs_config_info.unstable_state_timeout;
+}
+
+int32_t enfs_get_latency_avg_threshold_ms(void)
+{
+	return g_enfs_config_info.latency_avg_threshold_ms;
+}
+
+int32_t enfs_get_latency_detect_period_min(void)
+{
+	return g_enfs_config_info.latency_detect_period_min;
+}
+
+int32_t enfs_get_latency_mini_window_sec(void)
+{
+	return g_enfs_config_info.latency_mini_window_sec;
+}
+
+int32_t enfs_get_latency_recover_min(void)
+{
+	return g_enfs_config_info.latency_recover_min;
 }
 
 bool enfs_check_config_wwn(uint64_t wwn)

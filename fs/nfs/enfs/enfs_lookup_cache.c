@@ -26,7 +26,7 @@ static ktime_t start_query_lookup = { 0 };
 
 static bool start_query_lookup_init;
 
-const struct rpc_procinfo enfs_lookup_cahce = { PROC(LOOKUPCACHE, lookupcache,
+const struct rpc_procinfo enfs_lookup_cache = { PROC(LOOKUPCACHE, lookupcache,
 						     lookupcache, 1) };
 
 static void encode_uint32(struct xdr_stream *xdr, u32 value)
@@ -501,6 +501,6 @@ void enfs_lookupcache_fini(void)
 int enfs_lookupcache_init(void)
 {
 	spin_lock_init(&g_lookupcache_switch_lock);
-	enfs_proc_reg(ENFSPROC_LOOKUPCACHE, &enfs_lookup_cahce);
+	enfs_proc_reg(ENFSPROC_LOOKUPCACHE, &enfs_lookup_cache);
 	return enfs_lookupcache_timer_init();
 }

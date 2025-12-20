@@ -146,7 +146,7 @@ static void enfs_proc_format_xprt_addr_display(
 				       "Unknown");
 		else {
 			if (ctx->protocol != XPRT_TRANSPORT_RDMA) {
-				sockaddr_ip_to_str((struct sockaddr *)&srcaddr,
+				sockaddr_ip_to_str((struct sockaddr *)&ctx->srcaddr,
 						   local_name_buf,
 						   local_name_buf_len);
 			} else {
