@@ -171,6 +171,12 @@ static inline struct inode *VFS_I(struct xfs_inode *ip)
 	return &ip->i_vnode;
 }
 
+/* convert from const xfs inode to const vfs inode */
+static inline const struct inode *VFS_IC(const struct xfs_inode *ip)
+{
+	return &ip->i_vnode;
+}
+
 /*
  * For regular files we only update the on-disk filesize when actually
  * writing data back to disk.  Until then only the copy in the VFS inode
@@ -320,6 +326,22 @@ static inline bool xfs_inode_has_bigrtalloc(struct xfs_inode *ip)
 #define xfs_inode_buftarg(ip) \
 	(XFS_IS_REALTIME_INODE(ip) ? \
 		(ip)->i_mount->m_rtdev_targp : (ip)->i_mount->m_ddev_targp)
+
+static inline bool xfs_inode_can_hw_atomic_write(const struct xfs_inode *ip)
+{
+	if (IS_DAX(VFS_IC(ip)))
+		return false;
+
+	return xfs_inode_buftarg(ip)->bt_bdev_awu_max > 0;
+}
+
+static inline bool xfs_inode_can_sw_atomic_write(const struct xfs_inode *ip)
+{
+	if (IS_DAX(VFS_IC(ip)))
+		return false;
+
+	return xfs_can_sw_atomic_write(ip->i_mount);
+}
 
 /*
  * In-core inode flags.
