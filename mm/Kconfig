@@ -696,6 +696,13 @@ config MIGRATION
 	  pages as migration can relocate pages to satisfy a huge page
 	  allocation instead of reclaiming.
 
+config MIGRATE_PAGES_DMA_OFFLOADING
+	bool "Support to use DMA channels for page migration"
+	depends on DMA_ENGINE
+	default y
+	help
+	  Allows kernel to use dma offloading for page migraton.
+
 config DEVICE_MIGRATION
 	def_bool MIGRATION && ZONE_DEVICE
 
