@@ -142,7 +142,6 @@ static int hisi_l3c_pmu_get_event_idx(struct perf_event *event)
 
 	ext -= 1;
 	idx = find_next_zero_bit(used_mask, L3C_CNTR_EXT_H(ext), L3C_CNTR_EXT_L(ext));
-
 	if (idx >= L3C_CNTR_EXT_H(ext))
 		return -EAGAIN;
 
@@ -375,7 +374,6 @@ static int hisi_l3c_pmu_check_filter(struct perf_event *event)
 	struct hisi_pmu *l3c_pmu = to_hisi_pmu(event->pmu);
 	struct hisi_l3c_pmu *hisi_l3c_pmu = to_hisi_l3c_pmu(l3c_pmu);
 	int ext = hisi_get_ext(event);
-
 	if (ext < 0 || ext > hisi_l3c_pmu->ext_num)
 		return -EINVAL;
 	return 0;
@@ -386,7 +384,7 @@ static int hisi_l3c_pmu_check_filter(struct perf_event *event)
  */
 static u32 hisi_l3c_pmu_get_counter_offset(int cntr_idx)
 {
-	return L3C_CNTR0_LOWER + L3C_HW_IDX(cntr_idx) * 8;
+	return L3C_CNTR0_LOWER + L3C_HW_IDX(cntr_idx) * L3C_NR_COUNTERS;
 }
 
 static u64 hisi_l3c_pmu_read_counter(struct hisi_pmu *l3c_pmu,

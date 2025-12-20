@@ -148,7 +148,7 @@ static ssize_t bus_show(struct device *dev, struct device_attribute *attr, char 
 {
 	struct hisi_pcie_pmu *pcie_pmu = to_pcie_pmu(dev_get_drvdata(dev));
 
-	return sysfs_emit(buf, "%#04x\n", PCI_BUS_NUM(pcie_pmu->bdf_min));
+	return sysfs_emit(buf, "%#04x\n", (unsigned int)PCI_BUS_NUM(pcie_pmu->bdf_min));
 }
 static DEVICE_ATTR_RO(bus);
 
@@ -716,7 +716,7 @@ static int hisi_pcie_pmu_offline_cpu(unsigned int cpu, struct hlist_node *node)
 	struct hisi_pcie_pmu *pcie_pmu = hlist_entry_safe(node, struct hisi_pcie_pmu, node);
 	unsigned int target;
 	cpumask_t mask;
-	int numa_node;
+	int dev_numa_node;
 
 	/* Nothing to do if this CPU doesn't own the PMU */
 	if (pcie_pmu->on_cpu != cpu)
@@ -725,8 +725,8 @@ static int hisi_pcie_pmu_offline_cpu(unsigned int cpu, struct hlist_node *node)
 	pcie_pmu->on_cpu = -1;
 
 	/* Choose a local CPU from all online cpus. */
-	numa_node = dev_to_node(&pcie_pmu->pdev->dev);
-	if (cpumask_and(&mask, cpumask_of_node(numa_node), cpu_online_mask) &&
+	dev_numa_node = dev_to_node(&pcie_pmu->pdev->dev);
+	if (cpumask_and(&mask, cpumask_of_node(dev_numa_node), cpu_online_mask) &&
 	    cpumask_andnot(&mask, &mask, cpumask_of(cpu)))
 		target = cpumask_any(&mask);
 	else

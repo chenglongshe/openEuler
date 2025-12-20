@@ -185,7 +185,6 @@ static void hisi_ddrc_pmu_disable_counter(struct hisi_pmu *ddrc_pmu,
 	struct hisi_ddrc_pmu_regs *regs = ddrc_pmu->dev_info->private;
 	u32 val;
 
-
 	val = readl(ddrc_pmu->base + regs->event_ctrl);
 	val &= ~BIT_ULL(hwc->idx);
 	writel(val, ddrc_pmu->base + regs->event_ctrl);
@@ -207,7 +206,6 @@ static void hisi_ddrc_pmu_disable_counter_int(struct hisi_pmu *ddrc_pmu,
 {
 	struct hisi_ddrc_pmu_regs *regs = ddrc_pmu->dev_info->private;
 	u32 val;
-
 
 	val = readl(ddrc_pmu->base + regs->int_mask);
 	val |= BIT_ULL(hwc->idx);

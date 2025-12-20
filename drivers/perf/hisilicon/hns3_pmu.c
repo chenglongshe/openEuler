@@ -489,8 +489,8 @@ static ssize_t bdf_min_show(struct device *dev, struct device_attribute *attr,
 	struct hns3_pmu *hns3_pmu = to_hns3_pmu(dev_get_drvdata(dev));
 	u16 bdf = hns3_pmu->bdf_min;
 
-	return sysfs_emit(buf, "%02x:%02x.%x\n", PCI_BUS_NUM(bdf),
-			  PCI_SLOT(bdf), PCI_FUNC(bdf));
+	return sysfs_emit(buf, "%02x:%02x.%x\n", (unsigned int)PCI_BUS_NUM(bdf),
+			  (unsigned int)PCI_SLOT(bdf), (unsigned int)PCI_FUNC(bdf));
 }
 static DEVICE_ATTR_RO(bdf_min);
 
@@ -500,8 +500,8 @@ static ssize_t bdf_max_show(struct device *dev, struct device_attribute *attr,
 	struct hns3_pmu *hns3_pmu = to_hns3_pmu(dev_get_drvdata(dev));
 	u16 bdf = hns3_pmu->bdf_max;
 
-	return sysfs_emit(buf, "%02x:%02x.%x\n", PCI_BUS_NUM(bdf),
-			  PCI_SLOT(bdf), PCI_FUNC(bdf));
+	return sysfs_emit(buf, "%02x:%02x.%x\n", (unsigned int)PCI_BUS_NUM(bdf),
+			  (unsigned int)PCI_SLOT(bdf), (unsigned int)PCI_FUNC(bdf));
 }
 static DEVICE_ATTR_RO(bdf_max);
 
@@ -1260,7 +1260,7 @@ static int hns3_pmu_event_init(struct perf_event *event)
 	idx = hns3_pmu_get_event_idx(hns3_pmu);
 	if (idx < 0) {
 		pci_err(hns3_pmu->pdev, "Up to %u events are supported!\n",
-			HNS3_PMU_MAX_HW_EVENTS);
+			(unsigned int)HNS3_PMU_MAX_HW_EVENTS);
 		return -EBUSY;
 	}
 
