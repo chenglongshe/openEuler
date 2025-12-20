@@ -405,8 +405,13 @@ void fuse_request_end(struct fuse_req *req)
 		}
 
 		fc->num_background--;
-		fuse_dec_active_bg(fc, req);
-		flush_bg_queue(fc);
+
+		if (fuse_uring_ready(fc)) {
+			fc->active_background[DEFAULT_BG_QUEUE]--;
+		} else {
+			fuse_dec_active_bg(fc, req);
+			flush_bg_queue(fc);
+		}
 		spin_unlock(&fc->bg_lock);
 	} else {
 		/* Wake up waiter sleeping in request_wait_answer() */
