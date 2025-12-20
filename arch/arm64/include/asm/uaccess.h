@@ -25,6 +25,10 @@
 #include <asm/ptrace.h>
 #include <asm/memory.h>
 #include <asm/extable.h>
+#ifdef CONFIG_NEON_COPY_USER
+#include <asm/neon.h>
+#include <asm/simd.h>
+#endif
 
 static inline int __access_ok(const void __user *ptr, unsigned long size);
 
@@ -391,6 +395,65 @@ do {									\
 	} while (0);							\
 } while(0)
 
+
+#ifdef CONFIG_NEON_COPY_USER
+extern unsigned long __must_check __arch_copy_from_user(
+	void *to, const void __user *from, unsigned long n);
+extern unsigned long __must_check __arch_copy_from_user_neon(
+	void *to, const void __user *from, unsigned long n);
+#define raw_copy_from_user(to, from, n)					\
+({										\
+	unsigned long __acfu_ret = n;		\
+	if ((n) >= 4096 && kernel_neon_copy_enabled()) {	\
+		if (may_use_simd()) {			\
+			kernel_neon_copy_begin();		\
+			uaccess_enable_privileged();	\
+			__acfu_ret = __arch_copy_from_user_neon((to),	\
+							__uaccess_mask_ptr(from), (n));	\
+			uaccess_disable_privileged();	\
+			kernel_neon_copy_end();			\
+		}							\
+	}								\
+	/* fallback to retry copy left */	\
+	if (__acfu_ret) {				\
+		uaccess_ttbr0_enable();		\
+		__acfu_ret = __arch_copy_from_user((u8 *)(to) + (n) - __acfu_ret,	\
+			__uaccess_mask_ptr((u8 __user *)(from) + (n) - __acfu_ret),	__acfu_ret);	\
+		uaccess_ttbr0_disable();	\
+	}								\
+	__acfu_ret;						\
+})
+
+extern unsigned long __must_check __arch_copy_to_user(
+	void __user *to, const void *from, unsigned long n);
+extern unsigned long __must_check __arch_copy_to_user_neon(
+	void __user *to, const void *from, unsigned long n);
+#define raw_copy_to_user(to, from, n)					\
+({										\
+	unsigned long __actu_ret = n;		\
+	if ((n) >= 4096 && kernel_neon_copy_enabled()) {	\
+		if (may_use_simd()) {			\
+			kernel_neon_copy_begin();		\
+			uaccess_enable_privileged();	\
+			__actu_ret = __arch_copy_to_user_neon(__uaccess_mask_ptr(to),	\
+							(from), (n));	\
+			uaccess_disable_privileged();	\
+			kernel_neon_copy_end();			\
+		}							\
+	}								\
+	/* fallback to retry copy left */	\
+	if (__actu_ret) {				\
+		uaccess_ttbr0_enable();		\
+		__actu_ret = __arch_copy_to_user(	\
+			__uaccess_mask_ptr((u8 __user *)(to) + (n) - __actu_ret),	\
+			(u8 *)(from)  + (n) - __actu_ret, __actu_ret);	\
+		uaccess_ttbr0_disable();	\
+	}								\
+	__actu_ret;						\
+})
+
+#else  /* CONFIG_NEON_COPY_USER */
+
 extern unsigned long __must_check __arch_copy_from_user(void *to, const void __user *from, unsigned long n);
 #define raw_copy_from_user(to, from, n)					\
 ({									\
@@ -412,6 +475,7 @@ extern unsigned long __must_check __arch_copy_to_user(void __user *to, const voi
 	uaccess_ttbr0_disable();					\
 	__actu_ret;							\
 })
+#endif  /* CONFIG_NEON_COPY_USER */
 
 static __must_check __always_inline bool user_access_begin(const void __user *ptr, size_t len)
 {

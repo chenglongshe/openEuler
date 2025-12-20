@@ -373,6 +373,16 @@ config SMP
 config KERNEL_MODE_NEON
 	def_bool y
 
+config NEON_COPY_USER
+	bool "Use NEON instructions in copy_to/from_user"
+	depends on KERNEL_MODE_NEON
+	default n
+	help
+	  This option turns on using NEON instructions to speed up copy_to/from_user
+	  routines. This implementation use st1/ld1 4-vector instrutions which allow
+	  to copy 64 bytes at once, and is used only if size of data block to copy
+	  is more than 4096 bytes.
+
 config FIX_EARLYCON_MEM
 	def_bool y
 

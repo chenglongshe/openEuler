@@ -57,9 +57,22 @@
 	stp \reg1, \reg2, [\ptr], \val
 	.endm
 
+#ifdef CONFIG_NEON_COPY_USER
+	.macro ldneon reg1, reg2, reg3, reg4, ptr, val
+	b	9997f
+	.endm
+
+	.macro stneon reg1, reg2, reg3, reg4, ptr, val
+	b	9997f
+	.endm
+#endif
+
 end	.req	x5
 SYM_FUNC_START(__memcpy_mc)
 	add	end, x0, x2
+#ifdef CONFIG_NEON_COPY_USER
+	mov	x3, #0		/* disable neon copy */
+#endif
 #include "copy_template.S"
 	mov	x0, #0				// Nothing to copy
 	ret

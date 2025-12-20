@@ -94,4 +94,21 @@ alternative_else_nop_endif
 
 		_asm_extable_uaccess	8888b, \l;
 	.endm
+
+#ifdef CONFIG_NEON_COPY_USER
+	.macro user_ldneon l, reg1, reg2, reg3, reg4, ptr, post_inc
+8888 :		ld1 {\reg1, \reg2, \reg3, \reg4}, [\ptr];
+		add		\ptr, \ptr, \post_inc;
+
+		_asm_extable_uaccess	8888b, \l;
+	.endm
+
+	.macro user_stneon l, reg1, reg2, reg3, reg4, ptr, post_inc
+8888 :		st1 {\reg1, \reg2, \reg3, \reg4}, [\ptr];
+		add		\ptr, \ptr, \post_inc;
+
+		_asm_extable_uaccess	8888b, \l;
+	.endm
+#endif
+
 #endif
