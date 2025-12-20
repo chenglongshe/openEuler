@@ -551,7 +551,8 @@ int hinic3_set_ppf_flr_type(void *hwdev, enum hinic3_ppf_flr_type flr_type)
 				    &flr_type_set, sizeof(flr_type_set),
 				    &flr_type_set, &out_size);
 	if (err || !out_size || flr_type_set.head.status) {
-		sdk_err(dev->dev_hdl, "Failed to set ppf flr type, err: %d, status: 0x%x, out size: 0x%x\n",
+		sdk_err(dev->dev_hdl,
+			"Failed to set ppf flr type, err: %d, status: 0x%x, out size: 0x%x\n",
 			err, flr_type_set.head.status, out_size);
 		return -EIO;
 	}
@@ -1554,6 +1555,71 @@ free_buf:
 	return err;
 }
 EXPORT_SYMBOL(hinic3_get_hw_pf_infos);
+
+int hinic3_get_pf_by_func(void *hwdev, u16 func_id, u8 *pf_id)
+{
+	struct comm_cmd_get_pf_by_func *pf_by_func = NULL;
+	u16 out_size = sizeof(*pf_by_func);
+	int err = 0;
+
+	if (!hwdev || !pf_id)
+		return -EINVAL;
+
+	pf_by_func = kzalloc(sizeof(*pf_by_func), GFP_KERNEL);
+	if (!pf_by_func)
+		return -ENOMEM;
+	pf_by_func->func_id = func_id;
+
+	err = comm_msg_to_mgmt_sync(hwdev, COMM_MGMT_CMD_GET_PF_BY_FUNC,
+					pf_by_func, sizeof(*pf_by_func),
+					pf_by_func, &out_size);
+	if (pf_by_func->head.status != 0 || err != 0 || out_size == 0) {
+		sdk_err(((struct hinic3_hwdev *)hwdev)->dev_hdl,
+			   "Failed to get pf by func, err: %d, status: 0x%x, out size: 0x%x\n",
+			   err, pf_by_func->head.status, out_size);
+		err = -EIO;
+		goto free_buf;
+	}
+
+	*pf_id = pf_by_func->pf_id;
+
+free_buf:
+	kfree(pf_by_func);
+	return err;
+}
+EXPORT_SYMBOL(hinic3_get_pf_by_func);
+
+int hinic3_get_pf_bus_by_dev(void *hwdev, u8 *bus_num)
+{
+	struct cmd_get_pf_bus_info_s *pf_bus_by_dev = NULL;
+	u16 out_size = sizeof(*pf_bus_by_dev);
+	int err = 0;
+
+	if (hwdev == NULL || bus_num == NULL)
+		return -EINVAL;
+
+	pf_bus_by_dev = kzalloc(sizeof(*pf_bus_by_dev), GFP_KERNEL);
+	if (pf_bus_by_dev == NULL)
+		return -ENOMEM;
+
+	err = comm_msg_to_mgmt_sync(hwdev, COMM_MGMT_CMD_GET_PF_BUS_BY_DEV,
+					pf_bus_by_dev, sizeof(*pf_bus_by_dev),
+					pf_bus_by_dev, &out_size);
+	if (pf_bus_by_dev->head.status != 0 || err != 0 || out_size == 0) {
+		sdk_err(((struct hinic3_hwdev *)hwdev)->dev_hdl,
+			   "Failed to get pf by func, err: %d, status: 0x%x, out size: 0x%x\n",
+			   err, pf_bus_by_dev->head.status, out_size);
+		err = -EIO;
+		goto free_buf;
+	}
+
+	*bus_num = pf_bus_by_dev->bus_num;
+
+free_buf:
+	kfree(pf_bus_by_dev);
+	return err;
+}
+EXPORT_SYMBOL(hinic3_get_pf_bus_by_dev);
 
 int hinic3_get_global_attr(void *hwdev, struct comm_global_attr *attr)
 {

@@ -68,6 +68,16 @@ static struct hinic3_stats hinic3_netdev_link_count[] = {
 	HINIC3_NETDEV_LINK_COUNT(link_down_events_phy),
 };
 
+#define HINIC3_CIR_DRP(_stat_item) { \
+	.name = #_stat_item, \
+	.size = FIELD_SIZEOF(struct hinic3_cir_drop, _stat_item), \
+	.offset = offsetof(struct hinic3_cir_drop, _stat_item) \
+}
+
+static struct hinic3_stats hinic3_cir_drp[] = {
+	HINIC3_CIR_DRP(rx_discard_phy),
+};
+
 #define HINIC3_NETDEV_STAT(_stat_item) { \
 	.name = #_stat_item, \
 	.size = FIELD_SIZEOF(struct rtnl_link_stats64, _stat_item), \
@@ -135,14 +145,16 @@ static struct hinic3_stats hinic3_rx_queue_stats[] = {
 	HINIC3_RXQ_STAT(dropped),
 #ifdef HAVE_XDP_SUPPORT
 	HINIC3_RXQ_STAT(xdp_dropped),
+	HINIC3_RXQ_STAT(xdp_redirected),
 #endif
 	HINIC3_RXQ_STAT(rx_buf_empty),
 };
-
 static struct hinic3_stats hinic3_rx_queue_stats_extern[] = {
 	HINIC3_RXQ_STAT(alloc_skb_err),
 	HINIC3_RXQ_STAT(alloc_rx_buf_err),
+#ifdef HAVE_XDP_SUPPORT
 	HINIC3_RXQ_STAT(xdp_large_pkt),
+#endif
 	HINIC3_RXQ_STAT(restore_drop_sge),
 	HINIC3_RXQ_STAT(rsvd2),
 };
@@ -153,6 +165,10 @@ static struct hinic3_stats hinic3_tx_queue_stats[] = {
 	HINIC3_TXQ_STAT(busy),
 	HINIC3_TXQ_STAT(wake),
 	HINIC3_TXQ_STAT(dropped),
+#ifdef HAVE_XDP_SUPPORT
+	HINIC3_TXQ_STAT(xdp_dropped),
+	HINIC3_TXQ_STAT(xdp_xmits),
+#endif
 };
 
 static struct hinic3_stats hinic3_tx_queue_stats_extern[] = {
@@ -448,14 +464,14 @@ int hinic3_get_sset_count(struct net_device *netdev, int sset)
 			ARRAY_LEN(hinic3_nic_dev_stats) +
 			ARRAY_LEN(hinic3_netdev_link_count) +
 			ARRAY_LEN(hinic3_function_stats) +
+			ARRAY_LEN(hinic3_cir_drp) +
 			(ARRAY_LEN(hinic3_tx_queue_stats) +
-			 ARRAY_LEN(hinic3_rx_queue_stats)) * q_num;
+			ARRAY_LEN(hinic3_rx_queue_stats)) * q_num;
 
 		if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev)) {
 			count += ARRAY_LEN(hinic3_port_stats);
 			count += ARRAY_LEN(g_hinic3_rsfec_stats);
 		}
-
 		return count;
 	case ETH_SS_PRIV_FLAGS:
 		return ARRAY_LEN(g_hinic_priv_flags_strings);
@@ -534,6 +550,47 @@ static u16 get_ethtool_port_stats(struct hinic3_nic_dev *nic_dev, u64 *data)
 	return i;
 }
 
+static u16 get_ethtool_cir_drop(struct hinic3_nic_dev *nic_dev, u64 *data)
+{
+	struct hinic3_cir_drop *port_stats = NULL;
+	char *p = NULL;
+	u16 i = 0, j = 0;
+	int err;
+
+	port_stats = kzalloc(sizeof(*port_stats), GFP_KERNEL);
+	if (!port_stats) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+			  "Failed to malloc port stats\n");
+		(void)memset(&data[i],
+			       0, ARRAY_LEN(hinic3_cir_drp) * sizeof(*data));
+		i = ARRAY_LEN(hinic3_cir_drp);
+		return i;
+	}
+
+	err = hinic3_get_cir_drop(nic_dev->hwdev,
+				  hinic3_global_func_id(nic_dev->hwdev),
+				  port_stats);
+	if (err) {
+		nicif_err(nic_dev, drv, nic_dev->netdev,
+			  "Failed to get CPB cir drops from fw\n");
+		(void)memset(&data[i],
+			       0, ARRAY_LEN(hinic3_cir_drp) * sizeof(*data));
+		i = ARRAY_LEN(hinic3_cir_drp);
+		kfree(port_stats);
+		return i;
+	}
+
+	for (j = 0; j < ARRAY_LEN(hinic3_cir_drp); j++, i++) {
+		p = (char *)(port_stats) + hinic3_cir_drp[j].offset;
+		data[i] = (hinic3_cir_drp[j].size ==
+				sizeof(u64)) ? *(u64 *)p : *(u32 *)p;
+	}
+
+	kfree(port_stats);
+
+	return i;
+}
+
 static u16 get_ethtool_rsfec_stats(struct hinic3_nic_dev *nic_dev, u64 *data)
 {
 	struct mag_cmd_rsfec_stats *port_stats = NULL;
@@ -545,10 +602,10 @@ static u16 get_ethtool_rsfec_stats(struct hinic3_nic_dev *nic_dev, u64 *data)
 	if (!port_stats) {
 		nicif_err(nic_dev, drv, nic_dev->netdev,
 			  "Failed to malloc port stats\n");
-	memset(&data[i], 0,
-	       ARRAY_LEN(g_hinic3_rsfec_stats) * sizeof(*data));
-	i += ARRAY_LEN(g_hinic3_rsfec_stats);
-	return i;
+		memset(&data[i], 0,
+		       ARRAY_LEN(g_hinic3_rsfec_stats) * sizeof(*data));
+		i += ARRAY_LEN(g_hinic3_rsfec_stats);
+		return i;
 	}
 
 	err = hinic3_get_phy_rsfec_stats(nic_dev->hwdev, port_stats);
@@ -579,7 +636,7 @@ void hinic3_get_ethtool_stats(struct net_device *netdev,
 #endif
 	struct hinic3_nic_stats *nic_stats = NULL;
 
-	struct hinic3_vport_stats vport_stats = { 0 };
+	struct hinic3_vport_stats vport_stats = {0};
 	u16 i = 0, j = 0;
 	char *p = NULL;
 	int err;
@@ -615,13 +672,14 @@ void hinic3_get_ethtool_stats(struct net_device *netdev,
 				     hinic3_global_func_id(nic_dev->hwdev),
 				     &vport_stats);
 	if (err)
-		nicif_err(nic_dev, drv, netdev,
-			  "Failed to get function stats from fw\n");
+		nicif_err(nic_dev, drv, netdev, "Failed to get function stats from fw\n");
 
 	for (j = 0; j < ARRAY_LEN(hinic3_function_stats); j++, i++) {
 		p = (char *)(&vport_stats) + hinic3_function_stats[j].offset;
 		data[i] = get_value_of_ptr(hinic3_function_stats[j].size, p);
 	}
+
+	i += get_ethtool_cir_drop(nic_dev, data + i);
 
 	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev)) {
 		i += get_ethtool_port_stats(nic_dev, data + i);
@@ -661,20 +719,30 @@ static u16 get_hw_stats_strings(struct hinic3_nic_dev *nic_dev, char *p)
 	u16 i, cnt = 0;
 
 	for (i = 0; i < ARRAY_LEN(hinic3_function_stats); i++) {
-		memcpy(p, hinic3_function_stats[i].name, ETH_GSTRING_LEN);
+		(void)memcpy(p,  hinic3_function_stats[i].name,
+			       ETH_GSTRING_LEN);
+		p += ETH_GSTRING_LEN;
+		cnt++;
+	}
+
+	for (i = 0; i < ARRAY_LEN(hinic3_cir_drp); i++) {
+		(void)memcpy(p, hinic3_cir_drp[i].name,
+			       ETH_GSTRING_LEN);
 		p += ETH_GSTRING_LEN;
 		cnt++;
 	}
 
 	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev)) {
 		for (i = 0; i < ARRAY_LEN(hinic3_port_stats); i++) {
-			memcpy(p, hinic3_port_stats[i].name, ETH_GSTRING_LEN);
+			(void)memcpy(p, hinic3_port_stats[i].name,
+				       ETH_GSTRING_LEN);
 			p += ETH_GSTRING_LEN;
 			cnt++;
 		}
+
 		for (i = 0; i < ARRAY_LEN(g_hinic3_rsfec_stats); i++) {
-			memcpy(p, g_hinic3_rsfec_stats[i].name,
-			       ETH_GSTRING_LEN);
+			(void)memcpy(p, g_hinic3_rsfec_stats[i].name,
+				       ETH_GSTRING_LEN);
 			p += ETH_GSTRING_LEN;
 			cnt++;
 		}

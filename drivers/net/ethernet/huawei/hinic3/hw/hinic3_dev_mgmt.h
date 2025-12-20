@@ -37,6 +37,11 @@ enum {
 	HINIC3_IN_REMOVE = 4,
 };
 
+enum {
+	HIROCE_STF_CHANGE = 0,
+	HIROCE_STF_NOT_CHANGE = 1,
+};
+
 /* Structure pcidev private */
 struct hinic3_pcidev {
 	struct pci_dev *pcidev;
@@ -82,7 +87,8 @@ struct hinic3_pcidev {
 	spinlock_t uld_lock;    /* uld_state lock */
 
 	u16 probe_fault_level;
-	u16	rsvd2;
+	u16	roce_stf_nochange : 1;
+	u16	rsvd2 : 15;
 	u64	rsvd4;
 
 	struct workqueue_struct *multi_host_mgmt_workq;

@@ -31,10 +31,9 @@ MODULE_PARM_DESC(num_qps, "Number of Queue Pairs (default=0)");
 #define MOD_PARA_VALIDATE_NUM_QPS(nic_dev, num_qps, out_qps)	do {	\
 	if ((num_qps) > (nic_dev)->max_qps)				\
 		nic_warn(&(nic_dev)->pdev->dev,				\
-		"Module Parameter %s value %u is out of range, "		\
-		"Maximum value for the device: %u, using %u\n",		 \
-		#num_qps, num_qps, (nic_dev)->max_qps,				\
-		(nic_dev)->max_qps);						\
+		"Module Parameter %s value %u is out of range, "	\
+		"Maximum value for the device: %u\n",			\
+		#num_qps, num_qps, (nic_dev)->max_qps);			\
 	if ((num_qps) > (nic_dev)->max_qps)				\
 		(out_qps) = (nic_dev)->max_qps;				\
 	else if ((num_qps) > 0)						\
@@ -289,7 +288,11 @@ static void decide_num_qps(struct hinic3_nic_dev *nic_dev)
 	if (!num_cpus)
 		num_cpus = max_num_cpus;
 
-	nic_dev->q_params.num_qps = (u16)min_t(u16, tmp_num_qps, num_cpus);
+	if (num_qps == 0)
+		nic_dev->q_params.num_qps = (u16)min_t(u16,
+						       tmp_num_qps, num_cpus);
+	else
+		nic_dev->q_params.num_qps = tmp_num_qps;
 	nic_dev->nic_vram->vram_num_qps = nic_dev->q_params.num_qps;
 	nicif_info(nic_dev, drv, nic_dev->netdev,
 		   "init num qps 1:%u 2:%u\n",

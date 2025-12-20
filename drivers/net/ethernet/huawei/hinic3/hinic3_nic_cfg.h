@@ -228,10 +228,11 @@ int hinic3_update_mac(void *hwdev, const u8 *old_mac, u8 *new_mac, u16 vlan_id,
  * @brief hinic3_get_default_mac - get default mac address
  * @param hwdev: device pointer to hwdev
  * @param mac_addr: mac address from hardware
+ * @param ether_len: the length of mac address
  * @retval zero: success
  * @retval non-zero: failure
  */
-int hinic3_get_default_mac(void *hwdev, u8 *mac_addr);
+int hinic3_get_default_mac(void *hwdev, u8 *mac_addr, int ether_len);
 
 /* *
  * @brief hinic3_set_port_mtu - set function mtu
@@ -260,6 +261,17 @@ int hinic3_get_link_state(void *hwdev, u8 *link_state);
  * @retval non-zero: failure
  */
 int hinic3_get_vport_stats(void *hwdev, u16 func_id, struct hinic3_vport_stats *stats);
+
+/* *
+ * @brief hinic3_get_cir_drop - get CPB cir drop counter
+ * @param hwdev: device pointer to hwdev
+ * @param func_id: function index
+ * @param stats: function stats
+ * @retval zero: success
+ * @retval non-zero: failure
+ */
+int hinic3_get_cir_drop(void *hwdev, u16 func_id,
+			struct hinic3_cir_drop *stats);
 
 /* *
  * @brief hinic3_notify_all_vfs_link_changed - notify to all vfs link changed
@@ -304,7 +316,8 @@ int hinic3_set_rx_vlan_offload(void *hwdev, u8 en);
  * @retval non-zero: failure
  */
 int hinic3_set_rx_lro_state(void *hwdev, u8 lro_en, u32 lro_timer,
-			    u32 lro_max_pkt_len);
+			    u32 lro_max_pkt_len, u8 soft_lro_disable,
+			    u8 hw_lro_max_len, u8 hw_lro_max_num);
 
 /* *
  * @brief hinic3_set_vf_spoofchk - set vf spoofchk

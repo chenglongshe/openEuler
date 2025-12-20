@@ -156,7 +156,8 @@ struct hinic3_nic_io {
 	u8 __iomem			*rqs_db_addr;
 
 	u16				max_vfs;
-	u16				rsvd3;
+	u8				cqe_coal_en;
+	u8				rsvd3;
 	u32				rsvd4;
 
 	struct vf_data_storage		*vf_infos;

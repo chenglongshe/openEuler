@@ -137,6 +137,14 @@
 #define HINIC3_GET_ESP_NEXT_HEAD(decry_info) \
 	RQ_CQE_DECRY_INFO_GET(decry_info, ESP_NEXT_HEAD)
 
+#define RX_CQE_COALESCE_SHIFT 31
+#define RX_CQE_COALESCE_MASK 0x1U
+
+#define RX_HW_CI_SHIFT 0
+#define RX_HW_CI_MASK 0xFFFFU
+#define HINIC3_GET_RX_HW_CI(value) \
+	(((value) >> RX_HW_CI_SHIFT) & RX_HW_CI_MASK)
+
 /* compact cqe field */
 /* cqe dw0 */
 #define RQ_COMPACT_CQE_STATUS_RXDONE_SHIFT	31

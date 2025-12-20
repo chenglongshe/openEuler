@@ -5,6 +5,7 @@
 #define MAG_MPU_CMD_DEFS_H
 
 #include "mpu_cmd_base_defs.h"
+#include "bond_common_defs.h"
 
 /* serdes cmd struct define */
 #define CMD_ARRAY_BUF_SIZE 64
@@ -480,6 +481,33 @@ enum mag_wire_type {
 	MAG_CMD_WIRE_TYPE_BACKPLANE = 0x42
 };
 
+#define MAX_NUM_OF_PATH_ULOG 128
+struct mag_cmd_monitor_mac_speed {
+	struct mgmt_msg_head head;
+
+	u32 time;
+	u32 cpu_id;
+	u8 direction;
+	u8 number;
+	u8 status;
+	u8 log_file[MAX_NUM_OF_PATH_ULOG];
+	u8 rsvd;
+};
+
+#define ETH_ALEN 6
+struct mag_cmd_bond_default_offload {
+	struct mgmt_msg_head head;
+
+	u16 func_id;
+	u16 vf_num;
+	u16 bond_id;
+	u8 enable;
+	u8 slaves;
+	u8 mac[ETH_ALEN];
+	u8 is_offload;
+	u8 sync_flag;
+};
+
 struct mag_cmd_get_xsfp_info {
 	struct mgmt_msg_head head;
 
@@ -683,7 +711,7 @@ struct mag_cmd_event_port_info {
 };
 
 struct mag_cmd_rsfec_stats {
-	u32 rx_err_lane_phy;
+	u64 rx_err_lane_phy;
 };
 
 struct mag_cmd_port_stats {
@@ -868,6 +896,31 @@ struct mag_port_stats {
 	u64 rx_unfilter_pkts_port;
 };
 
+struct mag_port_speed {
+	u64 time_stamp;
+	u64 mac_total_octs_num;
+};
+
+struct mag_speed_info {
+	u8 direction;
+	u8 length;
+	u8 rsvd0[2];
+};
+
+struct mag_cmd_port_speed_info {
+	struct mgmt_msg_head head;
+
+	u8 port_id;
+	struct mag_speed_info info;
+	u8 rsvd0[3];
+};
+
+struct mag_cmd_get_port_speed {
+	struct mgmt_msg_head head;
+
+	struct mag_port_speed *speed;
+};
+
 struct mag_cmd_port_stats_info {
 	struct mgmt_msg_head head;
 
@@ -899,6 +952,16 @@ struct mag_cmd_get_mag_cnt {
 	u8 rsvd0[2];
 
 	u32 mag_csr[128];
+};
+
+struct mag_cmd_get_rsfec_cnt {
+	struct mgmt_msg_head head;
+
+	u8 port_id;
+	u8 len;
+	u8 rsvd0[2];
+
+	u64 rx_err_lane;
 };
 
 struct mag_cmd_dump_antrain_info {

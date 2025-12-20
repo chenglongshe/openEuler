@@ -554,7 +554,7 @@ int hinic3_msg_to_mgmt_api_chain_sync(void *hwdev, u8 mod, u16 cmd,
 
 	if (!COMM_SUPPORT_API_CHAIN((struct hinic3_hwdev *)hwdev)) {
 		sdk_err(((struct hinic3_hwdev *)hwdev)->dev_hdl,
-			"PF don't support api chain\n");
+			"PF doesn't support api chain\n");
 		return -EPERM;
 	}
 
@@ -573,11 +573,11 @@ int hinic3_msg_to_mgmt_api_chain_async(void *hwdev, u8 mod, u16 cmd,
 	if (hinic3_func_type(hwdev) == TYPE_VF) {
 		err = -EFAULT;
 		sdk_err(((struct hinic3_hwdev *)hwdev)->dev_hdl,
-			"VF don't support async cmd\n");
+			"VF doesn't support async cmd\n");
 	} else if (!COMM_SUPPORT_API_CHAIN((struct hinic3_hwdev *)hwdev)) {
 		err = -EPERM;
 		sdk_err(((struct hinic3_hwdev *)hwdev)->dev_hdl,
-			"PF don't support api chain\n");
+			"PF doesn't support api chain\n");
 	} else {
 		err = hinic3_pf_to_mgmt_async(hwdev, mod, cmd, buf_in, in_size);
 	}

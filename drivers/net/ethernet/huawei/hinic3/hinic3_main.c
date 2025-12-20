@@ -85,6 +85,14 @@ MODULE_PARM_DESC(page_pool_enabled, "enable/disable page_pool feature for rxq pa
 #define HINIC3_SQ_DEPTH			1024
 #define HINIC3_RQ_DEPTH			1024
 
+static u32 rq_depth = HINIC3_RQ_DEPTH;
+module_param(rq_depth, uint, 0444);
+MODULE_PARM_DESC(rq_depth, "Set rq_depth, must be [128-16384], default is 1024");
+
+static u32 sq_depth = HINIC3_SQ_DEPTH;
+module_param(sq_depth, uint, 0444);
+MODULE_PARM_DESC(sq_depth, "Set sq_depth, must be [128-65536], default is 1024");
+
 #define LRO_ENABLE 1
 
 enum hinic3_rx_buff_len {
@@ -185,13 +193,8 @@ static int hinic3_netdev_event(struct notifier_block *notifier,
 			ndev->vlan_features &= (~HINIC3_VLAN_CLEAR_OFFLOAD);
 		} else if (vlan_depth > HINIC3_MAX_VLAN_DEPTH_OFFLOAD_SUPPORT) {
 #ifdef HAVE_NDO_SET_FEATURES
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-			set_netdev_hw_features(ndev,
-					       get_netdev_hw_features(ndev) &
-					       (~HINIC3_VLAN_CLEAR_OFFLOAD));
-#else
+
 			ndev->hw_features &= (~HINIC3_VLAN_CLEAR_OFFLOAD);
-#endif
 #endif
 			ndev->features &= (~HINIC3_VLAN_CLEAR_OFFLOAD);
 		}
@@ -293,19 +296,10 @@ static void netdev_feature_init(struct net_device *netdev)
 		netdev->vlan_features |= NETIF_F_LRO;
 	}
 
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-	hw_features |= get_netdev_hw_features(netdev);
-#else
 	hw_features |= netdev->hw_features;
-#endif
-
 	hw_features |= netdev->features;
 
-#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
-	set_netdev_hw_features(netdev, hw_features);
-#else
 	netdev->hw_features = hw_features;
-#endif
 
 #ifdef IFF_UNICAST_FLT
 	netdev->priv_flags |= IFF_UNICAST_FLT;
@@ -451,6 +445,9 @@ static void hinic3_sw_deinit(struct hinic3_nic_dev *nic_dev)
 		       hinic3_global_func_id(nic_dev->hwdev),
 		       HINIC3_CHANNEL_NIC);
 
+	hinic3_cmd_vf_lag(nic_dev->hwdev, hinic3_global_func_id(nic_dev->hwdev),
+			  HINIC3_CHANNEL_NIC);
+
 	hinic3_clear_rss_config(nic_dev);
 
 	hinic3_dcb_deinit(nic_dev);
@@ -476,7 +473,7 @@ static int hinic3_set_default_mac(struct hinic3_nic_dev *nic_dev)
 	u8 mac_addr[ETH_ALEN];
 	int err = 0;
 
-	err = hinic3_get_default_mac(nic_dev->hwdev, mac_addr);
+	err = hinic3_get_default_mac(nic_dev->hwdev, mac_addr, ETH_ALEN);
 	if (err) {
 		nic_err(&nic_dev->pdev->dev, "Failed to get MAC address\n");
 		return err;
@@ -486,13 +483,13 @@ static int hinic3_set_default_mac(struct hinic3_nic_dev *nic_dev)
 
 	if (!is_valid_ether_addr(netdev->dev_addr)) {
 		if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev)) {
-			nic_err(&nic_dev->pdev->dev, "Invalid MAC address %pM\n",
-			netdev->dev_addr);
+			nic_err(&nic_dev->pdev->dev,
+				"Invalid MAC address %pM\n",
+				netdev->dev_addr);
 			return -EIO;
-	}
+		}
 
-		nic_info(&nic_dev->pdev->dev,
-			 "Invalid MAC address %pM, using random\n",
+		nic_info(&nic_dev->pdev->dev, "Invalid MAC address %pM, using random\n",
 			 netdev->dev_addr);
 		eth_hw_addr_random(netdev);
 	}
@@ -506,11 +503,37 @@ static int hinic3_set_default_mac(struct hinic3_nic_dev *nic_dev)
 	 */
 	if (err && err != HINIC3_PF_SET_VF_ALREADY)
 		nic_err(&nic_dev->pdev->dev, "Failed to set default MAC\n");
-
 	if (err == HINIC3_PF_SET_VF_ALREADY)
 		return 0;
 
 	return err;
+}
+
+static void hinic3_set_sq_rq_depth(struct hinic3_nic_dev *nic_dev)
+{
+	u32 new_sq_depth, new_rq_depth;
+
+	nic_dev->q_params.sq_depth = HINIC3_SQ_DEPTH;
+	nic_dev->q_params.rq_depth = HINIC3_RQ_DEPTH;
+	if (sq_depth > HINIC3_MAX_TX_QUEUE_DEPTH ||
+	    sq_depth < HINIC3_MIN_QUEUE_DEPTH) {
+		nic_warn(&nic_dev->pdev->dev,
+		   "tx queue depth out of range tx[%d-%d], use default value\n",
+		    HINIC3_MIN_QUEUE_DEPTH, HINIC3_MAX_TX_QUEUE_DEPTH);
+	} else {
+		new_sq_depth = (u32)(1U << (u16)ilog2(sq_depth));
+		nic_dev->q_params.sq_depth = new_sq_depth;
+	}
+
+	if (rq_depth > HINIC3_MAX_RX_QUEUE_DEPTH ||
+	    rq_depth < HINIC3_MIN_QUEUE_DEPTH) {
+		nic_warn(&nic_dev->pdev->dev,
+		   "rx queue depth out of range rx[%d-%d], use default value\n",
+		    HINIC3_MIN_QUEUE_DEPTH, HINIC3_MAX_RX_QUEUE_DEPTH);
+	} else {
+		new_rq_depth = (u32)(1U << (u16)ilog2(rq_depth));
+		nic_dev->q_params.rq_depth = new_rq_depth;
+	}
 }
 
 static void hinic3_outband_cfg_init(struct hinic3_nic_dev *nic_dev)
@@ -550,8 +573,7 @@ static int hinic3_sw_init(struct hinic3_nic_dev *nic_dev)
 		return -EFAULT;
 	}
 
-	nic_dev->q_params.sq_depth = HINIC3_SQ_DEPTH;
-	nic_dev->q_params.rq_depth = HINIC3_RQ_DEPTH;
+	hinic3_set_sq_rq_depth(nic_dev);
 
 	hinic3_try_to_enable_rss(nic_dev);
 
@@ -1142,16 +1164,31 @@ static void nic_remove(struct hinic3_lld_dev *lld_dev, void *adapter)
 {
 	struct hinic3_nic_dev *nic_dev = adapter;
 	struct net_device *netdev = NULL;
+#ifdef HIUDK_SDK
+	int is_use_vram = get_use_vram_flag();
+#endif
 
 	if (!nic_dev || !hinic3_support_nic(lld_dev->hwdev, NULL))
 		return;
 
 	nic_info(&lld_dev->pdev->dev, "NIC service remove begin\n");
 
+#ifdef HAVE_XDP_SUPPORT
+	nic_dev->remove_flag = true;
+#endif
 	netdev = nic_dev->netdev;
 
-	if (lld_dev->pdev->subsystem_device != BIFUR_RESOURCE_PF_SSID)
+	if (lld_dev->pdev->subsystem_device != BIFUR_RESOURCE_PF_SSID) {
+		/* The kernel function deregisters the network device and
+		 * releases related resources such as queues and mounted XDP
+		 * programs.
+		 */
 		unregister_netdev(netdev);
+	}
+
+#ifdef HAVE_XDP_SUPPORT
+	nic_dev->remove_flag = false;
+#endif
 
 #ifdef HAVE_MULTI_VLAN_OFFLOAD_EN
 	hinic3_unregister_notifier(nic_dev);
@@ -1159,6 +1196,7 @@ static void nic_remove(struct hinic3_lld_dev *lld_dev, void *adapter)
 
 	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev))
 		cancel_delayed_work_sync(&nic_dev->vport_stats_work);
+
 	cancel_delayed_work_sync(&nic_dev->periodic_work);
 	cancel_delayed_work_sync(&nic_dev->rxq_check_work);
 	cancel_work_sync(&nic_dev->rx_mode_work);
@@ -1168,6 +1206,9 @@ static void nic_remove(struct hinic3_lld_dev *lld_dev, void *adapter)
 
 	if (hinic3_get_bond_create_mode(lld_dev->hwdev) != 0)
 		hinic3_bond_deinit(nic_dev);
+
+	if (!HINIC3_FUNC_IS_VF(nic_dev->hwdev))
+		hinic3_bond_flush_workqueue(nic_dev->hwdev);
 
 	hinic3_update_nic_feature(nic_dev->hwdev, 0);
 	hinic3_set_nic_feature_to_hw(nic_dev->hwdev);
@@ -1180,7 +1221,20 @@ static void nic_remove(struct hinic3_lld_dev *lld_dev, void *adapter)
 	kfree(nic_dev->vlan_bitmap);
 	nic_dev->vlan_bitmap = NULL;
 
+#ifdef HIUDK_SDK
+	if (is_use_vram != 0)
+		hi_vram_kfree((void *)nic_dev->nic_vram, nic_dev->nic_vram_name,
+			      sizeof(struct hinic3_vram));
+	else
+		kfree(nic_dev->nic_vram);
+#endif
+
 	free_netdev(netdev);
+
+#ifdef HIUDK_SDK
+	if (is_use_vram != 0)
+		hiudk_unregister_flush_fn(lld_dev);
+#endif
 
 	nic_info(&lld_dev->pdev->dev, "NIC service removed\n");
 }
