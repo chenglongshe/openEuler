@@ -1955,6 +1955,7 @@ static void identify_cpu(struct cpuinfo_x86 *c)
 	 * reinit x86_vfm in case anything changed.
 	 */
 	init_cpu_x86_vfm(c);
+	bus_lock_init();
 
 	/* Disable the PN if appropriate */
 	squash_the_stupid_serial_number(c);
