@@ -220,6 +220,7 @@ static unsigned int sysctl_numa_balancing_promote_rate_limit = 65536;
  * (default: 85%), units: percentage of CPU utilization)
  */
 int sysctl_sched_util_low_pct = 85;
+unsigned int sysctl_dynamic_affinity_cluster_sched;
 #endif
 
 #ifdef CONFIG_QOS_SCHED_SMART_GRID
@@ -289,6 +290,15 @@ static struct ctl_table sched_fair_sysctls[] = {
 		.proc_handler   = proc_dointvec_minmax,
 		.extra1         = SYSCTL_ZERO,
 		.extra2		= SYSCTL_ONE_HUNDRED,
+	},
+	{
+		.procname	= "dynamic_affinity_cluster_sched",
+		.data		= &sysctl_dynamic_affinity_cluster_sched,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= SYSCTL_ONE,
 	},
 #endif
 #ifdef CONFIG_QOS_SCHED_PRIO_LB
@@ -9457,6 +9467,24 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 		new_cpu = idlest_cpu;
 		schedstat_inc(p->stats.nr_wakeups_force_preferred_cpus);
 	}
+	if (sysctl_dynamic_affinity_cluster_sched && prefer_cpus_valid(p)) {
+		if (!cpumask_test_cpu(new_cpu, task_prefer_cpus(p)) && new_cpu != prev_cpu) {
+			int prefer_cpu = cpumask_any(task_prefer_cpus(p));
+			unsigned long prefer_util = cpu_util_without(prefer_cpu, p);
+			unsigned long new_util = cpu_util_cfs(new_cpu);
+			if (prefer_util <= new_util) {
+				new_cpu = prefer_cpu;
+			} else if (prefer_util > new_util &&
+				   (prefer_util - new_util) * 100 < capacity_of(prev_cpu) *
+				   (100 - sysctl_sched_util_low_pct) / 2) {
+				new_cpu = prefer_cpu;
+			} else {
+				if (prev_cpu != prefer_cpu) {
+					new_cpu = prefer_cpu;
+				}
+			}
+		}
+	}
 #endif
 	return new_cpu;
 }
@@ -10845,6 +10873,43 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		return 0;
 
 #ifdef CONFIG_QOS_SCHED_DYNAMIC_AFFINITY
+	if (sysctl_dynamic_affinity_cluster_sched) {
+		int cluster_sibling;
+		int cluster_flag = 0;
+		int cluster_idle_core_flag = 0;
+
+		for_each_cpu(cluster_sibling, cpu_clustergroup_mask(env->src_cpu)) {
+			if (cluster_sibling == env->dst_cpu) {
+				cluster_flag = 1;
+				break;
+			}
+			if (!cpumask_test_cpu(cluster_sibling, cpu_smt_mask(env->src_cpu)) &&
+				idle_cpu(cluster_sibling) && is_core_idle(cluster_sibling))
+				cluster_idle_core_flag = 1;
+		}
+		if (cluster_flag == 0 && cluster_idle_core_flag == 1) {
+			return 0;
+		}
+
+		if (prefer_cpus_valid(p)) {
+			unsigned long src_util_sum = 0;
+			unsigned long dst_util_sum = 0;
+			unsigned long tg_capacity = 0;
+			int cpu;
+			for_each_cpu(cpu, cpu_smt_mask(env->src_cpu)) {
+				src_util_sum += cpu_util_without(cpu, p);
+				tg_capacity += capacity_of(cpu);
+			}
+			for_each_cpu(cpu, cpu_smt_mask(env->dst_cpu)) {
+				dst_util_sum += cpu_util_cfs(cpu);
+			}
+			if (src_util_sum <= dst_util_sum ||
+			    (src_util_sum - dst_util_sum) * 100 < tg_capacity *
+			    (100 - sysctl_sched_util_low_pct) / 2) {
+				return 0;
+			}
+		}
+	}
 	set_task_select_cpus(p, NULL, 0);
 	if (!cpumask_test_cpu(env->dst_cpu, p->select_cpus)) {
 #else
