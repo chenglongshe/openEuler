@@ -107,6 +107,13 @@ static u32 log_debug_switch;
 module_param(log_debug_switch, uint, 0644);
 MODULE_PARM_DESC(log_debug_switch, "set log state, default zero for switch off");
 
+static bool threaded_irq  = true;
+module_param(threaded_irq, bool, 0444);
+MODULE_PARM_DESC(threaded_irq, "use threaded irq for io queue, default on");
+
+static u32 poll_delay_min = 9;
+static u32 poll_delay_max = 19;
+
 static int extra_pool_num_set(const char *val, const struct kernel_param *kp)
 {
 	u8 n = 0;
@@ -152,7 +159,7 @@ static struct workqueue_struct *work_queue;
 			__func__, ##__VA_ARGS__);	\
 } while (0)
 
-#define HIRAID_DRV_VERSION	"1.1.0.1"
+#define HIRAID_DRV_VERSION	"1.1.0.2"
 
 #define ADMIN_TIMEOUT		(admin_tmout * HZ)
 #define USRCMD_TIMEOUT		(180 * HZ)
@@ -1305,6 +1312,7 @@ initq:
 	hiraidq->q_depth = depth;
 	hiraidq->qid = qid;
 	hiraidq->cq_vector = -1;
+	hiraidq->pci_irq = -1;
 	hdev->queue_count++;
 
 	return 0;
@@ -1631,6 +1639,39 @@ static irqreturn_t hiraid_handle_irq(int irq, void *data)
 	return ret;
 }
 
+static irqreturn_t hiraid_io_poll(int irq, void *data)
+{
+	struct hiraid_queue *hiraidq = data;
+	irqreturn_t ret = IRQ_NONE;
+	u16 start, end;
+
+	do {
+		spin_lock(&hiraidq->cq_lock);
+		hiraid_process_cq(hiraidq, &start, &end, -1);
+		hiraidq->last_cq_head = hiraidq->cq_head;
+		spin_unlock(&hiraidq->cq_lock);
+
+		if (start != end) {
+			hiraid_complete_cqes(hiraidq, start, end);
+			ret = IRQ_HANDLED;
+		}
+		usleep_range(poll_delay_min, poll_delay_max);
+	} while (start != end);
+	enable_irq(hiraidq->pci_irq);
+	return ret;
+}
+
+static irqreturn_t hiraid_io_irq(int irq, void *data)
+{
+	struct hiraid_queue *q = data;
+
+	if (hiraid_cqe_pending(q)) {
+		disable_irq_nosync(q->pci_irq);
+		return IRQ_WAKE_THREAD;
+	}
+	return IRQ_NONE;
+}
+
 static int hiraid_setup_admin_queue(struct hiraid_dev *hdev)
 {
 	struct hiraid_queue *adminq = &hdev->queues[0];
@@ -1666,9 +1707,11 @@ static int hiraid_setup_admin_queue(struct hiraid_dev *hdev)
 			      adminq, "hiraid%d_q%d", hdev->instance, adminq->qid);
 	if (ret) {
 		adminq->cq_vector = -1;
+		adminq->pci_irq = -1;
 		return ret;
 	}
 
+	adminq->pci_irq = pci_irq_vector(hdev->pdev, adminq->cq_vector);
 	hiraid_init_queue(adminq, 0);
 
 	dev_info(hdev->dev, "setup admin queue success, queuecount[%d] online[%d] pagesize[%d]\n",
@@ -1937,14 +1980,23 @@ static int hiraid_create_queue(struct hiraid_queue *hiraidq, u16 qid)
 		goto delete_cq;
 
 	hiraidq->cq_vector = cq_vector;
-	ret = pci_request_irq(hdev->pdev, cq_vector, hiraid_handle_irq, NULL,
-			      hiraidq, "hiraid%d_q%d", hdev->instance, qid);
+
+	if (threaded_irq)
+		ret = pci_request_irq(hdev->pdev, cq_vector, hiraid_io_irq,
+			 hiraid_io_poll, hiraidq, "hiraid%d_q%d",
+			 hdev->instance, qid);
+	else
+		ret = pci_request_irq(hdev->pdev, cq_vector, hiraid_handle_irq,
+			 NULL, hiraidq, "hiraid%d_q%d",
+			 hdev->instance, qid);
 	if (ret) {
 		hiraidq->cq_vector = -1;
+		hiraidq->pci_irq = -1;
 		dev_err(hdev->dev, "request queue[%d] irq failed\n", qid);
 		goto delete_sq;
 	}
 
+	hiraidq->pci_irq = pci_irq_vector(hdev->pdev, hiraidq->cq_vector);
 	hiraid_init_queue(hiraidq, qid);
 
 	return 0;
@@ -2094,10 +2146,12 @@ static int hiraid_setup_io_queues(struct hiraid_dev *hdev)
 			adminq, "hiraid%d_q%d", hdev->instance, adminq->qid);
 	if (ret) {
 		dev_err(hdev->dev, "request admin irq failed\n");
+		adminq->pci_irq = -1;
 		adminq->cq_vector = -1;
 		return ret;
 	}
 
+	adminq->pci_irq = pci_irq_vector(hdev->pdev, adminq->cq_vector);
 	hdev->online_queues++;
 
 	for (i = hdev->queue_count; i <= hdev->max_qid; i++) {
