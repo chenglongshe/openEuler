@@ -683,6 +683,7 @@ struct hiraid_queue {
 	atomic_t inflight;
 	void *sense_buffer_virt;
 	dma_addr_t sense_buffer_phy;
+	s32 pci_irq;
 	struct dma_pool *prp_small_pool;
 };
 
