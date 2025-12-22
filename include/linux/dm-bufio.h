@@ -71,6 +71,8 @@ void *dm_bufio_read(struct dm_bufio_client *c, sector_t block,
 void *dm_bufio_get(struct dm_bufio_client *c, sector_t block,
 		   struct dm_buffer **bp);
 
+void dm_setup_buffer_cache(struct dm_bufio_client *bc, unsigned long block);
+
 /*
  * Like dm_bufio_read, but don't read anything from the disk.  It is
  * expected that the caller initializes the buffer and marks it dirty.
@@ -138,6 +140,8 @@ int dm_bufio_issue_discard(struct dm_bufio_client *c, sector_t block, sector_t c
  * does nothing.
  */
 void dm_bufio_forget(struct dm_bufio_client *c, sector_t block);
+
+void dm_move_cache(struct dm_bufio_client *bc, unsigned long block);
 
 /*
  * Free the given range of buffers.

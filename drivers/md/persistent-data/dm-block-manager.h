@@ -35,7 +35,9 @@ struct dm_block_manager;
 struct dm_block_manager *dm_block_manager_create(
 	struct block_device *bdev, unsigned int block_size,
 	unsigned int max_held_per_thread);
+void dm_move_bm_cache(struct dm_block_manager *bm, unsigned long block);
 void dm_block_manager_destroy(struct dm_block_manager *bm);
+void dm_setup_bm_cache(struct dm_block_manager *bm, unsigned long block);
 void dm_block_manager_reset(struct dm_block_manager *bm);
 
 unsigned int dm_bm_block_size(struct dm_block_manager *bm);
