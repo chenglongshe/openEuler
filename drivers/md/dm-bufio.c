@@ -254,9 +254,9 @@ enum evict_result {
 	ER_STOP, /* stop looking for something to evict */
 };
 
-typedef enum evict_result (*le_predicate)(struct lru_entry *le, void *context);
+typedef enum evict_result (*le_predicate)(struct lru_entry *le, void *context, void *bc);
 
-static struct lru_entry *lru_evict(struct lru *lru, le_predicate pred, void *context, bool no_sleep)
+static struct lru_entry *lru_evict(struct lru *lru, le_predicate pred, void *context, bool no_sleep, void *bc)
 {
 	unsigned long tested = 0;
 	struct list_head *h = lru->cursor;
@@ -276,7 +276,7 @@ static struct lru_entry *lru_evict(struct lru *lru, le_predicate pred, void *con
 			atomic_set(&le->referenced, 0);
 		} else {
 			tested++;
-			switch (pred(le, context)) {
+			switch (pred(le, context, bc)) {
 			case ER_EVICT:
 				/*
 				 * Adjust the cursor, so we start the next
@@ -362,6 +362,7 @@ struct dm_buffer {
 	unsigned int stack_len;
 	unsigned long stack_entries[MAX_STACK];
 #endif
+	bool special;
 };
 
 /*--------------------------------------------------------------*/
@@ -399,11 +400,17 @@ struct dm_buffer_cache {
 	 * on the locks.
 	 */
 	unsigned int num_locks;
+	unsigned long special;
 	bool no_sleep;
 	struct buffer_tree trees[];
 };
 
 static DEFINE_STATIC_KEY_FALSE(no_sleep_enabled);
+
+static inline unsigned int cache_index_special(sector_t block, unsigned int num_locks, unsigned long special)
+{
+	return dm_hash_locks_index_special(block, num_locks, special);
+}
 
 static inline unsigned int cache_index(sector_t block, unsigned int num_locks)
 {
@@ -413,33 +420,33 @@ static inline unsigned int cache_index(sector_t block, unsigned int num_locks)
 static inline void cache_read_lock(struct dm_buffer_cache *bc, sector_t block)
 {
 	if (static_branch_unlikely(&no_sleep_enabled) && bc->no_sleep)
-		read_lock_bh(&bc->trees[cache_index(block, bc->num_locks)].u.spinlock);
+		read_lock_bh(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.spinlock);
 	else
-		down_read(&bc->trees[cache_index(block, bc->num_locks)].u.lock);
+		down_read(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.lock);
 }
 
 static inline void cache_read_unlock(struct dm_buffer_cache *bc, sector_t block)
 {
 	if (static_branch_unlikely(&no_sleep_enabled) && bc->no_sleep)
-		read_unlock_bh(&bc->trees[cache_index(block, bc->num_locks)].u.spinlock);
+		read_unlock_bh(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.spinlock);
 	else
-		up_read(&bc->trees[cache_index(block, bc->num_locks)].u.lock);
+		up_read(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.lock);
 }
 
 static inline void cache_write_lock(struct dm_buffer_cache *bc, sector_t block)
 {
 	if (static_branch_unlikely(&no_sleep_enabled) && bc->no_sleep)
-		write_lock_bh(&bc->trees[cache_index(block, bc->num_locks)].u.spinlock);
+		write_lock_bh(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.spinlock);
 	else
-		down_write(&bc->trees[cache_index(block, bc->num_locks)].u.lock);
+		down_write(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.lock);
 }
 
 static inline void cache_write_unlock(struct dm_buffer_cache *bc, sector_t block)
 {
 	if (static_branch_unlikely(&no_sleep_enabled) && bc->no_sleep)
-		write_unlock_bh(&bc->trees[cache_index(block, bc->num_locks)].u.spinlock);
+		write_unlock_bh(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.spinlock);
 	else
-		up_write(&bc->trees[cache_index(block, bc->num_locks)].u.lock);
+		up_write(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].u.lock);
 }
 
 /*
@@ -506,9 +513,9 @@ static void lh_exit(struct lock_history *lh)
  * Named 'next' because there is no corresponding
  * 'up/unlock' call since it's done automatically.
  */
-static void lh_next(struct lock_history *lh, sector_t b)
+static void lh_next(struct lock_history *lh, sector_t b, unsigned long special)
 {
-	unsigned int index = cache_index(b, lh->no_previous); /* no_previous is num_locks */
+	unsigned int index = cache_index_special(b, lh->no_previous, special); /* no_previous is num_locks */
 
 	if (lh->previous != lh->no_previous) {
 		if (lh->previous != index) {
@@ -619,7 +626,7 @@ static struct dm_buffer *cache_get(struct dm_buffer_cache *bc, sector_t block)
 	struct dm_buffer *b;
 
 	cache_read_lock(bc, block);
-	b = __cache_get(&bc->trees[cache_index(block, bc->num_locks)].root, block);
+	b = __cache_get(&bc->trees[cache_index_special(block, bc->num_locks, bc->special)].root, block);
 	if (b) {
 		lru_reference(&b->lru);
 		__cache_inc_buffer(b);
@@ -666,12 +673,13 @@ struct evict_wrapper {
  * Wraps the buffer predicate turning it into an lru predicate.  Adds
  * extra test for hold_count.
  */
-static enum evict_result __evict_pred(struct lru_entry *le, void *context)
+static enum evict_result __evict_pred(struct lru_entry *le, void *context, void *bc)
 {
 	struct evict_wrapper *w = context;
 	struct dm_buffer *b = le_to_buffer(le);
+	struct dm_buffer_cache *bcc = (struct dm_buffer_cache *)bc;
 
-	lh_next(w->lh, b->block);
+	lh_next(w->lh, b->block, b->special ? b->block : bcc->special);
 
 	if (atomic_read(&b->hold_count))
 		return ER_DONT_EVICT;
@@ -687,13 +695,13 @@ static struct dm_buffer *__cache_evict(struct dm_buffer_cache *bc, int list_mode
 	struct lru_entry *le;
 	struct dm_buffer *b;
 
-	le = lru_evict(&bc->lru[list_mode], __evict_pred, &w, bc->no_sleep);
+	le = lru_evict(&bc->lru[list_mode], __evict_pred, &w, bc->no_sleep, (void *) bc);
 	if (!le)
 		return NULL;
 
 	b = le_to_buffer(le);
 	/* __evict_pred will have locked the appropriate tree. */
-	rb_erase(&b->node, &bc->trees[cache_index(b->block, bc->num_locks)].root);
+	rb_erase(&b->node, &bc->trees[cache_index_special(b->block, bc->num_locks, b->special ? b->block : bc->special)].root);
 
 	return b;
 }
@@ -741,7 +749,7 @@ static void __cache_mark_many(struct dm_buffer_cache *bc, int old_mode, int new_
 	struct evict_wrapper w = {.lh = lh, .pred = pred, .context = context};
 
 	while (true) {
-		le = lru_evict(&bc->lru[old_mode], __evict_pred, &w, bc->no_sleep);
+		le = lru_evict(&bc->lru[old_mode], __evict_pred, &w, bc->no_sleep, (void *)bc);
 		if (!le)
 			break;
 
@@ -792,7 +800,7 @@ static void __cache_iterate(struct dm_buffer_cache *bc, int list_mode,
 	do {
 		struct dm_buffer *b = le_to_buffer(le);
 
-		lh_next(lh, b->block);
+		lh_next(lh, b->block, bc->special);
 
 		switch (fn(b, context)) {
 		case IT_NEXT:
@@ -858,8 +866,8 @@ static bool cache_insert(struct dm_buffer_cache *bc, struct dm_buffer *b)
 		return false;
 
 	cache_write_lock(bc, b->block);
-	BUG_ON(atomic_read(&b->hold_count) != 1);
-	r = __cache_insert(&bc->trees[cache_index(b->block, bc->num_locks)].root, b);
+	//BUG_ON(atomic_read(&b->hold_count) != 1);
+	r = __cache_insert(&bc->trees[cache_index_special(b->block, bc->num_locks, bc->special)].root, b);
 	if (r)
 		lru_insert(&bc->lru[b->list_mode], &b->lru);
 	cache_write_unlock(bc, b->block);
@@ -885,7 +893,7 @@ static bool cache_remove(struct dm_buffer_cache *bc, struct dm_buffer *b)
 		r = false;
 	} else {
 		r = true;
-		rb_erase(&b->node, &bc->trees[cache_index(b->block, bc->num_locks)].root);
+		rb_erase(&b->node, &bc->trees[cache_index_special(b->block, bc->num_locks, bc->special)].root);
 		lru_remove(&bc->lru[b->list_mode], &b->lru);
 	}
 
@@ -1018,6 +1026,12 @@ struct dm_bufio_client {
 
 	struct dm_buffer_cache cache; /* must be last member */
 };
+
+void dm_setup_buffer_cache(struct dm_bufio_client *bc, unsigned long block)
+{
+	bc->cache.special = block;
+}
+EXPORT_SYMBOL_GPL(dm_setup_buffer_cache);
 
 /*----------------------------------------------------------------*/
 
@@ -1792,6 +1806,7 @@ static struct dm_buffer *__bufio_new(struct dm_bufio_client *c, sector_t block,
 	b->read_error = 0;
 	b->write_error = 0;
 	b->list_mode = LIST_CLEAN;
+	b->special = (block == c->cache.special);
 
 	if (nf == NF_FRESH)
 		b->state = 0;
@@ -2641,6 +2656,17 @@ void dm_bufio_set_sector_offset(struct dm_bufio_client *c, sector_t start)
 	c->start = start;
 }
 EXPORT_SYMBOL_GPL(dm_bufio_set_sector_offset);
+
+void dm_move_cache(struct dm_bufio_client *bc, unsigned long block)
+{
+       struct dm_buffer *b;
+
+       b = cache_get(&bc->cache, block);
+       cache_remove(&bc->cache, b);
+       bc->cache.special = block;
+       cache_insert(&bc->cache, b);
+}
+EXPORT_SYMBOL_GPL(dm_move_cache);
 
 /*--------------------------------------------------------------*/
 

@@ -414,6 +414,17 @@ bad:
 }
 EXPORT_SYMBOL_GPL(dm_block_manager_create);
 
+void dm_setup_bm_cache(struct dm_block_manager *bm, unsigned long block)
+{
+	dm_setup_buffer_cache(bm->bufio, block);
+}
+EXPORT_SYMBOL_GPL(dm_setup_bm_cache);
+
+void dm_move_bm_cache(struct dm_block_manager *bm, unsigned long block)
+{
+       dm_move_cache(bm->bufio, block);
+}
+
 void dm_block_manager_destroy(struct dm_block_manager *bm)
 {
 	dm_bufio_client_destroy(bm->bufio);
