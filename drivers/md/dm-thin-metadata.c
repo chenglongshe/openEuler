@@ -747,6 +747,7 @@ static int __open_metadata(struct dm_pool_metadata *pmd)
 	 * root to avoid accessing broken btree.
 	 */
 	pmd->root = le64_to_cpu(disk_super->data_mapping_root);
+	dm_setup_bm_cache(pmd->bm, pmd->root);
 	pmd->details_root = le64_to_cpu(disk_super->device_details_root);
 
 	__setup_btree_details(pmd);
@@ -837,6 +838,7 @@ static int __begin_transaction(struct dm_pool_metadata *pmd)
 	disk_super = dm_block_data(sblock);
 	pmd->time = le32_to_cpu(disk_super->time);
 	pmd->root = le64_to_cpu(disk_super->data_mapping_root);
+	dm_setup_bm_cache(pmd->bm, pmd->root);
 	pmd->details_root = le64_to_cpu(disk_super->device_details_root);
 	pmd->trans_id = le64_to_cpu(disk_super->trans_id);
 	pmd->flags = le32_to_cpu(disk_super->flags);
@@ -1677,6 +1679,8 @@ static int __insert(struct dm_thin_device *td, dm_block_t block,
 				   &pmd->root, &inserted);
 	if (r)
 		return r;
+
+	dm_move_bm_cache(pmd->bm, pmd->root);
 
 	td->changed = true;
 	if (inserted)

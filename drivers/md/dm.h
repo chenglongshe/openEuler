@@ -232,11 +232,27 @@ static inline unsigned int dm_num_hash_locks(void)
 {
 	unsigned int num_locks = roundup_pow_of_two(num_online_cpus()) << 1;
 
-	return min_t(unsigned int, num_locks, DM_HASH_LOCKS_MAX);
+	return min_t(unsigned int, num_locks, DM_HASH_LOCKS_MAX) + 32;
 }
 
 #define DM_HASH_LOCKS_MULT  4294967291ULL
 #define DM_HASH_LOCKS_SHIFT 6
+
+static inline unsigned int dm_hash_locks_index_special(sector_t block,
+							unsigned int num_locks,
+							unsigned long special)
+{
+
+
+	sector_t h1 = (block * DM_HASH_LOCKS_MULT) >> DM_HASH_LOCKS_SHIFT;
+	sector_t h2 = h1 >> DM_HASH_LOCKS_SHIFT;
+
+	if (block == special)
+		return  ((h1 ^ h2) & 31) + num_locks - 32;
+
+	return (h1 ^ h2) & (num_locks - 33);
+}
+
 
 static inline unsigned int dm_hash_locks_index(sector_t block,
 					       unsigned int num_locks)
