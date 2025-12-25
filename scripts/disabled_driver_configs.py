@@ -11,6 +11,7 @@ import csv
 import os
 import re
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Iterable, Iterator, List, Set, Tuple
 
@@ -22,13 +23,15 @@ NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 # config: CONFIG_ option controlling the assignment
 # operator: :=, =, +=, ?=
 # rhs: remainder of the line after the operator
+# The prefix group is optional, but when present it must contain at least one
+# character before the dash.
 ASSIGN_RE = re.compile(
     r"(?:(?P<prefix>[-+A-Za-z0-9_./]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
     r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
 )
 SOURCE_SUFFIXES = (".c", ".S", ".s")
 IGNORED_TOKEN_PREFIXES = ("#", "$", "-")
-TARGET_TOKEN_HINTS = (".o", ".ko", "/")
+TARGET_TOKEN_HINTS = (".o", ".ko")
 
 
 def repo_root() -> Path:
@@ -88,10 +91,13 @@ def normalize_target(token: str, base: Path, root: Path) -> str:
     raw_path = Path(os.path.normpath(base / token))
     try:
         raw_path.relative_to(root)
-        target_path = raw_path
+        within_root = True
     except ValueError:
         # If normalization escapes the repository root (for example via ".."),
         # fall back to the unresolved path to avoid emitting unexpected locations.
+        target_path = raw_path
+        within_root = False
+    else:
         target_path = raw_path
     if token.endswith(".o"):
         for suffix in SOURCE_SUFFIXES:
@@ -99,10 +105,7 @@ def normalize_target(token: str, base: Path, root: Path) -> str:
             if candidate.exists():
                 target_path = candidate
                 break
-    try:
-        return str(target_path.relative_to(root))
-    except ValueError:
-        return str(target_path)
+    return str(target_path.relative_to(root)) if within_root else str(target_path)
 
 
 def scan_makefile(
@@ -171,13 +174,13 @@ def main(argv: List[str]) -> int:
 
     rows.sort(key=lambda item: (item[0], item[1], item[2]))
 
-    if args.output is not None:
-        with args.output.open("w", newline="", encoding="utf-8") as output_stream:
-            writer = csv.writer(output_stream)
-            writer.writerow(["CONFIG", "driver_path", "makefile"])
-            writer.writerows(rows)
-    else:
-        writer = csv.writer(sys.stdout)
+    stream_manager = (
+        args.output.open("w", newline="", encoding="utf-8")
+        if args.output is not None
+        else nullcontext(sys.stdout)
+    )
+    with stream_manager as output_stream:
+        writer = csv.writer(output_stream)
         writer.writerow(["CONFIG", "driver_path", "makefile"])
         writer.writerows(rows)
 
