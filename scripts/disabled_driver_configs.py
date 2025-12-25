@@ -27,7 +27,11 @@ def _repo_root() -> Path:
 DEFCONFIG_PATH = Path("arch/x86/configs/openeuler_defconfig")
 REPO_ROOT = _repo_root()  # prefer .git discovery, fallback to script-relative
 DRIVERS_ROOT = REPO_ROOT / "drivers"  # independent of current working directory
-MAX_TRAVERSED_FILES = int(os.environ.get("DISABLED_DRIVER_MAX_FILES", "0"))
+_env_limit = os.environ.get("DISABLED_DRIVER_MAX_FILES")
+try:
+    MAX_TRAVERSED_FILES = int(_env_limit) if _env_limit is not None else 0
+except ValueError:
+    raise SystemExit("DISABLED_DRIVER_MAX_FILES must be an integer")
 
 _OBJ_RE = re.compile(
     r"""^\s*obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*
@@ -127,8 +131,6 @@ def _find_disabled_targets(
                                 rel = rel_path.as_posix()
                                 entries.append((cfg, makefile, rel))
                                 file_count += 1
-                                if MAX_TRAVERSED_FILES and file_count >= MAX_TRAVERSED_FILES:
-                                    break
                     else:
                         entries.append((cfg, makefile, target))
                 else:
