@@ -12,7 +12,7 @@ Filesystems kept for OLK-6.6
 场景1：服务器场景
 -----------------
 
-openEuler 的 ``openeuler_defconfig`` 已按服务器场景启用相应文件系统，需保留的目录如下：
+openEuler 的 ``openeuler_defconfig`` 已按服务器场景启用相应文件系统，需保留的目录如下（其中 ``mfs/`` 对应 ``CONFIG_MFS_FS``，即 Memory File System，按 Makefile 保留）：
 
 ::
 
@@ -66,7 +66,7 @@ openEuler 的 ``openeuler_defconfig`` 已按服务器场景启用相应文件系
 
 .. _fs_keep_defconfig_n:
 
-场景2：``arch/x86/configs/openeuler_defconfig`` 中 ``config = n`` 的文件系统被剔除后
----------------------------------------------------------------------------------
+场景2：``arch/x86/configs/openeuler_defconfig`` 中 ``CONFIG_FOO = n`` / ``# CONFIG_FOO is not set`` 的文件系统被剔除后
+----------------------------------------------------------------------------------------------------------------
 
-在该场景下，仅保留 defconfig 中启用为 ``y/m`` 的文件系统目录，所有 ``# CONFIG_FOO is not set``（即 ``config = n``）对应的目录均移除。计算结果与 :ref:`fs_keep_server` 的保留集完全一致。
+在该场景下，仅保留 defconfig 中启用为 ``y/m`` 的文件系统目录，所有 ``CONFIG_FOO = n``（或 ``# CONFIG_FOO is not set``）对应的目录均移除。计算结果与 :ref:`fs_keep_server` 的保留集完全一致。
