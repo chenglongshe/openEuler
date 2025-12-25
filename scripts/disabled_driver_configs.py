@@ -27,7 +27,7 @@ def _repo_root() -> Path:
 DEFCONFIG_PATH = Path("arch/x86/configs/openeuler_defconfig")
 REPO_ROOT = _repo_root()  # prefer .git discovery, fallback to script-relative
 DRIVERS_ROOT = REPO_ROOT / "drivers"  # independent of current working directory
-MAX_TRAVERSED_FILES = int(os.environ.get("DISABLED_DRIVER_MAX_FILES", "0")) or 0
+MAX_TRAVERSED_FILES = int(os.environ.get("DISABLED_DRIVER_MAX_FILES", "0"))
 
 _OBJ_RE = re.compile(
     r"""^\s*obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*
@@ -115,6 +115,8 @@ def _find_disabled_targets(
                             # For extremely large trees, consider adding filtering (e.g. extensions) before consuming this script.
                             file_count = 0
                             for file_path in dir_path.rglob("*"):
+                                if MAX_TRAVERSED_FILES and file_count >= MAX_TRAVERSED_FILES:
+                                    break
                                 if not file_path.is_file():
                                     continue
                                 resolved = file_path.resolve()
