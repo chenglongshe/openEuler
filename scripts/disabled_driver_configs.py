@@ -18,7 +18,7 @@ NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 # Matches conditional Makefile assignments such as:
 # obj-$(CONFIG_FOO) += driver.o
 ASSIGN_RE = re.compile(
-    r"(?P<prefix>[-+A-Za-z0-9_./]*)-\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
+    r"(?:(?P<prefix>[-+A-Za-z0-9_./]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
     r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
 )
 SOURCE_SUFFIXES = (".c", ".S", ".s")
@@ -93,6 +93,7 @@ def scan_makefile(
                 config = match.group("config")
                 if config not in disabled:
                     continue
+                # Treat everything after an unescaped '#' as a Makefile comment.
                 rhs = match.group("rhs").split("#", 1)[0].strip()
                 if not rhs:
                     continue
