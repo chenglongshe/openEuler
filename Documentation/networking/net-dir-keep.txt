@@ -1,4 +1,4 @@
-场景1（服务器场景）保留目录：
+场景1（服务器场景 / server workload）保留目录：
 802
 8021q
 bpf
@@ -34,7 +34,7 @@ vmw_vsock
 xdp
 xfrm
 
-场景2（arch/x86/configs/openeuler_defconfig 中 config≠n）保留目录：
+场景2（arch/x86/configs/openeuler_defconfig 中 config≠n / defconfig-enabled）保留目录：
 6lowpan
 802
 8021q
