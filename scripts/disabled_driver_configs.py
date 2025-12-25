@@ -11,7 +11,7 @@ import csv
 import os
 import re
 import sys
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from pathlib import Path
 from typing import Iterable, Iterator, List, Set, Tuple
 
@@ -29,7 +29,7 @@ NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 #   usbcore-$(CONFIG_USB) += host/
 #   $(CONFIG_BAR) += bar.o
 ASSIGN_RE = re.compile(
-    r"(?:(?P<prefix>[-+A-Za-z0-9_./]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
+    r"(?:(?P<prefix>[-A-Za-z0-9_./+]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
     r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
 )
 SOURCE_SUFFIXES = (".c", ".S", ".s")
@@ -176,12 +176,14 @@ def main(argv: List[str]) -> int:
 
     rows.sort(key=lambda item: (item[0], item[1], item[2]))
 
-    stream_manager = (
-        args.output.open("w", newline="", encoding="utf-8")
-        if args.output is not None
-        else nullcontext(sys.stdout)
-    )
-    with stream_manager as output_stream:
+    with ExitStack() as stack:
+        output_stream = (
+            stack.enter_context(
+                args.output.open("w", newline="", encoding="utf-8")
+            )
+            if args.output is not None
+            else stack.enter_context(nullcontext(sys.stdout))
+        )
         writer = csv.writer(output_stream)
         writer.writerow(["CONFIG", "driver_path", "makefile"])
         writer.writerows(rows)
