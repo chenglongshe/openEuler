@@ -18,9 +18,12 @@ NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 # Matches conditional Makefile assignments such as:
 # obj-$(CONFIG_FOO) += driver.o
 ASSIGN_RE = re.compile(
-    r"([-A-Za-z0-9_.+/]+)-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*([:+?]?=)\s*(.+)"
+    r"(?P<prefix>[-A-Za-z0-9_.+/]*)-\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
+    r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
 )
 SOURCE_SUFFIXES = (".c", ".S", ".s")
+IGNORED_TOKEN_PREFIXES = ("#", "$", "-")
+TARGET_TOKEN_HINTS = (".o", ".ko", "/")
 
 
 def repo_root() -> Path:
@@ -53,9 +56,9 @@ def collapsed_lines(lines: Iterable[str]) -> Iterator[str]:
 
 
 def looks_like_target(token: str) -> bool:
-    if not token or token.startswith(("#", "$", "-")):
+    if not token or token.startswith(IGNORED_TOKEN_PREFIXES):
         return False
-    return token.endswith((".o", ".ko", "/")) or "/" in token
+    return token.endswith(TARGET_TOKEN_HINTS) or "/" in token
 
 
 def normalize_target(token: str, base: Path, root: Path) -> str:
@@ -87,10 +90,10 @@ def scan_makefile(
     with makefile.open(encoding="utf-8") as handle:
         for line in collapsed_lines(handle):
             for match in ASSIGN_RE.finditer(line):
-                config = match.group(2)
+                config = match.group("config")
                 if config not in disabled:
                     continue
-                rhs = match.group(4).split("#", 1)[0].strip()
+                rhs = match.group("rhs").split("#", 1)[0].strip()
                 if not rhs:
                     continue
                 for token in rhs.split():
