@@ -24,7 +24,10 @@ NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 # operator: :=, =, +=, ?=
 # rhs: remainder of the line after the operator
 # The prefix group is optional, but when present it must contain at least one
-# character before the dash.
+# character before the dash. Examples:
+#   obj-$(CONFIG_FOO) += driver.o
+#   usbcore-$(CONFIG_USB) += host/
+#   $(CONFIG_BAR) += bar.o
 ASSIGN_RE = re.compile(
     r"(?:(?P<prefix>[-+A-Za-z0-9_./]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
     r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
@@ -64,6 +67,7 @@ def collapsed_lines(lines: Iterable[str]) -> Iterator[str]:
 
 
 def looks_like_target(token: str) -> bool:
+    """Heuristic to decide whether a token looks like a driver target."""
     if not token or token.startswith(IGNORED_TOKEN_PREFIXES):
         return False
     return any(token.endswith(hint) for hint in TARGET_TOKEN_HINTS) or "/" in token
@@ -89,16 +93,14 @@ def strip_makefile_comment(text: str) -> str:
 
 def normalize_target(token: str, base: Path, root: Path) -> str:
     raw_path = Path(os.path.normpath(base / token))
+    target_path = raw_path
     try:
         raw_path.relative_to(root)
         within_root = True
     except ValueError:
         # If normalization escapes the repository root (for example via ".."),
         # fall back to the unresolved path to avoid emitting unexpected locations.
-        target_path = raw_path
         within_root = False
-    else:
-        target_path = raw_path
     if token.endswith(".o"):
         for suffix in SOURCE_SUFFIXES:
             candidate = target_path.with_suffix(suffix)
