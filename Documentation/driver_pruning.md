@@ -110,7 +110,7 @@ watchdog
 xen
 ```
 
-> Note: Directories whose configs are not present in `openeuler_defconfig` (see the “Review-needed directories (config not specified)” section below) should be evaluated against actual server hardware needs.
+> Note: Directories whose configs are not present in `openeuler_defconfig` (see the section titled “Review-needed directories (config not specified)” below) should be evaluated against actual server hardware needs.
 
 ## `CONFIG=n` in `openeuler_defconfig` – directories that can be removed
 
