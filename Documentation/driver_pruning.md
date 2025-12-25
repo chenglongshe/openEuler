@@ -2,10 +2,8 @@
 
 This note (bilingual: 中文/English) summarizes which top-level `drivers/` subdirectories are needed under two scenarios:
 
-1. **服务器场景** – 保留 `drivers/Makefile` 中无条件编译或在 `openeuler_defconfig` 里为 `y`/`m` 的目录。  
-   *(Server scenario – keep driver directories whose controlling Kconfig options are `y`/`m` or unconditional.)*
-2. **`arch/x86/configs/openeuler_defconfig` 中 `CONFIG=n` 场景** – 显式为 `n` 的目录可以去掉。  
-   *(Directories whose controlling options are explicitly `n` can be dropped.)*
+1. **服务器场景 (Server scenario)** – 保留 `drivers/Makefile` 中无条件编译或在 `openeuler_defconfig` 里为 `y`/`m` 的目录 (keep driver directories whose controlling Kconfig options are `y`/`m` or unconditional).
+2. **`arch/x86/configs/openeuler_defconfig` 中 `CONFIG=n` 场景 (CONFIG=n in openeuler_defconfig)** – 显式为 `n` 的目录可以去掉 (directories whose controlling options are explicitly `n` can be dropped).
 
 The mapping between driver directories and their controlling Kconfig symbols comes from `drivers/Makefile` in the OLK-6.6 branch of this repository.
 
@@ -112,7 +110,7 @@ watchdog
 xen
 ```
 
-> Note: Directories whose configs are not present in `openeuler_defconfig` (see the “Review-needed directories” section below) should be evaluated against actual server hardware needs.
+> Note: Directories whose configs are not present in `openeuler_defconfig` (see the “Review-needed directories (config not specified)” section below) should be evaluated against actual server hardware needs.
 
 ## `CONFIG=n` in `openeuler_defconfig` – directories that can be removed
 
