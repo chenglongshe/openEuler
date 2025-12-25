@@ -18,7 +18,7 @@ NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 # Matches conditional Makefile assignments such as:
 # obj-$(CONFIG_FOO) += driver.o
 ASSIGN_RE = re.compile(
-    r"(?P<prefix>[-A-Za-z0-9_.+/]*)-\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
+    r"(?P<prefix>[-+A-Za-z0-9_./]*)-\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
     r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
 )
 SOURCE_SUFFIXES = (".c", ".S", ".s")
@@ -58,7 +58,7 @@ def collapsed_lines(lines: Iterable[str]) -> Iterator[str]:
 def looks_like_target(token: str) -> bool:
     if not token or token.startswith(IGNORED_TOKEN_PREFIXES):
         return False
-    return token.endswith(TARGET_TOKEN_HINTS) or "/" in token
+    return any(token.endswith(hint) for hint in TARGET_TOKEN_HINTS) or "/" in token
 
 
 def normalize_target(token: str, base: Path, root: Path) -> str:
