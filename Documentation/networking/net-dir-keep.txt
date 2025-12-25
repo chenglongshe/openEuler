@@ -2,7 +2,7 @@ net 子目录保留清单（用于裁剪时参考，仅列需要保留的目录�
 Net subdirectory retention lists for trimming; entries below are directory names to keep.
 
 场景1（服务器场景 / server workload）保留目录：
-适用于面向服务器/虚拟化的精简，已剔除蓝牙、Wi‑Fi、物联网、CAN、ATM、L2TP 等目录。
+适用于面向服务器/虚拟化的精简，已剔除蓝牙、Wi-Fi、物联网、CAN、ATM、L2TP 等目录。
 802
 8021q
 bpf
