@@ -134,17 +134,15 @@ def main(argv: List[str]) -> int:
 
     rows.sort(key=lambda item: (item[0], item[1], item[2]))
 
-    output_stream = (
-        args.output.open("w", newline="", encoding="utf-8")
-        if args.output
-        else sys.stdout
-    )
-    writer = csv.writer(output_stream)
-    writer.writerow(["CONFIG", "driver_path", "makefile"])
-    writer.writerows(rows)
-
-    if args.output:
-        output_stream.close()
+    if args.output is not None:
+        with args.output.open("w", newline="", encoding="utf-8") as output_stream:
+            writer = csv.writer(output_stream)
+            writer.writerow(["CONFIG", "driver_path", "makefile"])
+            writer.writerows(rows)
+    else:
+        writer = csv.writer(sys.stdout)
+        writer.writerow(["CONFIG", "driver_path", "makefile"])
+        writer.writerows(rows)
 
     return 0
 
