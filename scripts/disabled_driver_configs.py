@@ -93,7 +93,7 @@ def _find_disabled_targets(
                 if target.endswith("/"):
                     dir_path = (makefile.parent / target).resolve()
                     if dir_path.is_dir():
-                        # Skip directories that resolve outside the repository root.
+                        # Directories outside the repository root are included without expansion.
                         try:
                             dir_path.relative_to(REPO_ROOT)
                         except ValueError:
