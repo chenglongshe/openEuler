@@ -16,8 +16,8 @@ from pathlib import Path
 
 
 DEFCONFIG_PATH = Path("arch/x86/configs/openeuler_defconfig")
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DRIVERS_ROOT = REPO_ROOT / "drivers"
+REPO_ROOT = Path(__file__).resolve().parent.parent  # derive repo root from script location
+DRIVERS_ROOT = REPO_ROOT / "drivers"  # independent of current working directory
 
 _OBJ_RE = re.compile(
     r"""^\s*obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*
@@ -93,13 +93,14 @@ def _find_disabled_targets(
                 if target.endswith("/"):
                     dir_path = (makefile.parent / target).resolve()
                     if dir_path.is_dir():
-                        # Directories outside the repository root are included without expansion to avoid unintended traversal.
+                        # Directories outside the repository root are included without expansion to avoid unintended traversal;
+                        # CSV consumers will see the literal target path.
                         try:
                             dir_path.relative_to(REPO_ROOT)
                         except ValueError:
                             entries.append((cfg, makefile, target))
                         else:
-                            # Traverse the full subtree and include every file under it.
+                            # Traverse the full subtree and include every file under it; this is deliberate and may be expensive on large trees.
                             for file_path in sorted(dir_path.rglob("*")):
                                 if not file_path.is_file():
                                     continue
