@@ -16,7 +16,8 @@ from pathlib import Path
 
 
 DEFCONFIG_PATH = Path("arch/x86/configs/openeuler_defconfig")
-DRIVERS_ROOT = Path("drivers")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DRIVERS_ROOT = REPO_ROOT / "drivers"
 
 _OBJ_RE = re.compile(
     r"""^\s*obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*
@@ -76,7 +77,7 @@ def _targets_from_line(line: str) -> tuple[str, list[str]] | None:
 def _find_disabled_targets(
     disabled: set[str], drivers_root: Path
 ) -> list[tuple[str, Path, str]]:
-    seen: set[tuple[str, Path, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     results: list[tuple[str, Path, str]] = []
     for makefile in sorted(drivers_root.rglob("Makefile")):
         content = makefile.read_text(encoding="utf-8", errors="ignore")
@@ -88,11 +89,26 @@ def _find_disabled_targets(
             if cfg not in disabled:
                 continue
             for target in targets:
-                entry = (cfg, makefile, target)
-                if entry in seen:
-                    continue
-                seen.add(entry)
-                results.append(entry)
+                entries: list[tuple[str, Path, str]] = []
+                if target.endswith("/"):
+                    dir_path = (makefile.parent / target).resolve()
+                    if dir_path.is_dir():
+                        for file_path in sorted(dir_path.rglob("*")):
+                            if not file_path.is_file():
+                                continue
+                            rel = file_path.relative_to(REPO_ROOT)
+                            entries.append((cfg, makefile, rel.as_posix()))
+                    else:
+                        entries.append((cfg, makefile, target))
+                else:
+                    entries.append((cfg, makefile, target))
+
+                for entry in entries:
+                    seen_key = (entry[0], entry[1].as_posix(), entry[2])
+                    if seen_key in seen:
+                        continue
+                    seen.add(seen_key)
+                    results.append(entry)
     return results
 
 
