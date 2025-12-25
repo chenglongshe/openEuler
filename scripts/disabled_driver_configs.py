@@ -8,6 +8,7 @@ drivers/*/Makefile files.
 
 import argparse
 import csv
+import os
 import re
 import sys
 from pathlib import Path
@@ -17,6 +18,10 @@ from typing import Iterable, Iterator, List, Set, Tuple
 NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 # Matches conditional Makefile assignments such as:
 # obj-$(CONFIG_FOO) += driver.o
+# prefix: the list name (obj, usbcore, etc.)
+# config: CONFIG_ option controlling the assignment
+# operator: :=, =, +=, ?=
+# rhs: remainder of the line after the operator
 ASSIGN_RE = re.compile(
     r"(?:(?P<prefix>[-+A-Za-z0-9_./]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
     r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
@@ -61,14 +66,31 @@ def looks_like_target(token: str) -> bool:
     return any(token.endswith(hint) for hint in TARGET_TOKEN_HINTS) or "/" in token
 
 
+def strip_makefile_comment(text: str) -> str:
+    result: List[str] = []
+    escaped = False
+    for char in text:
+        if escaped:
+            result.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            result.append(char)
+            continue
+        if char == "#":
+            break
+        result.append(char)
+    return "".join(result)
+
+
 def normalize_target(token: str, base: Path, root: Path) -> str:
-    raw_path = base / token
-    resolved_path = raw_path.resolve()
+    raw_path = Path(os.path.normpath(base / token))
     try:
-        resolved_path.relative_to(root)
-        target_path = resolved_path
+        raw_path.relative_to(root)
+        target_path = raw_path
     except ValueError:
-        # If resolution escapes the repository root (for example via ".."),
+        # If normalization escapes the repository root (for example via ".."),
         # fall back to the unresolved path to avoid emitting unexpected locations.
         target_path = raw_path
     if token.endswith(".o"):
@@ -93,8 +115,7 @@ def scan_makefile(
                 config = match.group("config")
                 if config not in disabled:
                     continue
-                # Treat everything after an unescaped '#' as a Makefile comment.
-                rhs = match.group("rhs").split("#", 1)[0].strip()
+                rhs = strip_makefile_comment(match.group("rhs")).strip()
                 if not rhs:
                     continue
                 for token in rhs.split():
