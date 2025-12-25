@@ -39,7 +39,7 @@ xdp
 xfrm
 
 场景2（openeuler_defconfig enabled configurations / arch/x86/configs/openeuler_defconfig with config set to y or m）保留目录：
-基于 arch/x86/configs/openeuler_defconfig 中被设置为 y/m 的配置直接解析，未列出的目录对应 config=n，可裁剪。
+基于 arch/x86/configs/openeuler_defconfig 中被设置为 y/m（y 为内建，m 为模块）的配置直接解析，未列出的目录对应 config=n，可裁剪。
 6lowpan
 802
 8021q
