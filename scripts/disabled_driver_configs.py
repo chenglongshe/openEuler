@@ -15,9 +15,12 @@ from typing import Iterable, Iterator, List, Set, Tuple
 
 
 NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
+# Matches conditional Makefile assignments such as:
+# obj-$(CONFIG_FOO) += driver.o
 ASSIGN_RE = re.compile(
     r"([-A-Za-z0-9_.+/]+)-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*([:+?]?=)\s*(.+)"
 )
+SOURCE_SUFFIXES = (".c", ".S", ".s")
 
 
 def repo_root() -> Path:
@@ -62,9 +65,11 @@ def normalize_target(token: str, base: Path, root: Path) -> str:
         resolved_path.relative_to(root)
         target_path = resolved_path
     except ValueError:
+        # If resolution escapes the repository root (for example via ".."),
+        # fall back to the unresolved path to avoid emitting unexpected locations.
         target_path = raw_path
     if token.endswith(".o"):
-        for suffix in (".c", ".S", ".s"):
+        for suffix in SOURCE_SUFFIXES:
             candidate = target_path.with_suffix(suffix)
             if candidate.exists():
                 target_path = candidate
