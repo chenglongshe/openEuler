@@ -26,7 +26,7 @@
 
 `openeuler_defconfig` 中已启用（`y`/`m`）且需保留的主要目录：
 - 基础/伪文件系统：`proc/`、`sysfs/`、`kernfs/`、`configfs/`、`tmpfs/`、`hugetlbfs/`、`pstore/`、`resctrl/`、`debugfs/`。
-- 本地文件系统：`ext4/`（含 `jbd2/`、`mbcache/`，兼容 ext3）、`xfs/`、`btrfs/`、`erofs/`、`squashfs/`、`cramfs/`、`mfs/`。
+- 本地文件系统：`ext4/`（含 `jbd2/`、`mbcache/`，兼容 ext3）、`xfs/`、`btrfs/`、`erofs/`、`squashfs/`、`cramfs/`、`mfs/`（`CONFIG_MFS_FS=y`）。
 - 镜像/可移除介质：`isofs/`、`udf/`、`fat/`、`exfat/`、`ntfs/`、`ntfs3/`。
 - 自动/叠加：`autofs/`、`overlayfs/`、`fuse/`（含 virtio-fs）。
 - 网络与分布式：`nfs/`、`nfsd/`、`lockd/`、`sunrpc/`、`cifs/`、`smb/`、`ceph/`、`gfs2/`、`netfs/`、`fscache/`、`cachefiles/`。
