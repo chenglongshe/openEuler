@@ -48,7 +48,7 @@ def _joined_lines(content: str) -> list[str]:
     for raw in content.splitlines():
         line = raw.rstrip()
         if buffer:
-            buffer += line.lstrip()
+            buffer += line
         else:
             buffer = line
         if buffer.endswith("\\"):
@@ -76,7 +76,8 @@ def _targets_from_line(line: str) -> tuple[str, list[str]] | None:
 def _find_disabled_targets(
     disabled: set[str], drivers_root: Path
 ) -> list[tuple[str, Path, str]]:
-    results: set[tuple[str, Path, str]] = set()
+    seen: set[tuple[str, Path, str]] = set()
+    results: list[tuple[str, Path, str]] = []
     for makefile in sorted(drivers_root.rglob("Makefile")):
         content = makefile.read_text(encoding="utf-8", errors="ignore")
         for line in _joined_lines(content):
@@ -87,8 +88,12 @@ def _find_disabled_targets(
             if cfg not in disabled:
                 continue
             for target in targets:
-                results.add((cfg, makefile, target))
-    return sorted(results)
+                entry = (cfg, makefile, target)
+                if entry in seen:
+                    continue
+                seen.add(entry)
+                results.append(entry)
+    return results
 
 
 def main(argv: list[str]) -> int:
@@ -110,7 +115,7 @@ def main(argv: list[str]) -> int:
     try:
         for cfg, makefile, target in results:
             writer.writerow([cfg, makefile.as_posix(), target])
-    except BrokenPipeError:
+    except (BrokenPipeError, OSError):
         return 0
     return 0
 
