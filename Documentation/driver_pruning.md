@@ -1,9 +1,9 @@
 # Driver directory retention guidance (OLK-6.6)
 
-This note summarizes which top-level `drivers/` subdirectories are needed under two scenarios:
+This note (bilingual: 中文/English) summarizes which top-level `drivers/` subdirectories are needed under two scenarios:
 
 1. **服务器场景（Server scenario）** – keep the drivers whose controlling Kconfig options are built as `y`/`m` or unconditional in `drivers/Makefile`.
-2. **`arch/x86/configs/openeuler_defconfig` 中 `CONFIG= n` 场景** – driver directories whose controlling options are explicitly set to `n` can be dropped.
+2. **`arch/x86/configs/openeuler_defconfig` 中 `CONFIG=n` 场景** – driver directories whose controlling options are explicitly set to `n` can be dropped.
 
 The mapping between driver directories and their controlling Kconfig symbols comes from `drivers/Makefile`.
 
