@@ -10,14 +10,24 @@ and the target listed on the matching Makefile line.
 """
 
 import csv
+import os
 import re
 import sys
 from pathlib import Path
 
 
+def _repo_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in [here] + list(here.parents):
+        if (parent / ".git").exists():
+            return parent
+    return here.parent.parent
+
+
 DEFCONFIG_PATH = Path("arch/x86/configs/openeuler_defconfig")
-REPO_ROOT = Path(__file__).resolve().parent.parent  # derive repo root from script location
+REPO_ROOT = _repo_root()  # prefer .git discovery, fallback to script-relative
 DRIVERS_ROOT = REPO_ROOT / "drivers"  # independent of current working directory
+MAX_TRAVERSED_FILES = int(os.environ.get("DISABLED_DRIVER_MAX_FILES", "0")) or 0
 
 _OBJ_RE = re.compile(
     r"""^\s*obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*
@@ -103,11 +113,20 @@ def _find_disabled_targets(
                         else:
                             # Traverse the full subtree and include every file under it; this is deliberate and may be expensive on large trees.
                             # For extremely large trees, consider adding filtering (e.g. extensions) before consuming this script.
+                            file_count = 0
                             for file_path in dir_path.rglob("*"):
                                 if not file_path.is_file():
                                     continue
-                                rel = file_path.relative_to(REPO_ROOT).as_posix()
+                                resolved = file_path.resolve()
+                                try:
+                                    rel_path = resolved.relative_to(REPO_ROOT)
+                                except ValueError:
+                                    continue
+                                rel = rel_path.as_posix()
                                 entries.append((cfg, makefile, rel))
+                                file_count += 1
+                                if MAX_TRAVERSED_FILES and file_count >= MAX_TRAVERSED_FILES:
+                                    break
                     else:
                         entries.append((cfg, makefile, target))
                 else:
