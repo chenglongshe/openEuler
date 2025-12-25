@@ -93,13 +93,13 @@ def _find_disabled_targets(
                 if target.endswith("/"):
                     dir_path = (makefile.parent / target).resolve()
                     if dir_path.is_dir():
-                        # Directories outside the repository root are included without expansion.
+                        # Directories outside the repository root are included without expansion to avoid unintended traversal.
                         try:
                             dir_path.relative_to(REPO_ROOT)
                         except ValueError:
                             entries.append((cfg, makefile, target))
                         else:
-                            # Traverse the full subtree to include all driver files.
+                            # Traverse the full subtree and include every file under it.
                             for file_path in sorted(dir_path.rglob("*")):
                                 if not file_path.is_file():
                                     continue
