@@ -94,14 +94,16 @@ def _find_disabled_targets(
                     dir_path = (makefile.parent / target).resolve()
                     if dir_path.is_dir():
                         # Directories outside the repository root are included without expansion to avoid unintended traversal;
-                        # CSV consumers will see the literal target path.
+                        # downstream CSV consumers (tools reading this output) will see the literal target path for such cases
+                        # e.g. when a Makefile points at a symlink that escapes the repository.
                         try:
                             dir_path.relative_to(REPO_ROOT)
                         except ValueError:
                             entries.append((cfg, makefile, target))
                         else:
                             # Traverse the full subtree and include every file under it; this is deliberate and may be expensive on large trees.
-                            for file_path in sorted(dir_path.rglob("*")):
+                            # For extremely large trees, consider adding filtering (e.g. extensions) before consuming this script.
+                            for file_path in dir_path.rglob("*"):
                                 if not file_path.is_file():
                                     continue
                                 rel = file_path.relative_to(REPO_ROOT).as_posix()
