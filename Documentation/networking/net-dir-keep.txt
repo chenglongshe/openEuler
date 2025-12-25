@@ -1,6 +1,8 @@
 net 子目录保留清单（用于裁剪时参考，仅列需要保留的目录名）。
+Net subdirectory retention lists for trimming; entries below are directory names to keep.
 
 场景1（服务器场景 / server workload）保留目录：
+适用于面向服务器/虚拟化的精简，已剔除蓝牙、Wi‑Fi、物联网、CAN、ATM、L2TP 等目录。
 802
 8021q
 bpf
@@ -36,7 +38,8 @@ vmw_vsock
 xdp
 xfrm
 
-场景2（openeuler_defconfig enabled configurations / arch/x86/configs/openeuler_defconfig with config≠n）保留目录：
+场景2（openeuler_defconfig enabled configurations / arch/x86/configs/openeuler_defconfig with config set to y or m）保留目录：
+基于 arch/x86/configs/openeuler_defconfig 中被设置为 y/m 的配置直接解析，未列出的目录对应 config=n，可裁剪。
 6lowpan
 802
 8021q
