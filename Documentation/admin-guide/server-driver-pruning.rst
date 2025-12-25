@@ -32,12 +32,11 @@ Commonly disabled on headless servers
 - ``macintosh/``: Apple-specific glue drivers.
 - ``memstick/``: MemoryStick storage.
 - ``pcmcia/`` and ``parport/``: PCMCIA/CardBus and parallel ports.
-- ``thunderbolt/``: only needed when the chassis exposes TB ports.
+- ``thunderbolt/``: only needed when the chassis exposes Thunderbolt ports.
 - ``nfc/`` and ``bluetooth/``: short-range wireless peripherals.
 - ``input/``, ``input/serio/`` and most ``hid/``: keyboards/mice/touchpads
   can be disabled on fully headless systems; keep minimal USB HID if remote
   KVM emulates it.
 - ``leds/``: indicator LEDs, unless the platform uses them for status.
-- SoC/embedded fabric on x86 servers: ``amba/``, ``mailbox/``, ``hwspinlock/``,
-  ``soc/``.
-
+- SoC and embedded fabric drivers (typically not needed on x86 servers):
+  ``amba/``, ``mailbox/``, ``hwspinlock/``, ``soc/``.
