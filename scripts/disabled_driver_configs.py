@@ -12,6 +12,7 @@ import os
 import re
 import sys
 from contextlib import ExitStack, nullcontext
+from operator import itemgetter
 from pathlib import Path
 from typing import Iterable, Iterator, List, Set, Tuple
 
@@ -29,7 +30,7 @@ NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 #   usbcore-$(CONFIG_USB) += host/
 #   $(CONFIG_BAR) += bar.o
 ASSIGN_RE = re.compile(
-    r"(?:(?P<prefix>[-A-Za-z0-9_./+]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
+    r"(?:(?P<prefix>[-A-Za-z0-9_+]+)-)?\$\((?P<config>CONFIG_[A-Za-z0-9_]+)\)"
     r"\s*(?P<operator>[:+?]?=)\s*(?P<rhs>.+)"
 )
 SOURCE_SUFFIXES = (".c", ".S", ".s")
@@ -67,10 +68,15 @@ def collapsed_lines(lines: Iterable[str]) -> Iterator[str]:
 
 
 def looks_like_target(token: str) -> bool:
-    """Heuristic to decide whether a token looks like a driver target."""
+    """Heuristic to decide whether a token looks like a driver target.
+
+    Accept tokens ending with common object/module suffixes or containing a
+    path separator to account for directory entries.
+    """
     if not token or token.startswith(IGNORED_TOKEN_PREFIXES):
         return False
-    return any(token.endswith(hint) for hint in TARGET_TOKEN_HINTS) or "/" in token
+    has_path_separator = "/" in token and token.strip("/") != ""
+    return any(token.endswith(hint) for hint in TARGET_TOKEN_HINTS) or has_path_separator
 
 
 def strip_makefile_comment(text: str) -> str:
@@ -94,13 +100,11 @@ def strip_makefile_comment(text: str) -> str:
 def normalize_target(token: str, base: Path, root: Path) -> str:
     raw_path = Path(os.path.normpath(base / token))
     target_path = raw_path
-    try:
-        raw_path.relative_to(root)
-        within_root = True
-    except ValueError:
-        # If normalization escapes the repository root (for example via ".."),
-        # fall back to the unresolved path to avoid emitting unexpected locations.
-        within_root = False
+    within_root = raw_path.is_relative_to(root)
+    # If normalization escapes the repository root (for example via ".."),
+    # fall back to the unresolved path to avoid emitting unexpected locations.
+    if not within_root:
+        target_path = raw_path
     if token.endswith(".o"):
         for suffix in SOURCE_SUFFIXES:
             candidate = target_path.with_suffix(suffix)
@@ -174,7 +178,7 @@ def main(argv: List[str]) -> int:
     for makefile in drivers_dir.rglob("Makefile"):
         rows.extend(scan_makefile(makefile, disabled, root))
 
-    rows.sort(key=lambda item: (item[0], item[1], item[2]))
+    rows.sort(key=itemgetter(0, 1, 2))
 
     with ExitStack() as stack:
         output_stream = (
