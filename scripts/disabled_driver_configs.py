@@ -77,7 +77,7 @@ def _targets_from_line(line: str) -> tuple[str, list[str]] | None:
 def _find_disabled_targets(
     disabled: set[str], drivers_root: Path
 ) -> list[tuple[str, Path, str]]:
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, Path, str]] = set()
     results: list[tuple[str, Path, str]] = []
     for makefile in sorted(drivers_root.rglob("Makefile")):
         content = makefile.read_text(encoding="utf-8", errors="ignore")
@@ -92,19 +92,24 @@ def _find_disabled_targets(
                 entries: list[tuple[str, Path, str]] = []
                 if target.endswith("/"):
                     dir_path = (makefile.parent / target).resolve()
-                    if dir_path.is_dir():
+                    try:
+                        dir_path.relative_to(REPO_ROOT)
+                    except ValueError:
+                        dir_path = None
+
+                    if dir_path and dir_path.is_dir():
                         for file_path in sorted(dir_path.rglob("*")):
                             if not file_path.is_file():
                                 continue
-                            rel = file_path.relative_to(REPO_ROOT)
-                            entries.append((cfg, makefile, rel.as_posix()))
+                            rel = file_path.relative_to(REPO_ROOT).as_posix()
+                            entries.append((cfg, makefile, rel))
                     else:
                         entries.append((cfg, makefile, target))
                 else:
                     entries.append((cfg, makefile, target))
 
                 for entry in entries:
-                    seen_key = (entry[0], entry[1].as_posix(), entry[2])
+                    seen_key = (entry[0], entry[1], entry[2])
                     if seen_key in seen:
                         continue
                     seen.add(seen_key)
