@@ -1,9 +1,11 @@
-# Driver directory retention guidance (OLK-6.6)
+# Driver directory retention guidance for OLK-6.6
 
 This note (bilingual: 中文/English) summarizes which top-level `drivers/` subdirectories are needed under two scenarios:
 
-1. **服务器场景（Server scenario）** – keep the drivers whose controlling Kconfig options are built as `y`/`m` or unconditional in `drivers/Makefile`.
-2. **`arch/x86/configs/openeuler_defconfig` 中 `CONFIG=n` 场景** – driver directories whose controlling options are explicitly set to `n` can be dropped.
+1. **服务器场景** – 保留 `drivers/Makefile` 中无条件编译或在 `openeuler_defconfig` 里为 `y`/`m` 的目录。  
+   *(Server scenario – keep driver directories whose controlling Kconfig options are `y`/`m` or unconditional.)*
+2. **`arch/x86/configs/openeuler_defconfig` 中 `CONFIG=n` 场景** – 显式为 `n` 的目录可以去掉。  
+   *(Directories whose controlling options are explicitly `n` can be dropped.)*
 
 The mapping between driver directories and their controlling Kconfig symbols comes from `drivers/Makefile`.
 
@@ -23,7 +25,7 @@ pps, ptp, pwm, ras, reset, rtc, scsi, soc, spi, target, thermal, thunderbolt,
 tty, ufs, uio, usb, vdpa, vfio, vhost, video, virtio, watchdog, xen
 ```
 
-> Note: Directories whose configs are not present in `openeuler_defconfig` (listed below as “review”) should be evaluated against actual server hardware needs.
+> Note: Directories whose configs are not present in `openeuler_defconfig` (listed in the “Review-needed directories” section below) should be evaluated against actual server hardware needs.
 
 ## `CONFIG=n` in `openeuler_defconfig` – directories that can be removed
 
