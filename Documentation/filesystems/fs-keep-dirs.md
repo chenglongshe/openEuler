@@ -57,55 +57,5 @@ unicode/
 xfs/
 ```
 
-## 场景2：`arch/x86/configs/openeuler_defconfig` 中 `config = n`
-在该 defconfig 中未启用的文件系统对应目录均可去掉，保留目录与上表一致（因 defconfig 已体现服务器默认启用集）。为便于对比，保留目录再次列出：
-
-```
-autofs/
-btrfs/
-cachefiles/
-ceph/
-configfs/
-cramfs/
-debugfs/
-devpts/
-dlm/
-efivarfs/
-erofs/
-exfat/
-exportfs/
-ext4/
-fat/
-fscache/
-fuse/
-gfs2/
-hostfs/
-hugetlbfs/
-iomap/
-isofs/
-jbd2/
-kernfs/
-lockd/
-mfs/
-netfs/
-nfs/
-nfs_common/
-nfsd/
-nls/
-notify/
-ntfs/
-ntfs3/
-overlayfs/
-proc/
-pstore/
-quota/
-ramfs/
-resctrl/
-smb/
-squashfs/
-sysfs/
-tracefs/
-udf/
-unicode/
-xfs/
-```
+## 场景2：`arch/x86/configs/openeuler_defconfig` 中未启用（`config = n`）的文件系统被剔除后
+该场景明确只保留 defconfig 中启用为 `y/m` 的文件系统目录，所有 `# CONFIG_FOO is not set`（即 `config=n`）对应目录均移除。计算结果与服务器场景一致，因此保留目录即上一节列出的集合。
