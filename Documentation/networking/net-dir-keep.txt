@@ -1,3 +1,5 @@
+net 子目录保留清单（用于裁剪时参考，仅列需要保留的目录名）。
+
 场景1（服务器场景 / server workload）保留目录：
 802
 8021q
@@ -34,7 +36,7 @@ vmw_vsock
 xdp
 xfrm
 
-场景2（arch/x86/configs/openeuler_defconfig 中 config≠n / defconfig-enabled）保留目录：
+场景2（openeuler_defconfig enabled configurations / arch/x86/configs/openeuler_defconfig with config≠n）保留目录：
 6lowpan
 802
 8021q
