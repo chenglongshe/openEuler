@@ -1,15 +1,15 @@
 # fs 目录裁剪分析（基于 OLK-6.6）
 
-问题：梳理 `fs/` 目录在两个场景下需要保留或可以去掉的子目录。
+问题：梳理 `fs/` 目录在两个场景下需要保留或可以去掉的子目录。以下分析基于 x86_64 的 `arch/x86/configs/openeuler_defconfig`。
 
 ## 场景 1：服务器场景（常规服务器/虚拟化/容器）
 
 ### 推荐保留
-- 伪文件系统与基础支持：`proc`、`sysfs`、`tmpfs`、`hugetlbfs`、`configfs`、`efivarfs`、`resctrl`、`pstore`、`tracefs`、`debugfs`。
-- 主流本地文件系统：`ext4`（包含 `ext3` 兼容）、`xfs`、`btrfs`、`erofs`，常用镜像/只读介质：`cramfs`、`squashfs`、`isofs`、`udf`。
+- 伪文件系统与基础支持：`proc`、`sysfs`、`tmpfs`、`hugetlbfs`、`configfs`、`efivarfs`、`resctrl`（RDT/LLC 控制）、`pstore`（崩溃日志持久化）、`tracefs`、`debugfs`。
+- 主流本地文件系统：`ext4`（包含 `ext3` 兼容）、`xfs`、`btrfs`、`erofs`（只读压缩），常用镜像/只读介质：`cramfs`、`squashfs`、`isofs`、`udf`。
 - 通用可读写格式：`fat`/`vfat`/`exfat`、`ntfs`/`ntfs3`。
 - 网络/分布式与容器相关：`nfs`/`nfsd`（含 `lockd`、`sunrpc`）、`ceph`、`cifs`/`smbfs`、`gfs2`（含 `dlm`）、`fuse`/`virtio_fs`、`overlayfs`、`autofs`。
-- 缓存与配套：`netfs`、`fscache`、`cachefiles`、`exportfs`、`quota`、`nls`、`unicode`。
+- 缓存与配套：`netfs`（页面缓存抽象层）、`fscache`、`cachefiles`、`exportfs`、`quota`、`nls`、`unicode`。
 
 ### 可去掉（服务器场景极少使用，若确有需求再保留）
 - 传统/小众或嵌入式文件系统：
