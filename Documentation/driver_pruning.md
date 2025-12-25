@@ -7,7 +7,7 @@ This note (bilingual: 中文/English) summarizes which top-level `drivers/` subd
 2. **`arch/x86/configs/openeuler_defconfig` 中 `CONFIG=n` 场景** – 显式为 `n` 的目录可以去掉。  
    *(Directories whose controlling options are explicitly `n` can be dropped.)*
 
-The mapping between driver directories and their controlling Kconfig symbols comes from `drivers/Makefile`.
+The mapping between driver directories and their controlling Kconfig symbols comes from `drivers/Makefile` in the OLK-6.6 branch of this repository.
 
 ## Server scenario – directories to keep
 
@@ -25,7 +25,7 @@ pps, ptp, pwm, ras, reset, rtc, scsi, soc, spi, target, thermal, thunderbolt,
 tty, ufs, uio, usb, vdpa, vfio, vhost, video, virtio, watchdog, xen
 ```
 
-> Note: Directories whose configs are not present in `openeuler_defconfig` (listed in the “Review-needed directories” section below) should be evaluated against actual server hardware needs.
+> Note: Directories whose configs are not present in `openeuler_defconfig` (see the “Review-needed directories” section further below) should be evaluated against actual server hardware needs.
 
 ## `CONFIG=n` in `openeuler_defconfig` – directories that can be removed
 
