@@ -16,7 +16,7 @@ from typing import Iterable, Iterator, List, Set, Tuple
 
 NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is\s+not\s+set\s*$")
 ASSIGN_RE = re.compile(
-    r"([A-Za-z0-9_.+/-]+)-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*([:+?]?=)\s*(.+)"
+    r"([-A-Za-z0-9_.+/]+)-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*([:+?]?=)\s*(.+)"
 )
 
 
@@ -56,7 +56,13 @@ def looks_like_target(token: str) -> bool:
 
 
 def normalize_target(token: str, base: Path, root: Path) -> str:
-    target_path = (base / token).resolve()
+    raw_path = base / token
+    resolved_path = raw_path.resolve()
+    try:
+        resolved_path.relative_to(root)
+        target_path = resolved_path
+    except ValueError:
+        target_path = raw_path
     if token.endswith(".o"):
         for suffix in (".c", ".S", ".s"):
             candidate = target_path.with_suffix(suffix)
@@ -73,21 +79,22 @@ def scan_makefile(
     makefile: Path, disabled: Set[str], root: Path
 ) -> List[Tuple[str, str, str]]:
     entries: List[Tuple[str, str, str]] = []
-    for line in collapsed_lines(makefile.read_text(encoding="utf-8").splitlines()):
-        for match in ASSIGN_RE.finditer(line):
-            config = match.group(2)
-            if config not in disabled:
-                continue
-            rhs = match.group(4).split("#", 1)[0].strip()
-            if not rhs:
-                continue
-            for token in rhs.split():
-                if not looks_like_target(token):
+    with makefile.open(encoding="utf-8") as handle:
+        for line in collapsed_lines(handle):
+            for match in ASSIGN_RE.finditer(line):
+                config = match.group(2)
+                if config not in disabled:
                     continue
-                target = normalize_target(token, makefile.parent, root)
-                entries.append(
-                    (config, target, str(makefile.relative_to(root)))
-                )
+                rhs = match.group(4).split("#", 1)[0].strip()
+                if not rhs:
+                    continue
+                for token in rhs.split():
+                    if not looks_like_target(token):
+                        continue
+                    target = normalize_target(token, makefile.parent, root)
+                    entries.append(
+                        (config, target, str(makefile.relative_to(root)))
+                    )
     return entries
 
 
