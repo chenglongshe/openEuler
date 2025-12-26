@@ -24,7 +24,7 @@ def _repo_root() -> Path:
     return here.parent.parent
 
 
-DEFCONFIG_PATH = Path("arch/x86/configs/openeuler_defconfig")
+DEFCONFIG_PATH = Path(os.environ.get("DISABLED_DRIVER_DEFCONFIG", "arch/x86/configs/openeuler_defconfig"))
 REPO_ROOT = _repo_root()  # prefer .git discovery, fallback to script-relative
 DRIVERS_ROOT = REPO_ROOT / "drivers"  # independent of current working directory
 _env_limit = os.environ.get("DISABLED_DRIVER_MAX_FILES")
