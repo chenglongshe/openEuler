@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
@@ -42,31 +43,24 @@ def find_repo_root(start: str) -> str:
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT_ERROR: Optional[str] = None
-REPO_ROOT: Optional[str] = None
-DEFCONFIG_PATH: Optional[str] = None
-DRIVERS_ROOT: Optional[str] = None
 NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
 EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n$")
 OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
 OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o\b")
 MACRO_SUB_RE = re.compile(r"\$\([^)]+\)")
-MACRO_PLACEHOLDER = "."
+MACRO_PLACEHOLDER = "_MACRO_"
 
 
-def init_paths() -> None:
-    """Lazily initialize repository paths."""
-    global REPO_ROOT, REPO_ROOT_ERROR, DEFCONFIG_PATH, DRIVERS_ROOT
-    if REPO_ROOT is not None or REPO_ROOT_ERROR is not None:
-        return
+@lru_cache(maxsize=1)
+def get_paths() -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    """Return repo_root, defconfig_path, drivers_root, error."""
     try:
         repo_root = find_repo_root(SCRIPT_DIR)
     except FileNotFoundError as exc:
-        REPO_ROOT_ERROR = str(exc)
-        return
-    REPO_ROOT = repo_root
-    DEFCONFIG_PATH = os.path.join(repo_root, "arch", "x86", "configs", "openeuler_defconfig")
-    DRIVERS_ROOT = os.path.join(repo_root, "drivers")
+        return None, None, None, str(exc)
+    defconfig_path = os.path.join(repo_root, "arch", "x86", "configs", "openeuler_defconfig")
+    drivers_root = os.path.join(repo_root, "drivers")
+    return repo_root, defconfig_path, drivers_root, None
 
 
 def load_disabled_configs(defconfig_path: str) -> Set[str]:
@@ -75,9 +69,12 @@ def load_disabled_configs(defconfig_path: str) -> Set[str]:
 
     with open(defconfig_path, "r", encoding="utf-8") as f:
         for line in f:
-            if match := NOT_SET_RE.match(line):
+            match = NOT_SET_RE.match(line)
+            if match:
                 disabled.add(match.group(1))
-            elif match := EXPLICIT_N_RE.match(line):
+                continue
+            match = EXPLICIT_N_RE.match(line)
+            if match:
                 disabled.add(match.group(1))
     return disabled
 
@@ -143,12 +140,12 @@ def iter_obj_entries(makefile_path: str, disabled_configs: Set[str]) -> Iterable
                     yield obj
 
 
-def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
+def resolve_source_path(
+    makefile_dir: str, obj_token: str, repo_root: str, drivers_root: str
+) -> Optional[str]:
     """Return relative driver path for an object token."""
-    if not REPO_ROOT or not DRIVERS_ROOT:
-        return None
     obj_path = (Path(makefile_dir) / obj_token).resolve()
-    drivers_root_abs = Path(DRIVERS_ROOT).resolve()
+    drivers_root_abs = Path(drivers_root).resolve()
     try:
         obj_path.relative_to(drivers_root_abs)
     except ValueError:
@@ -156,44 +153,47 @@ def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
     c_path = obj_path.with_suffix(".c")
     target = c_path if c_path.exists() else obj_path
     try:
-        return target.relative_to(Path(REPO_ROOT).resolve()).as_posix()
+        return target.relative_to(Path(repo_root).resolve()).as_posix()
     except ValueError:
         return None
 
 
 def collect_disabled_driver_sources() -> List[str]:
-    init_paths()
-    if not DEFCONFIG_PATH:
+    repo_root, defconfig_path, drivers_root, error = get_paths()
+    if error:
+        sys.stderr.write(f"{error}\n")
+        return []
+    if not defconfig_path:
         sys.stderr.write("DEFCONFIG_PATH is not set; cannot collect sources.\n")
         return []
-    if not DRIVERS_ROOT:
+    if not drivers_root:
         sys.stderr.write("DRIVERS_ROOT is not set; cannot collect sources.\n")
         return []
-    disabled_configs = load_disabled_configs(DEFCONFIG_PATH)
+    disabled_configs = load_disabled_configs(defconfig_path)
     results: Set[str] = set()
-    for root, _, files in os.walk(DRIVERS_ROOT):
+    for root, _, files in os.walk(drivers_root):
         for name in files:
             if name != "Makefile":
                 continue
             makefile_path = os.path.join(root, name)
             makefile_dir = os.path.dirname(makefile_path)
             for token in iter_obj_entries(makefile_path, disabled_configs):
-                resolved = resolve_source_path(makefile_dir, token)
+                resolved = resolve_source_path(makefile_dir, token, repo_root, drivers_root)
                 if resolved:
                     results.add(resolved)
     return sorted(results)
 
 
 def main() -> int:
-    init_paths()
-    if REPO_ROOT is None:
-        sys.stderr.write(f"{REPO_ROOT_ERROR or 'Repository root not found.'}\n")
+    repo_root, defconfig_path, drivers_root, error = get_paths()
+    if error or repo_root is None:
+        sys.stderr.write(f"{error or 'Repository root not found.'}\n")
         return 1
-    if not DEFCONFIG_PATH or not os.path.exists(DEFCONFIG_PATH):
-        sys.stderr.write(f"Defconfig not found: {DEFCONFIG_PATH}\n")
+    if not defconfig_path or not os.path.exists(defconfig_path):
+        sys.stderr.write(f"Defconfig not found: {defconfig_path}\n")
         return 1
-    if not DRIVERS_ROOT or not os.path.isdir(DRIVERS_ROOT):
-        sys.stderr.write(f"Drivers directory not found: {DRIVERS_ROOT}\n")
+    if not drivers_root or not os.path.isdir(drivers_root):
+        sys.stderr.write(f"Drivers directory not found: {drivers_root}\n")
         return 1
     sources = collect_disabled_driver_sources()
     print("驱动文件路径")
