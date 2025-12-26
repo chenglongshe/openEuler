@@ -58,6 +58,7 @@ NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
 EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n")
 OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
 OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o")
+MACRO_SUB_RE = re.compile(r"\$\([^)]+\)")
 
 
 def load_disabled_configs(defconfig_path: str) -> Set[str]:
@@ -99,7 +100,7 @@ def extract_object_tokens(token: str) -> Iterable[str]:
     stripped = token.strip()
     if not stripped or stripped.endswith("/"):
         return []
-    cleaned = re.sub(r"\$\([^)]+\)", "", stripped).lstrip("/")
+    cleaned = MACRO_SUB_RE.sub("", stripped).lstrip("/")
     if not cleaned or cleaned.endswith("/"):
         return []
     return OBJECT_RE.findall(cleaned)
@@ -130,17 +131,18 @@ def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
     """Return relative driver path for an object token."""
     if not REPO_ROOT or not DRIVERS_ROOT:
         return None
-    obj_path = os.path.normpath(os.path.join(makefile_dir, obj_token))
-    abs_obj = os.path.abspath(obj_path)
-    drivers_root_abs = os.path.abspath(DRIVERS_ROOT)
+    obj_path = (Path(makefile_dir) / obj_token).resolve()
+    drivers_root_abs = Path(DRIVERS_ROOT).resolve()
     try:
-        if os.path.commonpath([drivers_root_abs, abs_obj]) != drivers_root_abs:
-            return None
+        obj_path.relative_to(drivers_root_abs)
     except ValueError:
         return None
-    c_path = os.path.splitext(abs_obj)[0] + ".c"
-    target = c_path if os.path.exists(c_path) else abs_obj
-    return os.path.relpath(target, REPO_ROOT)
+    c_path = obj_path.with_suffix(".c")
+    target = c_path if c_path.exists() else obj_path
+    try:
+        return target.relative_to(Path(REPO_ROOT).resolve()).as_posix()
+    except ValueError:
+        return None
 
 
 def collect_disabled_driver_sources() -> List[str]:
