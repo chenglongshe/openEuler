@@ -155,6 +155,8 @@ def main(argv: list[str]) -> int:
     defconfig = Path(argv[1]) if len(argv) > 1 else DEFCONFIG_PATH
     drivers_root = Path(argv[2]) if len(argv) > 2 else DRIVERS_ROOT
 
+    exclude_obj = True
+
     if not defconfig.is_file():
         sys.stderr.write(f"defconfig not found: {defconfig}\n")
         return 1
@@ -169,6 +171,8 @@ def main(argv: list[str]) -> int:
     writer.writerow(["target"])
     try:
         for _, _, target in results:
+            if exclude_obj and target.endswith(".o"):
+                continue
             writer.writerow([target])
     except (BrokenPipeError, OSError):
         return 0
