@@ -146,6 +146,8 @@ def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
 
 
 def collect_disabled_driver_sources() -> List[str]:
+    if not DEFCONFIG_PATH:
+        return []
     disabled_configs = load_disabled_configs(DEFCONFIG_PATH)
     results: Set[str] = set()
     for root, _, files in os.walk(DRIVERS_ROOT):
@@ -174,7 +176,7 @@ def main() -> int:
     sources = collect_disabled_driver_sources()
     print("驱动文件路径")
     for src in sources:
-        print(Path(src).as_posix())
+        print(src)
     return 0
 
 
