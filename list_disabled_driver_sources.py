@@ -48,7 +48,7 @@ EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n$")
 OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
 OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o\b")
 MACRO_SUB_RE = re.compile(r"\$\([^)]+\)")
-MACRO_PLACEHOLDER = "_MACRO_"
+MACRO_PLACEHOLDER = "__MACRO_PLACEHOLDER__"
 
 
 @lru_cache(maxsize=1)
@@ -164,10 +164,10 @@ def collect_disabled_driver_sources() -> List[str]:
         sys.stderr.write(f"{error}\n")
         return []
     if not defconfig_path:
-        sys.stderr.write("DEFCONFIG_PATH is not set; cannot collect sources.\n")
+        sys.stderr.write("Defconfig path could not be determined; cannot collect sources.\n")
         return []
     if not drivers_root:
-        sys.stderr.write("DRIVERS_ROOT is not set; cannot collect sources.\n")
+        sys.stderr.write("Drivers directory could not be determined; cannot collect sources.\n")
         return []
     disabled_configs = load_disabled_configs(defconfig_path)
     results: Set[str] = set()
