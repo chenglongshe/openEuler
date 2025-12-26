@@ -23,9 +23,10 @@ from typing import Iterable, List, Set
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFCONFIG_PATH = os.path.join(REPO_ROOT, "arch", "x86", "configs", "openeuler_defconfig")
 DRIVERS_ROOT = os.path.join(REPO_ROOT, "drivers")
-NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is not set")
+NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
 EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n")
-OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[:+]?=\s*(.*)")
+OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
+OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o")
 
 
 def load_disabled_configs(defconfig_path: str) -> Set[str]:
@@ -58,6 +59,17 @@ def normalize_make_lines(lines: Iterable[str]) -> List[str]:
     return merged
 
 
+def extract_object_tokens(token: str) -> Iterable[str]:
+    """Extract .o entries from a raw Makefile token, tolerating simple macros."""
+    stripped = token.strip()
+    if not stripped or stripped.endswith("/"):
+        return []
+    cleaned = re.sub(r"\$\([^)]+\)", "", stripped).lstrip("/")
+    if not cleaned or cleaned.endswith("/"):
+        return []
+    return OBJECT_RE.findall(cleaned)
+
+
 def iter_obj_entries(makefile_path: str, disabled_configs: Set[str]) -> Iterable[str]:
     """Yield object tokens referenced by disabled CONFIG entries in a Makefile."""
     with open(makefile_path, "r", encoding="utf-8") as f:
@@ -75,11 +87,8 @@ def iter_obj_entries(makefile_path: str, disabled_configs: Set[str]) -> Iterable
             if not tail:
                 continue
             for token in re.split(r"\s+", tail):
-                token = token.strip()
-                if not token or token.startswith("$(") or token.endswith("/"):
-                    continue
-                if token.endswith(".o"):
-                    yield token
+                for obj in extract_object_tokens(token):
+                    yield obj
 
 
 def resolve_source_path(makefile_dir: str, obj_token: str) -> str:
