@@ -96,12 +96,16 @@ def parse_condition(line: str) -> Condition | None:
     if m:
         cfg, value = m.group(1), m.group(2).strip()
         value = value.strip('"').strip("'")
+        is_eq = line.startswith("ifeq")
         if value == "y":
-            return Condition([Requirement(cfg, "y")], [Requirement(cfg, "not-y")]) if line.startswith("ifeq") else Condition([Requirement(cfg, "not-y")], [Requirement(cfg, "y")])
-        if value == "m":
-            return Condition([Requirement(cfg, "m")], [Requirement(cfg, "not-m")]) if line.startswith("ifeq") else Condition([Requirement(cfg, "not-m")], [Requirement(cfg, "m")])
-        if value == "":
-            return Condition([Requirement(cfg, "unset")], [Requirement(cfg, "set")]) if line.startswith("ifeq") else Condition([Requirement(cfg, "set")], [Requirement(cfg, "unset")])
+            true_req, false_req = Requirement(cfg, "y"), Requirement(cfg, "not-y")
+        elif value == "m":
+            true_req, false_req = Requirement(cfg, "m"), Requirement(cfg, "not-m")
+        elif value == "":
+            true_req, false_req = Requirement(cfg, "unset"), Requirement(cfg, "set")
+        else:
+            return None
+        return Condition([true_req], [false_req]) if is_eq else Condition([false_req], [true_req])
     return None
 
 
