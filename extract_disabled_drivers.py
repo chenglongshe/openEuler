@@ -192,10 +192,10 @@ def collect_parse_results():
 
 
 def resolve_tokens(parsed, disabled_configs):
-    aggregates = {}
+    aggregates = defaultdict(list)
     for data in parsed.values():
         for target, comps in data["aggregates"].items():
-            aggregates[target] = comps + aggregates.get(target, [])
+            aggregates[target].extend(comps)
 
     warnings = []
     final_c_files = set()
@@ -271,7 +271,7 @@ def main():
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["c_file"])
-        for path in sorted(set(final_c_files)):
+        for path in sorted(final_c_files):
             writer.writerow([path])
 
     print(f"Disabled CONFIG count: {len(disabled_configs)}")
@@ -282,5 +282,5 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.setrecursionlimit(20000)
+    sys.setrecursionlimit(5000)
     main()
