@@ -9,7 +9,8 @@ Behavior:
    assignments matching disabled configs.
 3. Extract referenced .o entries; if a corresponding .c file exists, output the
    .c path, otherwise keep the .o suffix.
-4. Print a single-column CSV with header '驱动文件路径'.
+4. Print a single-column CSV with header '驱动文件路径' (Driver File Path),
+   retained as required by the task.
 """
 
 from __future__ import annotations
@@ -22,19 +23,20 @@ from typing import Iterable, List, Set
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFCONFIG_PATH = os.path.join(REPO_ROOT, "arch", "x86", "configs", "openeuler_defconfig")
 DRIVERS_ROOT = os.path.join(REPO_ROOT, "drivers")
+NOT_SET_RE = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is not set")
+EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n")
+OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[:+]?=\s*(.*)")
 
 
 def load_disabled_configs(defconfig_path: str) -> Set[str]:
     """Return CONFIG_* symbols marked as not set in defconfig."""
     disabled: Set[str] = set()
-    not_set_re = re.compile(r"^#\s*(CONFIG_[A-Za-z0-9_]+)\s+is not set")
-    explicit_n_re = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n")
 
     with open(defconfig_path, "r", encoding="utf-8") as f:
         for line in f:
-            if match := not_set_re.match(line):
+            if match := NOT_SET_RE.match(line):
                 disabled.add(match.group(1))
-            elif match := explicit_n_re.match(line):
+            elif match := EXPLICIT_N_RE.match(line):
                 disabled.add(match.group(1))
     return disabled
 
@@ -58,13 +60,12 @@ def normalize_make_lines(lines: Iterable[str]) -> List[str]:
 
 def iter_obj_entries(makefile_path: str, disabled_configs: Set[str]) -> Iterable[str]:
     """Yield object tokens referenced by disabled CONFIG entries in a Makefile."""
-    config_re = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[:+]?=\s*(.*)")
     with open(makefile_path, "r", encoding="utf-8") as f:
         for line in normalize_make_lines(f):
             stripped = line.split("#", 1)[0].strip()
             if not stripped:
                 continue
-            match = config_re.match(stripped)
+            match = OBJ_ASSIGN_RE.match(stripped)
             if not match:
                 continue
             config = match.group(1)
