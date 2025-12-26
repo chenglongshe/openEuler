@@ -18,12 +18,14 @@ from __future__ import annotations
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
 
 def find_repo_root(start: str) -> str:
     """Ascend from start to find the repository root that contains drivers/."""
-    path = os.path.abspath(start)
+    origin = os.path.abspath(start)
+    path = origin
     target = os.path.join("arch", "x86", "configs", "openeuler_defconfig")
     while True:
         if (
@@ -33,14 +35,25 @@ def find_repo_root(start: str) -> str:
             return path
         parent = os.path.dirname(path)
         if parent == path:
-            return os.path.abspath(start)
+            raise FileNotFoundError(
+                f"Repository root not found when searching upward from {origin}"
+            )
         path = parent
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = find_repo_root(SCRIPT_DIR)
-DEFCONFIG_PATH = os.path.join(REPO_ROOT, "arch", "x86", "configs", "openeuler_defconfig")
-DRIVERS_ROOT = os.path.join(REPO_ROOT, "drivers")
+REPO_ROOT_ERROR: Optional[str] = None
+try:
+    REPO_ROOT = find_repo_root(SCRIPT_DIR)
+except FileNotFoundError as exc:
+    REPO_ROOT = None
+    REPO_ROOT_ERROR = str(exc)
+DEFCONFIG_PATH = (
+    os.path.join(REPO_ROOT, "arch", "x86", "configs", "openeuler_defconfig")
+    if REPO_ROOT
+    else None
+)
+DRIVERS_ROOT = os.path.join(REPO_ROOT, "drivers") if REPO_ROOT else None
 NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
 EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n")
 OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
@@ -115,10 +128,15 @@ def iter_obj_entries(makefile_path: str, disabled_configs: Set[str]) -> Iterable
 
 def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
     """Return relative driver path for an object token."""
+    if not REPO_ROOT or not DRIVERS_ROOT:
+        return None
     obj_path = os.path.normpath(os.path.join(makefile_dir, obj_token))
     abs_obj = os.path.abspath(obj_path)
     drivers_root_abs = os.path.abspath(DRIVERS_ROOT)
-    if os.path.commonpath([drivers_root_abs, abs_obj]) != drivers_root_abs:
+    try:
+        if os.path.commonpath([drivers_root_abs, abs_obj]) != drivers_root_abs:
+            return None
+    except ValueError:
         return None
     c_path = os.path.splitext(abs_obj)[0] + ".c"
     target = c_path if os.path.exists(c_path) else abs_obj
@@ -142,16 +160,19 @@ def collect_disabled_driver_sources() -> List[str]:
 
 
 def main() -> int:
-    if not os.path.exists(DEFCONFIG_PATH):
+    if REPO_ROOT is None:
+        sys.stderr.write(f"{REPO_ROOT_ERROR or 'Repository root not found.'}\n")
+        return 1
+    if not DEFCONFIG_PATH or not os.path.exists(DEFCONFIG_PATH):
         sys.stderr.write(f"Defconfig not found: {DEFCONFIG_PATH}\n")
         return 1
-    if not os.path.isdir(DRIVERS_ROOT):
+    if not DRIVERS_ROOT or not os.path.isdir(DRIVERS_ROOT):
         sys.stderr.write(f"Drivers directory not found: {DRIVERS_ROOT}\n")
         return 1
     sources = collect_disabled_driver_sources()
     print("驱动文件路径")
     for src in sources:
-        print(src.replace(os.sep, "/"))
+        print(Path(src).as_posix())
     return 0
 
 
