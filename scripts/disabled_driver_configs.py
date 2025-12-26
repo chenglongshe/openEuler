@@ -173,6 +173,8 @@ def main(argv: list[str]) -> int:
         for _, _, target in results:
             if exclude_obj and target.endswith(".o"):
                 continue
+            if not target.endswith(".c"):
+                continue
             writer.writerow([target])
     except (BrokenPipeError, OSError):
         return 0
