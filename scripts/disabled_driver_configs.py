@@ -166,10 +166,10 @@ def main(argv: list[str]) -> int:
     results = _find_disabled_targets(disabled, drivers_root)
 
     writer = csv.writer(sys.stdout)
-    writer.writerow(["config", "makefile", "target"])
+    writer.writerow(["target"])
     try:
-        for cfg, makefile, target in results:
-            writer.writerow([cfg, makefile.as_posix(), target])
+        for _, _, target in results:
+            writer.writerow([target])
     except (BrokenPipeError, OSError):
         return 0
     return 0
