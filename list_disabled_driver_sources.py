@@ -94,7 +94,7 @@ def normalize_make_lines(lines: Iterable[str]) -> List[str]:
 def extract_object_tokens(token: str) -> Iterable[str]:
     """Extract .o entries from a raw Makefile token, tolerating simple macros.
 
-    Note: this only strips straightforward $(...) substitutions and does not
+    Note: this only strips straightforward $(...) substitutions and it does not
     attempt to parse nested Make constructs.
     """
     stripped = token.strip()
@@ -147,6 +147,8 @@ def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
 
 def collect_disabled_driver_sources() -> List[str]:
     if not DEFCONFIG_PATH:
+        return []
+    if not DRIVERS_ROOT:
         return []
     disabled_configs = load_disabled_configs(DEFCONFIG_PATH)
     results: Set[str] = set()
