@@ -46,9 +46,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
 EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n$")
 OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
-OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o\b")
+OBJECT_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./+-]*\.o\b")
 MACRO_SUB_RE = re.compile(r"\$\([^)]+\)")
-MACRO_PLACEHOLDER = "__MACRO_PLACEHOLDER__"
+MACRO_PLACEHOLDER = ""
 
 
 @lru_cache(maxsize=1)
@@ -111,9 +111,9 @@ def extract_object_tokens(token: str) -> Iterable[str]:
     attempt to parse nested Make constructs.
     """
     stripped = token.strip()
-    if not stripped or stripped.endswith("/"):
+    if not stripped:
         return []
-    cleaned = MACRO_SUB_RE.sub(MACRO_PLACEHOLDER, stripped).lstrip("/")
+    cleaned = MACRO_SUB_RE.sub(MACRO_PLACEHOLDER, stripped).strip("/")
     if not cleaned or cleaned.endswith("/"):
         return []
     return OBJECT_RE.findall(cleaned)
