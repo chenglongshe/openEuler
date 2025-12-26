@@ -18,9 +18,27 @@ from __future__ import annotations
 import os
 import re
 import sys
-from typing import Iterable, List, Set
+from typing import Iterable, List, Optional, Set
 
-REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+def find_repo_root(start: str) -> str:
+    """Ascend from start to find the repository root that contains drivers/."""
+    path = os.path.abspath(start)
+    target = os.path.join("arch", "x86", "configs", "openeuler_defconfig")
+    while True:
+        if (
+            os.path.isfile(os.path.join(path, target))
+            and os.path.isdir(os.path.join(path, "drivers"))
+        ):
+            return path
+        parent = os.path.dirname(path)
+        if parent == path:
+            return os.path.abspath(start)
+        path = parent
+
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = find_repo_root(SCRIPT_DIR)
 DEFCONFIG_PATH = os.path.join(REPO_ROOT, "arch", "x86", "configs", "openeuler_defconfig")
 DRIVERS_ROOT = os.path.join(REPO_ROOT, "drivers")
 NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
@@ -60,7 +78,11 @@ def normalize_make_lines(lines: Iterable[str]) -> List[str]:
 
 
 def extract_object_tokens(token: str) -> Iterable[str]:
-    """Extract .o entries from a raw Makefile token, tolerating simple macros."""
+    """Extract .o entries from a raw Makefile token, tolerating simple macros.
+
+    Note: this only strips straightforward $(...) substitutions and does not
+    attempt to parse nested Make constructs.
+    """
     stripped = token.strip()
     if not stripped or stripped.endswith("/"):
         return []
@@ -91,13 +113,16 @@ def iter_obj_entries(makefile_path: str, disabled_configs: Set[str]) -> Iterable
                     yield obj
 
 
-def resolve_source_path(makefile_dir: str, obj_token: str) -> str:
+def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
     """Return relative driver path for an object token."""
     obj_path = os.path.normpath(os.path.join(makefile_dir, obj_token))
-    c_path = os.path.splitext(obj_path)[0] + ".c"
-    if os.path.exists(c_path):
-        return os.path.relpath(c_path, REPO_ROOT)
-    return os.path.relpath(obj_path, REPO_ROOT)
+    abs_obj = os.path.abspath(obj_path)
+    drivers_root_abs = os.path.abspath(DRIVERS_ROOT)
+    if os.path.commonpath([drivers_root_abs, abs_obj]) != drivers_root_abs:
+        return None
+    c_path = os.path.splitext(abs_obj)[0] + ".c"
+    target = c_path if os.path.exists(c_path) else abs_obj
+    return os.path.relpath(target, REPO_ROOT)
 
 
 def collect_disabled_driver_sources() -> List[str]:
@@ -110,13 +135,18 @@ def collect_disabled_driver_sources() -> List[str]:
             makefile_path = os.path.join(root, name)
             makefile_dir = os.path.dirname(makefile_path)
             for token in iter_obj_entries(makefile_path, disabled_configs):
-                results.add(resolve_source_path(makefile_dir, token))
+                resolved = resolve_source_path(makefile_dir, token)
+                if resolved:
+                    results.add(resolved)
     return sorted(results)
 
 
 def main() -> int:
     if not os.path.exists(DEFCONFIG_PATH):
         sys.stderr.write(f"Defconfig not found: {DEFCONFIG_PATH}\n")
+        return 1
+    if not os.path.isdir(DRIVERS_ROOT):
+        sys.stderr.write(f"Drivers directory not found: {DRIVERS_ROOT}\n")
         return 1
     sources = collect_disabled_driver_sources()
     print("驱动文件路径")
