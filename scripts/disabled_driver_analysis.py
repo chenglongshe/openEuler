@@ -134,11 +134,9 @@ def combine_gatings(
 def normalize_token(token: str) -> str:
     cleaned = token.strip()
     cleaned = cleaned.replace("$(obj)/", "").replace("$(src)/", "").replace("$(srctree)/", "")
-    cleaned = cleaned.strip()
     cleaned = cleaned.rstrip("/")
     cleaned = cleaned.lstrip("./")
-    cleaned = cleaned.strip()
-    return cleaned
+    return cleaned.strip()
 
 
 def parse_aggregator_var(varname: str) -> Tuple[str | None, str | None]:
@@ -338,12 +336,12 @@ def main() -> None:
 
     statuses = parse_defconfig(args.defconfig)
     disabled = find_disabled_sources(script_root, args.drivers, statuses)
-    output_rows = disabled
+    output_paths = disabled
     if args.absolute:
-        output_rows = [(script_root / Path(item)).resolve().as_posix() for item in disabled]
+        output_paths = [(script_root / Path(item)).resolve().as_posix() for item in disabled]
 
     writer = csv.writer(sys.stdout)
-    for entry in output_rows:
+    for entry in output_paths:
         writer.writerow([entry])
 
 
