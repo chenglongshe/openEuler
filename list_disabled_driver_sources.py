@@ -55,9 +55,9 @@ DEFCONFIG_PATH = (
 )
 DRIVERS_ROOT = os.path.join(REPO_ROOT, "drivers") if REPO_ROOT else None
 NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
-EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n")
+EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n$")
 OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
-OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o")
+OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o\b")
 MACRO_SUB_RE = re.compile(r"\$\([^)]+\)")
 
 
@@ -91,6 +91,14 @@ def normalize_make_lines(lines: Iterable[str]) -> List[str]:
     return merged
 
 
+def strip_make_comment(line: str) -> str:
+    """Remove Make-style comments, honoring simple escaping."""
+    for idx, ch in enumerate(line):
+        if ch == "#" and (idx == 0 or line[idx - 1] != "\\"):
+            return line[:idx]
+    return line
+
+
 def extract_object_tokens(token: str) -> Iterable[str]:
     """Extract .o entries from a raw Makefile token, tolerating simple macros.
 
@@ -100,7 +108,7 @@ def extract_object_tokens(token: str) -> Iterable[str]:
     stripped = token.strip()
     if not stripped or stripped.endswith("/"):
         return []
-    cleaned = MACRO_SUB_RE.sub("", stripped).lstrip("/")
+    cleaned = MACRO_SUB_RE.sub(".", stripped).lstrip("/")
     if not cleaned or cleaned.endswith("/"):
         return []
     return OBJECT_RE.findall(cleaned)
@@ -110,7 +118,7 @@ def iter_obj_entries(makefile_path: str, disabled_configs: Set[str]) -> Iterable
     """Yield object tokens referenced by disabled CONFIG entries in a Makefile."""
     with open(makefile_path, "r", encoding="utf-8") as f:
         for line in normalize_make_lines(f):
-            stripped = line.split("#", 1)[0].strip()
+            stripped = strip_make_comment(line).strip()
             if not stripped:
                 continue
             match = OBJ_ASSIGN_RE.match(stripped)
