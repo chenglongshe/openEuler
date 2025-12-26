@@ -157,11 +157,11 @@ def parse_aggregator_var(varname: str) -> Tuple[str | None, str | None]:
     return base, kind
 
 
-def add_gatings(mapping: DefaultDict[str, List[List[Requirement]]], key: str, gatings: List[List[Requirement]]) -> None:
-    if not gatings:
+def add_gatings(mapping: DefaultDict[str, List[List[Requirement]]], key: str, gating_sets: List[List[Requirement]]) -> None:
+    if not gating_sets:
         return
     existing = mapping.get(key, [])
-    mapping[key] = dedup_gatings(existing + gatings)
+    mapping[key] = dedup_gatings(existing + gating_sets)
 
 
 def collect_mappings(
