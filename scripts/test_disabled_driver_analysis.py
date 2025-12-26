@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import importlib.util
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-MODULE_PATH = Path(__file__).resolve().with_name("disabled_driver_analysis.py")
-MODULE_SPEC = importlib.util.spec_from_file_location("disabled_driver_analysis", MODULE_PATH)
-analysis = importlib.util.module_from_spec(MODULE_SPEC)
-assert MODULE_SPEC and MODULE_SPEC.loader
-sys.modules["disabled_driver_analysis"] = analysis
-MODULE_SPEC.loader.exec_module(analysis)  # type: ignore[arg-type]
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+import disabled_driver_analysis as analysis
 
 
 def write_files(root: Path, files: dict[str, str]) -> None:
