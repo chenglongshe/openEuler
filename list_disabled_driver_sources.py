@@ -151,7 +151,9 @@ def resolve_source_path(
     except ValueError:
         return None
     c_path = obj_path.with_suffix(".c")
-    target = c_path if c_path.exists() else obj_path
+    if not c_path.exists():
+        return None
+    target = c_path
     try:
         return target.relative_to(Path(repo_root).resolve()).as_posix()
     except ValueError:
