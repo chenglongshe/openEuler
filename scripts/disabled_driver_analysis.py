@@ -8,7 +8,7 @@ import sys
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import DefaultDict, Dict, Iterable, List, Sequence, Tuple
+from typing import DefaultDict, Dict, Iterable, List, Sequence, Set, Tuple
 
 
 @dataclass(frozen=True)
@@ -47,8 +47,8 @@ def parse_defconfig(defconfig_path: Path) -> Dict[str, str]:
     statuses: Dict[str, str] = {}
     for raw_line in defconfig_path.read_text().splitlines():
         line = raw_line.strip()
-        if not line or line.startswith("# "):
-            if line.startswith("#") and "is not set" in line:
+        if not line or line.startswith("#"):
+            if "is not set" in line:
                 name = line.split()[1]
                 statuses[name] = "n"
             continue
@@ -272,7 +272,7 @@ def propagate_objects(
     aggregator_children: DefaultDict[str, List[Tuple[str, List[Requirement]]]],
 ) -> DefaultDict[str, List[List[Requirement]]]:
     final_gatings: DefaultDict[str, List[List[Requirement]]] = defaultdict(list)
-    seen: DefaultDict[str, set[Tuple[Requirement, ...]]] = defaultdict(set)
+    seen: DefaultDict[str, Set[Tuple[Requirement, ...]]] = defaultdict(set)
     queue: deque[Tuple[str, List[Requirement]]] = deque()
     for obj, gatings in root_objects.items():
         for gating in gatings:

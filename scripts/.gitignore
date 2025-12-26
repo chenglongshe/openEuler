@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
-# Local ignores for Python helper scripts
+# Python bytecode and cache files
 __pycache__/
 *.pyc
 *.pyo
