@@ -118,19 +118,26 @@ def _find_disabled_targets(
                             # Traverse the full subtree and include every file under it; this is deliberate and may be expensive on large trees.
                             # For extremely large trees, consider adding filtering (e.g. extensions) before consuming this script.
                             file_count = 0
+                            # Include the directory itself.
+                            rel_dir = dir_path.relative_to(REPO_ROOT).as_posix()
+                            if not rel_dir.endswith("/"):
+                                rel_dir += "/"
+                            entries.append((cfg, makefile, rel_dir))
                             for file_path in dir_path.rglob("*"):
                                 if MAX_TRAVERSED_FILES and file_count >= MAX_TRAVERSED_FILES:
                                     break
-                                if not file_path.is_file():
-                                    continue
                                 resolved = file_path.resolve()
                                 try:
                                     rel_path = resolved.relative_to(REPO_ROOT)
                                 except ValueError:
                                     continue
                                 rel = rel_path.as_posix()
+                                if file_path.is_dir():
+                                    if not rel.endswith("/"):
+                                        rel += "/"
+                                else:
+                                    file_count += 1
                                 entries.append((cfg, makefile, rel))
-                                file_count += 1
                     else:
                         entries.append((cfg, makefile, target))
                 else:
