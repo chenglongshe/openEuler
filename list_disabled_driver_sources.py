@@ -43,22 +43,30 @@ def find_repo_root(start: str) -> str:
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT_ERROR: Optional[str] = None
-try:
-    REPO_ROOT = find_repo_root(SCRIPT_DIR)
-except FileNotFoundError as exc:
-    REPO_ROOT = None
-    REPO_ROOT_ERROR = str(exc)
-DEFCONFIG_PATH = (
-    os.path.join(REPO_ROOT, "arch", "x86", "configs", "openeuler_defconfig")
-    if REPO_ROOT
-    else None
-)
-DRIVERS_ROOT = os.path.join(REPO_ROOT, "drivers") if REPO_ROOT else None
+REPO_ROOT: Optional[str] = None
+DEFCONFIG_PATH: Optional[str] = None
+DRIVERS_ROOT: Optional[str] = None
 NOT_SET_RE = re.compile(r"^# (CONFIG_[A-Za-z0-9_]+) is not set")
 EXPLICIT_N_RE = re.compile(r"^(CONFIG_[A-Za-z0-9_]+)=n$")
 OBJ_ASSIGN_RE = re.compile(r"obj-\$\((CONFIG_[A-Za-z0-9_]+)\)\s*[+:]?=\s*(.*)")
 OBJECT_RE = re.compile(r"[A-Za-z0-9_./+-]+\.o\b")
 MACRO_SUB_RE = re.compile(r"\$\([^)]+\)")
+MACRO_PLACEHOLDER = "."
+
+
+def init_paths() -> None:
+    """Lazily initialize repository paths."""
+    global REPO_ROOT, REPO_ROOT_ERROR, DEFCONFIG_PATH, DRIVERS_ROOT
+    if REPO_ROOT is not None or REPO_ROOT_ERROR is not None:
+        return
+    try:
+        repo_root = find_repo_root(SCRIPT_DIR)
+    except FileNotFoundError as exc:
+        REPO_ROOT_ERROR = str(exc)
+        return
+    REPO_ROOT = repo_root
+    DEFCONFIG_PATH = os.path.join(repo_root, "arch", "x86", "configs", "openeuler_defconfig")
+    DRIVERS_ROOT = os.path.join(repo_root, "drivers")
 
 
 def load_disabled_configs(defconfig_path: str) -> Set[str]:
@@ -108,7 +116,7 @@ def extract_object_tokens(token: str) -> Iterable[str]:
     stripped = token.strip()
     if not stripped or stripped.endswith("/"):
         return []
-    cleaned = MACRO_SUB_RE.sub(".", stripped).lstrip("/")
+    cleaned = MACRO_SUB_RE.sub(MACRO_PLACEHOLDER, stripped).lstrip("/")
     if not cleaned or cleaned.endswith("/"):
         return []
     return OBJECT_RE.findall(cleaned)
@@ -154,9 +162,12 @@ def resolve_source_path(makefile_dir: str, obj_token: str) -> Optional[str]:
 
 
 def collect_disabled_driver_sources() -> List[str]:
+    init_paths()
     if not DEFCONFIG_PATH:
+        sys.stderr.write("DEFCONFIG_PATH is not set; cannot collect sources.\n")
         return []
     if not DRIVERS_ROOT:
+        sys.stderr.write("DRIVERS_ROOT is not set; cannot collect sources.\n")
         return []
     disabled_configs = load_disabled_configs(DEFCONFIG_PATH)
     results: Set[str] = set()
@@ -174,6 +185,7 @@ def collect_disabled_driver_sources() -> List[str]:
 
 
 def main() -> int:
+    init_paths()
     if REPO_ROOT is None:
         sys.stderr.write(f"{REPO_ROOT_ERROR or 'Repository root not found.'}\n")
         return 1
