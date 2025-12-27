@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 from typing import Set
 
-# Matches declarations like "config FOO" inside Kconfig files.
-CONFIG_DECL_RE = re.compile(r"^\s*config\s+([A-Z0-9_]+)\b", re.IGNORECASE)
+# Matches declarations like "config FOO" or "menuconfig FOO" inside Kconfig files.
+CONFIG_DECL_RE = re.compile(r"^\s*(?:menu)?config\s+([A-Z0-9_]+)\b", re.IGNORECASE)
 # Matches enabled defconfig entries such as "CONFIG_FOO=y" or "CONFIG_FOO=m".
 DEFCONFIG_ENTRY_RE = re.compile(
     r"^CONFIG_([A-Z0-9_]+)=(y|m)\s*(?:#.*)?$", re.IGNORECASE
