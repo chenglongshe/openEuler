@@ -87,9 +87,15 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
-        "module",
-        nargs="+",
-        help="Module directory (or directories) under drivers/ or fs/ to disable.",
+        "--src",
+        dest="module",
+        action="append",
+        help="Module directory under drivers/ or fs/ to disable; can be provided multiple times.",
+    )
+    parser.add_argument(
+        "module_positional",
+        nargs="*",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--defconfig",
@@ -97,6 +103,24 @@ def parse_args() -> argparse.Namespace:
         help="Path to the defconfig to update (default: arch/x86/configs/openeuler_defconfig).",
     )
     return parser.parse_args()
+
+
+def gather_module_dirs(args: argparse.Namespace) -> list[str]:
+    module_dirs: list[str] = []
+    if args.module is not None:
+        module_dirs.extend(args.module)
+    if args.module_positional:
+        module_dirs.extend(args.module_positional)
+        print(
+            "Warning: positional module arguments are deprecated; please use --src",
+            file=sys.stderr,
+        )
+    if not module_dirs:
+        sys.exit(
+            "At least one module directory must be provided using --src "
+            "(e.g. --src drivers/accel --src fs/ext4)"
+        )
+    return module_dirs
 
 
 def main() -> None:
@@ -107,8 +131,10 @@ def main() -> None:
     if not defconfig.is_file():
         sys.exit(f"Defconfig file {defconfig} does not exist")
 
+    module_dirs = gather_module_dirs(args)
+
     symbols: Set[str] = set()
-    for module_path in args.module:
+    for module_path in module_dirs:
         module_dir = validate_module_dir(Path(module_path), root)
         symbols.update(collect_symbols(module_dir))
 
