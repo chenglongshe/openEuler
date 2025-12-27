@@ -7,8 +7,12 @@ import sys
 from pathlib import Path
 from typing import Set
 
-CONFIG_DECL_RE = re.compile(r"^\s*config\s+([A-Za-z0-9_]+)\b")
-DEFCONFIG_ENTRY_RE = re.compile(r"^CONFIG_([A-Za-z0-9_]+)=(y|m)\s*(?:#.*)?$")
+# Matches declarations like "config FOO" inside Kconfig files.
+CONFIG_DECL_RE = re.compile(r"^\s*config\s+([A-Z0-9_]+)\b", re.IGNORECASE)
+# Matches enabled defconfig entries such as "CONFIG_FOO=y" or "CONFIG_FOO=m".
+DEFCONFIG_ENTRY_RE = re.compile(
+    r"^CONFIG_([A-Z0-9_]+)=(y|m)\s*(?:#.*)?$", re.IGNORECASE
+)
 
 
 def repo_root() -> Path:
@@ -16,25 +20,32 @@ def repo_root() -> Path:
 
 
 def collect_symbols(module_dir: Path) -> Set[str]:
+    """Return CONFIG symbols declared in Kconfig files under module_dir."""
     symbols: Set[str] = set()
     for kconfig in module_dir.rglob("Kconfig*"):
         if not kconfig.is_file():
             continue
         try:
-            for line in kconfig.read_text(encoding="utf-8", errors="ignore").splitlines():
-                match = CONFIG_DECL_RE.match(line)
-                if match:
-                    symbols.add(match.group(1))
+            content = kconfig.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            sys.exit(
+                f"Error collecting CONFIG symbols: failed to decode {kconfig} as UTF-8: {exc}"
+            )
         except OSError as exc:
-            sys.exit(f"Failed to read {kconfig}: {exc}")
+            sys.exit(f"Error collecting CONFIG symbols: failed to read {kconfig}: {exc}")
+        for line in content.splitlines():
+            match = CONFIG_DECL_RE.match(line)
+            if match:
+                symbols.add(match.group(1))
     return symbols
 
 
 def disable_symbols(defconfig: Path, symbols: Set[str]) -> int:
+    """Disable enabled CONFIG entries in defconfig for the provided symbols."""
     try:
         lines = defconfig.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        sys.exit(f"Failed to read {defconfig}: {exc}")
+        sys.exit(f"Failed to read defconfig {defconfig} while disabling symbols: {exc}")
 
     disabled = 0
     new_lines = []
@@ -50,13 +61,13 @@ def disable_symbols(defconfig: Path, symbols: Set[str]) -> int:
         try:
             defconfig.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
         except OSError as exc:
-            sys.exit(f"Failed to write {defconfig}: {exc}")
+            sys.exit(f"Failed to write updated defconfig {defconfig}: {exc}")
     return disabled
 
 
 def validate_module_dir(path: Path, root: Path) -> Path:
-    if not path.is_absolute():
-        path = (root / path).resolve()
+    """Ensure the module path resolves inside drivers/ or fs/ within the repository."""
+    path = (root / path).resolve()
     if not path.is_dir():
         sys.exit(f"{path} is not a valid directory")
     try:
@@ -102,7 +113,9 @@ def main() -> None:
         symbols.update(collect_symbols(module_dir))
 
     if not symbols:
-        sys.exit("No CONFIG entries found under the provided module directories.")
+        sys.exit(
+            "No CONFIG entries found in Kconfig files under the provided module directories."
+        )
 
     disabled = disable_symbols(defconfig, symbols)
     if not disabled:
