@@ -74,8 +74,8 @@ def validate_module_dir(path: Path, root: Path) -> Path:
         relative = path.relative_to(root)
     except ValueError:
         sys.exit(f"{path} is outside of the repository")
-    if relative.parts[0] not in {"drivers", "fs", "net"}:
-        sys.exit("Module directory must be inside drivers/, fs/, or net/")
+    if relative.parts[0] not in {"drivers", "fs", "net", "sound"}:
+        sys.exit("Module directory must be inside drivers/, fs/, net/, or sound/")
     return path
 
 
@@ -90,7 +90,7 @@ def parse_args() -> argparse.Namespace:
         "--src",
         dest="module",
         action="append",
-        help="Module directory under drivers/, fs/, or net/ to disable; can be provided multiple times.",
+        help="Module directory under drivers/, fs/, net/, or sound/ to disable; can be provided multiple times.",
     )
     parser.add_argument(
         "module_positional",
