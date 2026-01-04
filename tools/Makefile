@@ -86,12 +86,12 @@ nolibc_%: FORCE
 
 # The perf build does not follow the descend function setup,
 # invoking it via it's own make rule.
-PERF_SUPPORTED_ARCHS := x86 arm64 mips
+PERF_SUPPORTED_ARCHS := x86 arm64 mips loongarch
 PERF_BUILD_ARCH      := $(ARCH)
 ifeq ($(PERF_BUILD_ARCH),)
 PERF_BUILD_ARCH      := $(shell uname -m)
 endif
-PERF_BUILD_ARCH      := $(shell echo $(PERF_BUILD_ARCH) | sed -e 's/i.86/x86/' -e 's/x86_64/x86/' -e 's/aarch64/arm64/' -e 's/arm64.*/arm64/' -e 's/mips.*/mips/')
+PERF_BUILD_ARCH      := $(shell echo $(PERF_BUILD_ARCH) | sed -e 's/i.86/x86/' -e 's/x86_64/x86/' -e 's/aarch64/arm64/' -e 's/arm64.*/arm64/' -e 's/mips.*/mips/' -e 's/loongarch.*/loongarch/')
 PERF_ARCH_SUPPORTED  := $(filter $(PERF_SUPPORTED_ARCHS),$(PERF_BUILD_ARCH))
 PERF_O   = $(if $(O),$(O)/tools/perf,)
 
