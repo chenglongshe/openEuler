@@ -60,6 +60,21 @@ define make
 endef
 
 #
+# Skip builds on unsupported architectures when invoked directly.
+#
+PERF_SUPPORTED_ARCHS := x86 arm64 mips loongarch
+PERF_BUILD_ARCH      := $(ARCH)
+ifeq ($(PERF_BUILD_ARCH),)
+PERF_BUILD_ARCH      := $(shell uname -m)
+endif
+PERF_BUILD_ARCH      := $(shell echo $(PERF_BUILD_ARCH) | sed -e 's/i.86/x86/' -e 's/x86_64/x86/' -e 's/aarch64/arm64/' -e 's/arm64.*/arm64/' -e 's/mips.*/mips/' -e 's/loongarch.*/loongarch/')
+PERF_ARCH_SUPPORTED  := $(filter $(PERF_SUPPORTED_ARCHS),$(PERF_BUILD_ARCH))
+
+ifeq ($(PERF_ARCH_SUPPORTED),)
+all tags TAGS:
+	@echo "perf: skipping build for unsupported architecture '$(PERF_BUILD_ARCH)'; supported: $(PERF_SUPPORTED_ARCHS)"
+else
+#
 # Needed if no target specified:
 # (Except for tags and TAGS targets. The reason is that the
 # Makefile does not treat tags/TAGS as targets but as files
@@ -68,6 +83,7 @@ endef
 all tags TAGS:
 	$(print_msg)
 	$(make)
+endif
 
 ifdef MAKECMDGOALS
 has_clean := 0
