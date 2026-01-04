@@ -86,11 +86,31 @@ nolibc_%: FORCE
 
 # The perf build does not follow the descend function setup,
 # invoking it via it's own make rule.
+PERF_SUPPORTED_ARCHS := x86 arm64 mips
+PERF_BUILD_ARCH      := $(ARCH)
+ifeq ($(PERF_BUILD_ARCH),)
+PERF_BUILD_ARCH      := $(shell uname -m)
+endif
+PERF_BUILD_ARCH      := $(shell echo $(PERF_BUILD_ARCH) | sed -e 's/i.86/x86/' -e 's/x86_64/x86/' -e 's/aarch64/arm64/' -e 's/arm64.*/arm64/' -e 's/mips.*/mips/')
+PERF_ARCH_SUPPORTED  := $(filter $(PERF_SUPPORTED_ARCHS),$(PERF_BUILD_ARCH))
 PERF_O   = $(if $(O),$(O)/tools/perf,)
 
+ifeq ($(PERF_ARCH_SUPPORTED),)
+perf perf_install perf_clean: FORCE
+	@echo "perf: skipping build for unsupported architecture '$(PERF_BUILD_ARCH)'; supported: $(PERF_SUPPORTED_ARCHS)"
+else
 perf: FORCE
 	$(Q)mkdir -p $(PERF_O) .
 	$(Q)$(MAKE) --no-print-directory -C perf O=$(PERF_O) subdir=
+
+perf_install: FORCE
+	$(Q)mkdir -p $(PERF_O) .
+	$(Q)$(MAKE) --no-print-directory -C perf O=$(PERF_O) subdir= install
+
+perf_clean: FORCE
+	$(Q)mkdir -p $(PERF_O) .
+	$(Q)$(MAKE) --no-print-directory -C perf O=$(PERF_O) subdir= clean
+endif
 
 selftests: FORCE
 	$(call descend,testing/$@)
@@ -116,11 +136,7 @@ freefall: FORCE
 kvm_stat: FORCE
 	$(call descend,kvm/$@)
 
-all: acpi cgroup counter cpupower gpio hv firewire \
-		perf selftests bootconfig spi turbostat usb \
-		virtio mm bpf x86_energy_perf_policy \
-		tmon freefall iio objtool kvm_stat wmi \
-		pci debugging tracing thermal thermometer thermal-engine
+all: bpf perf
 
 acpi_install:
 	$(call descend,power/$(@:_install=),install)
@@ -128,7 +144,7 @@ acpi_install:
 cpupower_install:
 	$(call descend,power/$(@:_install=),install)
 
-cgroup_install counter_install firewire_install gpio_install hv_install iio_install perf_install bootconfig_install spi_install usb_install virtio_install mm_install bpf_install objtool_install wmi_install pci_install debugging_install tracing_install:
+cgroup_install counter_install firewire_install gpio_install hv_install iio_install bootconfig_install spi_install usb_install virtio_install mm_install bpf_install objtool_install wmi_install pci_install debugging_install tracing_install:
 	$(call descend,$(@:_install=),install)
 
 selftests_install:
@@ -155,13 +171,7 @@ freefall_install:
 kvm_stat_install:
 	$(call descend,kvm/$(@:_install=),install)
 
-install: acpi_install cgroup_install counter_install cpupower_install gpio_install \
-		hv_install firewire_install iio_install \
-		perf_install selftests_install turbostat_install usb_install \
-		virtio_install mm_install bpf_install x86_energy_perf_policy_install \
-		tmon_install freefall_install objtool_install kvm_stat_install \
-		wmi_install pci_install debugging_install intel-speed-select_install \
-		tracing_install thermometer_install thermal-engine_install
+install: bpf_install perf_install
 
 acpi_clean:
 	$(call descend,power/acpi,clean)
@@ -180,10 +190,6 @@ libbpf_clean:
 
 libsubcmd_clean:
 	$(call descend,lib/subcmd,clean)
-
-perf_clean:
-	$(Q)mkdir -p $(PERF_O) .
-	$(Q)$(MAKE) --no-print-directory -C perf O=$(PERF_O) subdir= clean
 
 selftests_clean:
 	$(call descend,testing/$(@:_clean=),clean)
@@ -209,11 +215,6 @@ freefall_clean:
 build_clean:
 	$(call descend,build,clean)
 
-clean: acpi_clean cgroup_clean counter_clean cpupower_clean hv_clean firewire_clean \
-		perf_clean selftests_clean turbostat_clean bootconfig_clean spi_clean usb_clean virtio_clean \
-		mm_clean bpf_clean iio_clean x86_energy_perf_policy_clean tmon_clean \
-		freefall_clean build_clean libbpf_clean libsubcmd_clean \
-		gpio_clean objtool_clean leds_clean wmi_clean pci_clean firmware_clean debugging_clean \
-		intel-speed-select_clean tracing_clean thermal_clean thermometer_clean thermal-engine_clean
+clean: perf_clean bpf_clean build_clean libbpf_clean libsubcmd_clean libapi_clean
 
 .PHONY: FORCE
