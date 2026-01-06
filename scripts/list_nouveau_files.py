@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
 
+import csv
 import pathlib
 import sys
 
@@ -19,6 +20,12 @@ def main():
         for path in nouveau_root.rglob("*")
         if path.is_file() and path.name not in skip_names
     ]
+
+    output_path = repo_root / "nouveau_files.csv"
+    with output_path.open("w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        for path in sorted(files):
+            writer.writerow([path.as_posix()])
 
     try:
         for path in sorted(files):
