@@ -24,10 +24,12 @@ def main():
         for path in sorted(files):
             print(path.as_posix())
     except BrokenPipeError:
-        return 1
+        sys.stdout.close()
+        sys.stderr.close()
+        return 141
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())
