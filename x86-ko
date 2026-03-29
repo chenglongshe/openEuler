@@ -442,6 +442,8 @@ drivers/net/ethernet/huawei/hibifur/hibifur3.ko
 drivers/net/ethernet/intel/igb/igb.ko
 drivers/net/ethernet/intel/i40e/i40e.ko
 drivers/net/ethernet/intel/iavf/iavf.ko
+drivers/net/ethernet/mellanox/mlx4/mlx4_core.ko
+drivers/net/ethernet/mellanox/mlx4/mlx4_en.ko
 drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.ko
 drivers/net/ethernet/mellanox/mlxfw/mlxfw.ko
 drivers/net/wan/hdlc.ko
@@ -1149,6 +1151,7 @@ drivers/infiniband/core/rdma_cm.ko
 drivers/infiniband/core/ib_umad.ko
 drivers/infiniband/core/ib_uverbs.ko
 drivers/infiniband/core/rdma_ucm.ko
+drivers/infiniband/hw/mlx4/mlx4_ib.ko
 drivers/infiniband/hw/mlx5/mlx5_ib.ko
 drivers/infiniband/hw/hiroce3/hiroce3.ko
 drivers/infiniband/ulp/ipoib/ib_ipoib.ko
