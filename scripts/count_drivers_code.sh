@@ -18,7 +18,8 @@ if [ ! -d "$DRIVERS_DIR" ]; then
     exit 1
 fi
 
-echo "directory,code" > "$OUTPUT_FILE"
+TMPFILE=$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
 
 for dir in "$DRIVERS_DIR"/*/; do
     dirname=$(basename "$dir")
@@ -31,10 +32,14 @@ for dir in "$DRIVERS_DIR"/*/; do
     fi
     code=$(echo "$output" | grep "^Total" | sed 's/,//g' | awk -v col="$code_col" '{print $col}')
     if [ -n "$code" ]; then
-        echo "${dirname},${code}" >> "$OUTPUT_FILE"
+        echo "${dirname},${code}" >> "$TMPFILE"
     else
         echo "Warning: skipping $dirname (no Total line in scc output)" >&2
     fi
 done
+
+# Write header and sorted results (descending by code lines) to output CSV
+echo "directory,code" > "$OUTPUT_FILE"
+sort -t',' -k2 -n -r "$TMPFILE" >> "$OUTPUT_FILE"
 
 echo "Results saved to $OUTPUT_FILE"
