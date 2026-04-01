@@ -27,7 +27,7 @@ help:
 	@echo 'Cleaning targets:'
 	@echo ''
 	@echo '  bpf_clean              - clean bpf build directory'
-	@echo '  clean                  - a summary clean target to clean all folders'
+	@echo '  clean                  - clean bpf and related library build directories'
 
 bpf: FORCE
 	$(call descend,$@)
