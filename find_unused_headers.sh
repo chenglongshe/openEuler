@@ -68,11 +68,9 @@ find . -path ./.git -prune -o \
     sed -n 's/.*-include[[:space:]]*\$(srctree)\/include\/\([^[:space:]\\]*\).*/\1/p' | \
     sort -u > "$TMPDIR/force_includes.txt"
 
-# 提取 Makefile 中生成 #include 语句的代码（如 modpost.c 生成 #include <linux/xxx>）
-find . -path ./.git -prune -o \
-    \( -name '*.c' -o -name '*.py' -o -name '*.sh' \) \
-    -print0 | \
-    xargs -0 grep -h 'include.*<linux/[^>]*>' 2>/dev/null | \
+# 提取代码中动态生成 #include 语句的情况（如 modpost.c 中 buf_printf(b, "#include <linux/xxx>\n")）
+find . -path ./.git -prune -o -name 'modpost.c' -print0 | \
+    xargs -0 grep -h '#include.*<linux/[^>]*>' 2>/dev/null | \
     sed -n 's/.*<linux\/\([^>"]*\)>.*/linux\/\1/p' | \
     sort -u >> "$TMPDIR/force_includes.txt"
 
@@ -125,7 +123,7 @@ while IFS= read -r header_path; do
 
     # ---- 检查方式2: uapi 头文件的短路径 ----
     # include/uapi/linux/foo.h -> 搜索 "linux/foo.h"
-    if [ $found -eq 0 ] && [[ "$inc_path" == uapi/* ]]; then
+    if [[ $found -eq 0 ]] && [[ "$inc_path" == uapi/* ]]; then
         short_path="${inc_path#uapi/}"
         if grep -qFx "$short_path" "$TMPDIR/all_includes.txt" 2>/dev/null; then
             found=1
@@ -135,7 +133,7 @@ while IFS= read -r header_path; do
     # ---- 检查方式3: 相对路径 #include "xxx" ----
     # 例如 trace/stages/stage1_struct_define.h 可能被同目录的文件
     # 通过 #include "stages/stage1_struct_define.h" 引用
-    if [ $found -eq 0 ]; then
+    if [[ $found -eq 0 ]]; then
         # 尝试匹配路径的后缀部分
         # 如 trace/stages/stage1.h 可匹配 "stages/stage1.h"
         if grep -qF "$basename_h" "$TMPDIR/all_includes.txt" 2>/dev/null; then
@@ -151,7 +149,7 @@ while IFS= read -r header_path; do
     fi
 
     # ---- 检查方式4: Makefile -include 强制包含 ----
-    if [ $found -eq 0 ]; then
+    if [[ $found -eq 0 ]]; then
         if grep -qFx "$inc_path" "$TMPDIR/force_includes.txt" 2>/dev/null; then
             found=1
         fi
@@ -159,20 +157,20 @@ while IFS= read -r header_path; do
 
     # ---- 检查方式5: asm-generic Kbuild mandatory-y ----
     # include/asm-generic/xxx.h -> Kbuild 声明 mandatory-y += xxx.h
-    if [ $found -eq 0 ] && [[ "$inc_path" == asm-generic/* ]]; then
+    if [[ $found -eq 0 ]] && [[ "$inc_path" == asm-generic/* ]]; then
         if grep -qFx "$basename_h" "$TMPDIR/kbuild_headers.txt" 2>/dev/null; then
             found=1
         fi
     fi
 
     # ---- 检查方式6: uapi asm-generic Kbuild ----
-    if [ $found -eq 0 ] && [[ "$inc_path" == uapi/asm-generic/* ]]; then
+    if [[ $found -eq 0 ]] && [[ "$inc_path" == uapi/asm-generic/* ]]; then
         if grep -qFx "$basename_h" "$TMPDIR/kbuild_headers.txt" 2>/dev/null; then
             found=1
         fi
     fi
 
-    if [ $found -eq 0 ]; then
+    if [[ $found -eq 0 ]]; then
         echo "$header_path" >> "$TMPDIR/unused_headers.txt"
     fi
 done < "$TMPDIR/all_headers.txt"
@@ -252,4 +250,3 @@ echo ""
 echo "输出文件:"
 echo "  未引用文件列表: $OUTPUT_FILE"
 echo "  详细分析报告:   $SUMMARY_FILE"
-
