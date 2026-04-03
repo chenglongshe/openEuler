@@ -1563,7 +1563,6 @@ CONFIG_IP_SET_MAX=256
 # CONFIG_IP_VS is not set
 # CONFIG_IP_VS_IPV6 is not set
 # CONFIG_IP_VS_DEBUG is not set
-# CONFIG_IP_VS_TAB_BITS is not set
 
 #
 # IPVS transport protocol load balancing support
@@ -1596,12 +1595,10 @@ CONFIG_IP_SET_MAX=256
 #
 # IPVS SH scheduler
 #
-# CONFIG_IP_VS_SH_TAB_BITS is not set
 
 #
 # IPVS MH scheduler
 #
-# CONFIG_IP_VS_MH_TAB_INDEX is not set
 
 #
 # IPVS application helper
