@@ -23,7 +23,7 @@ set -euo pipefail
 
 if [ $# -lt 2 ]; then
     echo "用法: $0 <内核源码目录> <输出未使用文件列表> [编译命令]"
-    echo "示例: $0 /root/FusionOS_compile_env ./unused.txt 'make -j4'"
+    echo "示例: $0 /path/to/kernel_source ./unused.txt 'make -j4'"
     exit 1
 fi
 
@@ -52,7 +52,7 @@ CURRENT_MAX_WATCHES=$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || e
 RECOMMENDED_WATCHES=524288
 if [ "$CURRENT_MAX_WATCHES" -lt "$RECOMMENDED_WATCHES" ]; then
     echo "警告：当前 inotify watch 上限为 $CURRENT_MAX_WATCHES，内核源码可能需要更多。"
-    echo "建议执行：echo $RECOMMENDED_WATCHES | sudo tee /proc/sys/fs/inotify/max_user_watches"
+    echo "建议执行：echo \"$RECOMMENDED_WATCHES\" | sudo tee /proc/sys/fs/inotify/max_user_watches"
     echo "尝试自动增加..."
     if echo "$RECOMMENDED_WATCHES" > /proc/sys/fs/inotify/max_user_watches 2>/dev/null; then
         echo "已将 max_user_watches 增加到 $RECOMMENDED_WATCHES"
@@ -70,6 +70,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# 可配置的排除目录列表（用 | 分隔，用于 inotifywait 的 --exclude 正则）
+EXCLUDED_DIRS=".git|Documentation"
+
 # 启动 inotify 监控（递归监控 open 事件）
 # 注意：
 #   - 排除 .git 和 Documentation 目录以降低监控开销
@@ -77,7 +80,7 @@ trap cleanup EXIT
 #   - --format '%w%f' 输出完整路径（%w=被监控目录路径，%f=文件名）
 echo "正在启动文件访问监控..."
 inotifywait -m -r -e open \
-    --exclude '(/\.git/|/Documentation/)' \
+    --exclude "(/${EXCLUDED_DIRS}/)" \
     --format '%w%f' \
     "$SRC_DIR" > "$ACCESSED_LIST" 2>/dev/null &
 INOTIFY_PID=$!
@@ -147,7 +150,9 @@ if [ -n "$UNUSED_FILE_LIST" ]; then
 
     read -p "是否删除这些文件？(y/N) " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "$UNUSED_FILE_LIST" | xargs rm -f
+        while IFS= read -r file; do
+            rm -f "$file"
+        done <<< "$UNUSED_FILE_LIST"
         echo "已删除 $UNUSED_COUNT 个未使用的文件。"
     else
         echo "未删除任何文件。"
