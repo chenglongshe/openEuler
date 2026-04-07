@@ -300,15 +300,10 @@ drivers/gpu/drm/qxl/qxl.ko
 drivers/gpu/drm/virtio/virtio-gpu.ko
 drivers/base/regmap/regmap-i2c.ko
 drivers/base/regmap/regmap-spi.ko
-drivers/block/brd.ko
 drivers/block/loop.ko
-drivers/block/pktcdvd.ko
 drivers/block/nbd.ko
 drivers/block/virtio_blk.ko
-drivers/block/xen-blkfront.ko
-drivers/block/rbd.ko
 drivers/block/zram/zram.ko
-drivers/block/null_blk/null_blk.ko
 drivers/misc/eeprom/eeprom.ko
 drivers/misc/eeprom/max6875.ko
 drivers/misc/eeprom/eeprom_93cx6.ko
