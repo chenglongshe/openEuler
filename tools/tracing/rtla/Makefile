@@ -55,12 +55,12 @@ LICDIR	:=	$(DATADIR)/licenses
 SRCTREE	:=	$(or $(BUILD_SRC),$(CURDIR))
 
 # If running from the tarball, man pages are stored in the Documentation
-# dir. If running from the kernel source, man pages are stored in
-# Documentation/tools/rtla/.
+# dir. If running from the kernel source, man pages were in
+# Documentation/tools/rtla/ (now removed).
 ifneq ($(wildcard Documentation/.*),)
 DOCSRC	=	Documentation/
 else
-DOCSRC	=	$(SRCTREE)/../../../Documentation/tools/rtla/
+DOCSRC	=	.
 endif
 
 LIBTRACEEVENT_MIN_VERSION = 1.5
@@ -141,8 +141,6 @@ tarball: clean
 	rm -rf $(NAME)-$(VERSION) && mkdir $(NAME)-$(VERSION)
 	echo $(VERSION) > $(NAME)-$(VERSION)/VERSION
 	cp -r $(DIRS) $(FILES) $(NAME)-$(VERSION)
-	mkdir $(NAME)-$(VERSION)/Documentation/
-	cp -rp $(SRCTREE)/../../../Documentation/tools/rtla/* $(NAME)-$(VERSION)/Documentation/
 	tar $(TAROPTS) --exclude='*~' $(NAME)-$(VERSION)
 	rm -rf $(NAME)-$(VERSION)
 

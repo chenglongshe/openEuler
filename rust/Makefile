@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 
 # Where to place rustdoc generated documentation
-rustdoc_output := $(objtree)/Documentation/output/rust/rustdoc
+rustdoc_output := $(objtree)/rust/rustdoc
 
 obj-$(CONFIG_RUST) += core.o compiler_builtins.o
 always-$(CONFIG_RUST) += exports_core_generated.h
@@ -93,8 +93,6 @@ quiet_cmd_rustdoc = RUSTDOC $(if $(rustdoc_host),H, ) $<
 # and then retouch the generated files.
 rustdoc: rustdoc-core rustdoc-macros rustdoc-compiler_builtins \
     rustdoc-alloc rustdoc-kernel
-	$(Q)cp $(srctree)/Documentation/images/logo.svg $(rustdoc_output)/static.files/
-	$(Q)cp $(srctree)/Documentation/images/COPYING-logo $(rustdoc_output)/static.files/
 	$(Q)find $(rustdoc_output) -name '*.html' -type f -print0 | xargs -0 sed -Ei \
 		-e 's:rust-logo-[0-9a-f]+\.svg:logo.svg:g' \
 		-e 's:favicon-[0-9a-f]+\.svg:logo.svg:g' \

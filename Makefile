@@ -271,7 +271,7 @@ export building_out_of_srctree srctree objtree VPATH
 
 version_h := include/generated/uapi/linux/version.h
 
-clean-targets := %clean mrproper cleandocs
+clean-targets := %clean mrproper
 no-dot-config-targets := $(clean-targets) \
 			 cscope gtags TAGS tags help% %docs check% coccicheck \
 			 $(version_h) headers headers_% archheaders archscripts \
@@ -1113,7 +1113,7 @@ export MODULES_NSDEPS := $(extmod_prefix)modules.nsdeps
 ifeq ($(KBUILD_EXTMOD),)
 
 build-dir	:= .
-clean-dirs	:= $(sort . Documentation \
+clean-dirs	:= $(sort . \
 		     $(patsubst %/,%,$(filter %/, $(core-) \
 			$(drivers-) $(libs-))))
 
@@ -1414,7 +1414,7 @@ export CHECK_DTBS=y
 endif
 
 ifneq ($(CHECK_DTBS),)
-dtbs_prepare: dt_binding_check
+dtbs_prepare: scripts_dtc
 endif
 
 dtbs_check: dtbs
@@ -1432,17 +1432,13 @@ PHONY += scripts_dtc
 scripts_dtc: scripts_basic
 	$(Q)$(MAKE) $(build)=scripts/dtc
 
-ifneq ($(filter dt_binding_check, $(MAKECMDGOALS)),)
-export CHECK_DT_BINDING=y
-endif
-
 PHONY += dt_binding_check
-dt_binding_check: scripts_dtc
-	$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings
+dt_binding_check:
+	@echo "dt_binding_check: Documentation directory removed, skipping."
 
 PHONY += dt_compatible_check
-dt_compatible_check: dt_binding_check
-	$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings $@
+dt_compatible_check:
+	@echo "dt_compatible_check: Documentation directory removed, skipping."
 
 # ---------------------------------------------------------------------------
 # Modules
@@ -1648,8 +1644,6 @@ help:
 	@echo  'Kernel packaging:'
 	@$(MAKE) -f $(srctree)/scripts/Makefile.package help
 	@echo  ''
-	@echo  'Documentation targets:'
-	@$(MAKE) -f $(srctree)/Documentation/Makefile dochelp
 	@echo  ''
 	@echo  'Architecture specific targets ($(SRCARCH)):'
 	@$(or $(archhelp),\
@@ -1702,13 +1696,13 @@ $(help-board-dirs): help-%:
 		echo '')
 
 
-# Documentation targets
+# Documentation targets (disabled - Documentation directory removed)
 # ---------------------------------------------------------------------------
 DOC_TARGETS := xmldocs latexdocs pdfdocs htmldocs epubdocs cleandocs \
 	       linkcheckdocs dochelp refcheckdocs texinfodocs infodocs
 PHONY += $(DOC_TARGETS)
 $(DOC_TARGETS):
-	$(Q)$(MAKE) $(build)=Documentation $@
+	@echo "Documentation directory has been removed, skipping $@ target."
 
 
 # Rust targets
