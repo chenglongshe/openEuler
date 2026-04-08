@@ -93,8 +93,12 @@ quiet_cmd_rustdoc = RUSTDOC $(if $(rustdoc_host),H, ) $<
 # and then retouch the generated files.
 rustdoc: rustdoc-core rustdoc-macros rustdoc-compiler_builtins \
     rustdoc-alloc rustdoc-kernel
-	$(Q)cp $(srctree)/Documentation/images/logo.svg $(rustdoc_output)/static.files/
-	$(Q)cp $(srctree)/Documentation/images/COPYING-logo $(rustdoc_output)/static.files/
+	$(Q)if [ -f $(srctree)/Documentation/images/logo.svg ]; then \
+		cp $(srctree)/Documentation/images/logo.svg $(rustdoc_output)/static.files/; \
+	fi
+	$(Q)if [ -f $(srctree)/Documentation/images/COPYING-logo ]; then \
+		cp $(srctree)/Documentation/images/COPYING-logo $(rustdoc_output)/static.files/; \
+	fi
 	$(Q)find $(rustdoc_output) -name '*.html' -type f -print0 | xargs -0 sed -Ei \
 		-e 's:rust-logo-[0-9a-f]+\.svg:logo.svg:g' \
 		-e 's:favicon-[0-9a-f]+\.svg:logo.svg:g' \

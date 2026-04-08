@@ -1113,7 +1113,7 @@ export MODULES_NSDEPS := $(extmod_prefix)modules.nsdeps
 ifeq ($(KBUILD_EXTMOD),)
 
 build-dir	:= .
-clean-dirs	:= $(sort . Documentation \
+clean-dirs	:= $(sort . \
 		     $(patsubst %/,%,$(filter %/, $(core-) \
 			$(drivers-) $(libs-))))
 
@@ -1438,11 +1438,13 @@ endif
 
 PHONY += dt_binding_check
 dt_binding_check: scripts_dtc
-	$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings
+	$(if $(wildcard $(srctree)/Documentation/devicetree/bindings),\
+		$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings)
 
 PHONY += dt_compatible_check
 dt_compatible_check: dt_binding_check
-	$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings $@
+	$(if $(wildcard $(srctree)/Documentation/devicetree/bindings),\
+		$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings $@)
 
 # ---------------------------------------------------------------------------
 # Modules
@@ -1648,9 +1650,11 @@ help:
 	@echo  'Kernel packaging:'
 	@$(MAKE) -f $(srctree)/scripts/Makefile.package help
 	@echo  ''
-	@echo  'Documentation targets:'
-	@$(MAKE) -f $(srctree)/Documentation/Makefile dochelp
-	@echo  ''
+	@if [ -f $(srctree)/Documentation/Makefile ]; then \
+		echo  'Documentation targets:'; \
+		$(MAKE) -f $(srctree)/Documentation/Makefile dochelp; \
+		echo  ''; \
+	fi
 	@echo  'Architecture specific targets ($(SRCARCH)):'
 	@$(or $(archhelp),\
 		echo '  No architecture specific help defined for $(SRCARCH)')
@@ -1708,7 +1712,8 @@ DOC_TARGETS := xmldocs latexdocs pdfdocs htmldocs epubdocs cleandocs \
 	       linkcheckdocs dochelp refcheckdocs texinfodocs infodocs
 PHONY += $(DOC_TARGETS)
 $(DOC_TARGETS):
-	$(Q)$(MAKE) $(build)=Documentation $@
+	$(if $(wildcard $(srctree)/Documentation/Makefile),\
+		$(Q)$(MAKE) $(build)=Documentation $@)
 
 
 # Rust targets
