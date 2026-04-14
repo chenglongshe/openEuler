@@ -1,0 +1,14 @@
+[Unit]
+Description=Restore VM vCPU CPU-Pinning Configurations
+After=libvirtd.service
+Requires=libvirtd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/libexec/vm-bindcore/vm_bindcore_restore.py
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

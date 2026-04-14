@@ -1,0 +1,87 @@
+.TH VM-BINDCORE 1 "April 2026" "vm-bindcore 1.0.0" "User Commands"
+.SH NAME
+vm-bindcore \- VM vCPU CPU-Pinning Management Tool (NUMA-aware)
+.SH SYNOPSIS
+.B vm-bindcore
+[\fB\-v\fR]
+\fIcommand\fR
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B vm-bindcore
+is a NUMA-aware vCPU pinning management tool for KVM/libvirt virtual machines.
+It provides automatic and manual vCPU-to-pCPU pinning with strategies:
+numa-aware, spread, and compact.
+.SH COMMANDS
+.TP
+.B topology
+Show host NUMA topology information.
+.TP
+.B pin
+Pin vCPUs to physical CPUs using a strategy or manual mapping.
+.TP
+.B unpin
+Remove vCPU pinning for a virtual machine.
+.TP
+.B show
+Show current vCPU pinning status for a virtual machine.
+.TP
+.B restore
+Restore pinning from saved persistent configurations.
+.SH OPTIONS
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Enable verbose output.
+.SH PIN OPTIONS
+.TP
+\fB\-\-vm\fR \fIname\fR
+VM domain name (required).
+.TP
+\fB\-\-strategy\fR numa-aware|spread|compact
+Pinning strategy to use.
+.TP
+\fB\-\-node\fR \fIid\fR
+Preferred NUMA node (for numa-aware strategy).
+.TP
+\fB\-\-manual\fR \fImapping\fR
+Manual mapping, e.g., vcpu0:0-3,vcpu1:4-7.
+.SH EXAMPLES
+.PP
+Show NUMA topology:
+.RS
+.nf
+vm-bindcore topology
+vm-bindcore topology --format json
+.fi
+.RE
+.PP
+Pin with NUMA-aware strategy:
+.RS
+.nf
+vm-bindcore pin --vm test-vm --strategy numa-aware
+vm-bindcore pin --vm test-vm --strategy numa-aware --node 0
+.fi
+.RE
+.PP
+Manual pinning:
+.RS
+.nf
+vm-bindcore pin --vm test-vm --manual vcpu0:0-3,vcpu1:4-7
+.fi
+.RE
+.PP
+Show pinning status:
+.RS
+.nf
+vm-bindcore show --vm test-vm
+.fi
+.RE
+.SH FILES
+.TP
+/etc/vm-bindcore/pinning.d/*.json
+Persistent pinning configuration files.
+.SH SEE ALSO
+.BR virsh (1),
+.BR numactl (8),
+.BR taskset (1)
+.SH AUTHORS
+Based on patent by Zhang Hailiang (张海亮).
