@@ -2,11 +2,19 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MulanPSL-2.0
 #
-# Test suite for vm-bindcore
-# Tests cover: NumaTopology, PinningEngine, PinningConfig, CLI parsing
+# Test suite for vm-bindcore (VMM-side handler + Guest-side interceptor)
+# Based on patent: 一种优化虚拟机内业务绑核性能的方法 (Inventor: 张海亮)
 
 """
 Unit and integration tests for vm-bindcore.
+
+Tests cover the patent's core architecture:
+  1. Global CPU Map management
+  2. Dynamic 1:1 pinning on guest notification
+  3. Automatic un-pin restore
+  4. Conflict avoidance
+  5. Guest-side interception (kprobe/eBPF simulation)
+  6. End-to-end guest→VMM notification flow
 
 Run with: python3 -m pytest tests/test_vm_bindcore.py -v
 """
@@ -17,601 +25,722 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 # Add source directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from vm_bindcore import (  # noqa: E402
-    NumaTopology,
-    PinningConfig,
-    PinningEngine,
+    GlobalCpuMap,
+    GuestPinNotification,
+    PinMode,
+    PinSource,
+    VcpuPinState,
+    VmPinState,
+    VmmPinHandler,
     _format_cpulist,
+    _parse_cpulist,
     main,
+)
+from vm_bindcore_guest import (  # noqa: E402
+    AffinityEvent,
+    EbpfInterceptor,
+    InterceptorBase,
+    KprobeInterceptor,
+    NotificationAgent,
 )
 
 
-class TestNumaTopologyParseCpulist(unittest.TestCase):
-    """Test CPU list string parsing."""
-
-    def test_single_cpu(self):
-        result = NumaTopology._parse_cpulist("0")
-        self.assertEqual(result, [0])
-
-    def test_cpu_range(self):
-        result = NumaTopology._parse_cpulist("0-3")
-        self.assertEqual(result, [0, 1, 2, 3])
-
-    def test_mixed_range_and_single(self):
-        result = NumaTopology._parse_cpulist("0-3,8,12-15")
-        self.assertEqual(result, [0, 1, 2, 3, 8, 12, 13, 14, 15])
-
-    def test_single_large_cpu(self):
-        result = NumaTopology._parse_cpulist("127")
-        self.assertEqual(result, [127])
-
-    def test_multiple_ranges(self):
-        result = NumaTopology._parse_cpulist("0-1,4-5,8-9")
-        self.assertEqual(result, [0, 1, 4, 5, 8, 9])
-
-    def test_whitespace_handling(self):
-        result = NumaTopology._parse_cpulist(" 0-3 , 8-11 ")
-        self.assertEqual(result, [0, 1, 2, 3, 8, 9, 10, 11])
-
+# ============================================================================
+# Test: Utility functions
+# ============================================================================
 
 class TestFormatCpulist(unittest.TestCase):
     """Test CPU list formatting."""
 
-    def test_empty_list(self):
+    def test_empty(self):
         self.assertEqual(_format_cpulist([]), "(none)")
 
-    def test_single_cpu(self):
+    def test_single(self):
         self.assertEqual(_format_cpulist([5]), "5")
 
-    def test_contiguous_range(self):
+    def test_range(self):
         self.assertEqual(_format_cpulist([0, 1, 2, 3]), "0-3")
 
     def test_mixed(self):
         self.assertEqual(_format_cpulist([0, 1, 2, 5, 6, 10]), "0-2,5-6,10")
 
-    def test_unsorted_input(self):
+    def test_unsorted(self):
         self.assertEqual(_format_cpulist([3, 1, 2, 0]), "0-3")
 
 
-class MockNumaTopology:
-    """Create a mock NUMA topology for testing."""
+class TestParseCpulist(unittest.TestCase):
+    """Test CPU list parsing."""
 
-    @staticmethod
-    def two_node_no_smt():
-        """2 NUMA nodes, 8 CPUs each, no SMT."""
-        topo = NumaTopology.__new__(NumaTopology)
-        topo.nodes = {
-            0: list(range(0, 8)),
-            1: list(range(8, 16)),
-        }
-        topo.distances = {
-            0: {0: 10, 1: 21},
-            1: {0: 21, 1: 10},
-        }
-        topo.core_siblings = {i: [i] for i in range(16)}
-        return topo
+    def test_single(self):
+        self.assertEqual(_parse_cpulist("0"), [0])
 
-    @staticmethod
-    def two_node_with_smt():
-        """2 NUMA nodes, 4 cores * 2 threads each = 16 CPUs."""
-        topo = NumaTopology.__new__(NumaTopology)
-        topo.nodes = {
-            0: [0, 1, 2, 3, 8, 9, 10, 11],   # cores 0-3, threads on 8-11
-            1: [4, 5, 6, 7, 12, 13, 14, 15],  # cores 4-7, threads on 12-15
-        }
-        topo.distances = {
-            0: {0: 10, 1: 21},
-            1: {0: 21, 1: 10},
-        }
-        topo.core_siblings = {
-            0: [0, 8], 8: [0, 8],
-            1: [1, 9], 9: [1, 9],
-            2: [2, 10], 10: [2, 10],
-            3: [3, 11], 11: [3, 11],
-            4: [4, 12], 12: [4, 12],
-            5: [5, 13], 13: [5, 13],
-            6: [6, 14], 14: [6, 14],
-            7: [7, 15], 15: [7, 15],
-        }
-        return topo
+    def test_range(self):
+        self.assertEqual(_parse_cpulist("0-3"), [0, 1, 2, 3])
 
-    @staticmethod
-    def four_node():
-        """4 NUMA nodes, 8 CPUs each = 32 CPUs."""
-        topo = NumaTopology.__new__(NumaTopology)
-        topo.nodes = {
-            0: list(range(0, 8)),
-            1: list(range(8, 16)),
-            2: list(range(16, 24)),
-            3: list(range(24, 32)),
-        }
-        topo.distances = {
-            0: {0: 10, 1: 21, 2: 31, 3: 31},
-            1: {0: 21, 1: 10, 2: 31, 3: 31},
-            2: {0: 31, 1: 31, 2: 10, 3: 21},
-            3: {0: 31, 1: 31, 2: 21, 3: 10},
-        }
-        topo.core_siblings = {i: [i] for i in range(32)}
-        return topo
+    def test_mixed(self):
+        self.assertEqual(_parse_cpulist("0-3,8,12-15"), [0, 1, 2, 3, 8, 12, 13, 14, 15])
+
+    def test_whitespace(self):
+        self.assertEqual(_parse_cpulist(" 0-3 , 8-11 "), [0, 1, 2, 3, 8, 9, 10, 11])
 
 
-class TestPinningEngineNumaAware(unittest.TestCase):
-    """Test NUMA-aware pinning strategy."""
+# ============================================================================
+# Test: VcpuPinState and VmPinState
+# ============================================================================
 
-    def test_basic_numa_aware(self):
-        """All vCPUs should be on the same NUMA node."""
-        topo = MockNumaTopology.two_node_no_smt()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_numa_aware(4)
+class TestVcpuPinState(unittest.TestCase):
+    """Test vCPU pin state data structure."""
 
-        # All CPUs should be from the same node
-        all_cpus = []
-        for cpulist in mapping.values():
-            all_cpus.extend(cpulist)
+    def test_default_state(self):
+        state = VcpuPinState(0, [0, 1, 2, 3])
+        self.assertEqual(state.vcpu_id, 0)
+        self.assertEqual(state.mode, PinMode.RANGE)
+        self.assertIsNone(state.pinned_pcpu)
+        self.assertEqual(state.source, PinSource.DEFAULT)
 
-        nodes = set()
-        for cpu in all_cpus:
-            nodes.add(topo.get_node_for_cpu(cpu))
+    def test_serialize_roundtrip(self):
+        state = VcpuPinState(2, [0, 1, 2, 3])
+        state.mode = PinMode.EXCLUSIVE
+        state.pinned_pcpu = 8
+        state.source = PinSource.GUEST_PIN
+        state.guest_pid = 1234
 
-        self.assertEqual(len(nodes), 1, "All vCPUs should be on one NUMA node")
-        self.assertEqual(len(mapping), 4)
-
-    def test_numa_aware_preferred_node(self):
-        """vCPUs should be placed on the preferred node."""
-        topo = MockNumaTopology.two_node_no_smt()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_numa_aware(4, preferred_node=1)
-
-        for cpulist in mapping.values():
-            for cpu in cpulist:
-                self.assertEqual(
-                    topo.get_node_for_cpu(cpu), 1,
-                    f"CPU {cpu} should be on node 1"
-                )
-
-    def test_numa_aware_spillover(self):
-        """When preferred node is full, spill to nearest neighbor."""
-        topo = MockNumaTopology.two_node_no_smt()
-        # Use 6 of 8 CPUs on node 0
-        used = set(range(0, 6))
-        engine = PinningEngine(topo, used_cpus=used)
-        mapping = engine.compute_numa_aware(4, preferred_node=0)
-
-        # Should get 2 from node 0, 2 from node 1
-        self.assertEqual(len(mapping), 4)
-        node0_count = sum(
-            1 for cpulist in mapping.values()
-            for cpu in cpulist if topo.get_node_for_cpu(cpu) == 0
-        )
-        node1_count = sum(
-            1 for cpulist in mapping.values()
-            for cpu in cpulist if topo.get_node_for_cpu(cpu) == 1
-        )
-        self.assertEqual(node0_count, 2)
-        self.assertEqual(node1_count, 2)
-
-    def test_numa_aware_not_enough_cpus(self):
-        """Should raise error when not enough CPUs available."""
-        topo = MockNumaTopology.two_node_no_smt()
-        used = set(range(0, 16))  # All CPUs used
-        engine = PinningEngine(topo, used_cpus=used)
-
-        with self.assertRaises(RuntimeError) as ctx:
-            engine.compute_numa_aware(4)
-        self.assertIn("Not enough free CPUs", str(ctx.exception))
-
-    def test_numa_aware_four_nodes(self):
-        """NUMA-aware with 4 nodes should prefer the best node."""
-        topo = MockNumaTopology.four_node()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_numa_aware(4)
-
-        self.assertEqual(len(mapping), 4)
-        # All should be on one node
-        nodes = set()
-        for cpulist in mapping.values():
-            for cpu in cpulist:
-                nodes.add(topo.get_node_for_cpu(cpu))
-        self.assertEqual(len(nodes), 1)
+        d = state.to_dict()
+        restored = VcpuPinState.from_dict(d)
+        self.assertEqual(restored.vcpu_id, 2)
+        self.assertEqual(restored.mode, PinMode.EXCLUSIVE)
+        self.assertEqual(restored.pinned_pcpu, 8)
+        self.assertEqual(restored.source, PinSource.GUEST_PIN)
+        self.assertEqual(restored.guest_pid, 1234)
 
 
-class TestPinningEngineSpread(unittest.TestCase):
-    """Test spread pinning strategy."""
+class TestVmPinState(unittest.TestCase):
+    """Test VM pin state data structure."""
 
-    def test_even_spread_two_nodes(self):
-        """4 vCPUs spread across 2 nodes = 2 per node."""
-        topo = MockNumaTopology.two_node_no_smt()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_spread(4)
-
-        self.assertEqual(len(mapping), 4)
-
-        node_counts = {0: 0, 1: 0}
-        for cpulist in mapping.values():
-            for cpu in cpulist:
-                node_id = topo.get_node_for_cpu(cpu)
-                node_counts[node_id] += 1
-
-        self.assertEqual(node_counts[0], 2)
-        self.assertEqual(node_counts[1], 2)
-
-    def test_spread_four_nodes(self):
-        """8 vCPUs spread across 4 nodes = 2 per node."""
-        topo = MockNumaTopology.four_node()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_spread(8)
-
-        self.assertEqual(len(mapping), 8)
-
-        node_counts = {0: 0, 1: 0, 2: 0, 3: 0}
-        for cpulist in mapping.values():
-            for cpu in cpulist:
-                node_id = topo.get_node_for_cpu(cpu)
-                node_counts[node_id] += 1
-
-        for nid in range(4):
-            self.assertEqual(node_counts[nid], 2)
-
-    def test_spread_uneven(self):
-        """5 vCPUs across 2 nodes = 3+2 distribution."""
-        topo = MockNumaTopology.two_node_no_smt()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_spread(5)
-
-        self.assertEqual(len(mapping), 5)
-
-        node_counts = {0: 0, 1: 0}
-        for cpulist in mapping.values():
-            for cpu in cpulist:
-                node_id = topo.get_node_for_cpu(cpu)
-                node_counts[node_id] += 1
-
-        self.assertEqual(node_counts[0], 3)
-        self.assertEqual(node_counts[1], 2)
-
-    def test_spread_not_enough_cpus(self):
-        """Should raise error when a node runs out of CPUs."""
-        topo = MockNumaTopology.two_node_no_smt()
-        used = set(range(0, 8))  # node 0 fully used
-        engine = PinningEngine(topo, used_cpus=used)
-
-        with self.assertRaises(RuntimeError):
-            engine.compute_spread(4)
-
-
-class TestPinningEngineCompact(unittest.TestCase):
-    """Test compact pinning strategy."""
-
-    def test_compact_with_smt(self):
-        """2 vCPUs should use SMT siblings on the same core."""
-        topo = MockNumaTopology.two_node_with_smt()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_compact(2)
-
-        self.assertEqual(len(mapping), 2)
-        cpus = []
-        for cpulist in mapping.values():
-            cpus.extend(cpulist)
-
-        # Both CPUs should be siblings
-        self.assertEqual(len(cpus), 2)
-        cpu0, cpu1 = cpus
-        self.assertIn(cpu1, topo.core_siblings.get(cpu0, []),
-                       "Both vCPUs should be on SMT siblings")
-
-    def test_compact_more_than_smt(self):
-        """4 vCPUs should use 2 physical cores."""
-        topo = MockNumaTopology.two_node_with_smt()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_compact(4)
-
-        self.assertEqual(len(mapping), 4)
-
-        # Count physical cores used
-        cores_used = set()
-        for cpulist in mapping.values():
-            for cpu in cpulist:
-                # Find the primary sibling (lowest CPU ID in group)
-                siblings = topo.core_siblings.get(cpu, [cpu])
-                cores_used.add(min(siblings))
-
-        self.assertLessEqual(len(cores_used), 2,
-                             "Should use at most 2 physical cores for 4 vCPUs with SMT")
-
-    def test_compact_no_smt(self):
-        """Without SMT, compact should still pack onto first available CPUs."""
-        topo = MockNumaTopology.two_node_no_smt()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_compact(4)
-
-        self.assertEqual(len(mapping), 4)
-        cpus = sorted(
-            cpu for cpulist in mapping.values() for cpu in cpulist
-        )
-        # Should use first 4 available CPUs
-        self.assertEqual(cpus, [0, 1, 2, 3])
-
-    def test_compact_not_enough_cpus(self):
-        """Should raise error when not enough CPUs."""
-        topo = MockNumaTopology.two_node_no_smt()
-        used = set(range(0, 16))
-        engine = PinningEngine(topo, used_cpus=used)
-
-        with self.assertRaises(RuntimeError):
-            engine.compute_compact(4)
-
-
-class TestManualMapping(unittest.TestCase):
-    """Test manual mapping parsing."""
-
-    def test_basic_mapping(self):
-        mapping = PinningEngine.parse_manual_mapping(
-            "vcpu0:0-3,vcpu1:4-7", max_cpu=64
-        )
-        self.assertEqual(mapping["vcpu0"], [0, 1, 2, 3])
-        self.assertEqual(mapping["vcpu1"], [4, 5, 6, 7])
-
-    def test_single_cpu_mapping(self):
-        mapping = PinningEngine.parse_manual_mapping(
-            "vcpu0:5", max_cpu=64
-        )
-        self.assertEqual(mapping["vcpu0"], [5])
-
-    def test_invalid_format(self):
-        with self.assertRaises(ValueError):
-            PinningEngine.parse_manual_mapping("vcpu0", max_cpu=64)
-
-    def test_cpu_out_of_range(self):
-        with self.assertRaises(ValueError) as ctx:
-            PinningEngine.parse_manual_mapping(
-                "vcpu0:256", max_cpu=64
-            )
-        self.assertIn("does not exist", str(ctx.exception))
-
-    def test_multiple_vcpus(self):
-        mapping = PinningEngine.parse_manual_mapping(
-            "vcpu0:0,vcpu1:1,vcpu2:2,vcpu3:3", max_cpu=64
-        )
-        self.assertEqual(len(mapping), 4)
+    def test_creation(self):
+        vm = VmPinState("test-vm", 4, [0, 1, 2, 3, 4, 5, 6, 7])
+        self.assertEqual(vm.domain, "test-vm")
+        self.assertEqual(vm.vcpu_count, 4)
+        self.assertEqual(len(vm.vcpus), 4)
         for i in range(4):
-            self.assertEqual(mapping[f"vcpu{i}"], [i])
+            self.assertEqual(vm.vcpus[i].mode, PinMode.RANGE)
+
+    def test_serialize_roundtrip(self):
+        vm = VmPinState("vm1", 2, [0, 1, 2, 3])
+        vm.vcpus[0].mode = PinMode.EXCLUSIVE
+        vm.vcpus[0].pinned_pcpu = 2
+
+        d = vm.to_dict()
+        restored = VmPinState.from_dict(d)
+        self.assertEqual(restored.domain, "vm1")
+        self.assertEqual(restored.vcpus[0].mode, PinMode.EXCLUSIVE)
+        self.assertEqual(restored.vcpus[0].pinned_pcpu, 2)
+        self.assertEqual(restored.vcpus[1].mode, PinMode.RANGE)
 
 
-class TestPinningConfig(unittest.TestCase):
-    """Test persistent pinning configuration."""
+# ============================================================================
+# Test: GlobalCpuMap — core patent logic
+# ============================================================================
+
+class TestGlobalCpuMap(unittest.TestCase):
+    """Test the Global CPU Map — central to the patent's VMM-side logic."""
+
+    def setUp(self):
+        self.gm = GlobalCpuMap(total_pcpus=16)
+
+    def test_register_vm(self):
+        """AC-SR: VM registration in global map."""
+        vm = self.gm.register_vm("vm1", 4, list(range(0, 8)))
+        self.assertEqual(vm.domain, "vm1")
+        self.assertEqual(vm.vcpu_count, 4)
+        self.assertIn("vm1", self.gm.vm_states)
+
+    def test_unregister_vm_releases_exclusive(self):
+        """Unregistering a VM releases all its exclusive pCPUs."""
+        self.gm.register_vm("vm1", 4, list(range(0, 8)))
+        self.gm.pin_exclusive("vm1", 0)
+        self.gm.pin_exclusive("vm1", 1)
+        self.assertEqual(len(self.gm.exclusive_map), 2)
+
+        self.gm.unregister_vm("vm1")
+        self.assertEqual(len(self.gm.exclusive_map), 0)
+        self.assertNotIn("vm1", self.gm.vm_states)
+
+
+class TestDynamic1to1Pinning(unittest.TestCase):
+    """
+    Test AC-SR-03: VMM dynamically 1:1 pins a vCPU when guest app pins.
+    This is the core innovation of the patent.
+    """
+
+    def setUp(self):
+        self.gm = GlobalCpuMap(total_pcpus=64)
+        self.gm.register_vm("vm1", 4, list(range(0, 16)))
+
+    def test_pin_exclusive_basic(self):
+        """Guest app pins → VMM switches vCPU to exclusive 1:1."""
+        ok, pcpu, msg = self.gm.pin_exclusive("vm1", 2, guest_pid=5678)
+        self.assertTrue(ok)
+        self.assertIsNotNone(pcpu)
+        self.assertIn(pcpu, range(0, 16))  # Must be within VM's cpuset
+
+        # Verify state
+        vcpu = self.gm.vm_states["vm1"].vcpus[2]
+        self.assertEqual(vcpu.mode, PinMode.EXCLUSIVE)
+        self.assertEqual(vcpu.pinned_pcpu, pcpu)
+        self.assertEqual(vcpu.source, PinSource.GUEST_PIN)
+        self.assertEqual(vcpu.guest_pid, 5678)
+
+    def test_pin_exclusive_records_in_global_map(self):
+        """1:1 pin is recorded in the global exclusive map."""
+        ok, pcpu, _ = self.gm.pin_exclusive("vm1", 2)
+        self.assertTrue(ok)
+        self.assertIn(pcpu, self.gm.exclusive_map)
+        self.assertEqual(self.gm.exclusive_map[pcpu], ("vm1", 2))
+
+    def test_pin_exclusive_idempotent(self):
+        """Pinning an already-exclusive vCPU returns success without change."""
+        ok1, pcpu1, _ = self.gm.pin_exclusive("vm1", 0)
+        ok2, pcpu2, _ = self.gm.pin_exclusive("vm1", 0)
+        self.assertTrue(ok1)
+        self.assertTrue(ok2)
+        self.assertEqual(pcpu1, pcpu2)
+
+    def test_pin_multiple_vcpus_different_pcpus(self):
+        """AC-US-03-03: Multiple vCPUs get different pCPUs."""
+        results = []
+        for i in range(4):
+            ok, pcpu, _ = self.gm.pin_exclusive("vm1", i)
+            self.assertTrue(ok)
+            results.append(pcpu)
+
+        # All pCPUs must be unique
+        self.assertEqual(len(set(results)), 4, "Each vCPU must get a unique pCPU")
+
+    def test_pin_unknown_vm(self):
+        """Pinning for unknown VM returns error."""
+        ok, pcpu, msg = self.gm.pin_exclusive("nonexistent", 0)
+        self.assertFalse(ok)
+        self.assertIn("not registered", msg)
+
+    def test_pin_unknown_vcpu(self):
+        """Pinning for unknown vCPU returns error."""
+        ok, pcpu, msg = self.gm.pin_exclusive("vm1", 99)
+        self.assertFalse(ok)
+        self.assertIn("not found", msg)
+
+
+class TestAutoUnpinRestore(unittest.TestCase):
+    """
+    Test AC-SR-04: VMM auto-restores range pinning when guest app un-pins.
+    """
+
+    def setUp(self):
+        self.gm = GlobalCpuMap(total_pcpus=64)
+        self.gm.register_vm("vm1", 4, list(range(0, 16)))
+
+    def test_unpin_restore_basic(self):
+        """Guest app un-pins → VMM restores range mode."""
+        ok, pcpu, _ = self.gm.pin_exclusive("vm1", 2, guest_pid=5678)
+        self.assertTrue(ok)
+
+        ok, msg = self.gm.unpin_restore("vm1", 2)
+        self.assertTrue(ok)
+
+        vcpu = self.gm.vm_states["vm1"].vcpus[2]
+        self.assertEqual(vcpu.mode, PinMode.RANGE)
+        self.assertIsNone(vcpu.pinned_pcpu)
+        self.assertEqual(vcpu.source, PinSource.DEFAULT)
+        self.assertIsNone(vcpu.guest_pid)
+
+    def test_unpin_restore_releases_pcpu(self):
+        """Un-pin releases the pCPU from the exclusive map."""
+        ok, pcpu, _ = self.gm.pin_exclusive("vm1", 2)
+        self.assertIn(pcpu, self.gm.exclusive_map)
+
+        self.gm.unpin_restore("vm1", 2)
+        self.assertNotIn(pcpu, self.gm.exclusive_map)
+
+    def test_unpin_already_range(self):
+        """Un-pinning a vCPU already in range mode is a no-op success."""
+        ok, msg = self.gm.unpin_restore("vm1", 0)
+        self.assertTrue(ok)
+        self.assertIn("already in range", msg)
+
+    def test_unpin_all(self):
+        """Unpin all vCPUs of a VM."""
+        for i in range(4):
+            self.gm.pin_exclusive("vm1", i)
+        self.assertEqual(len(self.gm.exclusive_map), 4)
+
+        ok, results = self.gm.unpin_all("vm1")
+        self.assertTrue(ok)
+        self.assertEqual(len(self.gm.exclusive_map), 0)
+
+        for vcpu in self.gm.vm_states["vm1"].vcpus.values():
+            self.assertEqual(vcpu.mode, PinMode.RANGE)
+
+
+class TestConflictAvoidance(unittest.TestCase):
+    """
+    Test AC-SR-05: VMM avoids assigning the same pCPU to multiple vCPUs.
+    This is a key patent requirement.
+    """
+
+    def setUp(self):
+        self.gm = GlobalCpuMap(total_pcpus=64)
+        self.gm.register_vm("vm1", 4, list(range(0, 16)))
+        self.gm.register_vm("vm2", 4, list(range(0, 16)))  # Overlapping cpuset
+
+    def test_cross_vm_conflict_avoidance(self):
+        """vm1 and vm2 with overlapping cpusets don't get the same pCPU."""
+        ok1, pcpu1, _ = self.gm.pin_exclusive("vm1", 0)
+        ok2, pcpu2, _ = self.gm.pin_exclusive("vm2", 0)
+
+        self.assertTrue(ok1)
+        self.assertTrue(ok2)
+        self.assertNotEqual(pcpu1, pcpu2, "Different VMs must get different pCPUs")
+
+    def test_exhaust_cpuset(self):
+        """When all pCPUs in cpuset are occupied, return failure (graceful degradation)."""
+        # Small cpuset
+        self.gm.register_vm("tiny-vm", 4, [0, 1])
+
+        ok1, pcpu1, _ = self.gm.pin_exclusive("tiny-vm", 0)
+        ok2, pcpu2, _ = self.gm.pin_exclusive("tiny-vm", 1)
+        self.assertTrue(ok1)
+        self.assertTrue(ok2)
+
+        # Now try to pin vcpu2 — but only 2 pCPUs and both are taken
+        ok3, pcpu3, msg = self.gm.pin_exclusive("tiny-vm", 2)
+        self.assertFalse(ok3, "Should fail when no free pCPUs")
+        self.assertIn("No free pCPU", msg)
+
+    def test_released_pcpu_reusable(self):
+        """After un-pin, the released pCPU can be reused by another vCPU."""
+        ok, pcpu, _ = self.gm.pin_exclusive("vm1", 0)
+        self.gm.unpin_restore("vm1", 0)
+
+        # Same pCPU should be available again
+        ok2, pcpu2, _ = self.gm.pin_exclusive("vm2", 0)
+        self.assertTrue(ok2)
+        # pcpu2 could be the same as pcpu (now it's free)
+
+
+# ============================================================================
+# Test: Persistence
+# ============================================================================
+
+class TestPersistence(unittest.TestCase):
+    """Test global CPU map persistence."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.config = PinningConfig(conf_dir=self.tmpdir)
+        self.map_file = os.path.join(self.tmpdir, "global_cpu_map.json")
 
     def tearDown(self):
         import shutil
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_save_and_load(self):
-        pinning = {"vcpu0": [0, 1], "vcpu1": [2, 3]}
-        self.config.save("test-vm", "numa-aware", pinning)
+        gm = GlobalCpuMap(total_pcpus=16)
+        gm.register_vm("vm1", 4, list(range(0, 8)))
+        gm.pin_exclusive("vm1", 2, guest_pid=1234)
+        gm.save(self.map_file)
 
-        loaded = self.config.load("test-vm")
-        self.assertIsNotNone(loaded)
-        self.assertEqual(loaded["domain"], "test-vm")
-        self.assertEqual(loaded["strategy"], "numa-aware")
-        self.assertEqual(loaded["pinning"]["vcpu0"], [0, 1])
+        gm2 = GlobalCpuMap.load(self.map_file)
+        self.assertEqual(gm2.total_pcpus, 16)
+        self.assertIn("vm1", gm2.vm_states)
+        self.assertEqual(gm2.vm_states["vm1"].vcpus[2].mode, PinMode.EXCLUSIVE)
+        self.assertEqual(gm2.vm_states["vm1"].vcpus[2].guest_pid, 1234)
 
     def test_load_nonexistent(self):
-        loaded = self.config.load("nonexistent-vm")
-        self.assertIsNone(loaded)
+        gm = GlobalCpuMap.load("/nonexistent/path/map.json")
+        self.assertEqual(len(gm.vm_states), 0)
 
-    def test_remove(self):
-        self.config.save("test-vm", "manual", {"vcpu0": [0]})
-        self.config.remove("test-vm")
-        loaded = self.config.load("test-vm")
-        self.assertIsNone(loaded)
+    def test_config_file_valid_json(self):
+        gm = GlobalCpuMap(total_pcpus=8)
+        gm.register_vm("vm1", 2, [0, 1, 2, 3])
+        gm.save(self.map_file)
 
-    def test_remove_nonexistent(self):
-        # Should not raise
-        self.config.remove("nonexistent-vm")
-
-    def test_list_all(self):
-        self.config.save("vm1", "spread", {"vcpu0": [0]})
-        self.config.save("vm2", "compact", {"vcpu0": [1]})
-        domains = self.config.list_all()
-        self.assertIn("vm1", domains)
-        self.assertIn("vm2", domains)
-
-    def test_list_all_empty(self):
-        domains = self.config.list_all()
-        self.assertEqual(domains, [])
-
-    def test_config_file_format(self):
-        """Verify the JSON config file is properly formatted."""
-        pinning = {"vcpu0": [4], "vcpu1": [5]}
-        self.config.save("format-test", "numa-aware", pinning)
-
-        config_path = Path(self.tmpdir) / "format-test.json"
-        with open(config_path) as f:
+        with open(self.map_file) as f:
             data = json.load(f)
-
-        self.assertIn("domain", data)
-        self.assertIn("strategy", data)
-        self.assertIn("pinning", data)
-        self.assertEqual(data["domain"], "format-test")
+        self.assertIn("total_pcpus", data)
+        self.assertIn("exclusive_map", data)
+        self.assertIn("vm_states", data)
 
 
-class TestNumaTopologyMethods(unittest.TestCase):
-    """Test NumaTopology utility methods."""
+# ============================================================================
+# Test: VMM Pin Handler (processes guest notifications)
+# ============================================================================
 
-    def test_get_node_for_cpu(self):
-        topo = MockNumaTopology.two_node_no_smt()
-        self.assertEqual(topo.get_node_for_cpu(0), 0)
-        self.assertEqual(topo.get_node_for_cpu(7), 0)
-        self.assertEqual(topo.get_node_for_cpu(8), 1)
-        self.assertEqual(topo.get_node_for_cpu(15), 1)
-        self.assertEqual(topo.get_node_for_cpu(99), -1)
+class TestVmmPinHandler(unittest.TestCase):
+    """Test the VMM-side notification handler."""
 
-    def test_get_nearest_nodes(self):
-        topo = MockNumaTopology.four_node()
-        nearest = topo.get_nearest_nodes(0)
-        self.assertEqual(nearest[0], 0)  # Self is nearest
-        self.assertEqual(nearest[1], 1)  # Node 1 is next (dist 21)
+    def setUp(self):
+        self.gm = GlobalCpuMap(total_pcpus=64)
+        self.gm.register_vm("vm1", 4, list(range(0, 16)))
+        self.handler = VmmPinHandler(self.gm)
 
-    def test_is_smt_enabled_true(self):
-        topo = MockNumaTopology.two_node_with_smt()
-        self.assertTrue(topo.is_smt_enabled())
+    def test_handle_pin_notification(self):
+        """Process a 'pin' notification from guest."""
+        notif = GuestPinNotification("vm1", 2, "pin", guest_pid=5678)
+        ok, msg = self.handler.handle_notification(notif)
+        self.assertTrue(ok)
+        self.assertEqual(self.gm.vm_states["vm1"].vcpus[2].mode, PinMode.EXCLUSIVE)
 
-    def test_is_smt_enabled_false(self):
-        topo = MockNumaTopology.two_node_no_smt()
-        self.assertFalse(topo.is_smt_enabled())
+    def test_handle_unpin_notification(self):
+        """Process an 'unpin' notification from guest."""
+        # First pin
+        self.handler.handle_notification(
+            GuestPinNotification("vm1", 2, "pin", guest_pid=5678)
+        )
+        # Then unpin
+        notif = GuestPinNotification("vm1", 2, "unpin")
+        ok, msg = self.handler.handle_notification(notif)
+        self.assertTrue(ok)
+        self.assertEqual(self.gm.vm_states["vm1"].vcpus[2].mode, PinMode.RANGE)
 
-    def test_to_dict(self):
-        topo = MockNumaTopology.two_node_no_smt()
-        d = topo.to_dict()
-        self.assertEqual(len(d["nodes"]), 2)
-        self.assertEqual(d["nodes"][0]["id"], 0)
-        self.assertEqual(d["nodes"][0]["cpus"], list(range(8)))
-        self.assertEqual(d["smt_enabled"], False)
-        self.assertEqual(len(d["distances"]), 2)
+    def test_handle_batch(self):
+        """Process a batch of notifications."""
+        notifications = [
+            GuestPinNotification("vm1", 0, "pin", guest_pid=100),
+            GuestPinNotification("vm1", 1, "pin", guest_pid=200),
+            GuestPinNotification("vm1", 2, "pin", guest_pid=300),
+        ]
+        results = self.handler.handle_batch(notifications)
+        self.assertEqual(len(results), 3)
+        for r in results:
+            self.assertTrue(r["ok"])
 
-    def test_print_table(self, ):
-        """Ensure print_table runs without error."""
-        topo = MockNumaTopology.two_node_no_smt()
-        # Just verify it doesn't crash
-        import io
-        from contextlib import redirect_stdout
-        f = io.StringIO()
-        with redirect_stdout(f):
-            topo.print_table()
-        output = f.getvalue()
-        self.assertIn("node0", output)
-        self.assertIn("node1", output)
-        self.assertIn("Distance Matrix", output)
+    def test_handle_unknown_action(self):
+        """Unknown action should return error."""
+        notif = GuestPinNotification("vm1", 0, "invalid")
+        ok, msg = self.handler.handle_notification(notif)
+        self.assertFalse(ok)
+        self.assertIn("Unknown action", msg)
 
+
+class TestGuestPinNotification(unittest.TestCase):
+    """Test guest notification serialization."""
+
+    def test_serialize_roundtrip(self):
+        notif = GuestPinNotification("vm1", 2, "pin", guest_pid=1234, target_vcpus=[2])
+        d = notif.to_dict()
+        restored = GuestPinNotification.from_dict(d)
+        self.assertEqual(restored.domain, "vm1")
+        self.assertEqual(restored.vcpu_id, 2)
+        self.assertEqual(restored.action, "pin")
+        self.assertEqual(restored.guest_pid, 1234)
+
+
+# ============================================================================
+# Test: Guest-side interceptor
+# ============================================================================
+
+class TestInterceptorBase(unittest.TestCase):
+    """Test base interceptor logic."""
+
+    def test_is_pin_action(self):
+        interceptor = InterceptorBase(total_vcpus=4)
+        self.assertTrue(interceptor.is_pin_action([2]))       # Pin to single vCPU
+        self.assertTrue(interceptor.is_pin_action([0, 1]))    # Pin to subset
+        self.assertFalse(interceptor.is_pin_action([0, 1, 2, 3]))  # All CPUs = unpin
+
+    def test_callback_invoked(self):
+        interceptor = InterceptorBase(total_vcpus=4)
+        events = []
+        interceptor.register_callback(lambda e: events.append(e))
+
+        interceptor.intercept(pid=1234, comm="myapp", cpu_mask=[2])
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].pid, 1234)
+        self.assertTrue(events[0].is_bindcore)
+
+
+class TestKprobeInterceptor(unittest.TestCase):
+    """Test kprobe-based synchronous interceptor."""
+
+    def test_synchronous_interception(self):
+        interceptor = KprobeInterceptor(total_vcpus=4)
+        events = []
+        interceptor.register_callback(lambda e: events.append(e))
+
+        event = interceptor.intercept(pid=100, comm="app", cpu_mask=[1])
+        self.assertTrue(event.is_bindcore)
+        self.assertEqual(interceptor.mode, "kprobe")
+        self.assertEqual(len(events), 1)
+
+
+class TestEbpfInterceptor(unittest.TestCase):
+    """Test eBPF-based asynchronous interceptor."""
+
+    def test_async_ring_buffer(self):
+        """Events are queued to ring buffer for async processing."""
+        interceptor = EbpfInterceptor(total_vcpus=4)
+
+        interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
+        interceptor.intercept(pid=200, comm="app2", cpu_mask=[1])
+
+        self.assertEqual(len(interceptor.ring_buffer), 2)
+
+    def test_drain_ring_buffer(self):
+        """Draining returns all events and clears the buffer."""
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
+        interceptor.intercept(pid=200, comm="app2", cpu_mask=[1])
+
+        events = interceptor.drain_ring_buffer()
+        self.assertEqual(len(events), 2)
+        self.assertEqual(len(interceptor.ring_buffer), 0)  # Buffer cleared
+
+    def test_unpin_detection(self):
+        """Restoring to all CPUs is detected as unpin."""
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        event = interceptor.intercept(pid=100, comm="app", cpu_mask=[0, 1, 2, 3])
+        self.assertFalse(event.is_bindcore)  # All CPUs = unpin
+
+
+class TestNotificationAgent(unittest.TestCase):
+    """Test the user-space notification agent (eBPF async path)."""
+
+    def test_process_events(self):
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
+        interceptor.intercept(pid=200, comm="app2", cpu_mask=[1])
+
+        results = []
+        agent = NotificationAgent(interceptor, vmm_callback=lambda e: results.append(e))
+        agent.process_events()
+
+        self.assertEqual(len(results), 2)
+
+    def test_empty_buffer(self):
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        agent = NotificationAgent(interceptor)
+        results = agent.process_events()
+        self.assertEqual(len(results), 0)
+
+
+# ============================================================================
+# Test: End-to-end flow (Guest interception → VMM handling)
+# ============================================================================
+
+class TestEndToEndFlow(unittest.TestCase):
+    """
+    Integration test: full flow from guest app pinning to VMM 1:1 binding.
+    This validates the complete patent architecture.
+    """
+
+    def setUp(self):
+        self.gm = GlobalCpuMap(total_pcpus=64)
+        self.gm.register_vm("vm1", 4, list(range(0, 16)))
+        self.handler = VmmPinHandler(self.gm)
+
+    def _make_vmm_callback(self, domain):
+        """Create a VMM callback that processes guest events."""
+        def callback(event):
+            if event.is_bindcore:
+                # Pin: the target vCPU is the single CPU in the mask
+                vcpu_id = event.cpu_mask[0] if event.cpu_mask else 0
+                notif = GuestPinNotification(
+                    domain=domain,
+                    vcpu_id=vcpu_id,
+                    action="pin",
+                    guest_pid=event.pid,
+                )
+                return self.handler.handle_notification(notif)
+            else:
+                # Unpin: restore ALL vCPUs that were pinned by this PID
+                vm = self.gm.get_vm_status(domain)
+                results = []
+                if vm:
+                    for vid, vs in vm.vcpus.items():
+                        if vs.mode == PinMode.EXCLUSIVE and vs.guest_pid == event.pid:
+                            notif = GuestPinNotification(
+                                domain=domain,
+                                vcpu_id=vid,
+                                action="unpin",
+                            )
+                            results.append(self.handler.handle_notification(notif))
+                return results[-1] if results else (True, "No vCPUs to unpin")
+        return callback
+
+    def test_ebpf_full_flow_pin(self):
+        """
+        Full flow: App pins via sched_setaffinity → eBPF intercepts →
+        ring buffer → agent → VMM handler → 1:1 exclusive pin.
+        """
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        agent = NotificationAgent(
+            interceptor, vmm_callback=self._make_vmm_callback("vm1")
+        )
+
+        # Guest app pins to vCPU 2
+        interceptor.intercept(pid=5678, comm="myapp", cpu_mask=[2])
+        results = agent.process_events()
+
+        self.assertEqual(len(results), 1)
+        ok, msg = results[0]
+        self.assertTrue(ok)
+
+        # Verify VMM state
+        vcpu2 = self.gm.vm_states["vm1"].vcpus[2]
+        self.assertEqual(vcpu2.mode, PinMode.EXCLUSIVE)
+        self.assertIsNotNone(vcpu2.pinned_pcpu)
+
+    def test_ebpf_full_flow_pin_then_unpin(self):
+        """
+        Full flow: App pins → VMM 1:1 → App un-pins → VMM restores range.
+        """
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        agent = NotificationAgent(
+            interceptor, vmm_callback=self._make_vmm_callback("vm1")
+        )
+
+        # Step 1: App pins to vCPU 2
+        interceptor.intercept(pid=5678, comm="myapp", cpu_mask=[2])
+        agent.process_events()
+
+        vcpu2 = self.gm.vm_states["vm1"].vcpus[2]
+        self.assertEqual(vcpu2.mode, PinMode.EXCLUSIVE)
+        saved_pcpu = vcpu2.pinned_pcpu
+
+        # Step 2: App un-pins (restore to all vCPUs)
+        interceptor.intercept(pid=5678, comm="myapp", cpu_mask=[0, 1, 2, 3])
+        results = agent.process_events()
+
+        # Since all CPUs = unpin, agent should send unpin notification
+        # The callback uses cpu_mask[0] as vcpu_id for unpin
+        # Verify the pCPU is released
+        self.assertNotIn(saved_pcpu, self.gm.exclusive_map)
+
+    def test_kprobe_full_flow(self):
+        """Full flow using kprobe synchronous path."""
+        interceptor = KprobeInterceptor(total_vcpus=4)
+
+        # Kprobe is synchronous — callback fires immediately
+        interceptor.register_callback(self._make_vmm_callback("vm1"))
+        interceptor.intercept(pid=1234, comm="dbapp", cpu_mask=[1])
+
+        vcpu1 = self.gm.vm_states["vm1"].vcpus[1]
+        self.assertEqual(vcpu1.mode, PinMode.EXCLUSIVE)
+
+    def test_multi_vm_isolation(self):
+        """Multiple VMs with overlapping cpusets maintain isolation."""
+        self.gm.register_vm("vm2", 2, list(range(0, 16)))
+        interceptor = EbpfInterceptor(total_vcpus=4)
+
+        # Pin vm1:vcpu0 and vm2:vcpu0
+        agent1 = NotificationAgent(
+            interceptor, vmm_callback=self._make_vmm_callback("vm1")
+        )
+        interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
+        agent1.process_events()
+
+        agent2 = NotificationAgent(
+            interceptor, vmm_callback=self._make_vmm_callback("vm2")
+        )
+        interceptor.intercept(pid=200, comm="app2", cpu_mask=[0])
+        agent2.process_events()
+
+        pcpu1 = self.gm.vm_states["vm1"].vcpus[0].pinned_pcpu
+        pcpu2 = self.gm.vm_states["vm2"].vcpus[0].pinned_pcpu
+
+        self.assertNotEqual(pcpu1, pcpu2, "Different VMs must get different pCPUs")
+
+
+# ============================================================================
+# Test: CLI parsing
+# ============================================================================
 
 class TestCLIParsing(unittest.TestCase):
-    """Test CLI argument parsing and main entry point."""
-
-    @patch("vm_bindcore.NumaTopology")
-    def test_topology_command(self, mock_topo_cls):
-        """Test topology subcommand dispatching."""
-        mock_topo = MockNumaTopology.two_node_no_smt()
-        mock_topo_cls.return_value = mock_topo
-
-        with patch("sys.argv", ["vm-bindcore", "topology"]):
-            # Should not raise
-            import io
-            from contextlib import redirect_stdout
-            f = io.StringIO()
-            with redirect_stdout(f):
-                try:
-                    main()
-                except SystemExit:
-                    pass
+    """Test CLI argument parsing."""
 
     def test_no_command(self):
-        """No subcommand should print help and return 1."""
+        """No subcommand returns 1."""
+        from unittest.mock import patch
+        import io
         with patch("sys.argv", ["vm-bindcore"]):
-            import io
             from contextlib import redirect_stdout, redirect_stderr
-            f_out = io.StringIO()
-            f_err = io.StringIO()
-            with redirect_stdout(f_out), redirect_stderr(f_err):
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 ret = main()
-            self.assertEqual(ret, 1)
+        self.assertEqual(ret, 1)
 
-    def test_pin_requires_vm(self):
-        """pin without --vm should fail."""
-        with patch("sys.argv", ["vm-bindcore", "pin"]):
-            with self.assertRaises(SystemExit) as ctx:
-                main()
-            self.assertNotEqual(ctx.exception.code, 0)
 
+# ============================================================================
+# Test: pCPU status query
+# ============================================================================
+
+class TestPcpuStatus(unittest.TestCase):
+    """Test global pCPU status queries."""
+
+    def setUp(self):
+        self.gm = GlobalCpuMap(total_pcpus=8)
+        self.gm.register_vm("vm1", 2, [0, 1, 2, 3])
+        self.gm.register_vm("vm2", 2, [2, 3, 4, 5])
+
+    def test_get_pcpu_status_free(self):
+        mode, domain, vcpu_id = self.gm.get_pcpu_status(6)
+        self.assertEqual(mode, PinMode.RANGE)
+        self.assertIsNone(domain)
+
+    def test_get_pcpu_status_exclusive(self):
+        self.gm.pin_exclusive("vm1", 0)
+        pcpu = self.gm.vm_states["vm1"].vcpus[0].pinned_pcpu
+        mode, domain, vcpu_id = self.gm.get_pcpu_status(pcpu)
+        self.assertEqual(mode, PinMode.EXCLUSIVE)
+        self.assertEqual(domain, "vm1")
+        self.assertEqual(vcpu_id, 0)
+
+    def test_get_all_pcpu_status(self):
+        self.gm.pin_exclusive("vm1", 0)
+        all_status = self.gm.get_all_pcpu_status()
+        self.assertEqual(len(all_status), 8)
+
+        # Check shared pCPUs
+        for pcpu in [0, 1, 2, 3]:
+            info = all_status[pcpu]
+            if info["mode"] == PinMode.RANGE:
+                self.assertIn("vm1", info["sharing_vms"])
+
+
+# ============================================================================
+# Test: Edge cases
+# ============================================================================
 
 class TestEdgeCases(unittest.TestCase):
     """Test edge cases and boundary conditions."""
 
-    def test_single_node_numa_aware(self):
-        """NUMA-aware on single node should work."""
-        topo = NumaTopology.__new__(NumaTopology)
-        topo.nodes = {0: list(range(8))}
-        topo.distances = {0: {0: 10}}
-        topo.core_siblings = {i: [i] for i in range(8)}
+    def test_single_vcpu_vm(self):
+        gm = GlobalCpuMap(total_pcpus=8)
+        gm.register_vm("tiny", 1, [0])
+        ok, pcpu, _ = gm.pin_exclusive("tiny", 0)
+        self.assertTrue(ok)
+        self.assertEqual(pcpu, 0)
 
-        engine = PinningEngine(topo)
-        mapping = engine.compute_numa_aware(4)
-        self.assertEqual(len(mapping), 4)
+    def test_large_cpuset(self):
+        gm = GlobalCpuMap(total_pcpus=128)
+        gm.register_vm("big", 64, list(range(128)))
+        for i in range(64):
+            ok, pcpu, _ = gm.pin_exclusive("big", i)
+            self.assertTrue(ok)
+        self.assertEqual(len(gm.exclusive_map), 64)
 
-    def test_single_node_spread(self):
-        """Spread on single node should still work (all on one node)."""
-        topo = NumaTopology.__new__(NumaTopology)
-        topo.nodes = {0: list(range(8))}
-        topo.distances = {0: {0: 10}}
-        topo.core_siblings = {i: [i] for i in range(8)}
+    def test_register_same_vm_twice(self):
+        gm = GlobalCpuMap(total_pcpus=8)
+        gm.register_vm("vm1", 2, [0, 1])
+        gm.register_vm("vm1", 2, [0, 1])  # Should be idempotent
+        self.assertEqual(len(gm.vm_states), 1)
 
-        engine = PinningEngine(topo)
-        mapping = engine.compute_spread(4)
-        self.assertEqual(len(mapping), 4)
-
-    def test_one_vcpu(self):
-        """Pinning a single vCPU should work for all strategies."""
-        topo = MockNumaTopology.two_node_no_smt()
-        engine = PinningEngine(topo)
-
-        for strategy in ["numa_aware", "spread", "compact"]:
-            method = getattr(engine, f"compute_{strategy}")
-            mapping = method(1)
-            self.assertEqual(len(mapping), 1)
-
-    def test_all_cpus_used_except_needed(self):
-        """Exact number of free CPUs matches request."""
-        topo = MockNumaTopology.two_node_no_smt()
-        used = set(range(4, 16))  # Use all except 0-3
-        engine = PinningEngine(topo, used_cpus=used)
-        mapping = engine.compute_numa_aware(4)
-        self.assertEqual(len(mapping), 4)
-
-    def test_large_vcpu_count(self):
-        """Test with large number of vCPUs across 4 NUMA nodes."""
-        topo = MockNumaTopology.four_node()
-        engine = PinningEngine(topo)
-        mapping = engine.compute_spread(32)
-        self.assertEqual(len(mapping), 32)
-
-
-class TestConflictDetection(unittest.TestCase):
-    """Test CPU conflict detection scenarios."""
-
-    def test_used_cpus_excluded(self):
-        """Pinning engine should not assign already-used CPUs."""
-        topo = MockNumaTopology.two_node_no_smt()
-        used = {0, 1, 2, 3}
-        engine = PinningEngine(topo, used_cpus=used)
-        mapping = engine.compute_numa_aware(4)
-
-        assigned_cpus = set()
-        for cpulist in mapping.values():
-            assigned_cpus.update(cpulist)
-
-        self.assertTrue(assigned_cpus.isdisjoint(used),
-                        "Should not assign already-used CPUs")
-
-    def test_partial_node_used(self):
-        """Partial usage of a node should only use remaining CPUs."""
-        topo = MockNumaTopology.two_node_no_smt()
-        used = {0, 1}  # First 2 CPUs of node 0
-        engine = PinningEngine(topo, used_cpus=used)
-        mapping = engine.compute_numa_aware(4, preferred_node=0)
-
-        assigned = set()
-        for cpulist in mapping.values():
-            assigned.update(cpulist)
-
-        self.assertNotIn(0, assigned)
-        self.assertNotIn(1, assigned)
+    def test_unregister_nonexistent(self):
+        gm = GlobalCpuMap(total_pcpus=8)
+        gm.unregister_vm("nonexistent")  # Should not raise
 
 
 if __name__ == "__main__":

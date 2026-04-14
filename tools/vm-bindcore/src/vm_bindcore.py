@@ -2,18 +2,25 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MulanPSL-2.0
 #
-# vm-bindcore: Virtual Machine vCPU CPU-Pinning Management Tool
-# Based on patent: 一种虚拟机绑核方法及计算设备 (Inventor: 张海亮)
+# vm-bindcore: VMM-side handler for transparent in-VM pinning passthrough
+# Based on patent: 一种优化虚拟机内业务绑核性能的方法 (Inventor: 张海亮)
 #
 # Copyright (c) 2026 openEuler Contributors
 
 """
-vm-bindcore - A NUMA-aware vCPU pinning management tool for KVM/libvirt VMs.
+vm-bindcore — VMM-side transparent vCPU pinning optimization tool.
 
-Provides automatic and manual vCPU-to-pCPU pinning with the following strategies:
-  - numa-aware: Pin all vCPUs to the same NUMA node
-  - spread:     Distribute vCPUs evenly across NUMA nodes
-  - compact:    Pack vCPUs onto fewest physical cores (SMT-aware)
+Architecture (from patent):
+  1. Guest app calls sched_setaffinity() to pin to specific vCPU(s)
+  2. Guest-side interceptor (kprobe/eBPF) captures the pinning action
+  3. Interceptor notifies VMM via hypercall/wrmsr/emulated-device
+  4. VMM handler (this tool) receives notification and:
+     - Looks up Global CPU Map + VM cpuset
+     - Dynamically switches the vCPU from range-pinning to 1:1 pinning
+  5. When guest app un-pins, VMM restores range-pinning for the vCPU
+
+This module implements the VMM-side logic: global CPU map management,
+dynamic 1:1 pinning/un-pinning, conflict avoidance, and status reporting.
 """
 
 import argparse
@@ -24,600 +31,375 @@ import re
 import sys
 from pathlib import Path
 
-CONF_DIR = "/etc/vm-bindcore/pinning.d"
+CONF_DIR = "/etc/vm-bindcore"
+GLOBAL_MAP_FILE = os.path.join(CONF_DIR, "global_cpu_map.json")
 LOG_FORMAT = "[%(levelname)s] %(message)s"
+JOURNAL_FORMAT = (
+    "%(asctime)s %(hostname)s vm-bindcore[%(process)d]: "
+    "[%(action)s] vm=%(vm)s vcpu=%(vcpu)s %(details)s"
+)
 
 logger = logging.getLogger("vm-bindcore")
 
 
-class NumaTopology:
-    """Detects and represents the host NUMA topology."""
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
 
-    def __init__(self):
-        self.nodes = {}       # {node_id: [cpu_list]}
-        self.distances = {}   # {node_id: {node_id: distance}}
-        self.core_siblings = {}  # {cpu_id: [sibling_cpu_ids]}
-        self._detect()
+class PinMode:
+    """vCPU pinning modes on the Host side."""
+    RANGE = "range"          # vCPU scheduled across cpuset (default)
+    EXCLUSIVE = "exclusive"  # vCPU 1:1 pinned to a single pCPU
 
-    def _detect(self):
-        """Detect NUMA topology from sysfs."""
-        numa_base = Path("/sys/devices/system/node")
-        if not numa_base.exists():
-            # Fallback: single NUMA node with all online CPUs
-            cpus = self._get_online_cpus()
-            self.nodes[0] = cpus
-            self.distances[0] = {0: 10}
-            return
 
-        for node_dir in sorted(numa_base.iterdir()):
-            match = re.match(r"node(\d+)", node_dir.name)
-            if not match:
-                continue
-            node_id = int(match.group(1))
-            cpulist_path = node_dir / "cpulist"
-            if cpulist_path.exists():
-                cpulist_str = cpulist_path.read_text().strip()
-                self.nodes[node_id] = self._parse_cpulist(cpulist_str)
+class PinSource:
+    """Source of pinning action."""
+    DEFAULT = "default"      # System default range pinning
+    GUEST_PIN = "guest-pin"  # Triggered by in-VM app sched_setaffinity
+    MANUAL = "manual"        # Manually set by admin
 
-            distance_path = node_dir / "distance"
-            if distance_path.exists():
-                dists = distance_path.read_text().strip().split()
-                self.distances[node_id] = {}
-                for i, d in enumerate(dists):
-                    self.distances[node_id][i] = int(d)
 
-        self._detect_smt_siblings()
+class VcpuPinState:
+    """Tracks the pinning state of a single vCPU."""
 
-    def _detect_smt_siblings(self):
-        """Detect SMT (Hyper-Threading) sibling relationships."""
-        for node_cpus in self.nodes.values():
-            for cpu in node_cpus:
-                sibling_path = Path(
-                    f"/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list"
-                )
-                if sibling_path.exists():
-                    siblings_str = sibling_path.read_text().strip()
-                    self.core_siblings[cpu] = self._parse_cpulist(siblings_str)
-
-    @staticmethod
-    def _get_online_cpus():
-        """Get list of online CPUs."""
-        path = Path("/sys/devices/system/cpu/online")
-        if path.exists():
-            return NumaTopology._parse_cpulist(path.read_text().strip())
-        # Fallback: use os.cpu_count()
-        return list(range(os.cpu_count() or 1))
-
-    @staticmethod
-    def _parse_cpulist(cpulist_str):
-        """Parse a CPU list string like '0-3,8-11' into a list of ints."""
-        cpus = []
-        for part in cpulist_str.split(","):
-            part = part.strip()
-            if "-" in part:
-                start, end = part.split("-", 1)
-                cpus.extend(range(int(start), int(end) + 1))
-            else:
-                cpus.append(int(part))
-        return sorted(cpus)
-
-    def get_node_for_cpu(self, cpu):
-        """Return the NUMA node ID for a given CPU."""
-        for node_id, cpus in self.nodes.items():
-            if cpu in cpus:
-                return node_id
-        return -1
-
-    def get_nearest_nodes(self, node_id):
-        """Return nodes sorted by distance from the given node."""
-        if node_id not in self.distances:
-            return list(self.nodes.keys())
-        dists = self.distances[node_id]
-        return sorted(dists.keys(), key=lambda n: dists[n])
-
-    def is_smt_enabled(self):
-        """Check if SMT (Hyper-Threading) is enabled."""
-        for siblings in self.core_siblings.values():
-            if len(siblings) > 1:
-                return True
-        return False
+    def __init__(self, vcpu_id, cpuset):
+        self.vcpu_id = vcpu_id
+        self.mode = PinMode.RANGE
+        self.cpuset = list(cpuset)   # Allowed pCPU range
+        self.pinned_pcpu = None      # pCPU for 1:1 mode, None for range
+        self.source = PinSource.DEFAULT
+        self.guest_pid = None        # PID of the app inside guest (if known)
 
     def to_dict(self):
-        """Convert topology to a serializable dictionary."""
         return {
-            "nodes": [
-                {"id": nid, "cpus": cpus, "online": True}
-                for nid, cpus in sorted(self.nodes.items())
-            ],
-            "distances": [
-                [self.distances.get(i, {}).get(j, 0)
-                 for j in sorted(self.nodes.keys())]
-                for i in sorted(self.nodes.keys())
-            ],
-            "smt_enabled": self.is_smt_enabled(),
+            "vcpu_id": self.vcpu_id,
+            "mode": self.mode,
+            "cpuset": self.cpuset,
+            "pinned_pcpu": self.pinned_pcpu,
+            "source": self.source,
+            "guest_pid": self.guest_pid,
         }
 
-    def print_table(self):
-        """Print topology as a human-readable table."""
-        print("NUMA Node   CPUs                          Online")
-        print("---------   ----                          ------")
-        for nid in sorted(self.nodes.keys()):
-            cpus = self.nodes[nid]
-            if cpus:
-                cpu_str = f"{cpus[0]}-{cpus[-1]}" if len(cpus) > 1 else str(cpus[0])
-            else:
-                cpu_str = "(none)"
-            print(f"node{nid:<6}  {cpu_str:<30}yes")
-
-        if self.distances:
-            print()
-            print("Distance Matrix:")
-            header = "        " + "  ".join(
-                f"node{n}" for n in sorted(self.nodes.keys())
-            )
-            print(header)
-            for i in sorted(self.nodes.keys()):
-                row = f"node{i}   "
-                row += "  ".join(
-                    f"{self.distances.get(i, {}).get(j, 0):>5}"
-                    for j in sorted(self.nodes.keys())
-                )
-                print(row)
+    @classmethod
+    def from_dict(cls, d):
+        state = cls(d["vcpu_id"], d["cpuset"])
+        state.mode = d.get("mode", PinMode.RANGE)
+        state.pinned_pcpu = d.get("pinned_pcpu")
+        state.source = d.get("source", PinSource.DEFAULT)
+        state.guest_pid = d.get("guest_pid")
+        return state
 
 
-class LibvirtConnector:
-    """Interface to libvirt for vCPU pinning operations."""
+class VmPinState:
+    """Tracks the pinning state of all vCPUs in a VM."""
 
-    def __init__(self):
-        self._conn = None
-
-    def _connect(self):
-        """Establish libvirt connection."""
-        if self._conn is not None:
-            return
-        try:
-            import libvirt  # noqa: F811
-            self._conn = libvirt.open("qemu:///system")
-            if self._conn is None:
-                raise RuntimeError("Failed to connect to qemu:///system")
-        except ImportError:
-            raise RuntimeError(
-                "libvirt Python bindings not found. "
-                "Install with: yum install python3-libvirt"
-            )
-
-    def get_domain(self, name):
-        """Look up a domain by name."""
-        self._connect()
-        try:
-            return self._conn.lookupByName(name)
-        except Exception:
-            raise RuntimeError(f"Domain '{name}' not found or not running")
-
-    def get_vcpu_count(self, domain):
-        """Get the number of vCPUs for a domain."""
-        info = domain.info()
-        return info[3]  # nrVirtCpu
-
-    def pin_vcpu(self, domain, vcpu_id, cpulist, max_cpus=None):
-        """Pin a vCPU to specified physical CPUs."""
-        if max_cpus is None:
-            max_cpus = os.cpu_count() or 64
-        # Build cpumap tuple
-        maplen = (max_cpus + 7) // 8
-        cpumap = bytearray(maplen)
-        for cpu in cpulist:
-            byte_idx = cpu // 8
-            bit_idx = cpu % 8
-            if byte_idx < maplen:
-                cpumap[byte_idx] |= 1 << bit_idx
-        domain.pinVcpu(vcpu_id, tuple(cpumap))
-
-    def unpin_vcpu(self, domain, vcpu_id, max_cpus=None):
-        """Unpin a vCPU (allow all CPUs)."""
-        if max_cpus is None:
-            max_cpus = os.cpu_count() or 64
-        maplen = (max_cpus + 7) // 8
-        cpumap = tuple([0xFF] * maplen)
-        domain.pinVcpu(vcpu_id, cpumap)
-
-    def get_vcpu_info(self, domain):
-        """Get current vCPU pinning info."""
-        vcpus = domain.vcpus()
-        if vcpus is None:
-            return []
-        info_list = []
-        for i, (vcpu_info, cpumap) in enumerate(zip(vcpus[0], vcpus[1])):
-            pinned_cpus = []
-            for byte_idx, byte_val in enumerate(cpumap):
-                for bit_idx in range(8):
-                    if byte_val & (1 << bit_idx):
-                        pinned_cpus.append(byte_idx * 8 + bit_idx)
-            info_list.append({
-                "vcpu": i,
-                "state": vcpu_info[1],
-                "cpu": vcpu_info[3],
-                "pinned_cpus": pinned_cpus,
-            })
-        return info_list
-
-    def close(self):
-        """Close libvirt connection."""
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
-
-
-class PinningConfig:
-    """Manages persistent pinning configurations."""
-
-    def __init__(self, conf_dir=CONF_DIR):
-        self.conf_dir = Path(conf_dir)
-
-    def save(self, domain_name, strategy, pinning_map):
-        """Save pinning configuration to file."""
-        self.conf_dir.mkdir(parents=True, exist_ok=True)
-        config = {
-            "domain": domain_name,
-            "strategy": strategy,
-            "pinning": pinning_map,
+    def __init__(self, domain, vcpu_count, cpuset):
+        self.domain = domain
+        self.vcpu_count = vcpu_count
+        self.cpuset = list(cpuset)
+        self.vcpus = {
+            i: VcpuPinState(i, cpuset) for i in range(vcpu_count)
         }
-        config_path = self.conf_dir / f"{domain_name}.json"
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
-        logger.info("Saved pinning config to %s", config_path)
 
-    def load(self, domain_name):
-        """Load pinning configuration from file."""
-        config_path = self.conf_dir / f"{domain_name}.json"
-        if not config_path.exists():
-            return None
-        with open(config_path) as f:
-            return json.load(f)
+    def to_dict(self):
+        return {
+            "domain": self.domain,
+            "vcpu_count": self.vcpu_count,
+            "cpuset": self.cpuset,
+            "vcpus": {str(k): v.to_dict() for k, v in self.vcpus.items()},
+        }
 
-    def remove(self, domain_name):
-        """Remove pinning configuration file."""
-        config_path = self.conf_dir / f"{domain_name}.json"
-        if config_path.exists():
-            config_path.unlink()
-            logger.info("Removed persistent config for %s", domain_name)
-
-    def list_all(self):
-        """List all saved domain configurations."""
-        if not self.conf_dir.exists():
-            return []
-        return [
-            p.stem for p in self.conf_dir.glob("*.json")
-        ]
+    @classmethod
+    def from_dict(cls, d):
+        vm = cls(d["domain"], d["vcpu_count"], d["cpuset"])
+        vm.vcpus = {
+            int(k): VcpuPinState.from_dict(v)
+            for k, v in d.get("vcpus", {}).items()
+        }
+        return vm
 
 
-class PinningEngine:
-    """Computes vCPU-to-pCPU mappings based on selected strategy."""
+# ---------------------------------------------------------------------------
+# Global CPU Map — tracks which pCPUs are exclusively occupied
+# ---------------------------------------------------------------------------
 
-    def __init__(self, topology, used_cpus=None):
-        self.topo = topology
-        self.used_cpus = used_cpus or set()
+class GlobalCpuMap:
+    """
+    Maintains a global map of all pCPU assignments across all VMs.
 
-    def _get_free_cpus(self, node_id):
-        """Get free CPUs on a NUMA node."""
-        return [c for c in self.topo.nodes.get(node_id, [])
-                if c not in self.used_cpus]
+    Key data:
+      exclusive_map: {pcpu_id: (vm_domain, vcpu_id)}  — 1:1 occupied pCPUs
+      vm_states:     {vm_domain: VmPinState}           — per-VM pinning info
+    """
 
-    def compute_numa_aware(self, vcpu_count, preferred_node=None):
+    def __init__(self, total_pcpus=None):
+        self.total_pcpus = total_pcpus or os.cpu_count() or 64
+        self.exclusive_map = {}   # {pcpu: (domain, vcpu_id)}
+        self.vm_states = {}       # {domain: VmPinState}
+
+    # --- Persistence ---
+
+    def save(self, path=GLOBAL_MAP_FILE):
+        """Persist the global CPU map to disk."""
+        data = {
+            "total_pcpus": self.total_pcpus,
+            "exclusive_map": {
+                str(k): list(v) for k, v in self.exclusive_map.items()
+            },
+            "vm_states": {
+                k: v.to_dict() for k, v in self.vm_states.items()
+            },
+        }
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+
+    @classmethod
+    def load(cls, path=GLOBAL_MAP_FILE):
+        """Load the global CPU map from disk."""
+        if not os.path.exists(path):
+            return cls()
+        with open(path) as f:
+            data = json.load(f)
+        gm = cls(total_pcpus=data.get("total_pcpus"))
+        gm.exclusive_map = {
+            int(k): tuple(v)
+            for k, v in data.get("exclusive_map", {}).items()
+        }
+        gm.vm_states = {
+            k: VmPinState.from_dict(v)
+            for k, v in data.get("vm_states", {}).items()
+        }
+        return gm
+
+    # --- VM registration ---
+
+    def register_vm(self, domain, vcpu_count, cpuset):
+        """Register a VM with its vCPU count and cpuset."""
+        if domain not in self.vm_states:
+            self.vm_states[domain] = VmPinState(domain, vcpu_count, cpuset)
+        return self.vm_states[domain]
+
+    def unregister_vm(self, domain):
+        """Remove a VM and release all its exclusive pCPUs."""
+        vm = self.vm_states.pop(domain, None)
+        if vm:
+            for vcpu_state in vm.vcpus.values():
+                if vcpu_state.pinned_pcpu is not None:
+                    self.exclusive_map.pop(vcpu_state.pinned_pcpu, None)
+
+    # --- Core pinning logic ---
+
+    def find_free_pcpu(self, cpuset):
         """
-        Compute NUMA-aware pinning: place all vCPUs on the same NUMA node.
-        If the preferred node lacks capacity, spill to nearest neighbor.
+        Find a free (non-exclusively-occupied) pCPU within the given cpuset.
+        Returns pCPU id or None if all are occupied.
         """
-        if preferred_node is not None:
-            node_order = [preferred_node] + [
-                n for n in self.topo.get_nearest_nodes(preferred_node)
-                if n != preferred_node
-            ]
-        else:
-            # Pick node with most free CPUs
-            node_order = sorted(
-                self.topo.nodes.keys(),
-                key=lambda n: len(self._get_free_cpus(n)),
-                reverse=True,
+        for pcpu in cpuset:
+            if pcpu not in self.exclusive_map:
+                return pcpu
+        return None
+
+    def pin_exclusive(self, domain, vcpu_id, guest_pid=None):
+        """
+        Switch a vCPU from range mode to exclusive 1:1 mode.
+        Called when Guest app binds to a specific vCPU.
+
+        Returns (success: bool, pcpu: int or None, message: str)
+        """
+        vm = self.vm_states.get(domain)
+        if vm is None:
+            return False, None, f"VM '{domain}' not registered"
+
+        vcpu = vm.vcpus.get(vcpu_id)
+        if vcpu is None:
+            return False, None, f"vCPU {vcpu_id} not found in '{domain}'"
+
+        if vcpu.mode == PinMode.EXCLUSIVE:
+            return True, vcpu.pinned_pcpu, f"vCPU {vcpu_id} already exclusive on pCPU {vcpu.pinned_pcpu}"
+
+        # Find free pCPU in this VM's cpuset
+        pcpu = self.find_free_pcpu(vm.cpuset)
+        if pcpu is None:
+            msg = (
+                f"No free pCPU in cpuset {_format_cpulist(vm.cpuset)} "
+                f"for {domain}:vcpu{vcpu_id} — keeping range mode"
             )
+            logger.warning(msg)
+            return False, None, msg
 
-        mapping = {}
-        remaining = vcpu_count
-        vcpu_idx = 0
+        # Execute 1:1 pinning
+        vcpu.mode = PinMode.EXCLUSIVE
+        vcpu.pinned_pcpu = pcpu
+        vcpu.source = PinSource.GUEST_PIN
+        vcpu.guest_pid = guest_pid
+        self.exclusive_map[pcpu] = (domain, vcpu_id)
 
-        for node_id in node_order:
-            if remaining <= 0:
-                break
-            free = self._get_free_cpus(node_id)
-            allocate = min(remaining, len(free))
-            for i in range(allocate):
-                mapping[f"vcpu{vcpu_idx}"] = [free[i]]
-                vcpu_idx += 1
-                remaining -= 1
+        logger.info(
+            "[PIN] vm=%s vcpu=%d action=exclusive pcpu=%d source=guest-pin pid=%s",
+            domain, vcpu_id, pcpu, guest_pid,
+        )
+        return True, pcpu, f"Pinned vcpu{vcpu_id} -> pCPU {pcpu}"
 
-        if remaining > 0:
-            raise RuntimeError(
-                f"Not enough free CPUs: need {vcpu_count}, "
-                f"only {vcpu_count - remaining} available"
-            )
-        return mapping
-
-    def compute_spread(self, vcpu_count):
+    def unpin_restore(self, domain, vcpu_id):
         """
-        Compute spread pinning: distribute vCPUs evenly across NUMA nodes.
+        Restore a vCPU from exclusive 1:1 mode back to range mode.
+        Called when Guest app un-pins (restores to all vCPUs).
+
+        Returns (success: bool, message: str)
         """
-        node_ids = sorted(self.topo.nodes.keys())
-        if not node_ids:
-            raise RuntimeError("No NUMA nodes detected")
+        vm = self.vm_states.get(domain)
+        if vm is None:
+            return False, f"VM '{domain}' not registered"
 
-        node_free = {n: self._get_free_cpus(n) for n in node_ids}
-        mapping = {}
+        vcpu = vm.vcpus.get(vcpu_id)
+        if vcpu is None:
+            return False, f"vCPU {vcpu_id} not found in '{domain}'"
 
-        for vcpu_idx in range(vcpu_count):
-            target_node = node_ids[vcpu_idx % len(node_ids)]
-            free = node_free[target_node]
-            if not free:
-                raise RuntimeError(
-                    f"No free CPUs on node{target_node} for vcpu{vcpu_idx}"
-                )
-            cpu = free.pop(0)
-            mapping[f"vcpu{vcpu_idx}"] = [cpu]
+        if vcpu.mode != PinMode.EXCLUSIVE:
+            return True, f"vCPU {vcpu_id} already in range mode"
 
-        return mapping
+        old_pcpu = vcpu.pinned_pcpu
+        # Release exclusive pCPU
+        if old_pcpu is not None:
+            self.exclusive_map.pop(old_pcpu, None)
 
-    def compute_compact(self, vcpu_count):
-        """
-        Compute compact pinning: pack vCPUs onto fewest physical cores,
-        preferring SMT siblings on the same core.
-        """
-        # Group CPUs by physical core using SMT siblings
-        core_groups = []
-        visited = set()
+        vcpu.mode = PinMode.RANGE
+        vcpu.pinned_pcpu = None
+        vcpu.source = PinSource.DEFAULT
+        vcpu.guest_pid = None
 
-        for cpu in sorted(self.topo.core_siblings.keys()):
-            if cpu in visited:
-                continue
-            siblings = self.topo.core_siblings.get(cpu, [cpu])
-            free_siblings = [c for c in siblings
-                             if c not in self.used_cpus and c not in visited]
-            if free_siblings:
-                core_groups.append(free_siblings)
-                visited.update(siblings)
+        logger.info(
+            "[UNPIN] vm=%s vcpu=%d action=restore cpuset=%s source=guest-unpin",
+            domain, vcpu_id, _format_cpulist(vm.cpuset),
+        )
+        return True, f"Restored vcpu{vcpu_id} to range mode (cpuset {_format_cpulist(vm.cpuset)})"
 
-        # If no SMT info, fall back to flat CPU list
-        if not core_groups:
-            all_free = []
-            for cpus in self.topo.nodes.values():
-                all_free.extend(c for c in cpus if c not in self.used_cpus)
-            core_groups = [[c] for c in sorted(all_free)]
+    def unpin_all(self, domain):
+        """Restore all vCPUs of a VM to range mode."""
+        vm = self.vm_states.get(domain)
+        if vm is None:
+            return False, f"VM '{domain}' not registered"
+        results = []
+        for vcpu_id in sorted(vm.vcpus.keys()):
+            ok, msg = self.unpin_restore(domain, vcpu_id)
+            results.append(msg)
+        return True, results
 
-        mapping = {}
-        vcpu_idx = 0
+    # --- Query ---
 
-        for group in core_groups:
-            if vcpu_idx >= vcpu_count:
-                break
-            for cpu in group:
-                if vcpu_idx >= vcpu_count:
-                    break
-                mapping[f"vcpu{vcpu_idx}"] = [cpu]
-                vcpu_idx += 1
+    def get_vm_status(self, domain):
+        """Return the pinning status of a VM."""
+        return self.vm_states.get(domain)
 
-        if vcpu_idx < vcpu_count:
-            raise RuntimeError(
-                f"Not enough free CPUs: need {vcpu_count}, "
-                f"only {vcpu_idx} available"
-            )
-        return mapping
+    def get_pcpu_status(self, pcpu):
+        """Return the status of a specific pCPU."""
+        if pcpu in self.exclusive_map:
+            domain, vcpu_id = self.exclusive_map[pcpu]
+            return PinMode.EXCLUSIVE, domain, vcpu_id
+        return PinMode.RANGE, None, None
 
-    @staticmethod
-    def parse_manual_mapping(mapping_str, max_cpu):
-        """
-        Parse manual mapping string like 'vcpu0:0-3,vcpu1:4-7'.
-        """
-        mapping = {}
-        for entry in mapping_str.split(","):
-            entry = entry.strip()
-            if ":" not in entry:
-                raise ValueError(f"Invalid mapping format: '{entry}'")
-            vcpu_part, cpu_part = entry.split(":", 1)
-            vcpu_part = vcpu_part.strip()
-            cpu_part = cpu_part.strip()
-
-            cpus = NumaTopology._parse_cpulist(cpu_part)
-            for c in cpus:
-                if c >= max_cpu:
-                    raise ValueError(
-                        f"pCPU {c} does not exist on this host "
-                        f"(max: {max_cpu - 1})"
-                    )
-            mapping[vcpu_part] = cpus
-        return mapping
-
-
-def cmd_topology(args):
-    """Handle the 'topology' subcommand."""
-    topo = NumaTopology()
-    if args.format == "json":
-        print(json.dumps(topo.to_dict(), indent=2))
-    else:
-        topo.print_table()
-
-
-def cmd_pin(args):
-    """Handle the 'pin' subcommand."""
-    topo = NumaTopology()
-    lv = LibvirtConnector()
-
-    try:
-        domain = lv.get_domain(args.vm)
-        vcpu_count = lv.get_vcpu_count(domain)
-        max_cpus = os.cpu_count() or 64
-
-        if args.manual:
-            mapping = PinningEngine.parse_manual_mapping(args.manual, max_cpus)
-            strategy = "manual"
-        else:
-            strategy = args.strategy or "numa-aware"
-            engine = PinningEngine(topo)
-
-            if strategy == "numa-aware":
-                node = getattr(args, "node", None)
-                mapping = engine.compute_numa_aware(vcpu_count, node)
-            elif strategy == "spread":
-                mapping = engine.compute_spread(vcpu_count)
-            elif strategy == "compact":
-                mapping = engine.compute_compact(vcpu_count)
-            else:
-                print(f"[ERROR] Unknown strategy: {strategy}", file=sys.stderr)
-                return 1
-
-        # Execute pinning
-        for vcpu_name, cpulist in sorted(mapping.items()):
-            vcpu_id = int(re.search(r"\d+", vcpu_name).group())
-            lv.pin_vcpu(domain, vcpu_id, cpulist, max_cpus)
-            node_id = topo.get_node_for_cpu(cpulist[0])
-            cpu_str = ",".join(str(c) for c in cpulist)
-            logger.info("Pinned %s -> pCPU %s (node%d)", vcpu_name, cpu_str, node_id)
-
-        # Persist
-        config = PinningConfig()
-        pinning_serializable = {k: v for k, v in mapping.items()}
-        config.save(args.vm, strategy, pinning_serializable)
-
-        logger.info("Successfully pinned %d vCPUs for %s", len(mapping), args.vm)
-        print(f"[OK] Successfully pinned {len(mapping)} vCPUs for {args.vm}")
-
-    finally:
-        lv.close()
-
-
-def cmd_unpin(args):
-    """Handle the 'unpin' subcommand."""
-    lv = LibvirtConnector()
-
-    try:
-        domain = lv.get_domain(args.vm)
-        vcpu_count = lv.get_vcpu_count(domain)
-
-        for vcpu_id in range(vcpu_count):
-            lv.unpin_vcpu(domain, vcpu_id)
-            logger.info("Unpinned vcpu%d", vcpu_id)
-
-        config = PinningConfig()
-        config.remove(args.vm)
-
-        logger.info("Successfully unpinned %d vCPUs for %s", vcpu_count, args.vm)
-        print(f"[OK] Successfully unpinned {vcpu_count} vCPUs for {args.vm}")
-
-    finally:
-        lv.close()
-
-
-def cmd_show(args):
-    """Handle the 'show' subcommand."""
-    lv = LibvirtConnector()
-    topo = NumaTopology()
-
-    try:
-        domain = lv.get_domain(args.vm)
-        vcpu_info = lv.get_vcpu_info(domain)
-
-        config = PinningConfig()
-        saved = config.load(args.vm)
-        strategy = saved.get("strategy", "unknown") if saved else "none"
-
-        if args.format == "json":
-            output = {
-                "domain": args.vm,
-                "vcpu_count": len(vcpu_info),
-                "strategy": strategy,
-                "vcpus": [],
+    def get_all_pcpu_status(self):
+        """Return status of all pCPUs."""
+        result = {}
+        for pcpu in range(self.total_pcpus):
+            mode, domain, vcpu_id = self.get_pcpu_status(pcpu)
+            sharing_vms = set()
+            if mode == PinMode.RANGE:
+                for vm in self.vm_states.values():
+                    if pcpu in vm.cpuset:
+                        sharing_vms.add(vm.domain)
+            result[pcpu] = {
+                "mode": mode,
+                "domain": domain,
+                "vcpu_id": vcpu_id,
+                "sharing_vms": sorted(sharing_vms),
             }
-            for vi in vcpu_info:
-                node = topo.get_node_for_cpu(vi["cpu"]) if vi["cpu"] >= 0 else -1
-                output["vcpus"].append({
-                    "vcpu": vi["vcpu"],
-                    "current_cpu": vi["cpu"],
-                    "pinned_cpus": vi["pinned_cpus"],
-                    "numa_node": node,
-                })
-            print(json.dumps(output, indent=2))
-        else:
-            max_cpus = os.cpu_count() or 64
-            all_cpus = set(range(max_cpus))
-
-            print(f"VM: {args.vm} ({len(vcpu_info)} vCPUs)")
-            print(f"{'vCPU':<8}{'Pinned pCPUs':<24}{'NUMA Node'}")
-            print(f"{'----':<8}{'------------':<24}{'---------'}")
-
-            has_pinning = False
-            for vi in vcpu_info:
-                pinned = vi["pinned_cpus"]
-                if set(pinned) != all_cpus:
-                    has_pinning = True
-                    cpu_str = _format_cpulist(pinned)
-                    node = topo.get_node_for_cpu(pinned[0]) if pinned else -1
-                    node_str = f"node{node}" if node >= 0 else "N/A"
-                else:
-                    cpu_str = "(all)"
-                    node_str = "N/A"
-                print(f"vcpu{vi['vcpu']:<4}{cpu_str:<24}{node_str}")
-
-            if not has_pinning:
-                print(f"\nNo pinning configured for {args.vm} "
-                      "(using system default scheduling)")
-            else:
-                print(f"Strategy: {strategy}")
-
-    finally:
-        lv.close()
+        return result
 
 
-def cmd_restore(args):
-    """Handle the 'restore' subcommand."""
-    config = PinningConfig()
+# ---------------------------------------------------------------------------
+# Guest-side pinning notification (simulates what KVM/QEMU would receive)
+# ---------------------------------------------------------------------------
 
-    if args.vm:
-        domains = [args.vm]
-    else:
-        domains = config.list_all()
+class GuestPinNotification:
+    """
+    Represents a pinning notification from the Guest to the VMM.
+    In production, this comes via hypercall/wrmsr/device-write causing VM-Exit.
+    Here we model it as a structured message for the VMM handler.
+    """
+    ACTION_PIN = "pin"
+    ACTION_UNPIN = "unpin"
 
-    if not domains:
-        print("[INFO] No saved pinning configurations found")
-        return
+    def __init__(self, domain, vcpu_id, action, guest_pid=None, target_vcpus=None):
+        self.domain = domain
+        self.vcpu_id = vcpu_id          # Which vCPU the app pinned to
+        self.action = action            # "pin" or "unpin"
+        self.guest_pid = guest_pid      # PID of app inside guest
+        self.target_vcpus = target_vcpus  # Bitmask of target vCPUs (for info)
 
-    lv = LibvirtConnector()
-    topo = NumaTopology()
+    def to_dict(self):
+        return {
+            "domain": self.domain,
+            "vcpu_id": self.vcpu_id,
+            "action": self.action,
+            "guest_pid": self.guest_pid,
+            "target_vcpus": self.target_vcpus,
+        }
 
-    try:
-        for domain_name in domains:
-            saved = config.load(domain_name)
-            if not saved:
-                continue
+    @classmethod
+    def from_dict(cls, d):
+        return cls(
+            domain=d["domain"],
+            vcpu_id=d["vcpu_id"],
+            action=d["action"],
+            guest_pid=d.get("guest_pid"),
+            target_vcpus=d.get("target_vcpus"),
+        )
 
-            try:
-                domain = lv.get_domain(domain_name)
-            except RuntimeError:
-                logger.warning("Domain %s not found, skipping", domain_name)
-                continue
 
-            max_cpus = os.cpu_count() or 64
-            pinning = saved.get("pinning", {})
+class VmmPinHandler:
+    """
+    VMM-side handler that processes guest pinning notifications.
+    This is the core logic unit described in the patent's architecture.
+    """
 
-            for vcpu_name, cpulist in pinning.items():
-                vcpu_id = int(re.search(r"\d+", vcpu_name).group())
-                lv.pin_vcpu(domain, vcpu_id, cpulist, max_cpus)
+    def __init__(self, global_map):
+        self.global_map = global_map
 
-            logger.info(
-                "Restored pinning for %s (%d vCPUs)",
-                domain_name, len(pinning)
+    def handle_notification(self, notification):
+        """
+        Process a single guest pinning notification.
+        Returns (success, message) tuple.
+        """
+        if notification.action == GuestPinNotification.ACTION_PIN:
+            ok, pcpu, msg = self.global_map.pin_exclusive(
+                notification.domain,
+                notification.vcpu_id,
+                guest_pid=notification.guest_pid,
             )
-            print(f"[OK] Restored pinning for {domain_name}")
+            return ok, msg
+        elif notification.action == GuestPinNotification.ACTION_UNPIN:
+            ok, msg = self.global_map.unpin_restore(
+                notification.domain,
+                notification.vcpu_id,
+            )
+            return ok, msg
+        else:
+            return False, f"Unknown action: {notification.action}"
 
-    finally:
-        lv.close()
+    def handle_batch(self, notifications):
+        """Process a batch of notifications."""
+        results = []
+        for notif in notifications:
+            ok, msg = self.handle_notification(notif)
+            results.append({"notification": notif.to_dict(), "ok": ok, "msg": msg})
+        return results
 
+
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
 
 def _format_cpulist(cpus):
     """Format a list of CPUs into a compact range string."""
@@ -638,57 +420,220 @@ def _format_cpulist(cpus):
     return ",".join(ranges)
 
 
+def _parse_cpulist(cpulist_str):
+    """Parse a CPU list string like '0-3,8-11' into a sorted list of ints."""
+    cpus = []
+    for part in cpulist_str.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = part.split("-", 1)
+            cpus.extend(range(int(start), int(end) + 1))
+        else:
+            cpus.append(int(part))
+    return sorted(cpus)
+
+
+# ---------------------------------------------------------------------------
+# CLI commands
+# ---------------------------------------------------------------------------
+
+def cmd_register(args):
+    """Register a VM in the global CPU map."""
+    gm = GlobalCpuMap.load()
+    cpuset = _parse_cpulist(args.cpuset)
+    gm.register_vm(args.vm, args.vcpus, cpuset)
+    gm.save()
+    print(f"[OK] Registered {args.vm}: {args.vcpus} vCPUs, cpuset {_format_cpulist(cpuset)}")
+
+
+def cmd_unregister(args):
+    """Unregister a VM from the global CPU map."""
+    gm = GlobalCpuMap.load()
+    gm.unregister_vm(args.vm)
+    gm.save()
+    print(f"[OK] Unregistered {args.vm}")
+
+
+def cmd_notify(args):
+    """Simulate receiving a guest pinning notification (for testing/manual use)."""
+    gm = GlobalCpuMap.load()
+    handler = VmmPinHandler(gm)
+
+    notification = GuestPinNotification(
+        domain=args.vm,
+        vcpu_id=args.vcpu,
+        action=args.action,
+        guest_pid=args.pid,
+    )
+    ok, msg = handler.handle_notification(notification)
+    gm.save()
+
+    if ok:
+        print(f"[OK] {msg}")
+    else:
+        print(f"[ERROR] {msg}", file=sys.stderr)
+        return 1
+
+
+def cmd_status(args):
+    """Show pinning status for a VM or all VMs."""
+    gm = GlobalCpuMap.load()
+
+    if args.vm:
+        vm = gm.get_vm_status(args.vm)
+        if vm is None:
+            print(f"VM '{args.vm}' not found in global map")
+            return 1
+        _print_vm_status(vm, args.format)
+    else:
+        if not gm.vm_states:
+            print("No active VMs found")
+            return 0
+        print(f"Host: {gm.total_pcpus} pCPUs")
+        print()
+        for domain in sorted(gm.vm_states.keys()):
+            _print_vm_status(gm.vm_states[domain], args.format)
+            print()
+
+
+def _print_vm_status(vm, fmt="table"):
+    """Print a single VM's pinning status."""
+    if fmt == "json":
+        print(json.dumps(vm.to_dict(), indent=2))
+        return
+
+    print(f"VM: {vm.domain} ({vm.vcpu_count} vCPUs, cpuset: {_format_cpulist(vm.cpuset)})")
+    print(f"{'vCPU':<8}{'Mode':<12}{'pCPU':<16}{'Source'}")
+    print(f"{'----':<8}{'----':<12}{'----':<16}{'------'}")
+
+    for vcpu_id in sorted(vm.vcpus.keys()):
+        vs = vm.vcpus[vcpu_id]
+        if vs.mode == PinMode.EXCLUSIVE:
+            pcpu_str = f"pCPU {vs.pinned_pcpu}"
+            source_str = f"{vs.source}"
+            if vs.guest_pid:
+                source_str += f" (PID {vs.guest_pid})"
+        else:
+            pcpu_str = f"pCPU {_format_cpulist(vs.cpuset)}"
+            source_str = vs.source
+
+        print(f"vcpu{vcpu_id:<4}{vs.mode:<12}{pcpu_str:<16}{source_str}")
+
+
+def cmd_map(args):
+    """Show the global CPU map."""
+    gm = GlobalCpuMap.load()
+
+    if args.format == "json":
+        all_status = gm.get_all_pcpu_status()
+        print(json.dumps(all_status, indent=2, default=str))
+        return
+
+    print(f"Global CPU Pinning Map ({gm.total_pcpus} pCPUs)")
+    print(f"{'pCPU':<8}{'Status':<12}{'Owner'}")
+    print(f"{'----':<8}{'------':<12}{'-----'}")
+
+    all_status = gm.get_all_pcpu_status()
+    for pcpu in range(min(gm.total_pcpus, args.limit or gm.total_pcpus)):
+        info = all_status[pcpu]
+        if info["mode"] == PinMode.EXCLUSIVE:
+            status = "exclusive"
+            owner = f"{info['domain']}:vcpu{info['vcpu_id']} (guest-pin)"
+        else:
+            status = "shared"
+            if info["sharing_vms"]:
+                owner = f"({', '.join(info['sharing_vms'])} range)"
+            else:
+                owner = "(free)"
+        print(f"{pcpu:<8}{status:<12}{owner}")
+
+
+def cmd_unpin_all(args):
+    """Restore all vCPUs of a VM to range mode."""
+    gm = GlobalCpuMap.load()
+    ok, results = gm.unpin_all(args.vm)
+    gm.save()
+
+    if not ok:
+        print(f"[ERROR] {results}", file=sys.stderr)
+        return 1
+
+    for msg in results:
+        print(f"[INFO] {msg}")
+    print(f"[OK] Restored all vCPUs for {args.vm} to range mode")
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
         prog="vm-bindcore",
-        description="VM vCPU CPU-Pinning Management Tool (NUMA-aware)",
+        description=(
+            "VMM-side transparent vCPU pinning optimization tool.\n"
+            "Manages dynamic 1:1 pinning based on in-VM app pinning notifications."
+        ),
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose output"
     )
     subparsers = parser.add_subparsers(dest="command", help="Sub-command")
 
-    # topology
-    p_topo = subparsers.add_parser("topology", help="Show host NUMA topology")
-    p_topo.add_argument(
+    # register
+    p_reg = subparsers.add_parser(
+        "register", help="Register a VM in the global CPU map"
+    )
+    p_reg.add_argument("--vm", required=True, help="VM domain name")
+    p_reg.add_argument("--vcpus", required=True, type=int, help="Number of vCPUs")
+    p_reg.add_argument("--cpuset", required=True, help="Allowed pCPU range (e.g. 0-15)")
+
+    # unregister
+    p_unreg = subparsers.add_parser(
+        "unregister", help="Unregister a VM from the global CPU map"
+    )
+    p_unreg.add_argument("--vm", required=True, help="VM domain name")
+
+    # notify (simulate guest notification)
+    p_notify = subparsers.add_parser(
+        "notify", help="Process a guest pinning notification"
+    )
+    p_notify.add_argument("--vm", required=True, help="VM domain name")
+    p_notify.add_argument("--vcpu", required=True, type=int, help="vCPU id")
+    p_notify.add_argument(
+        "--action", required=True, choices=["pin", "unpin"],
+        help="pin = guest app pinned, unpin = guest app unpinned"
+    )
+    p_notify.add_argument("--pid", type=int, help="Guest-side PID of the app")
+
+    # status
+    p_status = subparsers.add_parser(
+        "status", help="Show vCPU pinning status"
+    )
+    p_status.add_argument("--vm", help="VM domain name (all VMs if omitted)")
+    p_status.add_argument(
         "--format", choices=["table", "json"], default="table",
-        help="Output format (default: table)"
+        help="Output format"
     )
 
-    # pin
-    p_pin = subparsers.add_parser("pin", help="Pin vCPUs to physical CPUs")
-    p_pin.add_argument("--vm", required=True, help="VM domain name")
-    p_pin.add_argument(
-        "--strategy", choices=["numa-aware", "spread", "compact"],
-        help="Pinning strategy"
+    # map
+    p_map = subparsers.add_parser(
+        "map", help="Show global CPU pinning map"
     )
-    p_pin.add_argument("--node", type=int, help="Preferred NUMA node (numa-aware)")
-    p_pin.add_argument(
-        "--manual", help="Manual mapping (e.g., vcpu0:0-3,vcpu1:4-7)"
+    p_map.add_argument(
+        "--format", choices=["table", "json"], default="table",
+        help="Output format"
     )
-    p_pin.add_argument(
-        "--exclusive", action="store_true",
-        help="Exclusive mode: reject if target CPUs are already pinned"
+    p_map.add_argument(
+        "--limit", type=int, help="Limit number of pCPUs shown"
     )
 
-    # unpin
-    p_unpin = subparsers.add_parser("unpin", help="Remove vCPU pinning")
+    # unpin-all
+    p_unpin = subparsers.add_parser(
+        "unpin-all", help="Restore all vCPUs of a VM to range mode"
+    )
     p_unpin.add_argument("--vm", required=True, help="VM domain name")
-
-    # show
-    p_show = subparsers.add_parser("show", help="Show current vCPU pinning")
-    p_show.add_argument("--vm", required=True, help="VM domain name")
-    p_show.add_argument(
-        "--format", choices=["table", "json"], default="table",
-        help="Output format (default: table)"
-    )
-
-    # restore
-    p_restore = subparsers.add_parser(
-        "restore", help="Restore pinning from saved configs"
-    )
-    p_restore.add_argument("--vm", help="VM domain name (all if omitted)")
 
     args = parser.parse_args()
 
@@ -702,11 +647,12 @@ def main():
         return 1
 
     commands = {
-        "topology": cmd_topology,
-        "pin": cmd_pin,
-        "unpin": cmd_unpin,
-        "show": cmd_show,
-        "restore": cmd_restore,
+        "register": cmd_register,
+        "unregister": cmd_unregister,
+        "notify": cmd_notify,
+        "status": cmd_status,
+        "map": cmd_map,
+        "unpin-all": cmd_unpin_all,
     }
 
     func = commands.get(args.command)
@@ -727,3 +673,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

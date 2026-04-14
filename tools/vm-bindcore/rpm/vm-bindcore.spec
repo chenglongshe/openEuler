@@ -1,7 +1,7 @@
 Name:           vm-bindcore
-Version:        1.0.0
+Version:        2.0.0
 Release:        1%{?dist}
-Summary:        VM vCPU CPU-Pinning Management Tool (NUMA-aware)
+Summary:        VMM-side Transparent vCPU Pinning Optimization Tool
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/vm-bindcore
 Source0:        %{name}-%{version}.tar.gz
@@ -11,24 +11,37 @@ BuildRequires:  python3-devel
 BuildRequires:  systemd
 
 Requires:       python3 >= 3.8
-Requires:       libvirt-python3 >= 6.0.0
-Requires:       libvirt-daemon >= 6.0.0
 Requires:       qemu-kvm
 Requires:       systemd
 
 %description
-vm-bindcore is a NUMA-aware vCPU pinning management tool for KVM/libvirt
-virtual machines. Based on the patent "一种虚拟机绑核方法及计算设备"
-(A Virtual Machine CPU Pinning Method and Computing Device, Inventor: 张海亮),
-it provides automatic and manual vCPU-to-pCPU pinning with the following
-strategies:
+vm-bindcore provides transparent vCPU pinning optimization for KVM/QEMU
+virtual machines. Based on the patent "一种优化虚拟机内业务绑核性能的方法"
+(A Method for Optimizing VM In-Guest Business CPU Pinning Performance,
+Inventor: 张海亮).
 
-  - numa-aware: Pin all vCPUs to the same NUMA node to reduce cross-node
-                memory access latency.
-  - spread:     Distribute vCPUs evenly across NUMA nodes to maximize
-                memory bandwidth utilization.
-  - compact:    Pack vCPUs onto fewest physical cores using SMT siblings
-                to minimize CPU resource footprint.
+When a business application inside a VM uses sched_setaffinity to pin to
+specific vCPUs, the guest-side interceptor (kprobe/eBPF) detects this and
+notifies the VMM. The VMM then dynamically switches the corresponding vCPU
+from range-pinning to 1:1 exclusive pinning on the host side, achieving
+stable performance without sacrificing resource utilization.
+
+Key features:
+  - Guest-side interception via kprobe (sync) or eBPF CO-RE (async)
+  - VMM-side dynamic 1:1 pinning on guest app bind notification
+  - Automatic range-pinning restore on guest app unbind
+  - Global CPU map with cross-VM conflict avoidance
+  - Persistent state with auto-restore on reboot
+
+%package guest
+Summary:        Guest-side sched_setaffinity interceptor for vm-bindcore
+Requires:       python3 >= 3.8
+
+%description guest
+Guest-side component of vm-bindcore. Installs inside the VM to intercept
+sched_setaffinity calls and notify the VMM via hypercall/wrmsr.
+Supports eBPF CO-RE (compile once, run everywhere) for cross-kernel
+compatibility.
 
 %prep
 %setup -q
@@ -37,9 +50,13 @@ strategies:
 # Nothing to build for a pure Python tool
 
 %install
-# Install main tool
+# Install VMM-side tool
 install -D -m 0755 src/vm_bindcore.py \
     %{buildroot}%{_bindir}/vm-bindcore
+
+# Install guest-side tool
+install -D -m 0755 src/vm_bindcore_guest.py \
+    %{buildroot}%{_bindir}/vm-bindcore-guest
 
 # Install restore helper
 install -D -m 0755 src/vm_bindcore_restore.py \
@@ -50,7 +67,7 @@ install -D -m 0644 src/vm-bindcore-restore.service \
     %{buildroot}%{_unitdir}/vm-bindcore-restore.service
 
 # Create config directory
-install -d -m 0755 %{buildroot}%{_sysconfdir}/vm-bindcore/pinning.d
+install -d -m 0755 %{buildroot}%{_sysconfdir}/vm-bindcore
 
 # Install man page
 install -d -m 0755 %{buildroot}%{_mandir}/man1
@@ -73,14 +90,19 @@ install -D -m 0644 docs/vm-bindcore.1 \
 %{_libexecdir}/vm-bindcore/vm_bindcore_restore.py
 %{_unitdir}/vm-bindcore-restore.service
 %dir %{_sysconfdir}/vm-bindcore
-%dir %{_sysconfdir}/vm-bindcore/pinning.d
 %{_mandir}/man1/vm-bindcore.1*
 
+%files guest
+%license LICENSE
+%{_bindir}/vm-bindcore-guest
+
 %changelog
+* Mon Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 2.0.0-1
+- Rewrite to match patent: 一种优化虚拟机内业务绑核性能的方法
+- Guest-side interception via kprobe/eBPF with hypercall notification
+- VMM-side dynamic 1:1 pinning on guest app bind/unbind
+- Global CPU map with cross-VM conflict avoidance
+- Separate guest RPM subpackage (vm-bindcore-guest)
+
 * Mon Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 1.0.0-1
 - Initial release
-- NUMA-aware vCPU pinning (numa-aware, spread, compact strategies)
-- Manual vCPU-to-pCPU pinning support
-- Pinning status query and management
-- Persistent pinning configuration with auto-restore on reboot
-- Systemd service for automatic pinning restoration

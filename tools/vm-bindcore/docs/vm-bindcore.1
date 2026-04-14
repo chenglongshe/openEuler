@@ -1,87 +1,54 @@
-.TH VM-BINDCORE 1 "April 2026" "vm-bindcore 1.0.0" "User Commands"
+.TH VM-BINDCORE 1 "April 2026" "vm-bindcore 2.0.0" "User Commands"
 .SH NAME
-vm-bindcore \- VM vCPU CPU-Pinning Management Tool (NUMA-aware)
+vm-bindcore \- VMM-side transparent vCPU pinning optimization tool
 .SH SYNOPSIS
 .B vm-bindcore
-[\fB\-v\fR]
-\fIcommand\fR
-[\fIoptions\fR]
+[\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
 .SH DESCRIPTION
 .B vm-bindcore
-is a NUMA-aware vCPU pinning management tool for KVM/libvirt virtual machines.
-It provides automatic and manual vCPU-to-pCPU pinning with strategies:
-numa-aware, spread, and compact.
+manages dynamic vCPU-to-pCPU pinning on the host (VMM) side, based on
+pinning notifications from guest VMs. When a business application inside a
+VM calls sched_setaffinity to pin to a specific vCPU, the guest-side
+interceptor (kprobe or eBPF) detects this and notifies the VMM.
+vm-bindcore then switches the corresponding vCPU from range-pinning to
+1:1 exclusive pinning on a physical CPU. When the app un-pins, vm-bindcore
+restores range-pinning.
+.PP
+Based on patent: "一种优化虚拟机内业务绑核性能的方法" (Inventor: 张海亮).
 .SH COMMANDS
 .TP
-.B topology
-Show host NUMA topology information.
+.B register \-\-vm \fINAME\fR \-\-vcpus \fIN\fR \-\-cpuset \fIRANGE\fR
+Register a VM in the global CPU map with its vCPU count and allowed
+pCPU range.
 .TP
-.B pin
-Pin vCPUs to physical CPUs using a strategy or manual mapping.
+.B unregister \-\-vm \fINAME\fR
+Remove a VM from the global CPU map and release all exclusive pCPUs.
 .TP
-.B unpin
-Remove vCPU pinning for a virtual machine.
+.B notify \-\-vm \fINAME\fR \-\-vcpu \fIID\fR \-\-action \fIpin|unpin\fR [\-\-pid \fIPID\fR]
+Process a guest pinning notification (simulate or manual trigger).
 .TP
-.B show
-Show current vCPU pinning status for a virtual machine.
+.B status [\-\-vm \fINAME\fR] [\-\-format \fItable|json\fR]
+Show vCPU pinning status for a specific VM or all VMs.
 .TP
-.B restore
-Restore pinning from saved persistent configurations.
+.B map [\-\-format \fItable|json\fR] [\-\-limit \fIN\fR]
+Show the global CPU pinning map (all pCPU assignments).
+.TP
+.B unpin-all \-\-vm \fINAME\fR
+Restore all vCPUs of a VM to range-pinning mode.
 .SH OPTIONS
 .TP
-\fB\-v\fR, \fB\-\-verbose\fR
+.B \-v, \-\-verbose
 Enable verbose output.
-.SH PIN OPTIONS
-.TP
-\fB\-\-vm\fR \fIname\fR
-VM domain name (required).
-.TP
-\fB\-\-strategy\fR numa-aware|spread|compact
-Pinning strategy to use.
-.TP
-\fB\-\-node\fR \fIid\fR
-Preferred NUMA node (for numa-aware strategy).
-.TP
-\fB\-\-manual\fR \fImapping\fR
-Manual mapping, e.g., vcpu0:0-3,vcpu1:4-7.
-.SH EXAMPLES
-.PP
-Show NUMA topology:
-.RS
-.nf
-vm-bindcore topology
-vm-bindcore topology --format json
-.fi
-.RE
-.PP
-Pin with NUMA-aware strategy:
-.RS
-.nf
-vm-bindcore pin --vm test-vm --strategy numa-aware
-vm-bindcore pin --vm test-vm --strategy numa-aware --node 0
-.fi
-.RE
-.PP
-Manual pinning:
-.RS
-.nf
-vm-bindcore pin --vm test-vm --manual vcpu0:0-3,vcpu1:4-7
-.fi
-.RE
-.PP
-Show pinning status:
-.RS
-.nf
-vm-bindcore show --vm test-vm
-.fi
-.RE
 .SH FILES
 .TP
-/etc/vm-bindcore/pinning.d/*.json
-Persistent pinning configuration files.
+.I /etc/vm-bindcore/global_cpu_map.json
+Persistent global CPU mapping state.
 .SH SEE ALSO
+.BR vm-bindcore-guest (1),
 .BR virsh (1),
-.BR numactl (8),
-.BR taskset (1)
+.BR taskset (1),
+.BR numactl (8)
 .SH AUTHORS
-Based on patent by Zhang Hailiang (张海亮).
+张海亮 (Zhang Hailiang)
+.br
+openEuler Contributors

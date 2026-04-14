@@ -1,14 +1,13 @@
 [Unit]
-Description=Restore VM vCPU CPU-Pinning Configurations
+Description=vm-bindcore Global CPU Map Restore Service
+Documentation=man:vm-bindcore(1)
 After=libvirtd.service
-Requires=libvirtd.service
+Wants=libvirtd.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/libexec/vm-bindcore/vm_bindcore_restore.py
-RemainAfterExit=yes
-StandardOutput=journal
-StandardError=journal
+ExecStart=/usr/libexec/vm-bindcore/vm_bindcore_restore.py
+RemainAfterExit=no
 
 [Install]
 WantedBy=multi-user.target
