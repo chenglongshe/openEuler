@@ -1,137 +1,152 @@
 # SR（System Requirement，系统需求）
 
-## 基于专利《一种虚拟机绑核方法及计算设备》—— 发明人：张海亮
+## 基于专利《一种优化虚拟机内业务绑核性能的方法》—— 发明人：张海亮
 
 ---
 
 ### [名称]
-虚拟机 vCPU 绑核管理系统（VM vCPU CPU-Pinning Management System）
+虚拟机内业务绑核透传优化系统（VM In-Guest Pinning Passthrough Optimization System）
 
 ### [类型]
 功能
 
 ### [需求详情]
 
-系统应提供一套虚拟机 vCPU 到物理 CPU 核心的绑定（Pinning）管理能力，具体包含以下功能行为：
+在服务器虚拟化场景中，虚拟机的 vCPU 与物理 CPU（pCPU）存在两种绑核模式：**范围绑核**（vCPU 可在一组 pCPU 上被调度器自由调度）和 **1:1 绑核**（vCPU 固定运行在一个 pCPU 上）。范围绑核资源利用率高但性能不稳定，1:1 绑核性能稳定但资源利用率低。
 
-1. **NUMA 拓扑感知**：系统应自动检测宿主机的 NUMA 拓扑结构（节点数量、每节点 CPU 列表、节点间距离），并以此作为绑核决策的基础数据。
+本系统实现一种**透明的虚拟机内业务绑核感知与透传优化机制**：当虚拟机内的业务应用通过 `sched_setaffinity` 系统调用进行绑核时，VMM 侧能够自动感知并将该绑核意图透传到宿主机侧，动态地将对应 vCPU 从范围绑核切换为 1:1 绑核；当业务解除绑核后，VMM 自动恢复为范围绑核。从而在超分配部署场景下，兼顾资源利用率与业务性能稳定性。
 
-2. **自动绑核策略**：当用户指定虚拟机名称/ID 和绑核策略（如 `numa-aware`、`spread`、`compact`）时，系统应根据以下规则自动计算并执行 vCPU 到 pCPU 的映射：
-   - **`numa-aware` 策略**：将同一虚拟机的所有 vCPU 绑定到同一 NUMA 节点的物理 CPU 上，以减少跨节点内存访问延迟。若单节点可用 CPU 不足，则优先选择 NUMA 距离最近的相邻节点进行扩展。
-   - **`spread` 策略**：将虚拟机的 vCPU 均匀分散到多个 NUMA 节点上，以最大化利用各节点的内存带宽。
-   - **`compact` 策略**：将虚拟机的 vCPU 紧凑排布到最少数量的物理核心上，优先使用同一物理核心的超线程（Hyper-Threading/SMT siblings），以降低 CPU 资源占用面积。
+系统应提供以下核心功能：
 
-3. **手动绑核**：系统应支持用户通过指定 vCPU 编号和目标 pCPU 列表手动设置绑定关系，格式如 `vcpu0:0-3,vcpu1:4-7`。
+1. **Guest 侧绑核截获**：在虚拟机 Guest OS 内核中，通过 kprobe 或 eBPF 技术截获业务应用对 `sched_setaffinity` 系统调用的调用，获取绑核目标 vCPU 范围等信息。
+   - **kprobe 方式**（同步）：在内核 kprobe hook 中直接通过 hypercall 或 wrmsr 将绑核信息同步传递到 VMM。
+   - **eBPF 方式**（异步）：通过 eBPF 程序截获后传递给用户态处理程序，由用户态异步通知 VMM。eBPF 方式支持一次编译多平台运行，减少每个 Guest OS 版本的适配工作量。
 
-4. **绑核关系查询**：系统应支持查询指定虚拟机当前所有 vCPU 的绑核状态，输出格式应包含 vCPU 编号、绑定的 pCPU 列表以及所在 NUMA 节点。
+2. **Guest-to-Host 通知机制**：提供从虚拟机内部向 VMM/Hypervisor 传递绑核信息的通道，支持以下方式：
+   - **hypercall 方式**：直接调用虚拟机管理程序调用接口，触发 VM-Exit 进入 KVM 模块处理。
+   - **wrmsr/rdmsr 方式**：通过写入特定 MSR 寄存器触发 VM-Exit 传递信息。
+   - **模拟设备方式**（实施例二）：通过模拟 PCI/ISA 设备的 write 操作传递信息，VM-Exit 到 QEMU 用户态处理。
 
-5. **绑核关系解除**：系统应支持解除指定虚拟机的 vCPU 绑核关系，恢复为系统默认调度行为。
+3. **VMM 侧绑核处理**：VMM（KVM 或 QEMU）接收到 Guest 内绑核通知后：
+   - 解析绑核信息（绑核/解绑核动作、目标 vCPU 范围）。
+   - 查询 **全局 CPU 映射表（Global CPU Maps）** 和该 VM 的 **cpuset 配置**，确定可用的物理 CPU。
+   - 对需要绑核的 vCPU 执行 Host 侧 1:1 绑定（`sched_setaffinity` 到指定 pCPU）。
+   - 尽可能避免多个 VM 的 1:1 绑核范围重叠（同一 pCPU 不被多个 vCPU 独占绑定）。
 
-6. **冲突检测**：在执行绑核操作前，系统应检测目标 pCPU 是否已被其他虚拟机独占绑定（exclusive 模式），若存在冲突应返回明确的错误信息并拒绝操作。
+4. **自动解绑恢复**：当 Guest 内业务应用解除绑核（调用 `sched_setaffinity` 恢复到全范围）时：
+   - Guest 侧截获模块感知解绑核动作。
+   - 通知 VMM 侧恢复该 vCPU 为范围绑核（允许在原 cpuset 范围内调度）。
+   - 更新全局 CPU 映射表，释放原独占 pCPU。
 
-7. **持久化**：绑核配置应支持持久化存储（配置文件），在宿主机或 libvirtd 重启后可自动恢复绑核关系。
+5. **全局 CPU 映射管理**：VMM 侧维护一张全局 CPU 映射表，记录所有 VM 的 vCPU 绑核状态：
+   - 哪些 pCPU 已被哪个 VM 的哪个 vCPU 1:1 独占绑定。
+   - 哪些 pCPU 处于空闲或范围绑核共享状态。
+   - 绑核冲突检测：新绑核请求时检查目标 pCPU 是否已被占用，若冲突则选择最近可用 pCPU。
 
-8. **日志记录**：所有绑核操作（设置、解除、策略变更）应记录到系统日志（syslog/journald），包含时间戳、操作者、虚拟机标识和操作结果。
+6. **日志与审计**：所有绑核事件（Guest 内截获、VMM 侧绑定/解绑、冲突检测结果）记录到系统日志。
 
 ### [约束]
 
 **法规/合规**：
 - 绑核操作需具备审计日志，满足等保 2.0 日志留存要求。
-- 不得修改内核调度器核心逻辑，仅通过用户态 API（cgroup/cpuset、sched_setaffinity、libvirt API）实现。
+- Guest 侧仅使用 kprobe/eBPF 等非侵入式内核机制，不修改 Guest 内核源码（eBPF 方案可在不修改 VM 内核的情况下支持旧版本 OS）。
 
 **平台兼容性**：
 - 支持 x86_64 和 arm64（aarch64）架构。
-- 支持 openEuler 22.03/24.03 LTS 版本。
-- 依赖 libvirt ≥ 6.0.0、QEMU/KVM 虚拟化环境。
-- 兼容 Linux 内核版本 ≥ 5.10。
+- 支持 openEuler 22.03/24.03 LTS 版本作为 Host OS。
+- Guest OS 支持 Linux 内核 ≥ 4.18（kprobe）或 ≥ 5.4（eBPF CO-RE）。
+- 依赖 QEMU/KVM 虚拟化环境。
 
-**资源限制**：
-- 绑核策略计算时间 ≤ 1 秒（128 核以内宿主机）。
-- 工具运行时常驻内存 ≤ 10 MB。
-- 单次绑核操作（含 libvirt API 调用）完成时间 ≤ 3 秒。
+**性能约束**：
+- Guest 侧截获模块对 `sched_setaffinity` 调用的额外延迟 ≤ 50μs。
+- VMM 侧绑核处理（从 VM-Exit 到绑核完成）延迟 ≤ 1ms。
+- eBPF 程序加载时间 ≤ 500ms。
+- 截获模块对虚拟机正常业务性能影响 ≤ 1%。
 
 **部署约束**：
-- 以 RPM 包形式交付。
-- 默认不安装，用户按需安装。
-- 依赖 libvirt-devel、python3 运行时环境。
+- Guest 侧截获模块以内核模块（kprobe）或 eBPF 程序形式部署。
+- VMM 侧处理逻辑集成在 KVM 模块或 QEMU 设备模拟中。
+- eBPF 方案支持 CO-RE（Compile Once – Run Everywhere），一次编译适配多种 Guest 内核版本。
 
 ### [范围]
 
 **覆盖范围**：
-- 宿主机 NUMA 拓扑检测模块
-- vCPU 绑核策略计算引擎（numa-aware / spread / compact）
-- vCPU-to-pCPU 绑定执行模块（通过 libvirt virDomainPinVcpu API 或 cgroup/cpuset）
-- 绑核状态查询模块
-- 绑核配置持久化模块
-- CLI 命令行工具（vm-bindcore）
+- Guest 侧 sched_setaffinity 截获模块（kprobe 方式 + eBPF 方式）
+- Guest-to-Host 绑核信息通知通道（hypercall / wrmsr / 模拟设备）
+- VMM 侧通知接收与解析模块
+- VMM 侧绑核执行模块（动态 1:1 绑定 / 范围绑定恢复）
+- 全局 CPU 映射表管理模块
+- 绑核冲突检测与解决模块
+- 日志审计模块
 
 **不在范围内**：
 - 虚拟机创建、删除、迁移等生命周期管理
-- 内存绑定（memory binding / membind）策略（仅限 CPU 绑核）
-- 内核态调度器修改
+- 内存绑定（memory binding / membind）策略
+- Guest 内核 CFS 调度器修改
 - GUI 图形界面
-- 虚拟机 I/O 线程绑核（可作为后续扩展）
+- 非 KVM 虚拟化平台（如 Xen、Hyper-V）
 
 ### [验收标准]
 
-**AC-SR-01：NUMA 拓扑感知**
-- GIVEN 宿主机为多 NUMA 节点服务器（≥2 个 NUMA 节点）
-- WHEN 执行 `vm-bindcore topology` 命令
-- THEN 系统输出完整的 NUMA 拓扑信息，包含各节点 CPU 列表和节点间距离矩阵，与 `numactl --hardware` 输出一致
+**AC-SR-01：Guest 侧绑核截获（kprobe 方式）**
+- GIVEN 虚拟机 vm1 已加载 kprobe 截获模块
+- WHEN vm1 内业务应用调用 `sched_setaffinity(pid, cpuset={vcpu2})` 将任务绑定到 vcpu2
+- THEN 截获模块捕获该调用并通过 hypercall 将绑核信息（pid、目标 vCPU 范围）发送到 VMM
 
-**AC-SR-02：自动绑核 - numa-aware 策略**
-- GIVEN 宿主机有 2 个 NUMA 节点（node0: CPU 0-31, node1: CPU 32-63），虚拟机 vm1 配置 4 个 vCPU
-- WHEN 执行 `vm-bindcore pin --vm vm1 --strategy numa-aware`
-- THEN vm1 的 4 个 vCPU 全部绑定到同一 NUMA 节点的连续 CPU 上，通过 `vm-bindcore show --vm vm1` 可验证所有 vCPU 位于同一 NUMA 节点
+**AC-SR-02：Guest 侧绑核截获（eBPF 方式）**
+- GIVEN 虚拟机 vm2 已加载 eBPF 截获程序
+- WHEN vm2 内业务应用调用 `sched_setaffinity` 进行绑核
+- THEN eBPF 程序截获后通过 ring buffer 传递给用户态处理程序，用户态通过 hypercall 异步通知 VMM
 
-**AC-SR-03：自动绑核 - spread 策略**
-- GIVEN 宿主机有 2 个 NUMA 节点，虚拟机 vm2 配置 4 个 vCPU
-- WHEN 执行 `vm-bindcore pin --vm vm2 --strategy spread`
-- THEN vm2 的 vCPU 均匀分布在两个 NUMA 节点上（每节点 2 个 vCPU）
+**AC-SR-03：VMM 侧动态 1:1 绑核**
+- GIVEN 宿主机有 64 个 pCPU，vm1 配置 cpuset 为 pCPU 0-15（范围绑核），vm1 有 4 个 vCPU
+- WHEN VMM 收到 vm1 内 vcpu2 被业务绑核的通知
+- THEN VMM 查询 Global CPU Maps，选择一个未被独占的 pCPU（如 pCPU 8），将 vcpu2 的 Host 侧任务 1:1 绑定到 pCPU 8
 
-**AC-SR-04：自动绑核 - compact 策略**
-- GIVEN 宿主机开启 SMT（超线程），虚拟机 vm3 配置 2 个 vCPU
-- WHEN 执行 `vm-bindcore pin --vm vm3 --strategy compact`
-- THEN vm3 的 2 个 vCPU 绑定到同一物理核心的 2 个超线程上
+**AC-SR-04：自动解绑恢复**
+- GIVEN vm1 的 vcpu2 当前已被 VMM 1:1 绑定到 pCPU 8
+- WHEN vm1 内业务应用解除绑核（`sched_setaffinity` 恢复到全部 vCPU）
+- THEN VMM 收到解绑通知，将 vcpu2 恢复为范围绑核（cpuset 0-15），释放 pCPU 8 的独占标记
 
-**AC-SR-05：手动绑核**
-- GIVEN 虚拟机 vm4 配置 2 个 vCPU
-- WHEN 执行 `vm-bindcore pin --vm vm4 --manual vcpu0:0-3,vcpu1:4-7`
-- THEN vcpu0 绑定到 pCPU 0-3，vcpu1 绑定到 pCPU 4-7，通过 `virsh vcpuinfo vm4` 可交叉验证
+**AC-SR-05：绑核冲突避免**
+- GIVEN pCPU 8 已被 vm1 的 vcpu2 独占绑定
+- WHEN vm2 的 vcpu0 也需要 1:1 绑核
+- THEN VMM 检测到 pCPU 8 已被占用，选择下一个可用 pCPU（如 pCPU 9）进行绑定
 
-**AC-SR-06：冲突检测**
-- GIVEN 虚拟机 vm5 的 vCPU 已独占绑定到 pCPU 0-3
-- WHEN 执行 `vm-bindcore pin --vm vm6 --manual vcpu0:0-3 --exclusive`
-- THEN 系统返回错误信息 "pCPU 0-3 已被 vm5 独占绑定，操作被拒绝"
+**AC-SR-06：全局 CPU 映射查询**
+- GIVEN 宿主机上运行 3 个 VM，各有不同的绑核状态
+- WHEN 管理员查询全局 CPU 映射
+- THEN 系统输出每个 pCPU 的状态（空闲/共享/独占）及对应的 VM 和 vCPU 信息
 
-**AC-SR-07：绑核解除**
-- GIVEN 虚拟机 vm7 已设置绑核
-- WHEN 执行 `vm-bindcore unpin --vm vm7`
-- THEN vm7 的所有 vCPU 绑核关系被解除，恢复为系统默认调度
-
-**AC-SR-08：持久化恢复**
-- GIVEN 虚拟机 vm8 已设置绑核配置并已持久化
-- WHEN 宿主机重启后 libvirtd 启动完成
-- THEN 执行 `vm-bindcore show --vm vm8` 显示绑核关系与重启前一致
+**AC-SR-07：eBPF 跨版本兼容**
+- GIVEN Guest OS 分别为 openEuler 22.03（内核 5.10）和 openEuler 24.03（内核 6.6）
+- WHEN 使用同一编译产物的 eBPF 截获程序加载到两个不同版本的 Guest OS 中
+- THEN 截获程序均能正常截获 `sched_setaffinity` 调用
 
 ### [交付说明]
 
 #### 交付清单
-- 新增 RPM 包：`vm-bindcore`
-- RPM 包集成方式：everything 镜像 / 独立 yum 源
+- Guest 侧截获模块：kprobe 内核模块（`.ko`）+ eBPF 程序（CO-RE `.bpf.o`）
+- Guest 侧用户态通知代理（eBPF 方案）
+- VMM 侧绑核处理补丁（KVM 模块 patch 或 QEMU 设备模拟）
+- 全局 CPU 映射管理工具（`vm-bindcore`）
+- RPM 包：`vm-bindcore`（宿主机侧）、`vm-bindcore-guest`（虚拟机侧）
 
 #### 安装策略
-- 默认不安装，用户通过 `yum install vm-bindcore` 按需安装
+- Host 侧：`yum install vm-bindcore` 安装 VMM 侧处理模块和管理工具
+- Guest 侧：`yum install vm-bindcore-guest` 安装 eBPF 截获程序和通知代理
 
 #### 环境与依赖
 - 平台架构：x86_64 / arm64（aarch64）
+- Host 运行依赖：QEMU/KVM、libvirt ≥ 6.0.0
+- Guest 运行依赖：Linux 内核 ≥ 4.18（kprobe）或 ≥ 5.4（eBPF CO-RE）、bpftool
 - 交付机型：鲲鹏、海光、Intel、飞腾
-- 运行依赖：libvirt ≥ 6.0.0、python3 ≥ 3.8、QEMU/KVM
 
 #### 文档与培训资料
-- 资料：用户手册（vm-bindcore 使用指南）、运维手册（部署与故障排查）
-- 文档：CLI 命令参考手册（`vm-bindcore --help` 内嵌）
-- 培训材料：快速入门指南、常见问题 FAQ
+- 技术白皮书：透明虚拟机绑核优化原理与架构
+- 部署指南：Host/Guest 双侧安装配置手册
+- CLI 命令参考手册（`vm-bindcore --help`）
 
 #### 版本策略
 - GA 发布（随 openEuler 24.03 LTS SP1 或后续更新版本）
+
