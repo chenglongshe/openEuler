@@ -88,40 +88,17 @@
 
 ### [验收标准]
 
-**AC-SR-01：Guest 侧绑核截获（kprobe 方式）**
-- GIVEN 虚拟机 vm1 已加载 kprobe 截获模块
-- WHEN vm1 内业务应用调用 `sched_setaffinity(pid, cpuset={vcpu2})` 将任务绑定到 vcpu2
-- THEN 截获模块捕获该调用并通过 hypercall 将绑核信息（pid、目标 vCPU 范围）发送到 VMM
+> 以下验收标准均从**最终用户（虚拟化平台管理员）可执行、可观测**的角度编写。
 
-**AC-SR-02：Guest 侧绑核截获（eBPF 方式）**
-- GIVEN 虚拟机 vm2 已加载 eBPF 截获程序
-- WHEN vm2 内业务应用调用 `sched_setaffinity` 进行绑核
-- THEN eBPF 程序截获后通过 ring buffer 传递给用户态处理程序，用户态通过 hypercall 异步通知 VMM
+**AC-SR-01：虚拟机内业务绑核后，管理员能在宿主机侧观察到对应 vCPU 已被自动切换为 1:1 独占绑核**
+- GIVEN 宿主机上运行虚拟机 vm1（4 vCPU，cpuset 0-15，范围绑核模式），管理员在 Host 侧执行 `vm-bindcore status --vm vm1` 确认所有 vCPU 均为 `range` 模式
+- WHEN 管理员在 vm1 Guest 内运行业务程序，该程序调用 `taskset -c 2 <workload>`（即绑核到 vCPU 2）
+- THEN 管理员在 Host 侧再次执行 `vm-bindcore status --vm vm1`，**可观察到** vcpu2 已变为 `exclusive` 模式并绑定到一个具体的 pCPU（如 pCPU 8），其余 vCPU 仍为 `range` 模式；同时 `vm-bindcore map` 输出中 pCPU 8 标记为 `exclusive: vm1:vcpu2`
 
-**AC-SR-03：VMM 侧动态 1:1 绑核**
-- GIVEN 宿主机有 64 个 pCPU，vm1 配置 cpuset 为 pCPU 0-15（范围绑核），vm1 有 4 个 vCPU
-- WHEN VMM 收到 vm1 内 vcpu2 被业务绑核的通知
-- THEN VMM 查询 Global CPU Maps，选择一个未被独占的 pCPU（如 pCPU 8），将 vcpu2 的 Host 侧任务 1:1 绑定到 pCPU 8
-
-**AC-SR-04：自动解绑恢复**
-- GIVEN vm1 的 vcpu2 当前已被 VMM 1:1 绑定到 pCPU 8
-- WHEN vm1 内业务应用解除绑核（`sched_setaffinity` 恢复到全部 vCPU）
-- THEN VMM 收到解绑通知，将 vcpu2 恢复为范围绑核（cpuset 0-15），释放 pCPU 8 的独占标记
-
-**AC-SR-05：绑核冲突避免**
-- GIVEN pCPU 8 已被 vm1 的 vcpu2 独占绑定
-- WHEN vm2 的 vcpu0 也需要 1:1 绑核
-- THEN VMM 检测到 pCPU 8 已被占用，选择下一个可用 pCPU（如 pCPU 9）进行绑定
-
-**AC-SR-06：全局 CPU 映射查询**
-- GIVEN 宿主机上运行 3 个 VM，各有不同的绑核状态
-- WHEN 管理员查询全局 CPU 映射
-- THEN 系统输出每个 pCPU 的状态（空闲/共享/独占）及对应的 VM 和 vCPU 信息
-
-**AC-SR-07：eBPF 跨版本兼容**
-- GIVEN Guest OS 分别为 openEuler 22.03（内核 5.10）和 openEuler 24.03（内核 6.6）
-- WHEN 使用同一编译产物的 eBPF 截获程序加载到两个不同版本的 Guest OS 中
-- THEN 截获程序均能正常截获 `sched_setaffinity` 调用
+**AC-SR-02：虚拟机内业务解除绑核后，管理员能在宿主机侧观察到对应 vCPU 已自动恢复为范围绑核，独占 pCPU 被释放**
+- GIVEN 承接 AC-SR-01，vm1 的 vcpu2 当前为 `exclusive` 模式（1:1 绑定到 pCPU 8）
+- WHEN 管理员在 vm1 Guest 内终止该业务进程（或显式调用 `taskset -c 0-3 <workload>` 恢复到全部 vCPU）
+- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可观察到** vcpu2 已恢复为 `range` 模式（cpuset 0-15）；执行 `vm-bindcore map` **可观察到** pCPU 8 不再标记为独占，状态恢复为 `shared`
 
 ### [交付说明]
 

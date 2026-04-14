@@ -22,20 +22,17 @@
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-01-01**：
-- GIVEN 虚拟机 vm1 已加载 kprobe 截获内核模块
-- WHEN vm1 内业务应用调用 `sched_setaffinity(0, sizeof(cpuset), &cpuset)` 将当前进程绑定到 vCPU 2
-- THEN kprobe hook 触发，提取绑核目标信息（PID、目标 vCPU 掩码），并通过 hypercall 同步发送到 Host KVM 模块
+- GIVEN 管理员在 vm1 Guest 内执行 `insmod vm_bindcore_kprobe.ko` 成功加载截获模块
+- WHEN 管理员在 vm1 内运行 `taskset -c 2 stress --cpu 1`（将压测进程绑定到 vCPU 2）
+- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可看到** vcpu2 已变为 `exclusive` 模式
 
 **AC-US-01-02**：
-- GIVEN kprobe 截获模块已加载
-- WHEN 业务应用正常执行非绑核相关的系统调用
-- THEN 截获模块不产生任何 VM-Exit 或通知开销，对正常业务性能影响 ≤ 1%
-
-**AC-US-01-03**：
-- GIVEN kprobe 截获模块已加载
-- WHEN 业务应用连续高频调用 `sched_setaffinity`（如每秒 1000 次）
-- THEN 截获模块能稳定工作，不造成 Guest OS 崩溃或死锁
+- GIVEN kprobe 截获模块已加载，vm1 内正在运行非绑核的普通业务
+- WHEN 管理员在 Guest 内通过 `perf stat` 测量业务性能
+- THEN **可观察到**业务吞吐量与未加载截获模块时的差异 ≤ 1%（截获模块对非绑核操作无感知开销）
 
 ### [备注]
 ```
@@ -68,20 +65,17 @@ kprobe 截获流程（同步方式）：
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-02-01**：
-- GIVEN vm1 的 Guest OS 为 openEuler 22.03（内核 5.10）
-- WHEN 启动 eBPF 截获守护进程后，业务应用调用 `sched_setaffinity`
-- THEN eBPF 程序截获调用，通过 ring buffer 传递给用户态代理，用户态代理通过 hypercall 异步通知 VMM
+- GIVEN 管理员在 vm1（openEuler 22.03）内执行 `vm-bindcore-guest start` 启动 eBPF 截获守护进程，执行 `vm-bindcore-guest status` 确认状态为 `running`
+- WHEN 管理员在 vm1 内运行 `taskset -c 1 stress --cpu 1`（绑核到 vCPU 1）
+- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可看到** vcpu1 已变为 `exclusive` 模式
 
 **AC-US-02-02**：
-- GIVEN 同一编译产物的 eBPF 程序
-- WHEN 分别加载到 openEuler 22.03（内核 5.10）和 openEuler 24.03（内核 6.6）的 Guest OS
-- THEN 两个版本都能正常截获 `sched_setaffinity`，无需重新编译
-
-**AC-US-02-03**：
-- GIVEN eBPF 截获守护进程运行中
-- WHEN 业务应用解除绑核（恢复到所有 CPU）
-- THEN eBPF 程序同样截获该解绑动作，异步通知 VMM 进行解绑恢复
+- GIVEN 同一编译产物的 eBPF 截获程序分别部署到 openEuler 22.03（内核 5.10）和 openEuler 24.03（内核 6.6）的 Guest OS
+- WHEN 管理员在两个 Guest 内分别执行 `vm-bindcore-guest start` 并运行绑核业务
+- THEN 两个 Guest 均能正常工作：Host 侧 `vm-bindcore status` **可看到**两个 VM 都有 vCPU 变为 `exclusive` 模式，无需为不同内核版本重新编译
 
 ### [备注]
 ```
@@ -113,20 +107,17 @@ VMM 接收 Guest 绑核通知后自动执行 Host 侧 1:1 绑核
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-03-01**：
-- GIVEN vm1 有 4 个 vCPU，cpuset 为 pCPU 0-15（范围绑核），当前所有 vCPU 在 pCPU 0-15 间自由调度
-- WHEN vm1 内业务将任务绑定到 vcpu2
-- THEN VMM 自动将 vcpu2 对应的 Host 任务通过 `sched_setaffinity` 1:1 绑定到一个空闲 pCPU（如 pCPU 8）
+- GIVEN vm1 有 4 个 vCPU（cpuset 0-15，范围绑核），管理员执行 `vm-bindcore status --vm vm1` 确认所有 vCPU 均为 `range` 模式
+- WHEN 管理员在 vm1 Guest 内分别运行 `taskset -c 0 app1`、`taskset -c 2 app2`（两个业务分别绑核到 vCPU 0 和 vCPU 2）
+- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可看到** vcpu0 和 vcpu2 均为 `exclusive` 模式且绑定到**不同的** pCPU，vcpu1 和 vcpu3 仍为 `range` 模式
 
 **AC-US-03-02**：
-- GIVEN vm1 的 vcpu2 已被 1:1 绑定到 pCPU 8
-- WHEN 使用 `vm-bindcore status --vm vm1` 查询
-- THEN 输出显示 vcpu2 为 "exclusive: pCPU 8"，其他 vCPU 为 "range: pCPU 0-15"
-
-**AC-US-03-03**：
-- GIVEN vm1 有多个 vCPU 陆续被业务绑核
-- WHEN vcpu0、vcpu1、vcpu2 分别被业务绑核
-- THEN VMM 为每个 vCPU 选择不同的空闲 pCPU 进行 1:1 绑定，互不冲突
+- GIVEN vm1 的 vcpu2 已被自动 1:1 绑定到某 pCPU
+- WHEN 管理员执行 `vm-bindcore status --vm vm1 --format json`
+- THEN 输出的 JSON 中 **可看到** vcpu2 的 `mode` 为 `"exclusive"`、`pcpu` 字段为具体数字、`source` 为 `"guest-pin"`
 
 ### [备注]
 ```bash
@@ -158,15 +149,17 @@ Guest 内业务解除绑核后 VMM 自动恢复范围绑核
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-04-01**：
-- GIVEN vm1 的 vcpu2 当前被 VMM 1:1 绑定到 pCPU 8（因 Guest 内业务绑核触发）
-- WHEN vm1 内业务调用 `sched_setaffinity` 恢复到全部 vCPU（解绑核）
-- THEN VMM 收到解绑通知，将 vcpu2 恢复为范围绑核（cpuset 0-15），pCPU 8 的独占标记被释放
+- GIVEN vm1 的 vcpu2 当前为 `exclusive` 模式（管理员可通过 `vm-bindcore status --vm vm1` 确认）
+- WHEN 管理员在 vm1 Guest 内终止该绑核业务进程（`kill <pid>`），或执行 `taskset -c 0-3 <pid>` 恢复到全部 vCPU
+- THEN 管理员在 Host 侧再次执行 `vm-bindcore status --vm vm1`，**可看到** vcpu2 已恢复为 `range` 模式
 
 **AC-US-04-02**：
-- GIVEN 多个 vCPU 陆续被 1:1 绑定后
-- WHEN 所有业务均解除绑核
-- THEN 所有 vCPU 恢复为范围绑核，全局 CPU 映射表中无独占记录
+- GIVEN vm1 的 vcpu0、vcpu2 均为 `exclusive` 模式，`vm-bindcore map` 显示 2 个 pCPU 被独占
+- WHEN 管理员在 Guest 内终止所有绑核业务
+- THEN 管理员执行 `vm-bindcore map`，**可看到**之前被独占的 2 个 pCPU 均已恢复为 `shared` 状态
 
 ### [备注]
 ```
@@ -193,20 +186,17 @@ VMM 侧维护全局 CPU 映射表并自动避免绑核冲突
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-05-01**：
-- GIVEN pCPU 8 已被 vm1:vcpu2 独占绑定
-- WHEN vm2 的 vcpu0 需要 1:1 绑核
-- THEN VMM 跳过 pCPU 8，选择下一个空闲 pCPU（如 pCPU 9）进行绑定
+- GIVEN 宿主机上运行 vm1 和 vm2（cpuset 有重叠），vm1 的 vcpu2 已被 1:1 绑定到 pCPU 8（通过 `vm-bindcore map` 可见）
+- WHEN 管理员在 vm2 Guest 内运行 `taskset -c 0 stress --cpu 1`（触发 vm2 的 vcpu0 绑核）
+- THEN 管理员执行 `vm-bindcore map`，**可看到** vm2:vcpu0 绑定到了**另一个** pCPU（如 pCPU 9），而非 pCPU 8，系统自动避免了冲突
 
 **AC-US-05-02**：
-- GIVEN 宿主机上运行多个 VM
-- WHEN 执行 `vm-bindcore map`
-- THEN 输出每个 pCPU 的占用状态和对应 VM/vCPU 信息
-
-**AC-US-05-03**：
-- GIVEN cpuset 范围内的所有 pCPU 都已被独占
-- WHEN 新的 vCPU 需要 1:1 绑核
-- THEN 系统记录警告日志，保持该 vCPU 为范围绑核模式（降级处理）
+- GIVEN 宿主机运行多个 VM
+- WHEN 管理员执行 `vm-bindcore map`
+- THEN **可看到**每个 pCPU 的状态（`shared` / `exclusive`）和对应的 VM:vCPU 归属信息，格式清晰可读
 
 ### [备注]
 ```bash
@@ -243,15 +233,17 @@ pCPU    Status      Owner
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-06-01**：
-- GIVEN vm1 配置了模拟设备 X，Guest 侧使用 eBPF 截获 + 设备写入方式
-- WHEN vm1 内业务绑核
-- THEN eBPF 截获后，用户态代理通过 `write(fd, bindinfo, len)` 写入设备 X，QEMU 接收到绑核信息并执行 Host 侧绑核
+- GIVEN vm1 配置了模拟设备 X，管理员在 Guest 内执行 `vm-bindcore-guest start --mode device` 启动设备通知方式
+- WHEN 管理员在 vm1 Guest 内运行 `taskset -c 2 stress --cpu 1`
+- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可看到** vcpu2 变为 `exclusive` 模式（与 hypercall 方式功能一致）
 
 **AC-US-06-02**：
-- GIVEN 使用模拟设备方式
-- WHEN 大量绑核/解绑操作
-- THEN 设备 I/O 方式与 hypercall 方式功能一致，绑核结果正确
+- GIVEN 使用模拟设备方式，vm1 内业务先绑核再解绑
+- WHEN 管理员在 Host 侧分别查看绑核后和解绑后的状态
+- THEN **可看到**状态先变为 `exclusive` 后恢复为 `range`，与 hypercall 方式表现一致
 
 ### [备注]
 ```
@@ -278,15 +270,17 @@ Guest App → eBPF 截获 → 用户态打开设备X → write(绑核信息) →
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-07-01**：
-- GIVEN 宿主机上运行 3 个 VM，各有不同绑核状态
-- WHEN 执行 `vm-bindcore status`
-- THEN 以表格形式输出每个 VM 的每个 vCPU 的绑核模式（range/exclusive）、绑定的 pCPU、触发来源
+- GIVEN 宿主机上运行 3 个 VM，其中 vm1 有 2 个 vCPU 为 `exclusive`，vm2 有 1 个 vCPU 为 `exclusive`，vm3 全部为 `range`
+- WHEN 管理员执行 `vm-bindcore status`
+- THEN **可看到**以表格形式输出所有 VM 的所有 vCPU 的绑核模式、绑定的 pCPU、触发来源，信息完整且易读
 
 **AC-US-07-02**：
-- GIVEN 无 VM 运行
-- WHEN 执行 `vm-bindcore status`
-- THEN 显示 "No active VMs found"
+- GIVEN 当前无任何 VM 运行
+- WHEN 管理员执行 `vm-bindcore status`
+- THEN **可看到**输出提示 "No active VMs found"，程序正常退出（退出码 0）
 
 ### [备注]
 ```bash
@@ -322,15 +316,17 @@ VM: vm2 (2 vCPUs, cpuset: 16-31)
 
 ### [验收准则]
 
+> 以下验收标准从最终用户可执行、可观测角度编写。
+
 **AC-US-08-01**：
-- GIVEN vm1 内业务触发绑核
-- WHEN VMM 完成 1:1 绑核
-- THEN journald 中记录包含：时间戳、VM 名称、vCPU 编号、绑核来源（guest-pin）、目标 pCPU、操作结果
+- GIVEN vm1 内业务触发绑核，VMM 完成 1:1 绑核
+- WHEN 管理员在 Host 侧执行 `journalctl -u vm-bindcore --since "1 min ago"`
+- THEN **可看到**包含 `[PIN]` 标记的日志行，内含：VM 名称、vCPU 编号、目标 pCPU、操作来源（`guest-pin`）
 
 **AC-US-08-02**：
-- GIVEN vm1 内业务触发解绑
-- WHEN VMM 恢复范围绑核
-- THEN journald 中记录包含：时间戳、VM 名称、vCPU 编号、操作类型（unpin-restore）、恢复的 cpuset 范围
+- GIVEN vm1 内业务解除绑核，VMM 恢复范围绑核
+- WHEN 管理员在 Host 侧执行 `journalctl -u vm-bindcore --since "1 min ago"`
+- THEN **可看到**包含 `[UNPIN]` 标记的日志行，内含：VM 名称、vCPU 编号、恢复的 cpuset 范围
 
 ### [备注]
 ```
