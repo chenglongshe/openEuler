@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MulanPSL-2.0
 #
-# Test suite for vm-bindcore (VMM-side handler + Guest-side interceptor)
+# Test suite for vm-bindcore (Host-side handler + Guest-side interceptor)
 # Based on patent: 一种优化虚拟机内业务绑核性能的方法 (Inventor: 张海亮)
 
 """
@@ -13,8 +13,11 @@ Tests cover the patent's core architecture:
   2. Dynamic 1:1 pinning on guest notification
   3. Automatic un-pin restore
   4. Conflict avoidance
-  5. Guest-side interception (kprobe/eBPF simulation)
-  6. End-to-end guest→VMM notification flow
+  5. Guest-side eBPF interception simulation
+  6. Notification transport (simulated)
+  7. End-to-end guest → host notification flow
+  8. Pin executor
+  9. Event log
 
 Run with: python3 -m pytest tests/test_vm_bindcore.py -v
 """
@@ -32,6 +35,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from vm_bindcore import (  # noqa: E402
     GlobalCpuMap,
     GuestPinNotification,
+    PinExecutor,
     PinMode,
     PinSource,
     VcpuPinState,
@@ -39,14 +43,16 @@ from vm_bindcore import (  # noqa: E402
     VmmPinHandler,
     _format_cpulist,
     _parse_cpulist,
+    _write_event_log,
     main,
 )
 from vm_bindcore_guest import (  # noqa: E402
     AffinityEvent,
     EbpfInterceptor,
-    InterceptorBase,
-    KprobeInterceptor,
     NotificationAgent,
+    SimulatedTransport,
+    VsockTransport,
+    VirtioSerialTransport,
 )
 
 
@@ -83,10 +89,16 @@ class TestParseCpulist(unittest.TestCase):
         self.assertEqual(_parse_cpulist("0-3"), [0, 1, 2, 3])
 
     def test_mixed(self):
-        self.assertEqual(_parse_cpulist("0-3,8,12-15"), [0, 1, 2, 3, 8, 12, 13, 14, 15])
+        self.assertEqual(
+            _parse_cpulist("0-3,8,12-15"),
+            [0, 1, 2, 3, 8, 12, 13, 14, 15],
+        )
 
     def test_whitespace(self):
-        self.assertEqual(_parse_cpulist(" 0-3 , 8-11 "), [0, 1, 2, 3, 8, 9, 10, 11])
+        self.assertEqual(
+            _parse_cpulist(" 0-3 , 8-11 "),
+            [0, 1, 2, 3, 8, 9, 10, 11],
+        )
 
 
 # ============================================================================
@@ -174,7 +186,7 @@ class TestGlobalCpuMap(unittest.TestCase):
 
 class TestDynamic1to1Pinning(unittest.TestCase):
     """
-    Test AC-SR-03: VMM dynamically 1:1 pins a vCPU when guest app pins.
+    Test: VMM dynamically 1:1 pins a vCPU when guest app pins.
     This is the core innovation of the patent.
     """
 
@@ -187,9 +199,8 @@ class TestDynamic1to1Pinning(unittest.TestCase):
         ok, pcpu, msg = self.gm.pin_exclusive("vm1", 2, guest_pid=5678)
         self.assertTrue(ok)
         self.assertIsNotNone(pcpu)
-        self.assertIn(pcpu, range(0, 16))  # Must be within VM's cpuset
+        self.assertIn(pcpu, range(0, 16))
 
-        # Verify state
         vcpu = self.gm.vm_states["vm1"].vcpus[2]
         self.assertEqual(vcpu.mode, PinMode.EXCLUSIVE)
         self.assertEqual(vcpu.pinned_pcpu, pcpu)
@@ -204,7 +215,7 @@ class TestDynamic1to1Pinning(unittest.TestCase):
         self.assertEqual(self.gm.exclusive_map[pcpu], ("vm1", 2))
 
     def test_pin_exclusive_idempotent(self):
-        """Pinning an already-exclusive vCPU returns success without change."""
+        """Pinning an already-exclusive vCPU returns success."""
         ok1, pcpu1, _ = self.gm.pin_exclusive("vm1", 0)
         ok2, pcpu2, _ = self.gm.pin_exclusive("vm1", 0)
         self.assertTrue(ok1)
@@ -212,40 +223,34 @@ class TestDynamic1to1Pinning(unittest.TestCase):
         self.assertEqual(pcpu1, pcpu2)
 
     def test_pin_multiple_vcpus_different_pcpus(self):
-        """AC-US-03-03: Multiple vCPUs get different pCPUs."""
+        """Multiple vCPUs get different pCPUs."""
         results = []
         for i in range(4):
             ok, pcpu, _ = self.gm.pin_exclusive("vm1", i)
             self.assertTrue(ok)
             results.append(pcpu)
-
-        # All pCPUs must be unique
-        self.assertEqual(len(set(results)), 4, "Each vCPU must get a unique pCPU")
+        self.assertEqual(len(set(results)), 4,
+                         "Each vCPU must get a unique pCPU")
 
     def test_pin_unknown_vm(self):
-        """Pinning for unknown VM returns error."""
         ok, pcpu, msg = self.gm.pin_exclusive("nonexistent", 0)
         self.assertFalse(ok)
         self.assertIn("not registered", msg)
 
     def test_pin_unknown_vcpu(self):
-        """Pinning for unknown vCPU returns error."""
         ok, pcpu, msg = self.gm.pin_exclusive("vm1", 99)
         self.assertFalse(ok)
         self.assertIn("not found", msg)
 
 
 class TestAutoUnpinRestore(unittest.TestCase):
-    """
-    Test AC-SR-04: VMM auto-restores range pinning when guest app un-pins.
-    """
+    """Test: VMM auto-restores range pinning when guest app un-pins."""
 
     def setUp(self):
         self.gm = GlobalCpuMap(total_pcpus=64)
         self.gm.register_vm("vm1", 4, list(range(0, 16)))
 
     def test_unpin_restore_basic(self):
-        """Guest app un-pins → VMM restores range mode."""
         ok, pcpu, _ = self.gm.pin_exclusive("vm1", 2, guest_pid=5678)
         self.assertTrue(ok)
 
@@ -259,7 +264,6 @@ class TestAutoUnpinRestore(unittest.TestCase):
         self.assertIsNone(vcpu.guest_pid)
 
     def test_unpin_restore_releases_pcpu(self):
-        """Un-pin releases the pCPU from the exclusive map."""
         ok, pcpu, _ = self.gm.pin_exclusive("vm1", 2)
         self.assertIn(pcpu, self.gm.exclusive_map)
 
@@ -267,13 +271,11 @@ class TestAutoUnpinRestore(unittest.TestCase):
         self.assertNotIn(pcpu, self.gm.exclusive_map)
 
     def test_unpin_already_range(self):
-        """Un-pinning a vCPU already in range mode is a no-op success."""
         ok, msg = self.gm.unpin_restore("vm1", 0)
         self.assertTrue(ok)
         self.assertIn("already in range", msg)
 
     def test_unpin_all(self):
-        """Unpin all vCPUs of a VM."""
         for i in range(4):
             self.gm.pin_exclusive("vm1", i)
         self.assertEqual(len(self.gm.exclusive_map), 4)
@@ -287,49 +289,40 @@ class TestAutoUnpinRestore(unittest.TestCase):
 
 
 class TestConflictAvoidance(unittest.TestCase):
-    """
-    Test AC-SR-05: VMM avoids assigning the same pCPU to multiple vCPUs.
-    This is a key patent requirement.
-    """
+    """Test: VMM avoids assigning the same pCPU to multiple vCPUs."""
 
     def setUp(self):
         self.gm = GlobalCpuMap(total_pcpus=64)
         self.gm.register_vm("vm1", 4, list(range(0, 16)))
-        self.gm.register_vm("vm2", 4, list(range(0, 16)))  # Overlapping cpuset
+        self.gm.register_vm("vm2", 4, list(range(0, 16)))
 
     def test_cross_vm_conflict_avoidance(self):
-        """vm1 and vm2 with overlapping cpusets don't get the same pCPU."""
         ok1, pcpu1, _ = self.gm.pin_exclusive("vm1", 0)
         ok2, pcpu2, _ = self.gm.pin_exclusive("vm2", 0)
 
         self.assertTrue(ok1)
         self.assertTrue(ok2)
-        self.assertNotEqual(pcpu1, pcpu2, "Different VMs must get different pCPUs")
+        self.assertNotEqual(pcpu1, pcpu2,
+                            "Different VMs must get different pCPUs")
 
     def test_exhaust_cpuset(self):
-        """When all pCPUs in cpuset are occupied, return failure (graceful degradation)."""
-        # Small cpuset
         self.gm.register_vm("tiny-vm", 4, [0, 1])
 
-        ok1, pcpu1, _ = self.gm.pin_exclusive("tiny-vm", 0)
-        ok2, pcpu2, _ = self.gm.pin_exclusive("tiny-vm", 1)
+        ok1, _, _ = self.gm.pin_exclusive("tiny-vm", 0)
+        ok2, _, _ = self.gm.pin_exclusive("tiny-vm", 1)
         self.assertTrue(ok1)
         self.assertTrue(ok2)
 
-        # Now try to pin vcpu2 — but only 2 pCPUs and both are taken
-        ok3, pcpu3, msg = self.gm.pin_exclusive("tiny-vm", 2)
+        ok3, _, msg = self.gm.pin_exclusive("tiny-vm", 2)
         self.assertFalse(ok3, "Should fail when no free pCPUs")
         self.assertIn("No free pCPU", msg)
 
     def test_released_pcpu_reusable(self):
-        """After un-pin, the released pCPU can be reused by another vCPU."""
         ok, pcpu, _ = self.gm.pin_exclusive("vm1", 0)
         self.gm.unpin_restore("vm1", 0)
 
-        # Same pCPU should be available again
         ok2, pcpu2, _ = self.gm.pin_exclusive("vm2", 0)
         self.assertTrue(ok2)
-        # pcpu2 could be the same as pcpu (now it's free)
 
 
 # ============================================================================
@@ -356,7 +349,9 @@ class TestPersistence(unittest.TestCase):
         gm2 = GlobalCpuMap.load(self.map_file)
         self.assertEqual(gm2.total_pcpus, 16)
         self.assertIn("vm1", gm2.vm_states)
-        self.assertEqual(gm2.vm_states["vm1"].vcpus[2].mode, PinMode.EXCLUSIVE)
+        self.assertEqual(
+            gm2.vm_states["vm1"].vcpus[2].mode, PinMode.EXCLUSIVE
+        )
         self.assertEqual(gm2.vm_states["vm1"].vcpus[2].guest_pid, 1234)
 
     def test_load_nonexistent(self):
@@ -376,7 +371,32 @@ class TestPersistence(unittest.TestCase):
 
 
 # ============================================================================
-# Test: VMM Pin Handler (processes guest notifications)
+# Test: PinExecutor
+# ============================================================================
+
+class TestPinExecutor(unittest.TestCase):
+    """Test the pin executor (dry-run mode)."""
+
+    def setUp(self):
+        self.executor = PinExecutor(dry_run=True)
+
+    def test_pin_vcpu(self):
+        ok = self.executor.pin_vcpu("vm1", 2, 8)
+        self.assertTrue(ok)
+        self.assertEqual(len(self.executor.history), 1)
+        self.assertEqual(self.executor.history[0], ("pin", "vm1", 2, 8))
+
+    def test_restore_vcpu(self):
+        ok = self.executor.restore_vcpu("vm1", 2, [0, 1, 2, 3])
+        self.assertTrue(ok)
+        self.assertEqual(len(self.executor.history), 1)
+        self.assertEqual(
+            self.executor.history[0], ("restore", "vm1", 2, "0-3")
+        )
+
+
+# ============================================================================
+# Test: VMM Pin Handler
 # ============================================================================
 
 class TestVmmPinHandler(unittest.TestCase):
@@ -385,29 +405,34 @@ class TestVmmPinHandler(unittest.TestCase):
     def setUp(self):
         self.gm = GlobalCpuMap(total_pcpus=64)
         self.gm.register_vm("vm1", 4, list(range(0, 16)))
-        self.handler = VmmPinHandler(self.gm)
+        self.executor = PinExecutor(dry_run=True)
+        self.handler = VmmPinHandler(self.gm, executor=self.executor)
 
     def test_handle_pin_notification(self):
-        """Process a 'pin' notification from guest."""
         notif = GuestPinNotification("vm1", 2, "pin", guest_pid=5678)
         ok, msg = self.handler.handle_notification(notif)
         self.assertTrue(ok)
-        self.assertEqual(self.gm.vm_states["vm1"].vcpus[2].mode, PinMode.EXCLUSIVE)
+        self.assertEqual(
+            self.gm.vm_states["vm1"].vcpus[2].mode, PinMode.EXCLUSIVE
+        )
+        # Executor was called
+        self.assertEqual(len(self.executor.history), 1)
+        self.assertEqual(self.executor.history[0][0], "pin")
 
     def test_handle_unpin_notification(self):
-        """Process an 'unpin' notification from guest."""
-        # First pin
         self.handler.handle_notification(
             GuestPinNotification("vm1", 2, "pin", guest_pid=5678)
         )
-        # Then unpin
         notif = GuestPinNotification("vm1", 2, "unpin")
         ok, msg = self.handler.handle_notification(notif)
         self.assertTrue(ok)
-        self.assertEqual(self.gm.vm_states["vm1"].vcpus[2].mode, PinMode.RANGE)
+        self.assertEqual(
+            self.gm.vm_states["vm1"].vcpus[2].mode, PinMode.RANGE
+        )
+        self.assertEqual(len(self.executor.history), 2)
+        self.assertEqual(self.executor.history[1][0], "restore")
 
     def test_handle_batch(self):
-        """Process a batch of notifications."""
         notifications = [
             GuestPinNotification("vm1", 0, "pin", guest_pid=100),
             GuestPinNotification("vm1", 1, "pin", guest_pid=200),
@@ -419,7 +444,6 @@ class TestVmmPinHandler(unittest.TestCase):
             self.assertTrue(r["ok"])
 
     def test_handle_unknown_action(self):
-        """Unknown action should return error."""
         notif = GuestPinNotification("vm1", 0, "invalid")
         ok, msg = self.handler.handle_notification(notif)
         self.assertFalse(ok)
@@ -430,7 +454,9 @@ class TestGuestPinNotification(unittest.TestCase):
     """Test guest notification serialization."""
 
     def test_serialize_roundtrip(self):
-        notif = GuestPinNotification("vm1", 2, "pin", guest_pid=1234, target_vcpus=[2])
+        notif = GuestPinNotification(
+            "vm1", 2, "pin", guest_pid=1234, target_vcpus=[2]
+        )
         d = notif.to_dict()
         restored = GuestPinNotification.from_dict(d)
         self.assertEqual(restored.domain, "vm1")
@@ -440,20 +466,20 @@ class TestGuestPinNotification(unittest.TestCase):
 
 
 # ============================================================================
-# Test: Guest-side interceptor
+# Test: Guest-side eBPF interceptor
 # ============================================================================
 
-class TestInterceptorBase(unittest.TestCase):
-    """Test base interceptor logic."""
+class TestEbpfInterceptor(unittest.TestCase):
+    """Test eBPF-based asynchronous interceptor."""
 
     def test_is_pin_action(self):
-        interceptor = InterceptorBase(total_vcpus=4)
-        self.assertTrue(interceptor.is_pin_action([2]))       # Pin to single vCPU
-        self.assertTrue(interceptor.is_pin_action([0, 1]))    # Pin to subset
-        self.assertFalse(interceptor.is_pin_action([0, 1, 2, 3]))  # All CPUs = unpin
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        self.assertTrue(interceptor.is_pin_action([2]))
+        self.assertTrue(interceptor.is_pin_action([0, 1]))
+        self.assertFalse(interceptor.is_pin_action([0, 1, 2, 3]))
 
     def test_callback_invoked(self):
-        interceptor = InterceptorBase(total_vcpus=4)
+        interceptor = EbpfInterceptor(total_vcpus=4)
         events = []
         interceptor.register_callback(lambda e: events.append(e))
 
@@ -462,26 +488,7 @@ class TestInterceptorBase(unittest.TestCase):
         self.assertEqual(events[0].pid, 1234)
         self.assertTrue(events[0].is_bindcore)
 
-
-class TestKprobeInterceptor(unittest.TestCase):
-    """Test kprobe-based synchronous interceptor."""
-
-    def test_synchronous_interception(self):
-        interceptor = KprobeInterceptor(total_vcpus=4)
-        events = []
-        interceptor.register_callback(lambda e: events.append(e))
-
-        event = interceptor.intercept(pid=100, comm="app", cpu_mask=[1])
-        self.assertTrue(event.is_bindcore)
-        self.assertEqual(interceptor.mode, "kprobe")
-        self.assertEqual(len(events), 1)
-
-
-class TestEbpfInterceptor(unittest.TestCase):
-    """Test eBPF-based asynchronous interceptor."""
-
     def test_async_ring_buffer(self):
-        """Events are queued to ring buffer for async processing."""
         interceptor = EbpfInterceptor(total_vcpus=4)
 
         interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
@@ -490,35 +497,77 @@ class TestEbpfInterceptor(unittest.TestCase):
         self.assertEqual(len(interceptor.ring_buffer), 2)
 
     def test_drain_ring_buffer(self):
-        """Draining returns all events and clears the buffer."""
         interceptor = EbpfInterceptor(total_vcpus=4)
         interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
         interceptor.intercept(pid=200, comm="app2", cpu_mask=[1])
 
         events = interceptor.drain_ring_buffer()
         self.assertEqual(len(events), 2)
-        self.assertEqual(len(interceptor.ring_buffer), 0)  # Buffer cleared
+        self.assertEqual(len(interceptor.ring_buffer), 0)
 
     def test_unpin_detection(self):
-        """Restoring to all CPUs is detected as unpin."""
         interceptor = EbpfInterceptor(total_vcpus=4)
-        event = interceptor.intercept(pid=100, comm="app", cpu_mask=[0, 1, 2, 3])
-        self.assertFalse(event.is_bindcore)  # All CPUs = unpin
+        event = interceptor.intercept(
+            pid=100, comm="app", cpu_mask=[0, 1, 2, 3]
+        )
+        self.assertFalse(event.is_bindcore)
 
+    def test_attach_detach(self):
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        self.assertFalse(interceptor.is_attached)
+        interceptor.attach()
+        self.assertTrue(interceptor.is_attached)
+        interceptor.detach()
+        self.assertFalse(interceptor.is_attached)
+
+
+# ============================================================================
+# Test: Notification transport
+# ============================================================================
+
+class TestSimulatedTransport(unittest.TestCase):
+    """Test simulated notification transport."""
+
+    def test_send(self):
+        transport = SimulatedTransport()
+        transport.connect()
+        transport.send({"pid": 123, "is_bindcore": True})
+        transport.send({"pid": 456, "is_bindcore": False})
+        self.assertEqual(len(transport.sent_messages), 2)
+        self.assertEqual(transport.sent_messages[0]["pid"], 123)
+        transport.close()
+
+
+# ============================================================================
+# Test: Notification agent
+# ============================================================================
 
 class TestNotificationAgent(unittest.TestCase):
-    """Test the user-space notification agent (eBPF async path)."""
+    """Test the user-space notification agent."""
 
-    def test_process_events(self):
+    def test_process_events_with_transport(self):
         interceptor = EbpfInterceptor(total_vcpus=4)
+        transport = SimulatedTransport()
+        transport.connect()
+        agent = NotificationAgent(interceptor, transport=transport)
+
         interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
         interceptor.intercept(pid=200, comm="app2", cpu_mask=[1])
 
-        results = []
-        agent = NotificationAgent(interceptor, vmm_callback=lambda e: results.append(e))
-        agent.process_events()
-
+        results = agent.process_events()
         self.assertEqual(len(results), 2)
+        self.assertEqual(len(transport.sent_messages), 2)
+
+    def test_process_events_with_callback(self):
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        results = []
+        agent = NotificationAgent(
+            interceptor, vmm_callback=lambda e: results.append(e)
+        )
+
+        interceptor.intercept(pid=100, comm="app1", cpu_mask=[0])
+        agent.process_events()
+        self.assertEqual(len(results), 1)
 
     def test_empty_buffer(self):
         interceptor = EbpfInterceptor(total_vcpus=4)
@@ -528,25 +577,25 @@ class TestNotificationAgent(unittest.TestCase):
 
 
 # ============================================================================
-# Test: End-to-end flow (Guest interception → VMM handling)
+# Test: End-to-end flow (Guest interception → Host handling)
 # ============================================================================
 
 class TestEndToEndFlow(unittest.TestCase):
     """
-    Integration test: full flow from guest app pinning to VMM 1:1 binding.
+    Integration test: full flow from guest app pinning to host 1:1 binding.
     This validates the complete patent architecture.
     """
 
     def setUp(self):
         self.gm = GlobalCpuMap(total_pcpus=64)
         self.gm.register_vm("vm1", 4, list(range(0, 16)))
-        self.handler = VmmPinHandler(self.gm)
+        self.executor = PinExecutor(dry_run=True)
+        self.handler = VmmPinHandler(self.gm, executor=self.executor)
 
     def _make_vmm_callback(self, domain):
         """Create a VMM callback that processes guest events."""
         def callback(event):
             if event.is_bindcore:
-                # Pin: the target vCPU is the single CPU in the mask
                 vcpu_id = event.cpu_mask[0] if event.cpu_mask else 0
                 notif = GuestPinNotification(
                     domain=domain,
@@ -556,32 +605,33 @@ class TestEndToEndFlow(unittest.TestCase):
                 )
                 return self.handler.handle_notification(notif)
             else:
-                # Unpin: restore ALL vCPUs that were pinned by this PID
                 vm = self.gm.get_vm_status(domain)
                 results = []
                 if vm:
                     for vid, vs in vm.vcpus.items():
-                        if vs.mode == PinMode.EXCLUSIVE and vs.guest_pid == event.pid:
+                        if (vs.mode == PinMode.EXCLUSIVE
+                                and vs.guest_pid == event.pid):
                             notif = GuestPinNotification(
                                 domain=domain,
                                 vcpu_id=vid,
                                 action="unpin",
                             )
-                            results.append(self.handler.handle_notification(notif))
+                            results.append(
+                                self.handler.handle_notification(notif)
+                            )
                 return results[-1] if results else (True, "No vCPUs to unpin")
         return callback
 
     def test_ebpf_full_flow_pin(self):
         """
-        Full flow: App pins via sched_setaffinity → eBPF intercepts →
-        ring buffer → agent → VMM handler → 1:1 exclusive pin.
+        Full flow: App pins → eBPF intercepts → ring buffer → agent →
+        VMM handler → 1:1 exclusive pin.
         """
         interceptor = EbpfInterceptor(total_vcpus=4)
         agent = NotificationAgent(
             interceptor, vmm_callback=self._make_vmm_callback("vm1")
         )
 
-        # Guest app pins to vCPU 2
         interceptor.intercept(pid=5678, comm="myapp", cpu_mask=[2])
         results = agent.process_events()
 
@@ -589,21 +639,23 @@ class TestEndToEndFlow(unittest.TestCase):
         ok, msg = results[0]
         self.assertTrue(ok)
 
-        # Verify VMM state
         vcpu2 = self.gm.vm_states["vm1"].vcpus[2]
         self.assertEqual(vcpu2.mode, PinMode.EXCLUSIVE)
         self.assertIsNotNone(vcpu2.pinned_pcpu)
 
+        # Executor was called
+        self.assertTrue(
+            any(h[0] == "pin" for h in self.executor.history)
+        )
+
     def test_ebpf_full_flow_pin_then_unpin(self):
-        """
-        Full flow: App pins → VMM 1:1 → App un-pins → VMM restores range.
-        """
+        """Full flow: App pins → 1:1 → App un-pins → restore range."""
         interceptor = EbpfInterceptor(total_vcpus=4)
         agent = NotificationAgent(
             interceptor, vmm_callback=self._make_vmm_callback("vm1")
         )
 
-        # Step 1: App pins to vCPU 2
+        # Pin
         interceptor.intercept(pid=5678, comm="myapp", cpu_mask=[2])
         agent.process_events()
 
@@ -611,32 +663,33 @@ class TestEndToEndFlow(unittest.TestCase):
         self.assertEqual(vcpu2.mode, PinMode.EXCLUSIVE)
         saved_pcpu = vcpu2.pinned_pcpu
 
-        # Step 2: App un-pins (restore to all vCPUs)
+        # Unpin
         interceptor.intercept(pid=5678, comm="myapp", cpu_mask=[0, 1, 2, 3])
-        results = agent.process_events()
+        agent.process_events()
 
-        # Since all CPUs = unpin, agent should send unpin notification
-        # The callback uses cpu_mask[0] as vcpu_id for unpin
-        # Verify the pCPU is released
         self.assertNotIn(saved_pcpu, self.gm.exclusive_map)
 
-    def test_kprobe_full_flow(self):
-        """Full flow using kprobe synchronous path."""
-        interceptor = KprobeInterceptor(total_vcpus=4)
+    def test_ebpf_flow_with_simulated_transport(self):
+        """Test eBPF → SimulatedTransport path (no VMM callback)."""
+        interceptor = EbpfInterceptor(total_vcpus=4)
+        transport = SimulatedTransport()
+        transport.connect()
+        agent = NotificationAgent(interceptor, transport=transport)
 
-        # Kprobe is synchronous — callback fires immediately
-        interceptor.register_callback(self._make_vmm_callback("vm1"))
-        interceptor.intercept(pid=1234, comm="dbapp", cpu_mask=[1])
+        interceptor.intercept(pid=100, comm="app", cpu_mask=[1])
+        results = agent.process_events()
 
-        vcpu1 = self.gm.vm_states["vm1"].vcpus[1]
-        self.assertEqual(vcpu1.mode, PinMode.EXCLUSIVE)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(transport.sent_messages), 1)
+        msg = transport.sent_messages[0]
+        self.assertEqual(msg["pid"], 100)
+        self.assertTrue(msg["is_bindcore"])
 
     def test_multi_vm_isolation(self):
         """Multiple VMs with overlapping cpusets maintain isolation."""
         self.gm.register_vm("vm2", 2, list(range(0, 16)))
         interceptor = EbpfInterceptor(total_vcpus=4)
 
-        # Pin vm1:vcpu0 and vm2:vcpu0
         agent1 = NotificationAgent(
             interceptor, vmm_callback=self._make_vmm_callback("vm1")
         )
@@ -652,7 +705,41 @@ class TestEndToEndFlow(unittest.TestCase):
         pcpu1 = self.gm.vm_states["vm1"].vcpus[0].pinned_pcpu
         pcpu2 = self.gm.vm_states["vm2"].vcpus[0].pinned_pcpu
 
-        self.assertNotEqual(pcpu1, pcpu2, "Different VMs must get different pCPUs")
+        self.assertNotEqual(pcpu1, pcpu2,
+                            "Different VMs must get different pCPUs")
+
+
+# ============================================================================
+# Test: Event log
+# ============================================================================
+
+class TestEventLog(unittest.TestCase):
+    """Test event log writing."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.log_file = os.path.join(self.tmpdir, "events.log")
+        # Monkey-patch LOG_FILE
+        import vm_bindcore
+        self._orig_log_file = vm_bindcore.LOG_FILE
+        vm_bindcore.LOG_FILE = self.log_file
+
+    def tearDown(self):
+        import shutil
+        import vm_bindcore
+        vm_bindcore.LOG_FILE = self._orig_log_file
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_write_event_log(self):
+        _write_event_log("PIN", "vm1", 2, "pcpu=8 source=guest-pin pid=1234")
+        _write_event_log("UNPIN", "vm1", 2, "cpuset=0-15 source=guest-unpin")
+
+        with open(self.log_file) as f:
+            lines = f.readlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("[PIN]", lines[0])
+        self.assertIn("[UNPIN]", lines[1])
+        self.assertIn("vm=vm1", lines[0])
 
 
 # ============================================================================
@@ -663,12 +750,12 @@ class TestCLIParsing(unittest.TestCase):
     """Test CLI argument parsing."""
 
     def test_no_command(self):
-        """No subcommand returns 1."""
         from unittest.mock import patch
         import io
         with patch("sys.argv", ["vm-bindcore"]):
             from contextlib import redirect_stdout, redirect_stderr
-            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            with redirect_stdout(io.StringIO()), \
+                 redirect_stderr(io.StringIO()):
                 ret = main()
         self.assertEqual(ret, 1)
 
@@ -703,7 +790,6 @@ class TestPcpuStatus(unittest.TestCase):
         all_status = self.gm.get_all_pcpu_status()
         self.assertEqual(len(all_status), 8)
 
-        # Check shared pCPUs
         for pcpu in [0, 1, 2, 3]:
             info = all_status[pcpu]
             if info["mode"] == PinMode.RANGE:
@@ -735,7 +821,7 @@ class TestEdgeCases(unittest.TestCase):
     def test_register_same_vm_twice(self):
         gm = GlobalCpuMap(total_pcpus=8)
         gm.register_vm("vm1", 2, [0, 1])
-        gm.register_vm("vm1", 2, [0, 1])  # Should be idempotent
+        gm.register_vm("vm1", 2, [0, 1])
         self.assertEqual(len(gm.vm_states), 1)
 
     def test_unregister_nonexistent(self):

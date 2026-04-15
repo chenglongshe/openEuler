@@ -1,0 +1,14 @@
+[Unit]
+Description=vm-bindcore Guest Notification Listener Daemon
+Documentation=man:vm-bindcore(1)
+After=libvirtd.service qemu-kvm.service
+Wants=libvirtd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vm-bindcore listen
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,8 @@
 # Called by vm-bindcore-restore.service after system startup.
 # Reloads the persisted global CPU map and re-applies exclusive
 # pinning for any VMs that are still running.
+#
+# Copyright (c) 2026 openEuler Contributors
 
 import json
 import logging
@@ -26,15 +28,58 @@ def get_running_vms():
             ["virsh", "list", "--name", "--state-running"],
             capture_output=True, text=True, timeout=10,
         )
-        return [name.strip() for name in result.stdout.strip().split("\n") if name.strip()]
+        return [
+            name.strip()
+            for name in result.stdout.strip().split("\n")
+            if name.strip()
+        ]
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return []
+
+
+def _format_cpulist(cpus):
+    """Format a list of CPUs into a compact range string."""
+    if not cpus:
+        return "(none)"
+    cpus = sorted(cpus)
+    ranges = []
+    start = cpus[0]
+    end = cpus[0]
+    for c in cpus[1:]:
+        if c == end + 1:
+            end = c
+        else:
+            ranges.append(
+                f"{start}-{end}" if start != end else str(start)
+            )
+            start = c
+            end = c
+    ranges.append(f"{start}-{end}" if start != end else str(start))
+    return ",".join(ranges)
+
+
+def _virsh_vcpupin(domain, vcpu_id, cpulist):
+    """Apply a vcpupin via virsh."""
+    try:
+        subprocess.run(
+            ["virsh", "vcpupin", domain, str(vcpu_id), cpulist],
+            capture_output=True, text=True, timeout=10, check=True,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError,
+            subprocess.TimeoutExpired) as exc:
+        logger.error("virsh vcpupin %s %d %s failed: %s",
+                      domain, vcpu_id, cpulist, exc)
+        return False
 
 
 def restore():
     """Restore pinning state from persisted global CPU map."""
     if not os.path.exists(GLOBAL_MAP_FILE):
-        logger.info("No global CPU map found at %s, nothing to restore", GLOBAL_MAP_FILE)
+        logger.info(
+            "No global CPU map found at %s, nothing to restore",
+            GLOBAL_MAP_FILE,
+        )
         return 0
 
     with open(GLOBAL_MAP_FILE) as f:
@@ -51,14 +96,14 @@ def restore():
 
         vcpus = vm_data.get("vcpus", {})
         for vcpu_id_str, vcpu_data in vcpus.items():
-            if vcpu_data.get("mode") == "exclusive" and vcpu_data.get("pinned_pcpu") is not None:
+            if (vcpu_data.get("mode") == "exclusive"
+                    and vcpu_data.get("pinned_pcpu") is not None):
                 pcpu = vcpu_data["pinned_pcpu"]
                 logger.info(
                     "Restoring %s:vcpu%s -> pCPU %d (exclusive)",
                     domain, vcpu_id_str, pcpu,
                 )
-                # In production: use virsh vcpupin or sched_setaffinity
-                # to re-pin the vCPU thread to the target pCPU
+                _virsh_vcpupin(domain, int(vcpu_id_str), str(pcpu))
                 restored += 1
 
     logger.info("Restored %d exclusive pinning(s)", restored)
