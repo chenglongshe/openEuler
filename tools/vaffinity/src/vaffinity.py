@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MulanPSL-2.0
 #
-# vm-bindcore: VMM-side handler for transparent in-VM pinning passthrough
+# vaffinity: VMM-side handler for transparent in-VM pinning passthrough
 # Based on patent: 一种优化虚拟机内业务绑核性能的方法 (Inventor: 张海亮)
 #
 # Copyright (c) 2026 openEuler Contributors
 
 """
-vm-bindcore — VMM-side transparent vCPU pinning optimization tool.
+vaffinity — VMM-side transparent vCPU pinning optimization tool.
 
 This package runs on the **host** (hypervisor).  It listens for pinning
 notifications from guest VMs, maintains a global CPU map of all pCPU
@@ -18,7 +18,7 @@ and 1:1 exclusive pinning.
 Architecture
 ============
 
-  Guest VM  ──VSOCK/virtio-serial──▶  vm-bindcore listener daemon (host)
+  Guest VM  ──VSOCK/virtio-serial──▶  vaffinity listener daemon (host)
                                            │
                                      ┌─────▼──────────┐
                                      │ Notification    │
@@ -31,7 +31,7 @@ Architecture
                                      │                 │    │  cgroup)     │
                                      └────────────────┘    └──────────────┘
 
-RPM: vm-bindcore
+RPM: vaffinity
 
 Sub-commands
 ------------
@@ -59,14 +59,14 @@ import threading
 import time
 from pathlib import Path
 
-CONF_DIR = "/etc/vm-bindcore"
+CONF_DIR = "/etc/vaffinity"
 GLOBAL_MAP_FILE = os.path.join(CONF_DIR, "global_cpu_map.json")
 LOG_FILE = os.path.join(CONF_DIR, "events.log")
-PID_FILE = "/run/vm-bindcore-listener.pid"
+PID_FILE = "/run/vaffinity-listener.pid"
 VSOCK_PORT = 11200                  # Same as guest side
 LOG_FORMAT = "[%(levelname)s] %(message)s"
 
-logger = logging.getLogger("vm-bindcore")
+logger = logging.getLogger("vaffinity")
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +414,7 @@ class GuestPinNotification:
     Represents a pinning notification from the Guest to the VMM.
 
     In production, this arrives via VSOCK or virtio-serial from the
-    vm-bindcore-guest agent running inside the VM.
+    vaffinity-guest agent running inside the VM.
     """
     ACTION_PIN = "pin"
     ACTION_UNPIN = "unpin"
@@ -590,7 +590,7 @@ def _handle_client(conn, addr, handler, global_map, persist_path):
 
                 # Build notification from guest event
                 cpu_mask = msg.get("cpu_mask", [])
-                is_pin = msg.get("is_bindcore", True)
+                is_pin = msg.get("is_affinity_pin", True)
                 vcpu_id = cpu_mask[0] if cpu_mask and is_pin else 0
 
                 notif = GuestPinNotification(
@@ -888,7 +888,7 @@ def cmd_listen(args):
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        prog="vm-bindcore",
+        prog="vaffinity",
         description=(
             "VMM-side transparent vCPU pinning optimization tool.\n"
             "Manages dynamic 1:1 pinning based on in-VM app pinning "
@@ -980,7 +980,7 @@ def main():
     # Setup logging
     level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format=LOG_FORMAT, level=level)
-    logging.getLogger("vm-bindcore").setLevel(level)
+    logging.getLogger("vaffinity").setLevel(level)
 
     if not args.command:
         parser.print_help()

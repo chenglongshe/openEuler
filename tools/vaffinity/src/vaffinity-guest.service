@@ -1,0 +1,14 @@
+[Unit]
+Description=vaffinity-guest eBPF Interceptor Agent
+Documentation=man:vaffinity(1)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vaffinity-guest start --foreground
+ExecStop=/usr/bin/vaffinity-guest stop
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

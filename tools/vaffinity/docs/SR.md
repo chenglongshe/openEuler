@@ -53,15 +53,15 @@
 
 **场景 1：虚拟机内业务绑核后，宿主机侧 vCPU 自动切换为 1:1 独占绑核**
 
-- GIVEN 宿主机上运行虚拟机 vm1（4 vCPU，cpuset 0-15，范围绑核模式），管理员在 Host 侧执行 `vm-bindcore status --vm vm1` 确认所有 vCPU 均为 `range` 模式
+- GIVEN 宿主机上运行虚拟机 vm1（4 vCPU，cpuset 0-15，范围绑核模式），管理员在 Host 侧执行 `vaffinity status --vm vm1` 确认所有 vCPU 均为 `range` 模式
 - WHEN 管理员在 vm1 Guest 内运行业务程序，该程序调用 `taskset -c 2 <workload>`（即绑核到 vCPU 2）
-- THEN 管理员在 Host 侧再次执行 `vm-bindcore status --vm vm1`，**可观察到** vcpu2 已变为 `exclusive` 模式并绑定到一个具体的 pCPU（如 pCPU 8），其余 vCPU 仍为 `range` 模式；同时 `vm-bindcore map` 输出中 pCPU 8 标记为 `exclusive: vm1:vcpu2`
+- THEN 管理员在 Host 侧再次执行 `vaffinity status --vm vm1`，**可观察到** vcpu2 已变为 `exclusive` 模式并绑定到一个具体的 pCPU（如 pCPU 8），其余 vCPU 仍为 `range` 模式；同时 `vaffinity map` 输出中 pCPU 8 标记为 `exclusive: vm1:vcpu2`
 
 **场景 2：虚拟机内业务解除绑核后，vCPU 自动恢复为范围绑核，独占 pCPU 被释放**
 
 - GIVEN 承接场景 1，vm1 的 vcpu2 当前为 `exclusive` 模式（1:1 绑定到 pCPU 8）
 - WHEN 管理员在 vm1 Guest 内终止该业务进程（或显式调用 `taskset -c 0-3 <workload>` 恢复到全部 vCPU）
-- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可观察到** vcpu2 已恢复为 `range` 模式（cpuset 0-15）；执行 `vm-bindcore map` **可观察到** pCPU 8 不再标记为独占，状态恢复为 `shared`
+- THEN 管理员在 Host 侧执行 `vaffinity status --vm vm1`，**可观察到** vcpu2 已恢复为 `range` 模式（cpuset 0-15）；执行 `vaffinity map` **可观察到** pCPU 8 不再标记为独占，状态恢复为 `shared`
 
 ### 【交付说明】
 
@@ -69,8 +69,8 @@
 - Guest 侧截获模块：kprobe 内核模块（`.ko`）+ eBPF 程序（CO-RE `.bpf.o`）
 - Guest 侧用户态通知代理（eBPF 方案）
 - VMM 侧绑核处理补丁（KVM 模块 patch 或 QEMU 设备模拟）
-- 全局 CPU 映射管理工具（`vm-bindcore`）
-- 是否涉及新增 RPM 包：是（`vm-bindcore`（宿主机侧）、`vm-bindcore-guest`（虚拟机侧））
+- 全局 CPU 映射管理工具（`vaffinity`）
+- 是否涉及新增 RPM 包：是（`vaffinity`（宿主机侧）、`vaffinity-guest`（虚拟机侧））
 
 #### 环境与依赖
 - 平台架构：x86_64、arm64（aarch64）

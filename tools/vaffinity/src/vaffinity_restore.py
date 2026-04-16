@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MulanPSL-2.0
 #
-# vm-bindcore restore helper — restores global CPU map state on boot
+# vaffinity restore helper — restores global CPU map state on boot
 #
-# Called by vm-bindcore-restore.service after system startup.
+# Called by vaffinity-restore.service after system startup.
 # Reloads the persisted global CPU map and re-applies exclusive
 # pinning for any VMs that are still running.
 #
@@ -16,9 +16,9 @@ import os
 import subprocess
 import sys
 
-GLOBAL_MAP_FILE = "/etc/vm-bindcore/global_cpu_map.json"
+GLOBAL_MAP_FILE = "/etc/vaffinity/global_cpu_map.json"
 
-logger = logging.getLogger("vm-bindcore-restore")
+logger = logging.getLogger("vaffinity-restore")
 
 
 def get_running_vms():

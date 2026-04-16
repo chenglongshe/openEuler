@@ -1,17 +1,17 @@
-.TH VM-BINDCORE 1 "April 2026" "vm-bindcore 2.0.0" "User Commands"
+.TH VAFFINITY 1 "April 2026" "vaffinity 2.0.0" "User Commands"
 .SH NAME
-vm-bindcore \- VMM-side transparent vCPU pinning optimization tool
+vaffinity \- VMM-side transparent vCPU pinning optimization tool
 .SH SYNOPSIS
-.B vm-bindcore
+.B vaffinity
 [\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
 .SH DESCRIPTION
-.B vm-bindcore
+.B vaffinity
 manages dynamic vCPU-to-pCPU pinning on the host (VMM) side, based on
 pinning notifications from guest VMs. When a business application inside a
 VM calls sched_setaffinity to pin to a specific vCPU, the guest-side
 interceptor (kprobe or eBPF) detects this and notifies the VMM.
-vm-bindcore then switches the corresponding vCPU from range-pinning to
-1:1 exclusive pinning on a physical CPU. When the app un-pins, vm-bindcore
+vaffinity then switches the corresponding vCPU from range-pinning to
+1:1 exclusive pinning on a physical CPU. When the app un-pins, vaffinity
 restores range-pinning.
 .PP
 Based on patent: "一种优化虚拟机内业务绑核性能的方法" (Inventor: 张海亮).
@@ -41,10 +41,10 @@ Restore all vCPUs of a VM to range-pinning mode.
 Enable verbose output.
 .SH FILES
 .TP
-.I /etc/vm-bindcore/global_cpu_map.json
+.I /etc/vaffinity/global_cpu_map.json
 Persistent global CPU mapping state.
 .SH SEE ALSO
-.BR vm-bindcore-guest (1),
+.BR vaffinity-guest (1),
 .BR virsh (1),
 .BR taskset (1),
 .BR numactl (8)

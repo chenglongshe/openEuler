@@ -14,18 +14,18 @@
 
 - QEMU/KVM 虚拟化环境
 - Guest OS 支持非侵入式内核探测机制（内核模块或轻量级探测程序）
-- Host 侧 `vm-bindcore` 管理工具
+- Host 侧 `vaffinity` 管理工具
 
 ### 【用户接口】
 
 | 位置 | 接口 | 说明 |
 |------|------|------|
-| Guest 侧 | `vm-bindcore-guest start [--mode auto\|device]` | 启动绑核感知模块 |
-| Guest 侧 | `vm-bindcore-guest stop` | 停止绑核感知模块 |
-| Guest 侧 | `vm-bindcore-guest status` | 查看感知模块运行状态 |
-| Host 侧 | `vm-bindcore status [--vm <domain>] [--format json\|table]` | 查看 vCPU 绑核状态 |
-| Host 侧 | `vm-bindcore map [--format json\|table]` | 查看全局 CPU 映射表 |
-| Host 侧 | `vm-bindcore log [--vm <domain>]` | 查看绑核事件日志 |
+| Guest 侧 | `vaffinity-guest start [--mode auto\|device]` | 启动绑核感知模块 |
+| Guest 侧 | `vaffinity-guest stop` | 停止绑核感知模块 |
+| Guest 侧 | `vaffinity-guest status` | 查看感知模块运行状态 |
+| Host 侧 | `vaffinity status [--vm <domain>] [--format json\|table]` | 查看 vCPU 绑核状态 |
+| Host 侧 | `vaffinity map [--format json\|table]` | 查看全局 CPU 映射表 |
+| Host 侧 | `vaffinity log [--vm <domain>]` | 查看绑核事件日志 |
 
 ### 【验收准则】
 
@@ -33,21 +33,21 @@
 
 **AC-01：Guest 内业务绑核 → Host 侧 vCPU 自动切换为 1:1 独占绑核**
 
-- GIVEN 宿主机上运行虚拟机 vm1（4 vCPU，cpuset 0-15，范围绑核模式），管理员在 Guest 内启动感知模块（`vm-bindcore-guest start`），在 Host 侧执行 `vm-bindcore status --vm vm1` 确认所有 vCPU 均为 `range` 模式
+- GIVEN 宿主机上运行虚拟机 vm1（4 vCPU，cpuset 0-15，范围绑核模式），管理员在 Guest 内启动感知模块（`vaffinity-guest start`），在 Host 侧执行 `vaffinity status --vm vm1` 确认所有 vCPU 均为 `range` 模式
 - WHEN 管理员在 vm1 Guest 内运行 `taskset -c 2 <workload>`（绑核到 vCPU 2）
-- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可观察到** vcpu2 已变为 `exclusive` 模式并绑定到一个具体的 pCPU，其余 vCPU 仍为 `range` 模式
+- THEN 管理员在 Host 侧执行 `vaffinity status --vm vm1`，**可观察到** vcpu2 已变为 `exclusive` 模式并绑定到一个具体的 pCPU，其余 vCPU 仍为 `range` 模式
 
 **AC-02：Guest 内业务解除绑核 → vCPU 自动恢复为范围绑核，独占 pCPU 释放**
 
 - GIVEN 承接 AC-01，vm1 的 vcpu2 当前为 `exclusive` 模式
 - WHEN 管理员在 vm1 Guest 内终止该业务进程（或恢复到全部 vCPU 的亲和性设置）
-- THEN 管理员在 Host 侧执行 `vm-bindcore status --vm vm1`，**可观察到** vcpu2 已恢复为 `range` 模式；执行 `vm-bindcore map` **可观察到**原独占 pCPU 已恢复为 `shared` 状态
+- THEN 管理员在 Host 侧执行 `vaffinity status --vm vm1`，**可观察到** vcpu2 已恢复为 `range` 模式；执行 `vaffinity map` **可观察到**原独占 pCPU 已恢复为 `shared` 状态
 
 **AC-03：多 VM 绑核冲突自动避免**
 
 - GIVEN 宿主机上运行 vm1 和 vm2（cpuset 有重叠），vm1 的 vcpu2 已被 1:1 绑定到某 pCPU
 - WHEN 管理员在 vm2 Guest 内触发业务绑核
-- THEN 管理员执行 `vm-bindcore map`，**可观察到** vm2 的 vCPU 绑定到了另一个不冲突的 pCPU，系统自动避免了资源争用
+- THEN 管理员执行 `vaffinity map`，**可观察到** vm2 的 vCPU 绑定到了另一个不冲突的 pCPU，系统自动避免了资源争用
 
 **AC-04：感知模块对非绑核业务性能无显著影响**
 
@@ -58,7 +58,7 @@
 **AC-05：绑核事件日志可审计**
 
 - GIVEN vm1 内业务触发绑核后又解除绑核
-- WHEN 管理员在 Host 侧执行 `vm-bindcore log --vm vm1`
+- WHEN 管理员在 Host 侧执行 `vaffinity log --vm vm1`
 - THEN **可看到**包含绑核（PIN）和解绑（UNPIN）标记的结构化日志记录，内含 VM 名称、vCPU 编号、目标/释放的 pCPU、操作来源等关键信息
 
 **AC-06：跨 Guest 内核版本兼容（异步模式）**

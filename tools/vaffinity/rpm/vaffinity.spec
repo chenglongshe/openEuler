@@ -1,9 +1,9 @@
-Name:           vm-bindcore
+Name:           vaffinity
 Version:        3.0.0
 Release:        1%{?dist}
-Summary:        VMM-side Transparent vCPU Pinning Optimization Tool
+Summary:        vAffinity — Transparent vCPU Affinity Orchestration Framework
 License:        MulanPSL-2.0
-URL:            https://gitee.com/openeuler/vm-bindcore
+URL:            https://gitee.com/openeuler/vaffinity
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
@@ -16,7 +16,7 @@ Requires:       libvirt
 Requires:       systemd
 
 %description
-vm-bindcore provides transparent vCPU pinning optimization for KVM/QEMU
+vaffinity provides transparent vCPU pinning optimization for KVM/QEMU
 virtual machines. Based on the patent "一种优化虚拟机内业务绑核性能的方法"
 (A Method for Optimizing VM In-Guest Business CPU Pinning Performance,
 Inventor: 张海亮).
@@ -28,7 +28,7 @@ dynamically switches the corresponding vCPU from range-pinning to 1:1
 exclusive pinning, achieving stable performance without sacrificing
 resource utilization.
 
-This package (vm-bindcore) installs on the **host** and provides:
+This package (vaffinity) installs on the **host** and provides:
   - Notification listener daemon (VSOCK)
   - Global CPU map management with cross-VM conflict avoidance
   - Dynamic 1:1 pinning via virsh vcpupin
@@ -37,15 +37,15 @@ This package (vm-bindcore) installs on the **host** and provides:
   - Event log for auditing
 
 %package guest
-Summary:        Guest-side eBPF sched_setaffinity interceptor for vm-bindcore
+Summary:        Guest-side eBPF sched_setaffinity interceptor for vaffinity
 Requires:       python3 >= 3.8
 
 %description guest
-Guest-side component of vm-bindcore.  Installs inside the VM to intercept
+Guest-side component of vaffinity.  Installs inside the VM to intercept
 sched_setaffinity calls via an eBPF CO-RE program and notify the host-side
-vm-bindcore listener through VSOCK or virtio-serial.
+vaffinity listener through VSOCK or virtio-serial.
 
-This package (vm-bindcore-guest) installs **inside the virtual machine**.
+This package (vaffinity-guest) installs **inside the virtual machine**.
   - eBPF CO-RE program for sched_setaffinity tracepoint interception
   - User-space agent for async ring buffer processing
   - Independent notification module (VSOCK / virtio-serial transport)
@@ -58,105 +58,105 @@ This package (vm-bindcore-guest) installs **inside the virtual machine**.
 # Nothing to build for pure Python tools
 
 %install
-# --- Host-side (vm-bindcore) ---
+# --- Host-side (vaffinity) ---
 
 # Main CLI + listener
-install -D -m 0755 src/vm_bindcore.py \
-    %{buildroot}%{_bindir}/vm-bindcore
+install -D -m 0755 src/vaffinity.py \
+    %{buildroot}%{_bindir}/vaffinity
 
 # Restore helper
-install -D -m 0755 src/vm_bindcore_restore.py \
-    %{buildroot}%{_libexecdir}/vm-bindcore/vm_bindcore_restore.py
+install -D -m 0755 src/vaffinity_restore.py \
+    %{buildroot}%{_libexecdir}/vaffinity/vaffinity_restore.py
 
 # Systemd services (host)
-install -D -m 0644 src/vm-bindcore-listener.service \
-    %{buildroot}%{_unitdir}/vm-bindcore-listener.service
-install -D -m 0644 src/vm-bindcore-restore.service \
-    %{buildroot}%{_unitdir}/vm-bindcore-restore.service
+install -D -m 0644 src/vaffinity-listener.service \
+    %{buildroot}%{_unitdir}/vaffinity-listener.service
+install -D -m 0644 src/vaffinity-restore.service \
+    %{buildroot}%{_unitdir}/vaffinity-restore.service
 
 # Config directory
-install -d -m 0755 %{buildroot}%{_sysconfdir}/vm-bindcore
+install -d -m 0755 %{buildroot}%{_sysconfdir}/vaffinity
 
 # Man page
 install -d -m 0755 %{buildroot}%{_mandir}/man1
-install -D -m 0644 docs/vm-bindcore.1 \
-    %{buildroot}%{_mandir}/man1/vm-bindcore.1
+install -D -m 0644 docs/vaffinity.1 \
+    %{buildroot}%{_mandir}/man1/vaffinity.1
 
-# --- Guest-side (vm-bindcore-guest) ---
+# --- Guest-side (vaffinity-guest) ---
 
 # Guest agent
-install -D -m 0755 src/vm_bindcore_guest.py \
-    %{buildroot}%{_bindir}/vm-bindcore-guest
+install -D -m 0755 src/vaffinity_guest.py \
+    %{buildroot}%{_bindir}/vaffinity-guest
 
 # eBPF C source (reference; production builds .bpf.o at package build time)
-install -D -m 0644 src/bpf/bindcore_intercept.bpf.c \
-    %{buildroot}%{_datadir}/vm-bindcore-guest/bpf/bindcore_intercept.bpf.c
+install -D -m 0644 src/bpf/vaffinity_intercept.bpf.c \
+    %{buildroot}%{_datadir}/vaffinity-guest/bpf/vaffinity_intercept.bpf.c
 
 # Systemd service (guest)
-install -D -m 0644 src/vm-bindcore-guest.service \
-    %{buildroot}%{_unitdir}/vm-bindcore-guest.service
+install -D -m 0644 src/vaffinity-guest.service \
+    %{buildroot}%{_unitdir}/vaffinity-guest.service
 
 # --- Host-side scriptlets ---
 
 %post
-%systemd_post vm-bindcore-listener.service
-%systemd_post vm-bindcore-restore.service
+%systemd_post vaffinity-listener.service
+%systemd_post vaffinity-restore.service
 
 %preun
-%systemd_preun vm-bindcore-listener.service
-%systemd_preun vm-bindcore-restore.service
+%systemd_preun vaffinity-listener.service
+%systemd_preun vaffinity-restore.service
 
 %postun
-%systemd_postun_with_restart vm-bindcore-listener.service
-%systemd_postun_with_restart vm-bindcore-restore.service
+%systemd_postun_with_restart vaffinity-listener.service
+%systemd_postun_with_restart vaffinity-restore.service
 
 # --- Guest-side scriptlets ---
 
 %post guest
-%systemd_post vm-bindcore-guest.service
+%systemd_post vaffinity-guest.service
 
 %preun guest
-%systemd_preun vm-bindcore-guest.service
+%systemd_preun vaffinity-guest.service
 
 %postun guest
-%systemd_postun_with_restart vm-bindcore-guest.service
+%systemd_postun_with_restart vaffinity-guest.service
 
 # --- File lists ---
 
 %files
 %license LICENSE
 %doc README.md docs/SR.md docs/US.md
-%{_bindir}/vm-bindcore
-%{_libexecdir}/vm-bindcore/vm_bindcore_restore.py
-%{_unitdir}/vm-bindcore-listener.service
-%{_unitdir}/vm-bindcore-restore.service
-%dir %{_sysconfdir}/vm-bindcore
-%{_mandir}/man1/vm-bindcore.1*
+%{_bindir}/vaffinity
+%{_libexecdir}/vaffinity/vaffinity_restore.py
+%{_unitdir}/vaffinity-listener.service
+%{_unitdir}/vaffinity-restore.service
+%dir %{_sysconfdir}/vaffinity
+%{_mandir}/man1/vaffinity.1*
 
 %files guest
 %license LICENSE
-%{_bindir}/vm-bindcore-guest
-%{_datadir}/vm-bindcore-guest/bpf/bindcore_intercept.bpf.c
-%{_unitdir}/vm-bindcore-guest.service
+%{_bindir}/vaffinity-guest
+%{_datadir}/vaffinity-guest/bpf/vaffinity_intercept.bpf.c
+%{_unitdir}/vaffinity-guest.service
 
 %changelog
 * Tue Apr 15 2026 openEuler Contributors <dev@openeuler.org> - 3.0.0-1
 - Rewrite: two clear RPM packages (host + guest)
 - Guest: eBPF CO-RE tracepoint interception + async ring buffer + notification agent
 - Guest: pluggable transport (VSOCK / virtio-serial / simulated)
-- Guest: systemd service (vm-bindcore-guest.service)
+- Guest: systemd service (vaffinity-guest.service)
 - Host: VSOCK listener daemon for receiving guest notifications
 - Host: PinExecutor with virsh vcpupin integration
 - Host: event log for audit trail
-- Host: systemd services (vm-bindcore-listener + vm-bindcore-restore)
-- eBPF C source: src/bpf/bindcore_intercept.bpf.c
+- Host: systemd services (vaffinity-listener + vaffinity-restore)
+- eBPF C source: src/bpf/vaffinity_intercept.bpf.c
 
 * Mon Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 2.0.0-1
 - Rewrite to match patent: 一种优化虚拟机内业务绑核性能的方法
 - Guest-side interception via kprobe/eBPF with hypercall notification
 - VMM-side dynamic 1:1 pinning on guest app bind/unbind
 - Global CPU map with cross-VM conflict avoidance
-- Separate guest RPM subpackage (vm-bindcore-guest)
+- Separate guest RPM subpackage (vaffinity-guest)
 
 * Mon Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 1.0.0-1
 - Initial release

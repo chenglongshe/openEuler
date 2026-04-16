@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MulanPSL-2.0
 #
-# Test suite for vm-bindcore (Host-side handler + Guest-side interceptor)
+# Test suite for vaffinity (Host-side handler + Guest-side interceptor)
 # Based on patent: 一种优化虚拟机内业务绑核性能的方法 (Inventor: 张海亮)
 
 """
-Unit and integration tests for vm-bindcore.
+Unit and integration tests for vaffinity.
 
 Tests cover the patent's core architecture:
   1. Global CPU Map management
@@ -19,7 +19,7 @@ Tests cover the patent's core architecture:
   8. Pin executor
   9. Event log
 
-Run with: python3 -m pytest tests/test_vm_bindcore.py -v
+Run with: python3 -m pytest tests/test_vaffinity.py -v
 """
 
 import json
@@ -32,7 +32,7 @@ from pathlib import Path
 # Add source directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from vm_bindcore import (  # noqa: E402
+from vaffinity import (  # noqa: E402
     GlobalCpuMap,
     GuestPinNotification,
     PinExecutor,
@@ -46,7 +46,7 @@ from vm_bindcore import (  # noqa: E402
     _write_event_log,
     main,
 )
-from vm_bindcore_guest import (  # noqa: E402
+from vaffinity_guest import (  # noqa: E402
     AffinityEvent,
     EbpfInterceptor,
     NotificationAgent,
@@ -486,7 +486,7 @@ class TestEbpfInterceptor(unittest.TestCase):
         interceptor.intercept(pid=1234, comm="myapp", cpu_mask=[2])
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].pid, 1234)
-        self.assertTrue(events[0].is_bindcore)
+        self.assertTrue(events[0].is_affinity_pin)
 
     def test_async_ring_buffer(self):
         interceptor = EbpfInterceptor(total_vcpus=4)
@@ -510,7 +510,7 @@ class TestEbpfInterceptor(unittest.TestCase):
         event = interceptor.intercept(
             pid=100, comm="app", cpu_mask=[0, 1, 2, 3]
         )
-        self.assertFalse(event.is_bindcore)
+        self.assertFalse(event.is_affinity_pin)
 
     def test_attach_detach(self):
         interceptor = EbpfInterceptor(total_vcpus=4)
@@ -531,8 +531,8 @@ class TestSimulatedTransport(unittest.TestCase):
     def test_send(self):
         transport = SimulatedTransport()
         transport.connect()
-        transport.send({"pid": 123, "is_bindcore": True})
-        transport.send({"pid": 456, "is_bindcore": False})
+        transport.send({"pid": 123, "is_affinity_pin": True})
+        transport.send({"pid": 456, "is_affinity_pin": False})
         self.assertEqual(len(transport.sent_messages), 2)
         self.assertEqual(transport.sent_messages[0]["pid"], 123)
         transport.close()
@@ -595,7 +595,7 @@ class TestEndToEndFlow(unittest.TestCase):
     def _make_vmm_callback(self, domain):
         """Create a VMM callback that processes guest events."""
         def callback(event):
-            if event.is_bindcore:
+            if event.is_affinity_pin:
                 vcpu_id = event.cpu_mask[0] if event.cpu_mask else 0
                 notif = GuestPinNotification(
                     domain=domain,
@@ -683,7 +683,7 @@ class TestEndToEndFlow(unittest.TestCase):
         self.assertEqual(len(transport.sent_messages), 1)
         msg = transport.sent_messages[0]
         self.assertEqual(msg["pid"], 100)
-        self.assertTrue(msg["is_bindcore"])
+        self.assertTrue(msg["is_affinity_pin"])
 
     def test_multi_vm_isolation(self):
         """Multiple VMs with overlapping cpusets maintain isolation."""
@@ -720,14 +720,14 @@ class TestEventLog(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         self.log_file = os.path.join(self.tmpdir, "events.log")
         # Monkey-patch LOG_FILE
-        import vm_bindcore
-        self._orig_log_file = vm_bindcore.LOG_FILE
-        vm_bindcore.LOG_FILE = self.log_file
+        import vaffinity
+        self._orig_log_file = vaffinity.LOG_FILE
+        vaffinity.LOG_FILE = self.log_file
 
     def tearDown(self):
         import shutil
-        import vm_bindcore
-        vm_bindcore.LOG_FILE = self._orig_log_file
+        import vaffinity
+        vaffinity.LOG_FILE = self._orig_log_file
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_write_event_log(self):
@@ -752,7 +752,7 @@ class TestCLIParsing(unittest.TestCase):
     def test_no_command(self):
         from unittest.mock import patch
         import io
-        with patch("sys.argv", ["vm-bindcore"]):
+        with patch("sys.argv", ["vaffinity"]):
             from contextlib import redirect_stdout, redirect_stderr
             with redirect_stdout(io.StringIO()), \
                  redirect_stderr(io.StringIO()):

@@ -2,18 +2,18 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MulanPSL-2.0
 #
-# vm-bindcore-guest: Guest-side sched_setaffinity interceptor (eBPF + async agent)
+# vaffinity-guest: Guest-side sched_setaffinity interceptor (eBPF + async agent)
 # Based on patent: 一种优化虚拟机内业务绑核性能的方法 (Inventor: 张海亮)
 #
 # Copyright (c) 2026 openEuler Contributors
 
 """
-vm-bindcore-guest — Guest-side eBPF interceptor & notification agent.
+vaffinity-guest — Guest-side eBPF interceptor & notification agent.
 
 This package runs *inside* the virtual machine.  It intercepts every call to
 sched_setaffinity(2) using a CO-RE eBPF program, classifies the call as a
 "pin" (subset of vCPUs) or "unpin" (all vCPUs), and forwards the event to
-the host-side vm-bindcore listener daemon through a notification channel
+the host-side vaffinity listener daemon through a notification channel
 (VSOCK or virtio-serial).
 
 Architecture
@@ -39,11 +39,11 @@ Architecture
   └──────────────────────────────────────────────────────┼─────────────────┘
                                                          │
                                               ┌──────────▼──────────────┐
-                                              │ Host: vm-bindcore       │
+                                              │ Host: vaffinity       │
                                               │ listener daemon         │
                                               └─────────────────────────┘
 
-RPM: vm-bindcore-guest
+RPM: vaffinity-guest
 """
 
 import argparse
@@ -56,21 +56,21 @@ import struct
 import sys
 import time
 
-logger = logging.getLogger("vm-bindcore-guest")
+logger = logging.getLogger("vaffinity-guest")
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-PID_FILE = "/run/vm-bindcore-guest.pid"
+PID_FILE = "/run/vaffinity-guest.pid"
 VSOCK_HOST_CID = 2                  # CID 2 = host in VSOCK
 VSOCK_PORT = 11200                  # Port the host listener binds to
-VIRTIO_SERIAL_PATH = "/dev/virtio-ports/vm-bindcore"
+VIRTIO_SERIAL_PATH = "/dev/virtio-ports/vaffinity"
 POLL_INTERVAL_SEC = 0.1             # Ring buffer polling interval (100 ms)
 BPF_OBJ_SEARCH_PATHS = [
-    "/usr/lib64/vm-bindcore/bindcore_intercept.bpf.o",
-    "/usr/lib/vm-bindcore/bindcore_intercept.bpf.o",
-    os.path.join(os.path.dirname(__file__), "bpf", "bindcore_intercept.bpf.o"),
+    "/usr/lib64/vaffinity/vaffinity_intercept.bpf.o",
+    "/usr/lib/vaffinity/vaffinity_intercept.bpf.o",
+    os.path.join(os.path.dirname(__file__), "bpf", "vaffinity_intercept.bpf.o"),
 ]
 
 
@@ -81,18 +81,18 @@ BPF_OBJ_SEARCH_PATHS = [
 class AffinityEvent:
     """Represents an intercepted sched_setaffinity call from the eBPF program."""
 
-    def __init__(self, pid, comm, cpu_mask, is_bindcore):
+    def __init__(self, pid, comm, cpu_mask, is_affinity_pin):
         self.pid = pid
         self.comm = comm            # Process name (up to 16 bytes)
         self.cpu_mask = cpu_mask    # Target CPU mask (list of vCPU ids)
-        self.is_bindcore = is_bindcore  # True = pin (subset), False = unpin
+        self.is_affinity_pin = is_affinity_pin  # True = pin (subset), False = unpin
 
     def to_dict(self):
         return {
             "pid": self.pid,
             "comm": self.comm,
             "cpu_mask": self.cpu_mask,
-            "is_bindcore": self.is_bindcore,
+            "is_affinity_pin": self.is_affinity_pin,
         }
 
 
@@ -104,7 +104,7 @@ class EbpfInterceptor:
     """
     eBPF-based sched_setaffinity interceptor (asynchronous path).
 
-    In production this loads the CO-RE BPF object (bindcore_intercept.bpf.o)
+    In production this loads the CO-RE BPF object (vaffinity_intercept.bpf.o)
     via libbpf/bpftool, attaches to the sched_setaffinity tracepoint, and
     reads events from the BPF ring buffer.
 
@@ -126,7 +126,7 @@ class EbpfInterceptor:
         Load and attach the BPF program.
 
         In production:
-            bpf_obj = bpf_object__open_file("bindcore_intercept.bpf.o")
+            bpf_obj = bpf_object__open_file("vaffinity_intercept.bpf.o")
             bpf_object__load(bpf_obj)
             bpf_program__attach(prog)
             ring_buffer__new(map_fd, callback)
@@ -177,7 +177,7 @@ class EbpfInterceptor:
             pid=pid,
             comm=comm,
             cpu_mask=cpu_mask,
-            is_bindcore=is_pin,
+            is_affinity_pin=is_pin,
         )
         logger.debug(
             "Intercepted sched_setaffinity: pid=%d comm=%s mask=%s action=%s",
@@ -275,7 +275,7 @@ class VirtioSerialTransport(NotificationTransport):
     """
     Virtio-serial (chardev) transport.
 
-    QEMU exposes a virtio-serial port (e.g. /dev/virtio-ports/vm-bindcore).
+    QEMU exposes a virtio-serial port (e.g. /dev/virtio-ports/vaffinity).
     The guest writes newline-delimited JSON to the character device.
     """
 
@@ -335,7 +335,7 @@ class NotificationAgent:
     User-space notification agent.
 
     Drains the eBPF ring buffer and forwards each event to the host-side
-    vm-bindcore listener through the configured transport.
+    vaffinity listener through the configured transport.
     """
 
     def __init__(self, interceptor, transport=None, vmm_callback=None):
@@ -368,7 +368,7 @@ class NotificationAgent:
                 logger.info(
                     "Event (no transport): pid=%d action=%s mask=%s",
                     event.pid,
-                    "pin" if event.is_bindcore else "unpin",
+                    "pin" if event.is_affinity_pin else "unpin",
                     event.cpu_mask,
                 )
                 results.append(event)
@@ -492,7 +492,7 @@ def daemon_loop(transport_mode="auto"):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="vm-bindcore-guest",
+        prog="vaffinity-guest",
         description="Guest-side eBPF sched_setaffinity interceptor & notification agent",
     )
     parser.add_argument(
@@ -528,7 +528,7 @@ def main():
         if getattr(args, "foreground", False):
             daemon_loop(args.mode)
         else:
-            print("[INFO] Starting vm-bindcore-guest agent …")
+            print("[INFO] Starting vaffinity-guest agent …")
             print("[INFO] Mode: eBPF CO-RE (async notification)")
             print("[INFO] Transport: %s" % args.mode)
             daemon_loop(args.mode)
@@ -549,7 +549,7 @@ def main():
         running = _is_running()
         pid = _read_pid()
         total_vcpus = os.cpu_count() or "unknown"
-        print("vm-bindcore-guest agent status:")
+        print("vaffinity-guest agent status:")
         print("  Running:    %s" % ("yes (pid=%d)" % pid if running else "no"))
         print("  Mode:       eBPF CO-RE (async)")
         print("  Hook:       tp/syscalls/sys_enter_sched_setaffinity")

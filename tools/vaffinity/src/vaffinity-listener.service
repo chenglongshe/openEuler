@@ -1,12 +1,12 @@
 [Unit]
-Description=vm-bindcore Guest Notification Listener Daemon
-Documentation=man:vm-bindcore(1)
+Description=vaffinity Guest Notification Listener Daemon
+Documentation=man:vaffinity(1)
 After=libvirtd.service qemu-kvm.service
 Wants=libvirtd.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/vm-bindcore listen
+ExecStart=/usr/bin/vaffinity listen
 Restart=on-failure
 RestartSec=5
 

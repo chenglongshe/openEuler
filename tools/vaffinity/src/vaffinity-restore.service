@@ -1,0 +1,13 @@
+[Unit]
+Description=vaffinity Global CPU Map Restore Service
+Documentation=man:vaffinity(1)
+After=libvirtd.service
+Wants=libvirtd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vaffinity/vaffinity_restore.py
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

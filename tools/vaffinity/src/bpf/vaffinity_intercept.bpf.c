@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0
 //
-// bindcore_intercept.bpf.c — eBPF CO-RE program for sched_setaffinity interception
+// vaffinity_intercept.bpf.c — eBPF CO-RE program for sched_setaffinity interception
 //
 // Based on patent: 一种优化虚拟机内业务绑核性能的方法 (Inventor: 张海亮)
 //
 // This BPF program attaches to the sched_setaffinity syscall entry point
 // and captures CPU affinity change events.  Events are sent to user space
 // via a BPF ring buffer for asynchronous processing by the notification
-// agent (vm-bindcore-guest).
+// agent (vaffinity-guest).
 //
 // Build (requires clang >= 12 + libbpf + bpftool):
 //   clang -O2 -target bpf -D__TARGET_ARCH_x86 \
 //         -I/usr/include/bpf -I. \
-//         -c bindcore_intercept.bpf.c -o bindcore_intercept.bpf.o
-//   bpftool gen skeleton bindcore_intercept.bpf.o > bindcore_intercept.skel.h
+//         -c vaffinity_intercept.bpf.c -o vaffinity_intercept.bpf.o
+//   bpftool gen skeleton vaffinity_intercept.bpf.o > vaffinity_intercept.skel.h
 //
 // Copyright (c) 2026 openEuler Contributors
 
@@ -33,7 +33,7 @@ struct bind_event {
     char  comm[16];     /* Process command name                         */
     __u64 cpu_mask[MASK_LONGS]; /* New CPU affinity bitmask             */
     __u32 nr_cpus;      /* Number of online CPUs on this guest          */
-    __u8  is_bindcore;  /* 1 = pin (subset), 0 = unpin (all CPUs)       */
+    __u8  is_affinity_pin;  /* 1 = pin (subset), 0 = unpin (all CPUs)       */
     __u8  pad[3];
 };
 
@@ -105,7 +105,7 @@ int handle_sched_setaffinity(struct trace_event_raw_sys_enter *ctx)
     e->nr_cpus = bpf_get_smp_processor_id();  /* placeholder; agent overrides */
 
     /* Classify as pin (subset) or unpin (full). */
-    e->is_bindcore = is_full_mask(e->cpu_mask, e->nr_cpus) ? 0 : 1;
+    e->is_affinity_pin = is_full_mask(e->cpu_mask, e->nr_cpus) ? 0 : 1;
 
     bpf_ringbuf_submit(e, 0);
     return 0;
