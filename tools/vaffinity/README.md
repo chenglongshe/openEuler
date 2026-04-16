@@ -73,27 +73,33 @@ yum install vaffinity-guest
 ### 宿主机侧
 
 ```bash
-# 启动通知监听守护进程
+# 启动通知监听守护进程（自动发现所有运行中的 VM）
 systemctl start vaffinity-listener
 
-# 注册 VM（通常由 libvirt hook 自动完成）
-vaffinity register --vm myvm --vcpus 4 --cpuset 0-15
+# 手动发现所有运行中 VM 的 vCPU 绑核信息（从 virsh vcpupin 获取）
+vaffinity discover
+
+# 发现指定 VM 的 vCPU 绑核信息
+vaffinity discover --vm FusionOS-23T10
 
 # 手动注入绑核通知（测试用）
-vaffinity notify --vm myvm --vcpu 2 --action pin --pid 5678
+vaffinity notify --vm FusionOS-23T10 --vcpu 2 --action pin --pid 5678
 
 # 查看 VM 绑核状态
-vaffinity status --vm myvm
+vaffinity status --vm FusionOS-23T10
 
 # 查看全局 CPU 映射
 vaffinity map
 
 # 查看绑核事件日志
-vaffinity log --vm myvm
+vaffinity log --vm FusionOS-23T10
 
 # 恢复范围绑核
-vaffinity unpin-all --vm myvm
+vaffinity unpin-all --vm FusionOS-23T10
 ```
+
+> **注意**：无需手动注册 VM。vCPU 的绑核范围在虚拟机启动时已由 libvirt 初始化，
+> vaffinity 通过 `virsh vcpupin <domain>` 自动获取每个 vCPU 的 CPU 亲和性范围。
 
 ### 虚拟机内
 

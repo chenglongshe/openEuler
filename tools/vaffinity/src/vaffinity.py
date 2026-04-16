@@ -15,6 +15,9 @@ notifications from guest VMs, maintains a global CPU map of all pCPU
 assignments, and dynamically switches individual vCPUs between range-pinning
 and 1:1 exclusive pinning.
 
+VM vCPU pinning information is auto-discovered from libvirt using
+``virsh vcpupin <domain>``, so no manual registration is required.
+
 Architecture
 ============
 
@@ -27,16 +30,15 @@ Architecture
                                            │ parse pin/unpin intent
                                      ┌─────▼──────────┐    ┌──────────────┐
                                      │ Global CPU Map  │───>│ Pin executor │
-                                     │ + VM cpuset     │    │ (virsh/      │
-                                     │                 │    │  cgroup)     │
+                                     │ + per-vCPU      │    │ (virsh/      │
+                                     │   cpuset        │    │  cgroup)     │
                                      └────────────────┘    └──────────────┘
 
 RPM: vaffinity
 
 Sub-commands
 ------------
-  register    Register a VM in the global CPU map
-  unregister  Remove a VM from the global CPU map
+  discover    Auto-discover all running VMs and their vCPU pinning
   notify      Manually inject a pin/unpin notification (testing)
   status      Show vCPU pinning status
   map         Show global CPU map
@@ -120,13 +122,20 @@ class VcpuPinState:
 class VmPinState:
     """Tracks the pinning state of all vCPUs in a VM."""
 
-    def __init__(self, domain, vcpu_count, cpuset):
+    def __init__(self, domain, vcpu_count, cpuset, per_vcpu_cpusets=None):
         self.domain = domain
         self.vcpu_count = vcpu_count
-        self.cpuset = list(cpuset)
-        self.vcpus = {
-            i: VcpuPinState(i, cpuset) for i in range(vcpu_count)
-        }
+        self.cpuset = list(cpuset)           # Default/fallback cpuset
+        # per_vcpu_cpusets: {vcpu_id: [pcpu_list]} — from virsh vcpupin
+        if per_vcpu_cpusets:
+            self.vcpus = {
+                i: VcpuPinState(i, per_vcpu_cpusets.get(i, cpuset))
+                for i in range(vcpu_count)
+            }
+        else:
+            self.vcpus = {
+                i: VcpuPinState(i, cpuset) for i in range(vcpu_count)
+            }
 
     def to_dict(self):
         return {
@@ -201,10 +210,21 @@ class GlobalCpuMap:
 
     # --- VM registration ---
 
-    def register_vm(self, domain, vcpu_count, cpuset):
-        """Register a VM with its vCPU count and cpuset."""
+    def register_vm(self, domain, vcpu_count, cpuset,
+                    per_vcpu_cpusets=None):
+        """Register a VM with its vCPU count and cpuset.
+
+        Args:
+            domain: libvirt domain name
+            vcpu_count: number of vCPUs
+            cpuset: default/fallback pCPU list
+            per_vcpu_cpusets: optional {vcpu_id: [pcpu_list]} from virsh vcpupin
+        """
         if domain not in self.vm_states:
-            self.vm_states[domain] = VmPinState(domain, vcpu_count, cpuset)
+            self.vm_states[domain] = VmPinState(
+                domain, vcpu_count, cpuset,
+                per_vcpu_cpusets=per_vcpu_cpusets,
+            )
         return self.vm_states[domain]
 
     def unregister_vm(self, domain):
@@ -250,11 +270,11 @@ class GlobalCpuMap:
                 f"vCPU {vcpu_id} already exclusive on pCPU {vcpu.pinned_pcpu}"
             )
 
-        # Find free pCPU in this VM's cpuset
-        pcpu = self.find_free_pcpu(vm.cpuset)
+        # Find free pCPU in this vCPU's own cpuset (per-vCPU affinity)
+        pcpu = self.find_free_pcpu(vcpu.cpuset)
         if pcpu is None:
             msg = (
-                f"No free pCPU in cpuset {_format_cpulist(vm.cpuset)} "
+                f"No free pCPU in cpuset {_format_cpulist(vcpu.cpuset)} "
                 f"for {domain}:vcpu{vcpu_id} — keeping range mode"
             )
             logger.warning(msg)
@@ -303,11 +323,11 @@ class GlobalCpuMap:
 
         logger.info(
             "[UNPIN] vm=%s vcpu=%d action=restore cpuset=%s source=guest-unpin",
-            domain, vcpu_id, _format_cpulist(vm.cpuset),
+            domain, vcpu_id, _format_cpulist(vcpu.cpuset),
         )
         return True, (
             f"Restored vcpu{vcpu_id} to range mode "
-            f"(cpuset {_format_cpulist(vm.cpuset)})"
+            f"(cpuset {_format_cpulist(vcpu.cpuset)})"
         )
 
     def unpin_all(self, domain):
@@ -496,12 +516,14 @@ class VmmPinHandler:
                 notification.vcpu_id,
             )
             if ok and vm:
+                vcpu = vm.vcpus.get(notification.vcpu_id)
+                restore_cpuset = vcpu.cpuset if vcpu else vm.cpuset
                 self.executor.restore_vcpu(
-                    notification.domain, notification.vcpu_id, vm.cpuset,
+                    notification.domain, notification.vcpu_id, restore_cpuset,
                 )
                 _write_event_log(
                     "UNPIN", notification.domain, notification.vcpu_id,
-                    f"cpuset={_format_cpulist(vm.cpuset)} source=guest-unpin",
+                    f"cpuset={_format_cpulist(restore_cpuset)} source=guest-unpin",
                 )
             return ok, msg
 
@@ -570,6 +592,26 @@ def _handle_client(conn, addr, handler, global_map, persist_path):
     domain = _resolve_domain_from_cid(cid)
     logger.info("Guest connected: cid=%s domain=%s", cid, domain)
 
+    # Auto-discover VM pinning if not yet registered
+    if domain not in global_map.vm_states:
+        info = discover_vm(domain)
+        if info:
+            vcpu_count, default_cpuset, per_vcpu = info
+            global_map.register_vm(
+                domain, vcpu_count, default_cpuset,
+                per_vcpu_cpusets=per_vcpu,
+            )
+            global_map.save(persist_path)
+            logger.info(
+                "Auto-discovered VM '%s': %d vCPUs, cpuset %s",
+                domain, vcpu_count, _format_cpulist(default_cpuset),
+            )
+        else:
+            logger.warning(
+                "Could not auto-discover VM '%s' — notifications may fail",
+                domain,
+            )
+
     buf = b""
     try:
         while _listener_running:
@@ -626,6 +668,20 @@ def listener_daemon(persist_path=GLOBAL_MAP_FILE, dry_run=False):
     signal.signal(signal.SIGINT, _listener_signal_handler)
 
     global_map = GlobalCpuMap.load(persist_path)
+
+    # Auto-discover all running VMs on startup
+    for domain, vcpu_count, cpuset, per_vcpu in discover_all_vms():
+        if domain not in global_map.vm_states:
+            global_map.register_vm(
+                domain, vcpu_count, cpuset,
+                per_vcpu_cpusets=per_vcpu,
+            )
+            logger.info(
+                "Auto-discovered VM '%s': %d vCPUs, cpuset %s",
+                domain, vcpu_count, _format_cpulist(cpuset),
+            )
+    global_map.save(persist_path)
+
     executor = PinExecutor(dry_run=dry_run)
     handler = VmmPinHandler(global_map, executor=executor,
                             persist_path=persist_path)
@@ -723,25 +779,148 @@ def _parse_cpulist(cpulist_str):
 
 
 # ---------------------------------------------------------------------------
+# Auto-discovery via virsh vcpupin
+# ---------------------------------------------------------------------------
+
+def _parse_virsh_vcpupin(output):
+    """
+    Parse the output of ``virsh vcpupin <domain>`` into per-vCPU cpusets.
+
+    Example input::
+
+         VCPU   CPU Affinity
+        ----------------------
+         0      5-47,53-63
+         1      5-47,53-63
+         16     0-63
+
+    Returns:
+        dict {vcpu_id: [pcpu_list]}
+    """
+    per_vcpu = {}
+    for line in output.strip().splitlines():
+        line = line.strip()
+        # Skip header and separator lines
+        if not line or line.startswith("VCPU") or line.startswith("---"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            continue
+        try:
+            vcpu_id = int(parts[0])
+        except ValueError:
+            continue
+        cpulist_str = parts[1].strip()
+        per_vcpu[vcpu_id] = _parse_cpulist(cpulist_str)
+    return per_vcpu
+
+
+def discover_vm(domain):
+    """
+    Auto-discover a VM's vCPU pinning by calling ``virsh vcpupin <domain>``.
+
+    Returns:
+        (vcpu_count, default_cpuset, per_vcpu_cpusets) or None on failure.
+        - vcpu_count: int
+        - default_cpuset: union of all per-vCPU cpusets
+        - per_vcpu_cpusets: {vcpu_id: [pcpu_list]}
+    """
+    try:
+        result = subprocess.run(
+            ["virsh", "vcpupin", domain],
+            capture_output=True, text=True, timeout=10, check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError,
+            subprocess.TimeoutExpired) as exc:
+        logger.error("Failed to discover VM '%s': %s", domain, exc)
+        return None
+
+    per_vcpu = _parse_virsh_vcpupin(result.stdout)
+    if not per_vcpu:
+        logger.warning("No vCPU info found for VM '%s'", domain)
+        return None
+
+    vcpu_count = max(per_vcpu.keys()) + 1
+    # Default cpuset = union of all per-vCPU cpusets
+    all_cpus = set()
+    for cpus in per_vcpu.values():
+        all_cpus.update(cpus)
+    default_cpuset = sorted(all_cpus)
+
+    return vcpu_count, default_cpuset, per_vcpu
+
+
+def discover_all_vms():
+    """
+    Auto-discover all running VMs and their vCPU pinning.
+
+    Returns:
+        list of (domain, vcpu_count, default_cpuset, per_vcpu_cpusets)
+    """
+    try:
+        result = subprocess.run(
+            ["virsh", "list", "--name", "--state-running"],
+            capture_output=True, text=True, timeout=10, check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError,
+            subprocess.TimeoutExpired) as exc:
+        logger.error("Failed to list running VMs: %s", exc)
+        return []
+
+    vms = []
+    for name in result.stdout.strip().split("\n"):
+        name = name.strip()
+        if not name:
+            continue
+        info = discover_vm(name)
+        if info:
+            vcpu_count, default_cpuset, per_vcpu = info
+            vms.append((name, vcpu_count, default_cpuset, per_vcpu))
+    return vms
+
+
+# ---------------------------------------------------------------------------
 # CLI commands
 # ---------------------------------------------------------------------------
 
-def cmd_register(args):
-    """Register a VM in the global CPU map."""
+def cmd_discover(args):
+    """Auto-discover running VMs and their vCPU pinning from libvirt."""
     gm = GlobalCpuMap.load()
-    cpuset = _parse_cpulist(args.cpuset)
-    gm.register_vm(args.vm, args.vcpus, cpuset)
-    gm.save()
-    print(f"[OK] Registered {args.vm}: {args.vcpus} vCPUs, "
-          f"cpuset {_format_cpulist(cpuset)}")
 
-
-def cmd_unregister(args):
-    """Unregister a VM from the global CPU map."""
-    gm = GlobalCpuMap.load()
-    gm.unregister_vm(args.vm)
-    gm.save()
-    print(f"[OK] Unregistered {args.vm}")
+    if args.vm:
+        # Discover a specific VM
+        info = discover_vm(args.vm)
+        if info is None:
+            print(f"[ERROR] Could not discover VM '{args.vm}'",
+                  file=sys.stderr)
+            return 1
+        vcpu_count, default_cpuset, per_vcpu = info
+        # Re-register (overwrite) to refresh pinning info
+        gm.vm_states.pop(args.vm, None)
+        gm.register_vm(
+            args.vm, vcpu_count, default_cpuset,
+            per_vcpu_cpusets=per_vcpu,
+        )
+        gm.save()
+        print(f"[OK] Discovered {args.vm}: {vcpu_count} vCPUs")
+        for vid in sorted(per_vcpu.keys()):
+            print(f"  vcpu{vid:<4} cpuset: {_format_cpulist(per_vcpu[vid])}")
+    else:
+        # Discover all running VMs
+        vms = discover_all_vms()
+        if not vms:
+            print("No running VMs found (or virsh not available)")
+            return 0
+        for domain, vcpu_count, cpuset, per_vcpu in vms:
+            gm.vm_states.pop(domain, None)
+            gm.register_vm(
+                domain, vcpu_count, cpuset,
+                per_vcpu_cpusets=per_vcpu,
+            )
+            print(f"[OK] Discovered {domain}: {vcpu_count} vCPUs, "
+                  f"cpuset {_format_cpulist(cpuset)}")
+        gm.save()
+        print(f"\nTotal: {len(vms)} VM(s) discovered")
 
 
 def cmd_notify(args):
@@ -900,21 +1079,15 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", help="Sub-command")
 
-    # register
-    p_reg = subparsers.add_parser(
-        "register", help="Register a VM in the global CPU map"
+    # discover
+    p_disc = subparsers.add_parser(
+        "discover",
+        help="Auto-discover running VMs and their vCPU pinning from libvirt"
     )
-    p_reg.add_argument("--vm", required=True, help="VM domain name")
-    p_reg.add_argument("--vcpus", required=True, type=int,
-                       help="Number of vCPUs")
-    p_reg.add_argument("--cpuset", required=True,
-                       help="Allowed pCPU range (e.g. 0-15)")
-
-    # unregister
-    p_unreg = subparsers.add_parser(
-        "unregister", help="Unregister a VM from the global CPU map"
+    p_disc.add_argument(
+        "--vm",
+        help="Discover a specific VM (all running VMs if omitted)"
     )
-    p_unreg.add_argument("--vm", required=True, help="VM domain name")
 
     # notify (simulate guest notification)
     p_notify = subparsers.add_parser(
@@ -987,8 +1160,7 @@ def main():
         return 1
 
     commands = {
-        "register": cmd_register,
-        "unregister": cmd_unregister,
+        "discover": cmd_discover,
         "notify": cmd_notify,
         "status": cmd_status,
         "map": cmd_map,

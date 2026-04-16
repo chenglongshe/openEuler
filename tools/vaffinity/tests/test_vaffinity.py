@@ -43,6 +43,7 @@ from vaffinity import (  # noqa: E402
     VmmPinHandler,
     _format_cpulist,
     _parse_cpulist,
+    _parse_virsh_vcpupin,
     _write_event_log,
     main,
 )
@@ -99,6 +100,104 @@ class TestParseCpulist(unittest.TestCase):
             _parse_cpulist(" 0-3 , 8-11 "),
             [0, 1, 2, 3, 8, 9, 10, 11],
         )
+
+
+class TestParseVirshVcpupin(unittest.TestCase):
+    """Test parsing of virsh vcpupin output."""
+
+    def test_basic_output(self):
+        output = """\
+ VCPU   CPU Affinity
+----------------------
+ 0      5-47,53-63
+ 1      5-47,53-63
+ 2      5-47,53-63
+"""
+        result = _parse_virsh_vcpupin(output)
+        self.assertEqual(len(result), 3)
+        self.assertIn(0, result)
+        self.assertIn(1, result)
+        self.assertIn(2, result)
+        # Check vcpu 0's cpuset
+        expected = list(range(5, 48)) + list(range(53, 64))
+        self.assertEqual(result[0], expected)
+
+    def test_mixed_affinity(self):
+        """Test VMs where different vCPUs have different affinities."""
+        output = """\
+ VCPU   CPU Affinity
+----------------------
+ 0      5-47,53-63
+ 1      5-47,53-63
+ 16     0-63
+ 17     0-63
+ 18     0-63
+"""
+        result = _parse_virsh_vcpupin(output)
+        self.assertEqual(len(result), 5)
+        # vCPU 0 has restricted affinity
+        self.assertNotIn(0, result[0])
+        self.assertIn(5, result[0])
+        # vCPU 16 has full 0-63 affinity
+        self.assertEqual(result[16], list(range(0, 64)))
+        self.assertEqual(result[17], list(range(0, 64)))
+
+    def test_empty_output(self):
+        result = _parse_virsh_vcpupin("")
+        self.assertEqual(result, {})
+
+    def test_header_only(self):
+        output = """\
+ VCPU   CPU Affinity
+----------------------
+"""
+        result = _parse_virsh_vcpupin(output)
+        self.assertEqual(result, {})
+
+    def test_single_cpu_affinity(self):
+        output = """\
+ VCPU   CPU Affinity
+----------------------
+ 0      4
+"""
+        result = _parse_virsh_vcpupin(output)
+        self.assertEqual(result[0], [4])
+
+
+class TestPerVcpuCpuset(unittest.TestCase):
+    """Test per-vCPU cpuset support in VmPinState and GlobalCpuMap."""
+
+    def test_vm_with_per_vcpu_cpusets(self):
+        per_vcpu = {
+            0: list(range(5, 48)) + list(range(53, 64)),
+            1: list(range(5, 48)) + list(range(53, 64)),
+            2: list(range(0, 64)),
+        }
+        vm = VmPinState("testvm", 3, list(range(0, 64)),
+                         per_vcpu_cpusets=per_vcpu)
+        # vCPU 0 should have restricted cpuset
+        self.assertNotIn(0, vm.vcpus[0].cpuset)
+        self.assertIn(5, vm.vcpus[0].cpuset)
+        # vCPU 2 should have full cpuset
+        self.assertIn(0, vm.vcpus[2].cpuset)
+
+    def test_pin_uses_vcpu_cpuset(self):
+        """Pin should use per-vCPU cpuset, not the VM-level default."""
+        gm = GlobalCpuMap(total_pcpus=64)
+        per_vcpu = {
+            0: [10, 11, 12],
+            1: [20, 21, 22],
+        }
+        gm.register_vm("vm1", 2, list(range(64)),
+                        per_vcpu_cpusets=per_vcpu)
+
+        ok, pcpu, _ = gm.pin_exclusive("vm1", 0)
+        self.assertTrue(ok)
+        self.assertIn(pcpu, [10, 11, 12])
+
+        ok, pcpu, _ = gm.pin_exclusive("vm1", 1)
+        self.assertTrue(ok)
+        self.assertIn(pcpu, [20, 21, 22])
 
 
 # ============================================================================

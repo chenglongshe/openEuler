@@ -1,4 +1,4 @@
-.TH VAFFINITY 1 "April 2026" "vaffinity 2.0.0" "User Commands"
+.TH VAFFINITY 1 "April 2026" "vaffinity 3.0.0" "User Commands"
 .SH NAME
 vaffinity \- VMM-side transparent vCPU pinning optimization tool
 .SH SYNOPSIS
@@ -14,15 +14,18 @@ vaffinity then switches the corresponding vCPU from range-pinning to
 1:1 exclusive pinning on a physical CPU. When the app un-pins, vaffinity
 restores range-pinning.
 .PP
+VM vCPU pinning information is auto-discovered from libvirt using
+.B virsh vcpupin <domain>
+so no manual registration is required.  Each vCPU can have a different
+CPU affinity range, which is read directly from the live VM configuration.
+.PP
 Based on patent: "一种优化虚拟机内业务绑核性能的方法" (Inventor: 张海亮).
 .SH COMMANDS
 .TP
-.B register \-\-vm \fINAME\fR \-\-vcpus \fIN\fR \-\-cpuset \fIRANGE\fR
-Register a VM in the global CPU map with its vCPU count and allowed
-pCPU range.
-.TP
-.B unregister \-\-vm \fINAME\fR
-Remove a VM from the global CPU map and release all exclusive pCPUs.
+.B discover [\-\-vm \fINAME\fR]
+Auto-discover running VMs and their per-vCPU pinning from libvirt
+(via \fBvirsh vcpupin\fR).  If \fB\-\-vm\fR is given, only that VM is
+discovered; otherwise all running VMs are discovered.
 .TP
 .B notify \-\-vm \fINAME\fR \-\-vcpu \fIID\fR \-\-action \fIpin|unpin\fR [\-\-pid \fIPID\fR]
 Process a guest pinning notification (simulate or manual trigger).
@@ -35,6 +38,13 @@ Show the global CPU pinning map (all pCPU assignments).
 .TP
 .B unpin-all \-\-vm \fINAME\fR
 Restore all vCPUs of a VM to range-pinning mode.
+.TP
+.B log [\-\-vm \fINAME\fR] [\-\-tail \fIN\fR]
+Show recent pinning event log.
+.TP
+.B listen [\-\-dry-run]
+Run the notification listener daemon. Auto-discovers all running VMs
+on startup.
 .SH OPTIONS
 .TP
 .B \-v, \-\-verbose
