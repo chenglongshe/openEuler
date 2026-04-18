@@ -1,0 +1,14 @@
+[Unit]
+Description=vmca-guest eBPF Interceptor Agent
+Documentation=man:vmca(1)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vmca-guest start --foreground
+ExecStop=/usr/bin/vmca-guest stop
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

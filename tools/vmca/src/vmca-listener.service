@@ -1,0 +1,14 @@
+[Unit]
+Description=vmca Guest Notification Listener Daemon
+Documentation=man:vmca(1)
+After=libvirtd.service qemu-kvm.service
+Wants=libvirtd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vmca listen
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
