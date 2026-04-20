@@ -140,7 +140,7 @@ install -D -m 0644 src/vmca-guest.service \
 %{_unitdir}/vmca-guest.service
 
 %changelog
-* Tue Apr 15 2026 openEuler Contributors <dev@openeuler.org> - 3.0.0-1
+* Wed Apr 15 2026 openEuler Contributors <dev@openeuler.org> - 3.0.0-1
 - Rewrite: two clear RPM packages (host + guest)
 - Guest: eBPF CO-RE tracepoint interception + async ring buffer + notification agent
 - Guest: pluggable transport (VSOCK / virtio-serial / simulated)
@@ -151,12 +151,12 @@ install -D -m 0644 src/vmca-guest.service \
 - Host: systemd services (vmca-listener + vmca-restore)
 - eBPF C source: src/bpf/vmca_intercept.bpf.c
 
-* Mon Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 2.0.0-1
+* Tue Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 2.0.0-1
 - Rewrite to match patent: 一种优化虚拟机内业务绑核性能的方法
 - Guest-side interception via kprobe/eBPF with hypercall notification
 - VMM-side dynamic 1:1 pinning on guest app bind/unbind
 - Global CPU map with cross-VM conflict avoidance
 - Separate guest RPM subpackage (vmca-guest)
 
-* Mon Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 1.0.0-1
+* Tue Apr 14 2026 openEuler Contributors <dev@openeuler.org> - 1.0.0-1
 - Initial release
